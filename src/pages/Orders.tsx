@@ -550,9 +550,12 @@ export default function Orders() {
                 <div className="space-y-2 max-h-[200px] overflow-y-auto pr-1">
                   {orderItems.map((item, idx) => {
                     const selectedProd = products.find((p) => p.id === item.productId)
-                    const itemSubtotal = selectedProd
-                      ? selectedProd.price * (Number(item.quantity) || 0)
-                      : 0
+                    const itemSubtotal =
+                      selectedProd &&
+                      selectedProd.price !== undefined &&
+                      selectedProd.price !== null
+                        ? selectedProd.price * (Number(item.quantity) || 0)
+                        : 0
 
                     return (
                       <div
@@ -570,7 +573,11 @@ export default function Orders() {
                             <SelectContent>
                               {products.map((p) => (
                                 <SelectItem key={p.id} value={p.id}>
-                                  {p.name} - R$ {p.price.toFixed(2)} / {p.unit}
+                                  {p.name}
+                                  {p.price !== undefined && p.price !== null && p.price > 0
+                                    ? ` - R$ ${p.price.toFixed(2)}`
+                                    : ''}{' '}
+                                  / {p.unit}
                                 </SelectItem>
                               ))}
                             </SelectContent>
@@ -792,7 +799,7 @@ export default function Orders() {
               <TableBody>
                 {isLoading ? (
                   <TableRow>
-                    <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={11} className="text-center py-8 text-muted-foreground">
                       <div className="flex items-center justify-center gap-2">
                         <Loader2 className="h-4 w-4 animate-spin" /> Carregando pedidos...
                       </div>
@@ -800,7 +807,7 @@ export default function Orders() {
                   </TableRow>
                 ) : filteredOrders.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={11} className="text-center py-8 text-muted-foreground">
                       Nenhum pedido encontrado para os filtros selecionados.
                     </TableCell>
                   </TableRow>
@@ -1081,21 +1088,26 @@ export default function Orders() {
               <div>
                 <h4 className="font-semibold text-xs mb-2">Itens Solicitados:</h4>
                 <div className="rounded border divide-y max-h-[220px] overflow-y-auto">
-                  {viewingOrder.items.map((it, idx) => (
-                    <div key={idx} className="flex justify-between p-2">
-                      <span>{it.name}</span>
-                      <span className="font-mono">
-                        {it.quantity} un × R$ {it.price.toFixed(2)} = R${' '}
-                        {(it.quantity * it.price).toFixed(2)}
-                      </span>
-                    </div>
-                  ))}
+                  {viewingOrder.items.map((it, idx) => {
+                    const itPreco = typeof it.price === 'number' && !isNaN(it.price) ? it.price : 0
+                    const itSubtotal = (it.quantity || 0) * itPreco
+                    return (
+                      <div key={idx} className="flex justify-between p-2">
+                        <span>{it.name}</span>
+                        <span className="font-mono">
+                          {it.quantity} un × R$ {itPreco.toFixed(2)} = R$ {itSubtotal.toFixed(2)}
+                        </span>
+                      </div>
+                    )
+                  })}
                 </div>
               </div>
 
               <div className="flex justify-between items-center pt-2 font-bold text-sm">
                 <span>Total do Pedido:</span>
-                <span className="text-primary font-mono">R$ {viewingOrder.total.toFixed(2)}</span>
+                <span className="text-primary font-mono">
+                  R$ {(viewingOrder.total || 0).toFixed(2)}
+                </span>
               </div>
             </div>
           )}{' '}
@@ -1132,7 +1144,7 @@ export default function Orders() {
                 <strong>Escola:</strong> {orderToCancel?.schoolName}
               </p>
               <p>
-                <strong>Valor:</strong> R$ {orderToCancel?.total.toFixed(2)}
+                <strong>Valor:</strong> R$ {(orderToCancel?.total || 0).toFixed(2)}
               </p>
               {orderToCancel?.rotaLogisticaNome && (
                 <p>
@@ -1256,7 +1268,7 @@ export default function Orders() {
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Valor Total:</span>
                   <span className="font-mono font-bold text-foreground">
-                    R$ {orderToDeliver.total.toFixed(2)}
+                    R$ {(orderToDeliver.total || 0).toFixed(2)}
                   </span>
                 </div>
                 <div className="flex justify-between items-center pt-1 border-t">
