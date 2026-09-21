@@ -126,6 +126,12 @@ interface AppState {
     rotaLogisticaId: string,
     paradas: Array<{ escola_id: string; ordem: number }>,
   ) => Promise<boolean>
+  moverEscolaEntreRotas: (data: {
+    escolaId: string
+    origemRotaId?: string
+    destinoRotaId: string
+    targetOrdem?: number
+  }) => Promise<boolean>
   updateCicloStatus: (
     cicloId: string,
     status: 'coletando' | 'correcao' | 'fechado',
@@ -1910,6 +1916,192 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }
 
+  // 6. MOVER ESCOLA ENTRE ROTAS LOGÍSTICAS
+  const moverEscolaEntreRotas = async ({
+    escolaId,
+    origemRotaId,
+    destinoRotaId,
+    targetOrdem,
+  }: {
+    escolaId: string
+    origemRotaId?: string
+    destinoRotaId: string
+    targetOrdem?: number
+  }): Promise<boolean> => {
+    // Se mesma rota e sem nova posição especificada, não precisa fazer nada
+    if (origemRotaId && origemRotaId === destinoRotaId && targetOrdem === undefined) {
+      return true
+    }
+
+    const prevParadas = [...paradasRota]
+    const prevOrders = [...orders]
+    const prevContractSchools = [...contractSchools]
+    const prevContracts = [...contracts]
+
+    const rotaDestinoObj = rotasLogisticas.find((r) => r.id === destinoRotaId)
+    const nomeRotaDestino = rotaDestinoObj?.nome || 'Rota'
+    const contratoId = rotaDestinoObj?.contrato_id
+
+    // Identificar a rota de origem real caso não informada
+    const efetivaOrigemId =
+      origemRotaId || paradasRota.find((p) => p.escola_id === escolaId)?.rota_logistica_id
+
+    // --- OPTIMISTIC UPDATE ---
+    // 1. Atualizar paradas da rota de origem e da rota de destino
+    if (efetivaOrigemId === destinoRotaId) {
+      // Reordenação na mesma rota
+      const paradasMesmaRota = paradasRota
+        .filter((p) => p.rota_logistica_id === destinoRotaId)
+        .sort((a, b) => a.ordem - b.ordem)
+
+      const curIdx = paradasMesmaRota.findIndex((p) => p.escola_id === escolaId)
+      if (curIdx !== -1 && targetOrdem !== undefined) {
+        const [moved] = paradasMesmaRota.splice(curIdx, 1)
+        const destIdx = Math.max(0, Math.min(paradasMesmaRota.length, targetOrdem - 1))
+        paradasMesmaRota.splice(destIdx, 0, moved)
+
+        const reordenadas = paradasMesmaRota.map((p, idx) => ({
+          ...p,
+          ordem: idx + 1,
+        }))
+
+        setParadasRota((prev) => [
+          ...prev.filter((p) => p.rota_logistica_id !== destinoRotaId),
+          ...reordenadas,
+        ])
+      }
+    } else {
+      // Mover entre rotas distintas
+      // Paradas de origem restantes (sem a escola)
+      const paradasOrigemRestantes = paradasRota
+        .filter((p) => p.rota_logistica_id === efetivaOrigemId && p.escola_id !== escolaId)
+        .sort((a, b) => a.ordem - b.ordem)
+        .map((p, idx) => ({ ...p, ordem: idx + 1 }))
+
+      // Paradas de destino (com a escola inserida)
+      const paradasDestinoAtuais = paradasRota
+        .filter((p) => p.rota_logistica_id === destinoRotaId && p.escola_id !== escolaId)
+        .sort((a, b) => a.ordem - b.ordem)
+
+      const novaParada: ParadaRotaRecord = {
+        id: `temp-parada-${escolaId}-${destinoRotaId}`,
+        rota_logistica_id: destinoRotaId,
+        escola_id: escolaId,
+        ordem: targetOrdem || paradasDestinoAtuais.length + 1,
+        created: new Date().toISOString(),
+        updated: new Date().toISOString(),
+      }
+
+      let insertIdx = paradasDestinoAtuais.length
+      if (targetOrdem !== undefined && targetOrdem >= 1) {
+        insertIdx = Math.max(0, Math.min(paradasDestinoAtuais.length, targetOrdem - 1))
+      }
+      paradasDestinoAtuais.splice(insertIdx, 0, novaParada)
+
+      const paradasDestinoRenumeradas = paradasDestinoAtuais.map((p, idx) => ({
+        ...p,
+        ordem: idx + 1,
+      }))
+
+      setParadasRota((prev) => [
+        ...prev.filter(
+          (p) =>
+            p.rota_logistica_id !== efetivaOrigemId &&
+            p.rota_logistica_id !== destinoRotaId &&
+            p.escola_id !== escolaId,
+        ),
+        ...paradasOrigemRestantes,
+        ...paradasDestinoRenumeradas,
+      ])
+    }
+
+    // 2. Atualizar pedidos pendentes da escola
+    setOrders((prev) =>
+      prev.map((o) => {
+        if (o.schoolId === escolaId && o.status === 'Pendente') {
+          return {
+            ...o,
+            rotaLogisticaId: destinoRotaId,
+            rotaLogisticaNome: nomeRotaDestino,
+          }
+        }
+        return o
+      }),
+    )
+
+    // 3. Atualizar contractSchools
+    if (contratoId) {
+      setContractSchools((prev) =>
+        prev.map((ce) => {
+          if (ce.contrato_id === contratoId && ce.escola_id === escolaId) {
+            return { ...ce, rota_logistica_id: destinoRotaId }
+          }
+          return ce
+        }),
+      )
+
+      // Atualizar também na lista de contratos
+      setContracts((prev) =>
+        prev.map((c) => {
+          if (c.id !== contratoId) return c
+          return {
+            ...c,
+            escolas: c.escolas.map((esc) => {
+              if (esc.escolaId === escolaId) {
+                return {
+                  ...esc,
+                  rotaLogisticaId: destinoRotaId,
+                  rotaLogisticaNome: nomeRotaDestino,
+                }
+              }
+              return esc
+            }),
+          }
+        }),
+      )
+    }
+
+    try {
+      const res = await rotasLogisticasService.moverEscolaEntreRotas({
+        escola_id: escolaId,
+        origem_rota_id: efetivaOrigemId,
+        destino_rota_id: destinoRotaId,
+        target_ordem: targetOrdem,
+      })
+
+      if (res && res.success) {
+        // Se o backend retornou as paradas salvas atualizadas, sincronizar o state
+        if (res.paradas_destino || res.paradas_origem) {
+          setParadasRota((prev) => {
+            let next = prev.filter(
+              (p) =>
+                p.rota_logistica_id !== destinoRotaId &&
+                (efetivaOrigemId ? p.rota_logistica_id !== efetivaOrigemId : true),
+            )
+            if (res.paradas_origem && res.paradas_origem.length > 0) {
+              next = [...next, ...res.paradas_origem]
+            }
+            if (res.paradas_destino && res.paradas_destino.length > 0) {
+              next = [...next, ...res.paradas_destino]
+            }
+            return next.sort((a, b) => a.ordem - b.ordem)
+          })
+        }
+        return true
+      }
+      return false
+    } catch (err: any) {
+      console.error('Erro ao mover escola entre rotas:', err)
+      // Rollback
+      setParadasRota(prevParadas)
+      setOrders(prevOrders)
+      setContractSchools(prevContractSchools)
+      setContracts(prevContracts)
+      toast.error('Falha ao mover escola para outra rota.')
+      return false
+    }
+  }
+
   const updateCicloStatus = async (
     cicloId: string,
     status: 'coletando' | 'correcao' | 'fechado',
@@ -2095,6 +2287,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         marcarNaoEntreguePedido,
         atribuirPedidosARotaLogistica,
         salvarSequenciamentoParadas,
+        moverEscolaEntreRotas,
         updateCicloStatus,
         createCiclo,
         generateAtesto,

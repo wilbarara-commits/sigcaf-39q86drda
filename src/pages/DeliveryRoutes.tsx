@@ -84,6 +84,7 @@ export default function DeliveryRoutes() {
     marcarNaoEntreguePedido,
     atribuirPedidosARotaLogistica,
     salvarSequenciamentoParadas,
+    moverEscolaEntreRotas,
     updateOrderStatus,
     refreshData,
   } = useApp()
@@ -138,9 +139,22 @@ export default function DeliveryRoutes() {
   const [detalheMotivoLogistico, setDetalheMotivoLogistico] = useState('')
   const [isProcessingUndelivered, setIsProcessingUndelivered] = useState(false)
 
-  // Estado de Drag and Drop para reordenamento de paradas
+  // Estado de Drag and Drop para movimentação entre rotas e sequenciamento de paradas
   const [draggedEscolaId, setDraggedEscolaId] = useState<string | null>(null)
+  const [draggedSourceRotaId, setDraggedSourceRotaId] = useState<string | null>(null)
+  const [dragOverRotaId, setDragOverRotaId] = useState<string | null>(null)
   const [dragOverEscolaId, setDragOverEscolaId] = useState<string | null>(null)
+  const [isMovingSchool, setIsMovingSchool] = useState(false)
+
+  // Estado para modal/diálogo mobile de mover escola para outra rota
+  const [mobileMoveDialogOpen, setMobileMoveDialogOpen] = useState(false)
+  const [schoolToMoveMobile, setSchoolToMoveMobile] = useState<{
+    escolaId: string
+    escolaNome: string
+    origemRotaId: string
+    origemRotaNome: string
+  } | null>(null)
+  const [targetRotaIdMobile, setTargetRotaIdMobile] = useState<string>('')
 
   // Contrato atualmente focado
   const currentContrato = useMemo(() => {
@@ -543,54 +557,200 @@ export default function DeliveryRoutes() {
     }
   }
 
-  // Drag and Drop nativo de sequenciamento de paradas
-  const handleDragStart = (e: React.DragEvent, escolaId: string) => {
+  // Drag and Drop nativo: início do arraste da escola
+  const handleDragStart = (e: React.DragEvent, escolaId: string, sourceRotaId: string) => {
     setDraggedEscolaId(escolaId)
+    setDraggedSourceRotaId(sourceRotaId)
     e.dataTransfer.effectAllowed = 'move'
-    e.dataTransfer.setData('text/plain', escolaId)
+    e.dataTransfer.setData('text/plain', JSON.stringify({ escolaId, sourceRotaId }))
   }
 
-  const handleDragOver = (e: React.DragEvent, escolaId: string) => {
+  const handleDragEnd = () => {
+    setDraggedEscolaId(null)
+    setDraggedSourceRotaId(null)
+    setDragOverRotaId(null)
+    setDragOverEscolaId(null)
+  }
+
+  // Hover sobre uma rota específica (área de drop da rota inteira ou do container)
+  const handleDragOverRota = (e: React.DragEvent, targetRotaId: string) => {
     e.preventDefault()
+    e.dataTransfer.dropEffect = 'move'
+    if (dragOverRotaId !== targetRotaId) {
+      setDragOverRotaId(targetRotaId)
+    }
+  }
+
+  // Hover sobre uma parada específica de uma rota
+  const handleDragOverParada = (e: React.DragEvent, escolaId: string, rotaId: string) => {
+    e.preventDefault()
+    e.stopPropagation()
     e.dataTransfer.dropEffect = 'move'
     if (dragOverEscolaId !== escolaId) {
       setDragOverEscolaId(escolaId)
     }
+    if (dragOverRotaId !== rotaId) {
+      setDragOverRotaId(rotaId)
+    }
   }
 
-  const handleDrop = async (
+  // Drop sobre uma rota (ao soltar no card/área da rota, sem soltar em uma parada específica)
+  const handleDropOnRota = async (e: React.DragEvent, targetRotaId: string) => {
+    e.preventDefault()
+    e.stopPropagation()
+
+    let sourceEscolaId = draggedEscolaId
+    let sourceRotaId = draggedSourceRotaId
+
+    try {
+      const dataStr = e.dataTransfer.getData('text/plain')
+      if (dataStr) {
+        const parsed = JSON.parse(dataStr)
+        if (parsed.escolaId) sourceEscolaId = parsed.escolaId
+        if (parsed.sourceRotaId) sourceRotaId = parsed.sourceRotaId
+      }
+    } catch {
+      // Usa estados já capturados
+    }
+
+    handleDragEnd()
+
+    if (!sourceEscolaId) return
+
+    // Se já estiver na mesma rota e não soltou em uma parada específica, não faz nada
+    if (sourceRotaId === targetRotaId) {
+      return
+    }
+
+    const sch = schools.find((s) => s.id === sourceEscolaId)
+    const destRota = rotasLogisticas.find((r) => r.id === targetRotaId)
+    const schoolName = sch?.name || 'Escola'
+    const destName = destRota?.nome || 'Rota de destino'
+
+    setIsMovingSchool(true)
+    try {
+      const ok = await moverEscolaEntreRotas({
+        escolaId: sourceEscolaId,
+        origemRotaId: sourceRotaId || undefined,
+        destinoRotaId: targetRotaId,
+      })
+      if (ok) {
+        toast.success(`"${schoolName}" movida para a ${destName}!`)
+      }
+    } finally {
+      setIsMovingSchool(false)
+    }
+  }
+
+  // Drop sobre uma parada específica (determina posição e renumeração)
+  const handleDropOnParada = async (
     e: React.DragEvent,
     targetEscolaId: string,
-    rotaId: string,
-    currentParadas: Array<{ escolaId: string; ordem: number }>,
+    targetRotaId: string,
+    targetParadas: Array<{ escolaId: string; ordem: number }>,
   ) => {
     e.preventDefault()
-    setDragOverEscolaId(null)
-    const sourceEscolaId = draggedEscolaId || e.dataTransfer.getData('text/plain')
-    setDraggedEscolaId(null)
+    e.stopPropagation()
+
+    let sourceEscolaId = draggedEscolaId
+    let sourceRotaId = draggedSourceRotaId
+
+    try {
+      const dataStr = e.dataTransfer.getData('text/plain')
+      if (dataStr) {
+        const parsed = JSON.parse(dataStr)
+        if (parsed.escolaId) sourceEscolaId = parsed.escolaId
+        if (parsed.sourceRotaId) sourceRotaId = parsed.sourceRotaId
+      }
+    } catch {
+      // Usa os estados
+    }
+
+    handleDragEnd()
 
     if (!sourceEscolaId || sourceEscolaId === targetEscolaId) return
 
-    const sourceIndex = currentParadas.findIndex((p) => p.escolaId === sourceEscolaId)
-    const targetIndex = currentParadas.findIndex((p) => p.escolaId === targetEscolaId)
+    const sch = schools.find((s) => s.id === sourceEscolaId)
+    const destRota = rotasLogisticas.find((r) => r.id === targetRotaId)
+    const schoolName = sch?.name || 'Escola'
+    const destName = destRota?.nome || 'Rota'
 
-    if (sourceIndex === -1 || targetIndex === -1) return
+    // Caso 1: Mesma rota (reordenação interna das paradas)
+    if (sourceRotaId === targetRotaId) {
+      const sourceIndex = targetParadas.findIndex((p) => p.escolaId === sourceEscolaId)
+      const targetIndex = targetParadas.findIndex((p) => p.escolaId === targetEscolaId)
 
-    // Reordenar a lista
-    const reordered = [...currentParadas]
-    const [movedItem] = reordered.splice(sourceIndex, 1)
-    reordered.splice(targetIndex, 0, movedItem)
+      if (sourceIndex === -1 || targetIndex === -1) return
 
-    // Recalcular ordens 1, 2, 3...
-    const payload = reordered.map((item, idx) => ({
-      escola_id: item.escolaId,
-      ordem: idx + 1,
-    }))
+      const reordered = [...targetParadas]
+      const [movedItem] = reordered.splice(sourceIndex, 1)
+      reordered.splice(targetIndex, 0, movedItem)
 
-    // Salvar automaticamente no banco em transação/batch único com update otimista local imediato
-    const ok = await salvarSequenciamentoParadas(rotaId, payload)
-    if (ok) {
-      toast.success('Sequência de paradas atualizada com sucesso!')
+      const payload = reordered.map((item, idx) => ({
+        escola_id: item.escolaId,
+        ordem: idx + 1,
+      }))
+
+      const ok = await salvarSequenciamentoParadas(targetRotaId, payload)
+      if (ok) {
+        toast.success('Sequência de paradas atualizada!')
+      }
+      return
+    }
+
+    // Caso 2: Movimentação entre rotas distintas soltando em posição de parada específica
+    const targetIndex = targetParadas.findIndex((p) => p.escolaId === targetEscolaId)
+    const targetOrdem = targetIndex !== -1 ? targetIndex + 1 : undefined
+
+    setIsMovingSchool(true)
+    try {
+      const ok = await moverEscolaEntreRotas({
+        escolaId: sourceEscolaId,
+        origemRotaId: sourceRotaId || undefined,
+        destinoRotaId: targetRotaId,
+        targetOrdem,
+      })
+      if (ok) {
+        toast.success(`"${schoolName}" movida para a ${destName} (parada #${targetOrdem || 1})!`)
+      }
+    } finally {
+      setIsMovingSchool(false)
+    }
+  }
+
+  // Acionamento mobile / fallback por botão
+  const handleOpenMobileMove = (
+    escolaId: string,
+    escolaNome: string,
+    origemRotaId: string,
+    origemRotaNome: string,
+  ) => {
+    setSchoolToMoveMobile({ escolaId, escolaNome, origemRotaId, origemRotaNome })
+    // Primeira rota diferente da atual
+    const outra = filteredRotasLogisticas.find((r) => r.id !== origemRotaId)
+    setTargetRotaIdMobile(outra?.id || '')
+    setMobileMoveDialogOpen(true)
+  }
+
+  const handleConfirmMobileMove = async () => {
+    if (!schoolToMoveMobile || !targetRotaIdMobile) return
+    setIsMovingSchool(true)
+    try {
+      const destRota = rotasLogisticas.find((r) => r.id === targetRotaIdMobile)
+      const ok = await moverEscolaEntreRotas({
+        escolaId: schoolToMoveMobile.escolaId,
+        origemRotaId: schoolToMoveMobile.origemRotaId,
+        destinoRotaId: targetRotaIdMobile,
+      })
+      if (ok) {
+        toast.success(
+          `"${schoolToMoveMobile.escolaNome}" movida para a ${destRota?.nome || 'nova rota'}!`,
+        )
+        setMobileMoveDialogOpen(false)
+        setSchoolToMoveMobile(null)
+      }
+    } finally {
+      setIsMovingSchool(false)
     }
   }
 
@@ -729,11 +889,19 @@ export default function DeliveryRoutes() {
             const hasPendentes = item.pedidosPendentes.length > 0
             const hasEmRota = item.pedidosEmRota.length > 0
             const totalEmTransito = item.pedidosPendentes.length + item.pedidosEmRota.length
+            const isDraggingOverThisRota =
+              dragOverRotaId === item.rota.id && draggedSourceRotaId !== item.rota.id
 
             return (
               <Card
                 key={item.rota.id}
-                className="flex flex-col border-t-4 border-t-primary shadow-sm hover:shadow-md transition-shadow"
+                onDragOver={(e) => handleDragOverRota(e, item.rota.id)}
+                onDrop={(e) => handleDropOnRota(e, item.rota.id)}
+                className={`flex flex-col border-t-4 border-t-primary shadow-sm hover:shadow-md transition-all ${
+                  isDraggingOverThisRota
+                    ? 'ring-2 ring-primary ring-offset-2 bg-primary/[0.04] border-primary scale-[1.008]'
+                    : ''
+                }`}
               >
                 <CardHeader className="pb-3">
                   <div className="flex justify-between items-start gap-2">
@@ -881,17 +1049,38 @@ export default function DeliveryRoutes() {
                   <div>
                     <div className="flex items-center justify-between mb-2">
                       <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
-                        <ArrowUpDown className="h-3.5 w-3.5" /> Sequência de Paradas (Arraste para
-                        Reordenar)
+                        <ArrowUpDown className="h-3.5 w-3.5" /> Sequência de Paradas
                       </h4>
                       <span className="text-[10px] text-muted-foreground">
                         {item.paradasOrdenadas.length} escola(s) atendida(s)
                       </span>
                     </div>
 
+                    <p className="text-[11px] text-muted-foreground mb-2">
+                      Arraste uma escola para reordenar dentro da rota ou{' '}
+                      <strong>solte em outra rota</strong> para transferi-la.
+                    </p>
+
+                    {/* Destaque visual quando arrastando de outra rota para cá */}
+                    {isDraggingOverThisRota && (
+                      <div className="p-3 mb-2 rounded-lg border-2 border-dashed border-primary bg-primary/10 text-center text-xs font-semibold text-primary animate-pulse flex items-center justify-center gap-2">
+                        <Sparkles className="h-4 w-4" /> Solte aqui para mover a escola para a{' '}
+                        {item.rota.nome}
+                      </div>
+                    )}
+
                     {item.paradasOrdenadas.length === 0 ? (
-                      <div className="py-6 text-center text-muted-foreground border border-dashed rounded-lg text-xs">
+                      <div
+                        onDragOver={(e) => handleDragOverRota(e, item.rota.id)}
+                        onDrop={(e) => handleDropOnRota(e, item.rota.id)}
+                        className={`py-6 text-center text-muted-foreground border border-dashed rounded-lg text-xs transition-colors ${
+                          isDraggingOverThisRota ? 'border-primary bg-primary/15' : ''
+                        }`}
+                      >
                         Nenhuma escola vinculada a esta rota.
+                        <p className="text-[10px] text-muted-foreground mt-1">
+                          Você pode arrastar uma escola de outra rota e soltá-la aqui.
+                        </p>
                         <div className="mt-2">
                           <Button
                             variant="outline"
@@ -904,18 +1093,26 @@ export default function DeliveryRoutes() {
                         </div>
                       </div>
                     ) : (
-                      <div className="space-y-2 max-h-[380px] overflow-y-auto pr-1">
+                      <div
+                        className="space-y-2 max-h-[380px] overflow-y-auto pr-1"
+                        onDragOver={(e) => handleDragOverRota(e, item.rota.id)}
+                        onDrop={(e) => handleDropOnRota(e, item.rota.id)}
+                      >
                         {item.paradasOrdenadas.map((parada) => {
                           const isOver = dragOverEscolaId === parada.escolaId
+                          const isBeingDragged = draggedEscolaId === parada.escolaId
 
                           return (
                             <div
                               key={parada.escolaId}
                               draggable
-                              onDragStart={(e) => handleDragStart(e, parada.escolaId)}
-                              onDragOver={(e) => handleDragOver(e, parada.escolaId)}
+                              onDragStart={(e) => handleDragStart(e, parada.escolaId, item.rota.id)}
+                              onDragEnd={handleDragEnd}
+                              onDragOver={(e) =>
+                                handleDragOverParada(e, parada.escolaId, item.rota.id)
+                              }
                               onDrop={(e) =>
-                                handleDrop(
+                                handleDropOnParada(
                                   e,
                                   parada.escolaId,
                                   item.rota.id,
@@ -925,40 +1122,68 @@ export default function DeliveryRoutes() {
                                   })),
                                 )
                               }
-                              className={`p-2.5 rounded-lg border bg-card text-xs space-y-2 shadow-xs transition-colors cursor-move ${
-                                isOver
-                                  ? 'border-primary border-2 bg-primary/10'
-                                  : 'hover:border-primary/40'
+                              className={`p-2.5 rounded-lg border bg-card text-xs space-y-2 shadow-xs transition-all cursor-grab active:cursor-grabbing select-none ${
+                                isBeingDragged
+                                  ? 'opacity-40 border-dashed border-primary scale-[0.98]'
+                                  : isOver
+                                    ? 'border-primary border-2 bg-primary/10 shadow-sm'
+                                    : 'hover:border-primary/50 hover:shadow-xs'
                               }`}
                             >
-                              <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-2">
+                              <div className="flex items-center justify-between gap-2">
+                                <div className="flex items-center gap-2 min-w-0">
                                   <GripVertical className="h-4 w-4 text-muted-foreground/60 shrink-0" />
-                                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground shrink-0">
+                                  <span
+                                    className="flex h-5 w-5 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground shrink-0"
+                                    title={`Parada #${parada.ordem} na ${item.rota.nome}`}
+                                  >
                                     {parada.ordem}
                                   </span>
-                                  <div>
-                                    <p className="font-semibold text-foreground">{parada.nome}</p>
-                                    <p className="text-[10px] text-muted-foreground">
+                                  <div className="min-w-0">
+                                    <p className="font-semibold text-foreground truncate">
+                                      {parada.nome}
+                                    </p>
+                                    <p className="text-[10px] text-muted-foreground truncate">
                                       {parada.endereco || 'Endereço não informado'}
                                     </p>
                                   </div>
                                 </div>
 
-                                {/* Referência de Volume: Nº de Alunos da Escola */}
-                                <div className="flex items-center gap-2 shrink-0">
+                                {/* Referência de Volume e Ação Mobile */}
+                                <div className="flex items-center gap-1.5 shrink-0">
                                   {parada.alunos !== undefined && parada.alunos !== null && (
                                     <Badge
                                       variant="secondary"
-                                      className="text-[10px] font-mono font-medium"
+                                      className="text-[10px] font-mono font-medium hidden sm:inline-flex"
                                       title="Número de alunos matriculados como referência de volume da escola"
                                     >
                                       {parada.alunos} alunos
                                     </Badge>
                                   )}
                                   <Badge variant="outline" className="text-[10px]">
-                                    {parada.pedidos.length} pedido(s)
+                                    {parada.pedidos.length} ped.
                                   </Badge>
+
+                                  {/* Botão de transferir rota para mobile / facilidade com clique */}
+                                  {filteredRotasLogisticas.length > 1 && (
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-6 w-6 text-muted-foreground hover:text-primary shrink-0"
+                                      title="Mover escola para outra rota"
+                                      onClick={(e) => {
+                                        e.stopPropagation()
+                                        handleOpenMobileMove(
+                                          parada.escolaId,
+                                          parada.nome,
+                                          item.rota.id,
+                                          item.rota.nome,
+                                        )
+                                      }}
+                                    >
+                                      <ArrowUpDown className="h-3 w-3" />
+                                    </Button>
+                                  )}
                                 </div>
                               </div>
 
@@ -1652,6 +1877,85 @@ Ou apenas o nome da escola copiado do Excel/Word`}
           }}
         />
       )}
+
+      {/* Modal / Diálogo de Transferência de Escola entre Rotas (Acessível via Mobile / Clique) */}
+      <Dialog
+        open={mobileMoveDialogOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            setSchoolToMoveMobile(null)
+          }
+          setMobileMoveDialogOpen(open)
+        }}
+      >
+        <DialogContent className="sm:max-w-[420px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Truck className="h-5 w-5 text-primary" /> Mover Escola de Rota
+            </DialogTitle>
+            <DialogDescription>
+              Transfira <strong>{schoolToMoveMobile?.escolaNome}</strong> da{' '}
+              <strong>{schoolToMoveMobile?.origemRotaNome}</strong> para outra rota deste contrato.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3 py-2 text-xs">
+            <div className="space-y-1.5">
+              <Label htmlFor="target-route-select" className="font-semibold">
+                Selecione a Rota de Destino <span className="text-destructive">*</span>
+              </Label>
+              <Select
+                value={targetRotaIdMobile}
+                onValueChange={(val) => setTargetRotaIdMobile(val)}
+              >
+                <SelectTrigger id="target-route-select">
+                  <SelectValue placeholder="Selecione a rota" />
+                </SelectTrigger>
+                <SelectContent>
+                  {filteredRotasLogisticas
+                    .filter((r) => r.id !== schoolToMoveMobile?.origemRotaId)
+                    .map((r) => (
+                      <SelectItem key={r.id} value={r.id}>
+                        {r.nome}
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+              <p className="text-[10px] text-muted-foreground">
+                A escola será posicionada no final da nova rota e os números de parada serão
+                renumerados automaticamente.
+              </p>
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              type="button"
+              variant="outline"
+              disabled={isMovingSchool}
+              onClick={() => {
+                setMobileMoveDialogOpen(false)
+                setSchoolToMoveMobile(null)
+              }}
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              disabled={isMovingSchool || !targetRotaIdMobile}
+              onClick={handleConfirmMobileMove}
+            >
+              {isMovingSchool ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Movendo...
+                </>
+              ) : (
+                'Confirmar Mudança de Rota'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

@@ -127,6 +127,26 @@ export const rotasLogisticasService = {
     return await pb.collection('paradas_rota').delete(id)
   },
 
+  async moverEscolaEntreRotas(data: {
+    escola_id: string
+    origem_rota_id?: string
+    destino_rota_id: string
+    target_ordem?: number
+  }): Promise<{
+    success: boolean
+    paradas_origem?: ParadaRotaRecord[]
+    paradas_destino?: ParadaRotaRecord[]
+  }> {
+    return await pb.send<{
+      success: boolean
+      paradas_origem?: ParadaRotaRecord[]
+      paradas_destino?: ParadaRotaRecord[]
+    }>('/backend/v1/rotas-logisticas/mover-escola', {
+      method: 'POST',
+      body: data,
+    })
+  },
+
   // Despachos
   async getDespachos(contratoId?: string): Promise<DespachoRecord[]> {
     const filter = contratoId ? `contrato_id = "${contratoId}"` : ''
