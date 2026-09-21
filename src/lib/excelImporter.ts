@@ -40,6 +40,7 @@ export interface ParsedOrderItem {
   isAmbiguous?: boolean
   quantity: number
   price: number
+  unit?: string
   isContractItem?: boolean
 }
 
@@ -1128,6 +1129,7 @@ export function parseSecretaryExcel(
             matchInfo.matchMethod || (matchInfo.matchedViaAlias ? 'alias' : 'contract_name'),
           quantity: qty,
           price: resolvedPrice,
+          unit: matchedProd.unit || 'Kg',
           isContractItem: true,
         })
       }

@@ -44,6 +44,7 @@ import {
   PackageCheck,
   HelpCircle,
   Merge,
+  Eye,
 } from 'lucide-react'
 import {
   Dialog,
@@ -117,6 +118,10 @@ export default function ExcelImport() {
   const [newSchoolTipo, setNewSchoolTipo] = useState<EscolaTipo | ''>('')
   const [newSchoolRota, setNewSchoolRota] = useState('')
   const [isCreatingSchool, setIsCreatingSchool] = useState(false)
+
+  // Diálogo para visualização detalhada de um pedido na prévia
+  const [viewOrderDialogOpen, setViewOrderDialogOpen] = useState(false)
+  const [viewingOrder, setViewingOrder] = useState<ParsedSchoolOrder | null>(null)
 
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -1234,15 +1239,18 @@ export default function ExcelImport() {
 
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                   {/* Grupo 1: Casados via Nome no Contrato */}
-                  <div className="space-y-2 rounded-md border p-3 bg-muted/20">
-                    <div className="flex items-center justify-between border-b pb-2">
+                  <div className="space-y-2 rounded-md border p-3 bg-emerald-500/5 border-emerald-200 dark:border-emerald-900/40">
+                    <div className="flex items-center justify-between border-b border-emerald-200/60 dark:border-emerald-900/60 pb-2">
                       <div className="flex items-center gap-1.5">
-                        <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                        <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
                         <span className="text-xs font-semibold text-foreground">
                           Casados via Nome no Contrato
                         </span>
                       </div>
-                      <Badge variant="secondary" className="text-[10px]">
+                      <Badge
+                        variant="secondary"
+                        className="text-[10px] bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300"
+                      >
                         {parsedData.productsMatchedByName?.length || 0} item(ns)
                       </Badge>
                     </div>
@@ -1257,26 +1265,52 @@ export default function ExcelImport() {
                         {parsedData.productsMatchedByName.map((p, idx) => (
                           <div
                             key={idx}
-                            className="p-2 rounded bg-background border text-xs flex flex-col gap-1"
+                            className="p-2.5 rounded bg-background border border-emerald-200 dark:border-emerald-900/40 text-xs space-y-1.5 shadow-sm"
                           >
                             <div className="flex items-start justify-between gap-2">
-                              <span className="font-medium text-foreground">
-                                {p.nomeContratoMatched || p.productNameMatched}
-                              </span>
-                              <span className="font-mono text-[11px] font-semibold text-emerald-600 shrink-0">
+                              <div className="flex flex-col">
+                                <span className="font-semibold text-emerald-950 dark:text-emerald-200">
+                                  {p.nomeContratoMatched || p.productNameMatched}
+                                </span>
+                                {p.productNameMatched &&
+                                  p.productNameMatched !== p.nomeContratoMatched && (
+                                    <span className="text-[10px] text-muted-foreground">
+                                      Catálogo mestre: {p.productNameMatched}
+                                    </span>
+                                  )}
+                              </div>
+                              <span className="font-mono text-[11px] font-semibold text-emerald-700 dark:text-emerald-300 shrink-0">
                                 {p.totalQuantity.toLocaleString('pt-BR')} Kg/Un
                               </span>
                             </div>
-                            <div className="flex items-center justify-between text-[11px] text-muted-foreground gap-2">
-                              <span className="truncate" title={`Planilha: "${p.productNameRaw}"`}>
-                                Planilha:{' '}
-                                <strong className="font-normal text-foreground">
-                                  "{p.productNameRaw}"
-                                </strong>
+
+                            <div className="p-1.5 rounded bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-200/60 dark:border-emerald-800/40 text-[11px] flex items-center gap-2 flex-wrap">
+                              <span className="text-muted-foreground">Nome na Planilha:</span>
+                              <strong className="text-foreground font-medium">
+                                "{p.productNameRaw}"
+                              </strong>
+                              <ArrowRight className="h-3 w-3 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                              <span className="text-muted-foreground">Nome no Contrato:</span>
+                              <Badge
+                                variant="outline"
+                                className="text-[10px] bg-emerald-100 text-emerald-800 border-emerald-300 dark:bg-emerald-950 dark:text-emerald-300 font-medium"
+                              >
+                                {p.nomeContratoMatched || p.productNameMatched}
+                              </Badge>
+                            </div>
+
+                            <div className="flex items-center justify-between text-[10px] text-muted-foreground pt-0.5">
+                              <span>
+                                Presente em <strong>{p.schoolsCount}</strong> pedido(s)
                               </span>
-                              <span className="text-[10px] shrink-0">
-                                {p.schoolsCount} pedido(s)
-                              </span>
+                              {p.sheets && p.sheets.length > 0 && (
+                                <span
+                                  className="truncate max-w-[200px]"
+                                  title={p.sheets.join(', ')}
+                                >
+                                  Abas: {p.sheets.join(', ')}
+                                </span>
+                              )}
                             </div>
                           </div>
                         ))}
@@ -1407,6 +1441,7 @@ export default function ExcelImport() {
                       <TableHead>Itens / Demanda</TableHead>
                       <TableHead className="text-right">Valor Estimado</TableHead>
                       <TableHead>Status / Pendência</TableHead>
+                      <TableHead className="text-center w-[90px]">Pedido</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -1551,7 +1586,22 @@ export default function ExcelImport() {
                                 </Button>
                               </div>
                             )}
-                          </TableCell>{' '}
+                          </TableCell>
+                          <TableCell className="text-center">
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-8 w-8 p-0 text-muted-foreground hover:text-primary hover:bg-primary/10"
+                              title="Visualizar detalhes do pedido"
+                              onClick={() => {
+                                setViewingOrder(po)
+                                setViewOrderDialogOpen(true)
+                              }}
+                            >
+                              <Eye className="h-4 w-4" />
+                              <span className="sr-only">Visualizar pedido</span>
+                            </Button>
+                          </TableCell>
                         </TableRow>
                       )
                     })}
@@ -1858,6 +1908,225 @@ export default function ExcelImport() {
                   <CheckCircle2 className="h-3.5 w-3.5" /> Salvar & Vincular
                 </>
               )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* DIALOG DE VISUALIZAÇÃO DETALHADA DO PEDIDO */}
+      <Dialog open={viewOrderDialogOpen} onOpenChange={setViewOrderDialogOpen}>
+        <DialogContent className="sm:max-w-[700px] max-h-[85vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Eye className="h-5 w-5 text-primary" /> Visualização do Pedido na Prévia
+            </DialogTitle>
+            <DialogDescription>
+              Conferência dos itens, quantidades, valores e status de casamento deste pedido.
+            </DialogDescription>
+          </DialogHeader>
+
+          {viewingOrder && (
+            <div className="space-y-4 pt-1 text-xs overflow-y-auto flex-1 pr-1">
+              {/* Cabeçalho do Pedido */}
+              <div className="p-3 rounded-lg border bg-muted/30 grid grid-cols-1 md:grid-cols-2 gap-2.5">
+                <div>
+                  <span className="text-[11px] text-muted-foreground block">
+                    Escola na Planilha:
+                  </span>
+                  <span className="font-semibold text-sm text-foreground">
+                    {viewingOrder.schoolNameRaw}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-[11px] text-muted-foreground block">
+                    Escola Vinculada (Mestre/Contrato):
+                  </span>
+                  {viewingOrder.isLinkedToContract ? (
+                    <span className="font-semibold text-emerald-600 flex items-center gap-1">
+                      <CheckCircle2 className="h-3.5 w-3.5" /> {viewingOrder.schoolNameMatched}
+                    </span>
+                  ) : viewingOrder.matchStatus === 'needs_link' ? (
+                    <span className="font-semibold text-amber-600 flex items-center gap-1">
+                      <Building2 className="h-3.5 w-3.5" /> {viewingOrder.schoolNameMatched}{' '}
+                      (precisa vincular)
+                    </span>
+                  ) : (
+                    <span className="font-semibold text-rose-600 flex items-center gap-1">
+                      <AlertTriangle className="h-3.5 w-3.5" /> Não cadastrada no mestre
+                    </span>
+                  )}
+                </div>
+                <div>
+                  <span className="text-[11px] text-muted-foreground block">Aba(s) de Origem:</span>
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <Badge variant="outline" className="font-mono text-[11px]">
+                      {viewingOrder.routeRaw}
+                    </Badge>
+                    {viewingOrder.sheetMatchedContractRota && (
+                      <span className="text-[10px] text-emerald-600">
+                        (Rota correspondente: {viewingOrder.sheetMatchedContractRota})
+                      </span>
+                    )}
+                    {viewingOrder.mergedColumnsCount && viewingOrder.mergedColumnsCount > 1 && (
+                      <Badge
+                        variant="secondary"
+                        className="text-[10px] bg-sky-100 text-sky-800 dark:bg-sky-950 dark:text-sky-300"
+                      >
+                        {viewingOrder.mergedColumnsCount} colunas somadas
+                      </Badge>
+                    )}
+                  </div>
+                </div>
+                <div>
+                  <span className="text-[11px] text-muted-foreground block">Ciclo & Contrato:</span>
+                  <span className="text-foreground">
+                    Ciclo: <strong>{activeCiclo?.nome || '—'}</strong> | Contrato:{' '}
+                    <strong>{selectedContract?.numero || '—'}</strong>
+                  </span>
+                </div>
+              </div>
+
+              {/* Tabela de Itens */}
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <h4 className="font-semibold text-xs text-foreground">
+                    Itens do Pedido ({viewingOrder.items.length})
+                  </h4>
+                  <span className="text-[11px] text-muted-foreground">
+                    Total em volume:{' '}
+                    <strong>
+                      {viewingOrder.items
+                        .reduce((acc, i) => acc + (i.quantity || 0), 0)
+                        .toLocaleString('pt-BR')}
+                    </strong>
+                  </span>
+                </div>
+
+                <div className="rounded-md border max-h-[280px] overflow-y-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="text-[11px]">
+                        <TableHead className="py-2">Item na Planilha</TableHead>
+                        <TableHead className="py-2">Casamento / Contrato</TableHead>
+                        <TableHead className="py-2 text-right">Qtd.</TableHead>
+                        <TableHead className="py-2 text-right">Preço Unit.</TableHead>
+                        <TableHead className="py-2 text-right">Subtotal</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {viewingOrder.items.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={5} className="text-center py-4 text-muted-foreground">
+                            Nenhum item válido identificado neste pedido.
+                          </TableCell>
+                        </TableRow>
+                      ) : (
+                        viewingOrder.items.map((item, itIdx) => {
+                          const subtotal = (item.quantity || 0) * (item.price || 0)
+                          const unit = item.unit || 'Kg'
+
+                          return (
+                            <TableRow key={itIdx} className="text-xs">
+                              <TableCell className="font-medium">
+                                <span className="text-foreground">{item.productNameRaw}</span>
+                              </TableCell>
+                              <TableCell>
+                                <div className="space-y-0.5">
+                                  {item.nomeContratoMatched && (
+                                    <div className="font-medium text-emerald-900 dark:text-emerald-200">
+                                      {item.nomeContratoMatched}
+                                    </div>
+                                  )}
+                                  {item.productNameMatched &&
+                                    item.productNameMatched !== item.nomeContratoMatched && (
+                                      <div className="text-[10px] text-muted-foreground">
+                                        {item.productNameMatched}
+                                      </div>
+                                    )}
+                                  <div className="flex items-center gap-1 flex-wrap pt-0.5">
+                                    {item.matchedViaAlias ? (
+                                      <Badge
+                                        variant="outline"
+                                        className="text-[9px] py-0 bg-sky-50 text-sky-800 border-sky-300 dark:bg-sky-950 dark:text-sky-300"
+                                      >
+                                        Apelido: {item.matchedViaAlias}
+                                      </Badge>
+                                    ) : (
+                                      <Badge
+                                        variant="outline"
+                                        className="text-[9px] py-0 bg-emerald-50 text-emerald-800 border-emerald-300 dark:bg-emerald-950 dark:text-emerald-300"
+                                      >
+                                        Nome no Contrato
+                                      </Badge>
+                                    )}
+                                  </div>
+                                </div>
+                              </TableCell>
+                              <TableCell className="text-right font-mono font-medium">
+                                {item.quantity.toLocaleString('pt-BR')} {unit}
+                              </TableCell>
+                              <TableCell className="text-right font-mono text-muted-foreground">
+                                R$ {item.price.toFixed(2)}
+                              </TableCell>
+                              <TableCell className="text-right font-mono font-semibold text-foreground">
+                                R${' '}
+                                {subtotal.toLocaleString('pt-BR', {
+                                  minimumFractionDigits: 2,
+                                  maximumFractionDigits: 2,
+                                })}
+                              </TableCell>
+                            </TableRow>
+                          )
+                        })
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
+              </div>
+
+              {/* Rodapé do Pedido com Totais */}
+              <div className="p-3 rounded-lg border bg-emerald-50/50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-900/40 flex items-center justify-between">
+                <div>
+                  <span className="text-xs text-muted-foreground block">
+                    Total de Itens: <strong>{viewingOrder.items.length}</strong>
+                  </span>
+                  <span className="text-[11px] text-muted-foreground">
+                    Demanda Somada:{' '}
+                    <strong>
+                      {viewingOrder.items
+                        .reduce((acc, i) => acc + (i.quantity || 0), 0)
+                        .toLocaleString('pt-BR')}{' '}
+                      un/kg
+                    </strong>
+                  </span>
+                </div>
+                <div className="text-right">
+                  <span className="text-[11px] text-muted-foreground block">
+                    Valor Estimado do Pedido
+                  </span>
+                  <span className="text-base font-bold font-mono text-emerald-700 dark:text-emerald-300">
+                    R${' '}
+                    {viewingOrder.totalCalculated.toLocaleString('pt-BR', {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                    })}
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter className="pt-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setViewOrderDialogOpen(false)
+                setViewingOrder(null)
+              }}
+            >
+              Fechar
             </Button>
           </DialogFooter>
         </DialogContent>
