@@ -241,7 +241,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
         id: p.id,
         name: p.nome,
         unit: p.unidade,
-        disponibilidade: p.disponibilidade || 'normal',
         apelidos: p.apelidos || '',
         category: p.categoria || '',
         stock: p.estoque !== undefined ? Number(p.estoque) : undefined,
@@ -655,10 +654,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
             name: p.nome !== undefined ? p.nome : copy[existingIdx].name,
             unit: p.unidade !== undefined ? p.unidade : copy[existingIdx].unit,
             apelidos: p.apelidos !== undefined ? p.apelidos : copy[existingIdx].apelidos,
-            disponibilidade:
-              p.disponibilidade !== undefined
-                ? p.disponibilidade
-                : copy[existingIdx].disponibilidade,
             category: p.categoria !== undefined ? p.categoria : copy[existingIdx].category,
             stock: p.estoque !== undefined ? Number(p.estoque) : copy[existingIdx].stock,
             price:
@@ -671,7 +666,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
           id: p.id,
           name: p.nome,
           unit: p.unidade,
-          disponibilidade: p.disponibilidade || 'normal',
           apelidos: p.apelidos || '',
           category: p.categoria || '',
           stock: p.estoque !== undefined ? Number(p.estoque) : undefined,

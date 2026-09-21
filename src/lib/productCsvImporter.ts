@@ -26,7 +26,7 @@ export function areCategoriesEqual(catA?: string | null, catB?: string | null): 
 }
 
 export interface ProductFieldChange {
-  field: 'unidade' | 'disponibilidade'
+  field: 'unidade'
   label: string
   oldValue: string
   newValue: string
@@ -36,17 +36,14 @@ export interface ParsedCsvProductRow {
   index: number // 1-based, considerando cabeçalho na linha 1
   rawNome: string
   rawUnidade: string
-  rawDisponibilidade: string
 
   // Campos mapeados e normalizados finais (com defaults aplicados para novos ou preservados para existentes)
   nome: string
   unidade: string
-  disponibilidade: ProdutoDisponibilidade
 
   // Qual colunas vieram presentes/preenchidas na linha
   presentColumns: {
     unidade: boolean
-    disponibilidade: boolean
   }
 
   // Se existente no banco
@@ -149,16 +146,14 @@ export function normalizeDisponibilidade(val: string): {
 
 /**
  * Mapeia cabeçalhos para os índices correspondentes das colunas:
- * nome, unidade, disponibilidade
+ * nome, unidade
  */
 function findColumnIndexes(headerRow: string[]): {
   nomeIdx: number
   unidadeIdx: number
-  disponibilidadeIdx: number
 } {
   let nomeIdx = -1
   let unidadeIdx = -1
-  let disponibilidadeIdx = -1
 
   headerRow.forEach((col, idx) => {
     const norm = normalizeName(col)
@@ -176,26 +171,16 @@ function findColumnIndexes(headerRow: string[]): {
       (norm === 'unidade' || norm === 'un' || norm.includes('medida') || norm === 'und')
     ) {
       unidadeIdx = idx
-    } else if (
-      disponibilidadeIdx === -1 &&
-      (norm === 'disponibilidade' ||
-        norm.includes('disp') ||
-        norm.includes('safra') ||
-        norm.includes('status'))
-    ) {
-      disponibilidadeIdx = idx
     }
   })
 
   // Se não achou por nome flexível e tiver posições padrão
   if (nomeIdx === -1 && headerRow.length >= 1) nomeIdx = 0
   if (unidadeIdx === -1 && headerRow.length >= 2) unidadeIdx = 1
-  if (disponibilidadeIdx === -1 && headerRow.length >= 3) disponibilidadeIdx = 2
 
   return {
     nomeIdx,
     unidadeIdx,
-    disponibilidadeIdx,
   }
 }
 
@@ -245,7 +230,7 @@ export async function parseProductsInput(
   }
 
   const header = rawMatrix[0]
-  const { nomeIdx, unidadeIdx, disponibilidadeIdx } = findColumnIndexes(header)
+  const { nomeIdx, unidadeIdx } = findColumnIndexes(header)
 
   const dataRows = rawMatrix.slice(1)
   if (dataRows.length === 0) {
@@ -304,10 +289,6 @@ export async function parseProductsInput(
     const rawNome = nomeIdx !== -1 && row[nomeIdx] !== undefined ? String(row[nomeIdx]).trim() : ''
     const rawUnidade =
       unidadeIdx !== -1 && row[unidadeIdx] !== undefined ? String(row[unidadeIdx]).trim() : ''
-    const rawDisponibilidade =
-      disponibilidadeIdx !== -1 && row[disponibilidadeIdx] !== undefined
-        ? String(row[disponibilidadeIdx]).trim()
-        : ''
 
     const warnings: string[] = []
     const fieldChanges: ProductFieldChange[] = []
@@ -318,13 +299,10 @@ export async function parseProductsInput(
         index: rowIdx + 2,
         rawNome,
         rawUnidade,
-        rawDisponibilidade,
         nome: '',
         unidade: DEFAULT_PRODUCT_UNIT,
-        disponibilidade: 'normal',
         presentColumns: {
           unidade: false,
-          disponibilidade: false,
         },
         fieldChanges: [],
         status: 'error',
@@ -342,13 +320,10 @@ export async function parseProductsInput(
         index: rowIdx + 2,
         rawNome,
         rawUnidade,
-        rawDisponibilidade,
         nome: rawNome,
         unidade: rawUnidade ? rawUnidade.trim() : DEFAULT_PRODUCT_UNIT,
-        disponibilidade: 'normal',
         presentColumns: {
           unidade: Boolean(rawUnidade),
-          disponibilidade: Boolean(rawDisponibilidade),
         },
         fieldChanges: [],
         status: 'duplicate_file',
@@ -403,11 +378,9 @@ export async function parseProductsInput(
     const isExisting = Boolean(existingMaster)
 
     const hasRawUnidade = Boolean(rawUnidade)
-    const hasRawDisponibilidade = Boolean(rawDisponibilidade)
 
     const presentColumns = {
       unidade: hasRawUnidade,
-      disponibilidade: hasRawDisponibilidade,
     }
 
     // Unidade
@@ -425,19 +398,6 @@ export async function parseProductsInput(
       }
     }
 
-    // Disponibilidade
-    let finalDisponibilidade: ProdutoDisponibilidade = 'normal'
-    if (hasRawDisponibilidade) {
-      const normDisp = normalizeDisponibilidade(rawDisponibilidade)
-      finalDisponibilidade = normDisp.disponibilidade
-    } else {
-      if (isExisting) {
-        finalDisponibilidade = existingMaster!.disponibilidade || 'normal'
-      } else {
-        finalDisponibilidade = 'normal'
-      }
-    }
-
     // Se existente, calcular fieldChanges
     if (isExisting && existingMaster) {
       if (hasRawUnidade && finalUnidade !== existingMaster.unit) {
@@ -446,14 +406,6 @@ export async function parseProductsInput(
           label: 'Unidade',
           oldValue: existingMaster.unit || '(vazio)',
           newValue: finalUnidade,
-        })
-      }
-      if (hasRawDisponibilidade && finalDisponibilidade !== existingMaster.disponibilidade) {
-        fieldChanges.push({
-          field: 'disponibilidade',
-          label: 'Disponibilidade',
-          oldValue: existingMaster.disponibilidade || 'normal',
-          newValue: finalDisponibilidade,
         })
       }
     }
@@ -475,7 +427,6 @@ export async function parseProductsInput(
     } else {
       const defaultsApplied: string[] = []
       if (!hasRawUnidade) defaultsApplied.push(`unidade "${DEFAULT_PRODUCT_UNIT}"`)
-      if (!hasRawDisponibilidade) defaultsApplied.push('disponibilidade "Normal"')
 
       if (defaultsApplied.length > 0) {
         statusReason = `Novo produto com defaults aplicados (${defaultsApplied.join(', ')}).`
@@ -488,10 +439,8 @@ export async function parseProductsInput(
       index: rowIdx + 2,
       rawNome,
       rawUnidade,
-      rawDisponibilidade,
       nome: rawNome,
       unidade: finalUnidade,
-      disponibilidade: finalDisponibilidade,
       presentColumns,
       existingProductId: existingMaster?.id,
       existingProductName: existingMaster?.name,
@@ -534,7 +483,6 @@ export async function parseProductsFile(
       id: p.id,
       name: (p as any).name || (p as any).nome || '',
       unit: (p as any).unit || DEFAULT_PRODUCT_UNIT,
-      disponibilidade: (p as any).disponibilidade || 'normal',
     }
   })
 

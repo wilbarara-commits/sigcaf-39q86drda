@@ -35,36 +35,18 @@ export default function WhatsappCommunication() {
   const [loadingEnvios, setLoadingEnvios] = useState(false)
   const [sendingAll, setSendingAll] = useState(false)
 
-  // Itens em abundância e escassez do catálogo
-  const itensAbundantes = useMemo(
-    () => products.filter((p) => p.disponibilidade === 'abundancia').map((p) => p.name),
-    [products],
-  )
-  const itensEscassos = useMemo(
-    () => products.filter((p) => p.disponibilidade === 'escassez').map((p) => p.name),
-    [products],
-  )
-
   // Mensagem padrão customizável
   const [customMsg, setCustomMsg] = useState('')
 
   // Preencher template semanal
   useEffect(() => {
-    const abundStr =
-      itensAbundantes.length > 0 ? itensAbundantes.join(', ') : 'Diversos itens da horta'
-    const escassStr =
-      itensEscassos.length > 0 ? itensEscassos.join(', ') : 'Nenhum item com restrição'
-
     const tpl = `Olá! Mensagem da CooperGestão referente ao *${activeCiclo?.nome || 'Ciclo Semanal'}*.
-
-🥦 *Itens em Abundância (Incentivo de Pedido):* ${abundStr}
-⚠️ *Itens em Escassez (Limitar pedido):* ${escassStr}
 
 📋 *Link para formulário/lançamento:* https://coopergestao.app/pedidos
 Por favor, envie suas quantidades até o prazo da fase de coleta para garantir a entrega na sua rota!`
 
     setCustomMsg(tpl)
-  }, [activeCiclo, itensAbundantes, itensEscassos])
+  }, [activeCiclo])
 
   // Carregar histórico de envios do ciclo ativo
   const loadEnvios = async () => {
@@ -156,8 +138,7 @@ Por favor, envie suas quantidades até o prazo da fase de coleta para garantir a
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Comunicação Semanal (WhatsApp)</h1>
           <p className="text-muted-foreground">
-            Dispare templates informativos sobre disponibilidade de safra e acompanhe envios por
-            escola.
+            Dispare templates informativos sobre o ciclo e acompanhe envios por escola.
           </p>
         </div>
 
@@ -181,8 +162,7 @@ Por favor, envie suas quantidades até o prazo da fase de coleta para garantir a
                 <MessageSquare className="h-5 w-5 text-emerald-600" /> Template da Mensagem Semanal
               </CardTitle>
               <CardDescription>
-                Mensagem gerada com base na safra (abundância), escassez e diretrizes do ciclo *
-                {activeCiclo?.nome || 'ativo'}*.
+                Mensagem informativa e diretrizes para o ciclo *{activeCiclo?.nome || 'ativo'}*.
               </CardDescription>
             </div>
             <Button
@@ -202,14 +182,6 @@ Por favor, envie suas quantidades até o prazo da fase de coleta para garantir a
             onChange={(e) => setCustomMsg(e.target.value)}
             className="font-mono text-sm leading-relaxed"
           />
-          <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-            <Badge variant="outline" className="border-emerald-500/40 text-emerald-700">
-              {itensAbundantes.length} em abundância
-            </Badge>
-            <Badge variant="outline" className="border-amber-500/40 text-amber-700">
-              {itensEscassos.length} em escassez
-            </Badge>
-          </div>
         </CardContent>
       </Card>
 

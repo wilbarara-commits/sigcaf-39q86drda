@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-21T00:59:27.257Z",
+  "generatedAt": "2026-09-21T01:13:03.509Z",
   "collections": [
     {
       "name": "users",
@@ -111,13 +111,6 @@
           "required": false,
           "system": false,
           "autodateTriggers": ["onCreate", "onUpdate"]
-        },
-        {
-          "name": "disponibilidade",
-          "type": "select",
-          "required": false,
-          "system": false,
-          "selectValues": ["normal", "escassez", "abundancia"]
         },
         {
           "name": "apelidos",

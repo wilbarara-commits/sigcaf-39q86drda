@@ -11,7 +11,6 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { Badge } from '@/components/ui/badge'
 import {
   Dialog,
   DialogContent,
@@ -35,23 +34,17 @@ export default function Products() {
   const [importDialogOpen, setImportDialogOpen] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
-  // Estados de edição de produto (unidade, disponibilidade e apelidos)
+  // Estados de edição de produto (unidade e apelidos)
   const [editDialogOpen, setEditDialogOpen] = useState(false)
   const [editingProduct, setEditingProduct] = useState<any>(null)
   const [editUnidade, setEditUnidade] = useState(DEFAULT_PRODUCT_UNIT)
   const [editApelidos, setEditApelidos] = useState('')
-  const [editDisponibilidade, setEditDisponibilidade] = useState<
-    'normal' | 'escassez' | 'abundancia'
-  >('normal')
 
   // Estado de criação de novo produto
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
   const [newNome, setNewNome] = useState('')
   const [newUnidade, setNewUnidade] = useState(DEFAULT_PRODUCT_UNIT)
   const [newApelidos, setNewApelidos] = useState('')
-  const [newDisponibilidade, setNewDisponibilidade] = useState<
-    'normal' | 'escassez' | 'abundancia'
-  >('normal')
 
   const filteredProducts = products.filter((p) => {
     const term = search.toLowerCase()
@@ -66,7 +59,6 @@ export default function Products() {
     setEditingProduct(p)
     setEditUnidade(p.unit || DEFAULT_PRODUCT_UNIT)
     setEditApelidos(p.apelidos || '')
-    setEditDisponibilidade(p.disponibilidade || 'normal')
     setEditDialogOpen(true)
   }
 
@@ -74,7 +66,6 @@ export default function Products() {
     setNewNome('')
     setNewUnidade(DEFAULT_PRODUCT_UNIT)
     setNewApelidos('')
-    setNewDisponibilidade('normal')
     setCreateDialogOpen(true)
   }
 
@@ -87,7 +78,6 @@ export default function Products() {
     try {
       await produtosService.update(editingProduct.id, {
         unidade: trimmedUnidade,
-        disponibilidade: editDisponibilidade,
         apelidos: editApelidos.trim(),
       })
       toast.success(`Produto "${editingProduct.name}" atualizado com sucesso!`)
@@ -113,7 +103,6 @@ export default function Products() {
       await produtosService.create({
         nome: trimmedNome,
         unidade: newUnidade.trim() || DEFAULT_PRODUCT_UNIT,
-        disponibilidade: newDisponibilidade,
         apelidos: newApelidos.trim(),
       })
       toast.success(`Produto "${trimmedNome}" cadastrado com sucesso!`)
@@ -173,14 +162,13 @@ export default function Products() {
                 <TableRow>
                   <TableHead>Produto</TableHead>
                   <TableHead>Unidade</TableHead>
-                  <TableHead>Disponibilidade</TableHead>
                   {isAdmin && <TableHead className="text-right">Ação</TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {isLoading ? (
                   <TableRow>
-                    <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={3} className="text-center py-8 text-muted-foreground">
                       <div className="flex items-center justify-center gap-2">
                         <Loader2 className="h-4 w-4 animate-spin" />
                         Carregando produtos do banco...
@@ -189,59 +177,43 @@ export default function Products() {
                   </TableRow>
                 ) : filteredProducts.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={3} className="text-center py-8 text-muted-foreground">
                       Nenhum produto encontrado.
                     </TableCell>
                   </TableRow>
                 ) : (
-                  filteredProducts.map((product) => {
-                    const dispBadge =
-                      product.disponibilidade === 'abundancia' ? (
-                        <Badge className="bg-emerald-600 hover:bg-emerald-700 text-xs">
-                          Abundância
-                        </Badge>
-                      ) : product.disponibilidade === 'escassez' ? (
-                        <Badge className="bg-amber-600 hover:bg-amber-700 text-xs">Escassez</Badge>
-                      ) : (
-                        <Badge variant="outline" className="text-xs">
-                          Normal
-                        </Badge>
-                      )
-
-                    return (
-                      <TableRow key={product.id}>
-                        <TableCell className="font-medium">
-                          <div>
-                            <span>{product.name}</span>
-                            {product.apelidos && (
-                              <div className="text-[11px] text-muted-foreground flex items-center gap-1 mt-0.5">
-                                <span className="font-semibold text-[10px] uppercase tracking-wider text-primary/80">
-                                  AKA:
-                                </span>
-                                <span className="truncate max-w-[280px]" title={product.apelidos}>
-                                  {product.apelidos}
-                                </span>
-                              </div>
-                            )}
-                          </div>
+                  filteredProducts.map((product) => (
+                    <TableRow key={product.id}>
+                      <TableCell className="font-medium">
+                        <div>
+                          <span>{product.name}</span>
+                          {product.apelidos && (
+                            <div className="text-[11px] text-muted-foreground flex items-center gap-1 mt-0.5">
+                              <span className="font-semibold text-[10px] uppercase tracking-wider text-primary/80">
+                                AKA:
+                              </span>
+                              <span className="truncate max-w-[280px]" title={product.apelidos}>
+                                {product.apelidos}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell>{product.unit}</TableCell>
+                      {isAdmin && (
+                        <TableCell className="text-right">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="text-xs h-7"
+                            onClick={() => handleOpenEdit(product)}
+                          >
+                            Editar
+                          </Button>
                         </TableCell>
-                        <TableCell>{product.unit}</TableCell>
-                        <TableCell>{dispBadge}</TableCell>
-                        {isAdmin && (
-                          <TableCell className="text-right">
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              className="text-xs h-7"
-                              onClick={() => handleOpenEdit(product)}
-                            >
-                              Editar
-                            </Button>
-                          </TableCell>
-                        )}
-                      </TableRow>
-                    )
-                  })
+                      )}
+                    </TableRow>
+                  ))
                 )}
               </TableBody>
             </Table>
@@ -255,8 +227,7 @@ export default function Products() {
           <DialogHeader>
             <DialogTitle>Editar Produto: {editingProduct?.name}</DialogTitle>
             <DialogDescription>
-              Ajuste a unidade de medida, disponibilidade de safra e nomes alternativos deste
-              produto.
+              Ajuste a unidade de medida e os nomes alternativos deste produto.
             </DialogDescription>
           </DialogHeader>
 
@@ -273,21 +244,6 @@ export default function Products() {
                 placeholder="Ex: kg, Dúzia, dz, Maço..."
                 className="w-full h-9"
               />
-            </div>
-
-            <div className="space-y-2">
-              <Label className="text-sm font-semibold">Disponibilidade na Safra do Ciclo</Label>
-              <select
-                value={editDisponibilidade}
-                onChange={(e) =>
-                  setEditDisponibilidade(e.target.value as 'normal' | 'escassez' | 'abundancia')
-                }
-                className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm"
-              >
-                <option value="normal">Normal (Estoque Regular)</option>
-                <option value="abundancia">Abundância (Safra Alta / Incentivo)</option>
-                <option value="escassez">Escassez (Restrição / Compensar em Correção)</option>
-              </select>
             </div>
 
             <div className="space-y-1.5 pt-1">
@@ -369,19 +325,6 @@ export default function Products() {
                 placeholder="Ex: kg, Dúzia..."
                 className="w-full h-9"
               />
-            </div>
-
-            <div className="space-y-2">
-              <Label className="text-sm font-semibold">Disponibilidade</Label>
-              <select
-                value={newDisponibilidade}
-                onChange={(e) => setNewDisponibilidade(e.target.value as any)}
-                className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm"
-              >
-                <option value="normal">Normal (Estoque Regular)</option>
-                <option value="abundancia">Abundância</option>
-                <option value="escassez">Escassez</option>
-              </select>
             </div>
 
             <div className="space-y-1.5 pt-1">

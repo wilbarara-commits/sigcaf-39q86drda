@@ -738,27 +738,16 @@ export function ContractItemsManager({
                           {isNomeDiferente && (
                             <span className="text-[10px] text-muted-foreground/70">(mestre)</span>
                           )}
-                          <div className="flex items-center gap-1 mt-0.5">
-                            {prod?.category && (
+                          {prod?.category && (
+                            <div className="flex items-center gap-1 mt-0.5">
                               <Badge
                                 variant="outline"
                                 className="text-[9px] py-0 px-1 font-normal text-muted-foreground"
                               >
                                 {prod.category}
                               </Badge>
-                            )}
-                            {prod?.disponibilidade && prod.disponibilidade !== 'normal' && (
-                              <Badge
-                                className={`text-[9px] py-0 px-1 font-normal ${
-                                  prod.disponibilidade === 'abundancia'
-                                    ? 'bg-emerald-600'
-                                    : 'bg-amber-600'
-                                }`}
-                              >
-                                {prod.disponibilidade === 'abundancia' ? 'Safra alta' : 'Escassez'}
-                              </Badge>
-                            )}
-                          </div>
+                            </div>
+                          )}
                         </div>
                       </TableCell>
 

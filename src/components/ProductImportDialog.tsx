@@ -153,12 +153,12 @@ export function ProductImportDialog({
 
   const handleDownloadModel = () => {
     const csvContent =
-      'nome,unidade,disponibilidade\n' +
-      'Alface Crespa,kg,Normal\n' +
-      'Banana Prata,kg,Normal\n' +
-      'Feijão Carioca,kg,Escassez\n' +
-      'Cenoura,kg,Abundância\n' +
-      'Couve Manteiga,,\n'
+      'nome,unidade\n' +
+      'Alface Crespa,kg\n' +
+      'Banana Prata,kg\n' +
+      'Feijão Carioca,kg\n' +
+      'Cenoura,kg\n' +
+      'Couve Manteiga,\n'
 
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
     const url = URL.createObjectURL(blob)
@@ -185,7 +185,6 @@ export function ProductImportDialog({
           const createData: Partial<ProdutoRecord> = {
             nome: r.nome,
             unidade: r.unidade,
-            disponibilidade: r.disponibilidade,
           }
           return {
             status: 'create' as const,
@@ -197,7 +196,6 @@ export function ProductImportDialog({
           // Colunas em branco não sobrescrevem os dados existentes
           const updateData: Partial<ProdutoRecord> = {}
           if (r.presentColumns.unidade) updateData.unidade = r.unidade
-          if (r.presentColumns.disponibilidade) updateData.disponibilidade = r.disponibilidade
 
           return {
             status: 'update' as const,
@@ -340,7 +338,7 @@ export function ProductImportDialog({
                       : 'Arraste seu arquivo CSV ou Excel aqui'}
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    Colunas aceitas: <strong>nome, unidade, disponibilidade</strong>
+                    Colunas aceitas: <strong>nome, unidade</strong>
                   </p>
                 </div>
 
@@ -372,7 +370,7 @@ export function ProductImportDialog({
             ) : (
               <div className="space-y-2 flex-1 flex flex-col">
                 <Textarea
-                  placeholder={`Cole as linhas do Excel ou CSV aqui...\nExemplo:\nAlface Crespa\tkg\tNormal\nBanana Prata\tkg\tNormal\nCenoura\tkg\t`}
+                  placeholder={`Cole as linhas do Excel ou CSV aqui...\nExemplo:\nAlface Crespa\tkg\nBanana Prata\tkg\nCenoura\tkg`}
                   value={pastedText}
                   onChange={(e) => setPastedText(e.target.value)}
                   className="flex-1 min-h-[200px] text-xs font-mono resize-none"
@@ -537,7 +535,6 @@ export function ProductImportDialog({
                     <th className="py-2.5 px-3 w-12 bg-muted font-semibold">#</th>
                     <th className="py-2.5 px-3 bg-muted font-semibold">Produto</th>
                     <th className="py-2.5 px-3 bg-muted font-semibold">Unidade</th>
-                    <th className="py-2.5 px-3 bg-muted font-semibold">Disponibilidade</th>
                     <th className="py-2.5 px-3 bg-muted font-semibold">Ação / Status</th>
                   </tr>
                 </thead>
@@ -547,21 +544,6 @@ export function ProductImportDialog({
                     const isDuplicate = row.status === 'duplicate_file'
                     const isCreate = row.status === 'create'
                     const isUpdate = row.status === 'update'
-
-                    const dispBadge =
-                      row.disponibilidade === 'abundancia' ? (
-                        <Badge className="bg-emerald-600 hover:bg-emerald-700 text-[10px]">
-                          Abundância
-                        </Badge>
-                      ) : row.disponibilidade === 'escassez' ? (
-                        <Badge className="bg-amber-600 hover:bg-amber-700 text-[10px]">
-                          Escassez
-                        </Badge>
-                      ) : (
-                        <Badge variant="outline" className="text-[10px]">
-                          Normal
-                        </Badge>
-                      )
 
                     return (
                       <tr
@@ -639,14 +621,6 @@ export function ProductImportDialog({
                           )}
                         </td>
                         <td className="py-2 px-3">
-                          {dispBadge}
-                          {!row.presentColumns.disponibilidade && isCreate && (
-                            <span className="text-[9px] text-muted-foreground block italic">
-                              (default Normal)
-                            </span>
-                          )}
-                        </td>
-                        <td className="py-2 px-3">
                           {/* PRODUTO NOVO COM DEFAULTS */}
                           {isCreate && (
                             <div className="space-y-0.5">
@@ -712,7 +686,7 @@ export function ProductImportDialog({
                   })}
                   {displayRows.length === 0 && (
                     <tr>
-                      <td colSpan={5} className="py-8 text-center text-muted-foreground text-xs">
+                      <td colSpan={4} className="py-8 text-center text-muted-foreground text-xs">
                         Nenhuma linha encontrada neste filtro.
                       </td>
                     </tr>

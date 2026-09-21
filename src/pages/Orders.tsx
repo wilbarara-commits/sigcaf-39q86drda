@@ -532,8 +532,7 @@ export default function Orders() {
                   <div>
                     <Label className="font-semibold text-sm">Itens e Quantidades</Label>
                     <p className="text-xs text-muted-foreground">
-                      O pedido será validado contra compensação de disponibilidade na fase de
-                      correção.
+                      Informe os produtos e as respectivas quantidades solicitadas pela escola.
                     </p>
                   </div>
                   <Button
