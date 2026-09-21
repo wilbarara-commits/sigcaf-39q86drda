@@ -18,6 +18,11 @@ import {
 } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { MonthlyReportButton } from '@/components/MonthlyReportButton'
+import {
+  formatIntervaloCiclo,
+  formatDespachoAmigavel,
+  getDespachoPrevistoCiclo,
+} from '@/lib/cicloUtils'
 
 export default function Index() {
   const { orders, contracts, contractItems, contractSchools, atestos, activeCiclo, isLoading } =
@@ -317,11 +322,23 @@ export default function Index() {
               <p className="text-xs text-muted-foreground">
                 Semana do ciclo:{' '}
                 <strong>
-                  quarta-feira ({new Date(activeCiclo.data_inicio).toLocaleDateString('pt-BR')})
+                  quarta-feira (
+                  {
+                    formatIntervaloCiclo(activeCiclo.data_inicio, activeCiclo.data_fim).split(
+                      ' a ',
+                    )[0]
+                  }
+                  )
                 </strong>{' '}
                 a{' '}
                 <strong>
-                  terça-feira ({new Date(activeCiclo.data_fim).toLocaleDateString('pt-BR')})
+                  terça-feira (
+                  {
+                    formatIntervaloCiclo(activeCiclo.data_inicio, activeCiclo.data_fim).split(
+                      ' a ',
+                    )[1]
+                  }
+                  )
                 </strong>
               </p>
             </div>
@@ -332,11 +349,11 @@ export default function Index() {
                   Previsão de Despacho em Rota
                 </span>
                 <strong className="text-emerald-700 dark:text-emerald-400 font-semibold">
-                  Segunda-feira,{' '}
-                  {new Date(
+                  {formatDespachoAmigavel(
                     activeCiclo.snapshot?.despacho_previsto_segunda ||
-                      new Date(new Date(activeCiclo.data_inicio).getTime() + 5 * 86400000),
-                  ).toLocaleDateString('pt-BR')}
+                      getDespachoPrevistoCiclo(activeCiclo.data_inicio),
+                    true,
+                  )}
                 </strong>
               </div>
             </div>

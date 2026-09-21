@@ -24,6 +24,11 @@ import {
   Sparkles,
 } from 'lucide-react'
 import { toast } from 'sonner'
+import {
+  formatIntervaloCiclo,
+  formatDespachoAmigavel,
+  getDespachoPrevistoCiclo,
+} from '@/lib/cicloUtils'
 
 export default function Monitoring() {
   const { activeCiclo, updateCicloStatus, schools, orders, products } = useApp()
@@ -115,18 +120,14 @@ export default function Monitoring() {
                 {activeCiclo && (
                   <>
                     {' '}
-                    • Período:{' '}
-                    <span className="font-medium text-foreground">
-                      {new Date(activeCiclo.data_inicio).toLocaleDateString('pt-BR')} (Qua) a{' '}
-                      {new Date(activeCiclo.data_fim).toLocaleDateString('pt-BR')} (Ter)
-                    </span>{' '}
-                    • Despacho em rota previsto para{' '}
+                    • Período ({formatIntervaloCiclo(activeCiclo.data_inicio, activeCiclo.data_fim)}
+                    ) • Despacho em rota previsto para{' '}
                     <span className="inline-flex items-center font-semibold text-emerald-700 dark:text-emerald-400">
-                      Segunda-feira,{' '}
-                      {new Date(
+                      {formatDespachoAmigavel(
                         activeCiclo.snapshot?.despacho_previsto_segunda ||
-                          new Date(new Date(activeCiclo.data_inicio).getTime() + 5 * 86400000),
-                      ).toLocaleDateString('pt-BR')}
+                          getDespachoPrevistoCiclo(activeCiclo.data_inicio),
+                        true,
+                      )}
                     </span>
                   </>
                 )}{' '}

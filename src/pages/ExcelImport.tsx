@@ -72,6 +72,11 @@ import { contratosService } from '@/services/contratos'
 import { escolasService } from '@/services/escolas'
 import { importacoesService } from '@/services/whatsapp-import'
 import type { ImportacaoRecord, EscolaTipo } from '@/lib/types'
+import {
+  formatIntervaloCiclo,
+  formatDespachoAmigavel,
+  getDespachoPrevistoCiclo,
+} from '@/lib/cicloUtils'
 
 export default function ExcelImport() {
   const {
@@ -2067,12 +2072,12 @@ export default function ExcelImport() {
                     Ciclo: <strong>{activeCiclo?.nome || '—'}</strong>
                     {activeCiclo && (
                       <span className="text-muted-foreground ml-1">
-                        ({new Date(activeCiclo.data_inicio).toLocaleDateString('pt-BR')} a{' '}
-                        {new Date(activeCiclo.data_fim).toLocaleDateString('pt-BR')} — Despacho: seg{' '}
-                        {new Date(
+                        ({formatIntervaloCiclo(activeCiclo.data_inicio, activeCiclo.data_fim)} —
+                        Despacho:{' '}
+                        {formatDespachoAmigavel(
                           activeCiclo.snapshot?.despacho_previsto_segunda ||
-                            new Date(new Date(activeCiclo.data_inicio).getTime() + 5 * 86400000),
-                        ).toLocaleDateString('pt-BR')}
+                            getDespachoPrevistoCiclo(activeCiclo.data_inicio),
+                        )}
                         )
                       </span>
                     )}{' '}

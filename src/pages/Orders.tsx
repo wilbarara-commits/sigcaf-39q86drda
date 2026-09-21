@@ -24,12 +24,17 @@ import {
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
+  DialogFooter,
   DialogTrigger,
 } from '@/components/ui/dialog'
+import {
+  formatIntervaloCiclo,
+  formatDespachoAmigavel,
+  getDespachoPrevistoCiclo,
+} from '@/lib/cicloUtils'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -457,14 +462,13 @@ export default function Orders() {
                 {activeCiclo && (
                   <>
                     {' '}
-                    • {new Date(activeCiclo.data_inicio).toLocaleDateString('pt-BR')} a{' '}
-                    {new Date(activeCiclo.data_fim).toLocaleDateString('pt-BR')} • Despacho:{' '}
+                    • {formatIntervaloCiclo(activeCiclo.data_inicio, activeCiclo.data_fim)} •
+                    Despacho:{' '}
                     <span className="font-semibold text-emerald-600 dark:text-emerald-400">
-                      Seg{' '}
-                      {new Date(
+                      {formatDespachoAmigavel(
                         activeCiclo.snapshot?.despacho_previsto_segunda ||
-                          new Date(new Date(activeCiclo.data_inicio).getTime() + 5 * 86400000),
-                      ).toLocaleDateString('pt-BR')}
+                          getDespachoPrevistoCiclo(activeCiclo.data_inicio),
+                      )}
                     </span>
                   </>
                 )}
