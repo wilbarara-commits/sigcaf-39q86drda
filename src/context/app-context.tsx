@@ -403,6 +403,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
           numero_chamada: c.numero_chamada || '',
           tipo: c.tipo || 'PNAE',
           modalidade_pedido: c.modalidade_pedido || 'individualizado',
+          tipo_importacao: c.tipo_importacao,
+          abas_planilha: c.abas_planilha || '',
           num_rotas_logisticas:
             c.num_rotas_logisticas !== undefined && c.num_rotas_logisticas !== null
               ? Number(c.num_rotas_logisticas)
@@ -414,7 +416,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }
       })
       setContracts(mappedContracts)
-
       // Map atestos
       const mappedAtestos: Atesto[] = rawAtestos.map((a) => {
         const relatedOrder = mappedOrders.find((o) => o.id === a.pedido_id)
@@ -870,6 +871,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
             numero_chamada: c.numero_chamada || '',
             tipo: c.tipo || 'PNAE',
             modalidade_pedido: c.modalidade_pedido || 'individualizado',
+            tipo_importacao: c.tipo_importacao,
+            abas_planilha: c.abas_planilha || '',
             num_rotas_logisticas:
               c.num_rotas_logisticas !== undefined && c.num_rotas_logisticas !== null
                 ? Number(c.num_rotas_logisticas)

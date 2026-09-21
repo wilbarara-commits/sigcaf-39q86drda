@@ -99,12 +99,16 @@ export const MOTIVOS_LOGISTICOS_CANCELAMENTO = [
 
 export type MotivoLogisticoCancelamento = (typeof MOTIVOS_LOGISTICOS_CANCELAMENTO)[number]
 
+export type ContratoTipoImportacao = 'unica' | 'fracionada'
+
 export interface ContratoRecord {
   id: string
   numero: string
   numero_chamada?: string
   tipo?: string
   modalidade_pedido?: 'individualizado' | 'centralizado'
+  tipo_importacao?: ContratoTipoImportacao
+  abas_planilha?: string
   num_rotas_logisticas?: number
   valor_total: number
   status: 'Ativo' | 'Encerrado' | 'Pendente'
@@ -294,6 +298,8 @@ export interface Contract {
   numero_chamada?: string
   tipo?: string
   modalidade_pedido: 'individualizado' | 'centralizado'
+  tipo_importacao?: ContratoTipoImportacao
+  abas_planilha?: string
   num_rotas_logisticas?: number
   totalValue: number
   balance: number

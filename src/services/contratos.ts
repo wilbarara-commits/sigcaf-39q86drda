@@ -38,6 +38,8 @@ export const contratosService = {
     numero_chamada?: string
     tipo?: string
     modalidade_pedido?: 'individualizado' | 'centralizado'
+    tipo_importacao?: 'unica' | 'fracionada'
+    abas_planilha?: string
     num_rotas_logisticas?: number
     valor_total: number
     status?: 'Ativo' | 'Encerrado' | 'Pendente'

@@ -131,6 +131,9 @@ export default function Contracts() {
   const [modalidade, setModalidade] = useState<'individualizado' | 'centralizado'>(
     'individualizado',
   )
+  const [tipoImportacao, setTipoImportacao] = useState<'unica' | 'fracionada'>('unica')
+  const [planilhaTemAbas, setPlanilhaTemAbas] = useState<boolean>(false)
+  const [abasPlanilhaTexto, setAbasPlanilhaTexto] = useState('')
   const [numRotasLogisticas, setNumRotasLogisticas] = useState<string>('')
   const [valorTotal, setValorTotal] = useState('')
   const [status, setStatus] = useState<'Ativo' | 'Encerrado' | 'Pendente'>('Ativo')
@@ -183,6 +186,9 @@ export default function Contracts() {
     setNumeroChamada('')
     setTipo('PNAE')
     setModalidade('individualizado')
+    setTipoImportacao('unica')
+    setPlanilhaTemAbas(false)
+    setAbasPlanilhaTexto('')
     setNumRotasLogisticas('')
     setValorTotal('')
     setStatus('Ativo')
@@ -201,6 +207,11 @@ export default function Contracts() {
     setNumeroChamada(contract.numero_chamada || '')
     setTipo(contract.tipo || 'PNAE')
     setModalidade(contract.modalidade_pedido || 'individualizado')
+    const tImp = contract.tipo_importacao || 'unica'
+    setTipoImportacao(tImp)
+    const abasText = contract.abas_planilha || ''
+    setAbasPlanilhaTexto(abasText)
+    setPlanilhaTemAbas(Boolean(abasText.trim()))
     setNumRotasLogisticas(
       contract.num_rotas_logisticas !== undefined && contract.num_rotas_logisticas !== null
         ? contract.num_rotas_logisticas.toString()
@@ -558,30 +569,64 @@ export default function Contracts() {
       }
     }
 
+    // Validação da regra da modalidade centralizada
+    let cleanedAbasString = ''
+    if (modalidade === 'centralizado') {
+      if (tipoImportacao === 'unica' && planilhaTemAbas) {
+        const trimmedAbas = abasPlanilhaTexto.trim()
+        if (!trimmedAbas) {
+          toast.error(
+            'Ao marcar que a planilha possui abas, cadastre os nomes das abas separados por ponto e vírgula (;).',
+          )
+          return
+        }
+        // Validar e normalizar entradas separadas por ponto e vírgula
+        const parts = trimmedAbas
+          .split(';')
+          .map((s) => s.trim())
+          .filter(Boolean)
+
+        if (parts.length === 0) {
+          toast.error('Informe pelo menos um nome de aba válido separado por ponto e vírgula (;).')
+          return
+        }
+
+        // Checar se o usuário deixou ponto e vírgula duplicado gerando item vazio
+        const rawTokens = trimmedAbas.split(';').map((s) => s.trim())
+        if (rawTokens.some((tok) => tok === '')) {
+          toast.error(
+            'A lista de abas contém entradas vazias entre pontos e vírgulas. Remova pontos e vírgulas duplicados ou no final.',
+          )
+          return
+        }
+
+        cleanedAbasString = parts.join(';')
+      }
+    }
+
     setIsSubmitting(true)
     try {
       let contractId = editingContract?.id
 
+      const payloadToSave = {
+        numero: trimmedNum,
+        numero_chamada: numeroChamada.trim() || undefined,
+        tipo,
+        modalidade_pedido: modalidade,
+        tipo_importacao: modalidade === 'centralizado' ? tipoImportacao : undefined,
+        abas_planilha:
+          modalidade === 'centralizado' && tipoImportacao === 'unica' && planilhaTemAbas
+            ? cleanedAbasString
+            : '',
+        num_rotas_logisticas: parsedNumRotas,
+        valor_total: val,
+        status,
+      }
+
       if (editingContract) {
-        await contratosService.update(editingContract.id, {
-          numero: trimmedNum,
-          numero_chamada: numeroChamada.trim() || undefined,
-          tipo,
-          modalidade_pedido: modalidade,
-          num_rotas_logisticas: parsedNumRotas,
-          valor_total: val,
-          status,
-        })
+        await contratosService.update(editingContract.id, payloadToSave)
       } else {
-        const created = await contratosService.create({
-          numero: trimmedNum,
-          numero_chamada: numeroChamada.trim() || undefined,
-          tipo,
-          modalidade_pedido: modalidade,
-          num_rotas_logisticas: parsedNumRotas,
-          valor_total: val,
-          status,
-        })
+        const created = await contratosService.create(payloadToSave)
         contractId = created.id
       }
 
@@ -901,16 +946,26 @@ export default function Contracts() {
                           <Badge variant="outline">{contract.tipo || 'PNAE'}</Badge>
                         </TableCell>
                         <TableCell>
-                          <Badge
-                            variant={
-                              contract.modalidade_pedido === 'centralizado'
-                                ? 'secondary'
-                                : 'default'
-                            }
-                            className="capitalize text-xs"
-                          >
-                            {contract.modalidade_pedido || 'individualizado'}
-                          </Badge>
+                          <div className="flex flex-col gap-1 items-start">
+                            <Badge
+                              variant={
+                                contract.modalidade_pedido === 'centralizado'
+                                  ? 'secondary'
+                                  : 'default'
+                              }
+                              className="capitalize text-xs"
+                            >
+                              {contract.modalidade_pedido || 'individualizado'}
+                            </Badge>
+                            {contract.modalidade_pedido === 'centralizado' && (
+                              <span className="text-[10px] text-muted-foreground flex items-center gap-1 font-mono">
+                                Imp:{' '}
+                                {contract.tipo_importacao === 'fracionada' ? 'Fracionada' : 'Única'}
+                                {contract.tipo_importacao !== 'fracionada' &&
+                                  (contract.abas_planilha ? ' (com abas)' : ' (simples)')}
+                              </span>
+                            )}
+                          </div>
                         </TableCell>
                         <TableCell>
                           <span
@@ -1106,7 +1161,13 @@ export default function Contracts() {
                     <Label htmlFor="c-modalidade">Modalidade de Pedido</Label>
                     <Select
                       value={modalidade}
-                      onValueChange={(v) => setModalidade(v as 'individualizado' | 'centralizado')}
+                      onValueChange={(v) => {
+                        const newMod = v as 'individualizado' | 'centralizado'
+                        setModalidade(newMod)
+                        if (newMod === 'centralizado' && !tipoImportacao) {
+                          setTipoImportacao('unica')
+                        }
+                      }}
                     >
                       <SelectTrigger id="c-modalidade">
                         <SelectValue />
@@ -1139,6 +1200,133 @@ export default function Contracts() {
                     </Select>
                   </div>
                 </div>
+
+                {/* Regras específicas para Modalidade Centralizada */}
+                {modalidade === 'centralizado' && (
+                  <div className="p-4 rounded-lg border border-primary/30 bg-primary/5 space-y-4">
+                    <div className="flex items-center gap-2">
+                      <FileSpreadsheet className="h-4 w-4 text-primary" />
+                      <div>
+                        <h4 className="text-sm font-semibold text-foreground">
+                          Configurações de Importação Centralizada
+                        </h4>
+                        <p className="text-xs text-muted-foreground">
+                          Defina se a planilha da secretaria é importada de forma única ou
+                          fracionada.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="c-tipo-importacao">Tipo de Importação</Label>
+                        <Select
+                          value={tipoImportacao}
+                          onValueChange={(v) => setTipoImportacao(v as 'unica' | 'fracionada')}
+                        >
+                          <SelectTrigger id="c-tipo-importacao" className="bg-background">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="unica">
+                              Única (Planilha consolidada única)
+                            </SelectItem>
+                            <SelectItem value="fracionada">
+                              Fracionada (Múltiplas planilhas por ciclo/período)
+                            </SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <p className="text-[11px] text-muted-foreground">
+                          {tipoImportacao === 'unica'
+                            ? 'A secretaria envia um arquivo unificado contendo o pedido.'
+                            : 'A secretaria envia arquivos fracionados (remessas/semanas) ao longo do contrato.'}
+                        </p>
+                      </div>
+
+                      {tipoImportacao === 'unica' && (
+                        <div className="space-y-2">
+                          <Label htmlFor="c-tem-abas">Estrutura da Planilha Única</Label>
+                          <Select
+                            value={planilhaTemAbas ? 'com_abas' : 'sem_abas'}
+                            onValueChange={(v) => {
+                              const hasTabs = v === 'com_abas'
+                              setPlanilhaTemAbas(hasTabs)
+                              if (!hasTabs) {
+                                setAbasPlanilhaTexto('')
+                              }
+                            }}
+                          >
+                            <SelectTrigger id="c-tem-abas" className="bg-background">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="sem_abas">
+                                Planilha Simples (sem abas / aba única)
+                              </SelectItem>
+                              <SelectItem value="com_abas">
+                                Planilha com Abas (múltiplas abas por rota/setor)
+                              </SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <p className="text-[11px] text-muted-foreground">
+                            {planilhaTemAbas
+                              ? 'O arquivo possui várias abas (ex: abas por rota ou escola).'
+                              : 'Arquivo simples em folha única contendo os pedidos.'}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+
+                    {tipoImportacao === 'unica' && planilhaTemAbas && (
+                      <div className="space-y-2 pt-1 border-t border-primary/20">
+                        <Label htmlFor="c-abas-input" className="flex items-center justify-between">
+                          <span>
+                            Nomes das Abas da Planilha <span className="text-destructive">*</span>
+                          </span>
+                          <span className="text-[10px] font-normal text-muted-foreground">
+                            Separados por ponto e vírgula (;)
+                          </span>
+                        </Label>
+                        <Input
+                          id="c-abas-input"
+                          placeholder="Ex: ROTA A; ROTA B; ROTA C; ZONA RURAL"
+                          className="bg-background font-mono text-xs"
+                          value={abasPlanilhaTexto}
+                          onChange={(e) => setAbasPlanilhaTexto(e.target.value)}
+                          required={tipoImportacao === 'unica' && planilhaTemAbas}
+                        />
+                        <p className="text-[11px] text-muted-foreground">
+                          Cadastre os nomes exatos das abas presentes no arquivo Excel, separados
+                          por ponto e vírgula (;). Exemplo:{' '}
+                          <code className="text-primary font-semibold">
+                            ROTA 01;ROTA 02;ROTA 03
+                          </code>
+                          .
+                        </p>
+                        {abasPlanilhaTexto.trim() && (
+                          <div className="flex flex-wrap gap-1 pt-1.5">
+                            <span className="text-[10px] font-medium text-muted-foreground self-center mr-1">
+                              Abas cadastradas:
+                            </span>
+                            {abasPlanilhaTexto
+                              .split(';')
+                              .map((tab) => tab.trim())
+                              .filter(Boolean)
+                              .map((tab, idx) => (
+                                <Badge
+                                  key={idx}
+                                  variant="secondary"
+                                  className="text-[10px] bg-background border"
+                                >
+                                  {tab}
+                                </Badge>
+                              ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 {/* Valor Total do Contrato: calculado automaticamente vs informado diretamente */}
                 <div className="space-y-2 p-3.5 rounded-lg border bg-muted/20">
@@ -2094,6 +2282,15 @@ export default function Contracts() {
             <DialogDescription>
               {viewingContract?.tipo || 'PNAE'} • Modalidade:{' '}
               {viewingContract?.modalidade_pedido || 'individualizado'}
+              {viewingContract?.modalidade_pedido === 'centralizado' && (
+                <>
+                  {' '}
+                  • Importação:{' '}
+                  {viewingContract?.tipo_importacao === 'fracionada'
+                    ? 'Fracionada'
+                    : `Única ${viewingContract?.abas_planilha ? '(com abas)' : '(simples)'}`}
+                </>
+              )}
             </DialogDescription>
           </DialogHeader>
 
@@ -2113,6 +2310,52 @@ export default function Contracts() {
                   </p>
                 </div>
               </div>
+
+              {/* Seção: Configuração da Importação (se modalidade centralizada) */}
+              {viewingContract.modalidade_pedido === 'centralizado' && (
+                <div className="p-3 rounded-lg border bg-muted/20 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="font-semibold text-foreground flex items-center gap-1.5">
+                      <FileSpreadsheet className="h-4 w-4 text-primary" /> Regra de Importação
+                    </span>
+                    <Badge variant="secondary" className="text-[10px]">
+                      {viewingContract.tipo_importacao === 'fracionada'
+                        ? 'Importação Fracionada'
+                        : 'Importação Única'}
+                    </Badge>
+                  </div>
+                  {viewingContract.tipo_importacao !== 'fracionada' && (
+                    <div className="text-[11px] text-muted-foreground space-y-1">
+                      <p>
+                        Estrutura:{' '}
+                        <strong className="text-foreground">
+                          {viewingContract.abas_planilha ? 'Planilha com abas' : 'Planilha simples'}
+                        </strong>
+                      </p>
+                      {viewingContract.abas_planilha && (
+                        <div>
+                          <p className="mb-1 font-medium text-foreground">Abas cadastradas:</p>
+                          <div className="flex flex-wrap gap-1">
+                            {viewingContract.abas_planilha
+                              .split(';')
+                              .map((tab) => tab.trim())
+                              .filter(Boolean)
+                              .map((tab, idx) => (
+                                <Badge
+                                  key={idx}
+                                  variant="outline"
+                                  className="text-[10px] bg-background font-mono"
+                                >
+                                  {tab}
+                                </Badge>
+                              ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Seção 1: Escolas por Aba da Planilha */}
               <div>

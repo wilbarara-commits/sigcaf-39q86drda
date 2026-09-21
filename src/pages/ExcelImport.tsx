@@ -256,7 +256,30 @@ export default function ExcelImport() {
       const workbook = XLSX.read(arrayBuffer, { type: 'array' })
       setRawWorkbook(workbook)
 
-      const contractRotas = rotas.filter((r) => r.contrato_id === selectedContract.id)
+      // Regra de abas do contrato:
+      // Se for contrato centralizado com importação única e abas cadastradas,
+      // unificar as rotas cadastradas na collection rotas com as abas_planilha do contrato
+      const existingContractRotas = rotas.filter((r) => r.contrato_id === selectedContract.id)
+      const rotasNamesList: Array<{ nome: string }> = existingContractRotas.map((r) => ({
+        nome: r.nome,
+      }))
+
+      if (
+        selectedContract.modalidade_pedido === 'centralizado' &&
+        selectedContract.tipo_importacao !== 'fracionada' &&
+        selectedContract.abas_planilha
+      ) {
+        const abasCadastradas = selectedContract.abas_planilha
+          .split(';')
+          .map((s) => s.trim())
+          .filter(Boolean)
+        for (const abaNome of abasCadastradas) {
+          if (!rotasNamesList.some((r) => r.nome.trim().toLowerCase() === abaNome.toLowerCase())) {
+            rotasNamesList.push({ nome: abaNome })
+          }
+        }
+      }
+
       const currentContractItems = contractItems.filter(
         (ci) => ci.contrato_id === selectedContract.id,
       )
@@ -265,7 +288,7 @@ export default function ExcelImport() {
         schools,
         selectedContract.escolas,
         products,
-        contractRotas,
+        rotasNamesList.length > 0 ? rotasNamesList : existingContractRotas,
         currentContractItems,
         selectedContract.numero,
       )
@@ -343,7 +366,27 @@ export default function ExcelImport() {
     currentLinks: typeof selectedContract.escolas,
   ) => {
     if (!rawWorkbook || !selectedContract) return
-    const contractRotas = rotas.filter((r) => r.contrato_id === selectedContract.id)
+    const existingContractRotas = rotas.filter((r) => r.contrato_id === selectedContract.id)
+    const rotasNamesList: Array<{ nome: string }> = existingContractRotas.map((r) => ({
+      nome: r.nome,
+    }))
+
+    if (
+      selectedContract.modalidade_pedido === 'centralizado' &&
+      selectedContract.tipo_importacao !== 'fracionada' &&
+      selectedContract.abas_planilha
+    ) {
+      const abasCadastradas = selectedContract.abas_planilha
+        .split(';')
+        .map((s) => s.trim())
+        .filter(Boolean)
+      for (const abaNome of abasCadastradas) {
+        if (!rotasNamesList.some((r) => r.nome.trim().toLowerCase() === abaNome.toLowerCase())) {
+          rotasNamesList.push({ nome: abaNome })
+        }
+      }
+    }
+
     const currentContractItems = contractItems.filter(
       (ci) => ci.contrato_id === selectedContract.id,
     )
@@ -352,7 +395,7 @@ export default function ExcelImport() {
       currentSchools,
       currentLinks,
       products,
-      contractRotas,
+      rotasNamesList.length > 0 ? rotasNamesList : existingContractRotas,
       currentContractItems,
       selectedContract.numero,
     )
@@ -709,6 +752,38 @@ export default function ExcelImport() {
                       {selectedContract.modalidade_pedido}
                     </Badge>
                   </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-muted-foreground">Tipo de Importação:</span>
+                    <Badge variant="secondary" className="font-mono text-[10px]">
+                      {selectedContract.tipo_importacao === 'fracionada'
+                        ? 'Fracionada'
+                        : `Única ${selectedContract.abas_planilha ? '(com abas)' : '(simples)'}`}
+                    </Badge>
+                  </div>
+                  {selectedContract.tipo_importacao !== 'fracionada' &&
+                    selectedContract.abas_planilha && (
+                      <div className="flex flex-col gap-1 pt-1 border-t border-border/50">
+                        <span className="text-muted-foreground text-[11px]">
+                          Abas mapeadas (
+                          {selectedContract.abas_planilha.split(';').filter(Boolean).length}):
+                        </span>
+                        <div className="flex flex-wrap gap-1">
+                          {selectedContract.abas_planilha
+                            .split(';')
+                            .map((t) => t.trim())
+                            .filter(Boolean)
+                            .map((t, idx) => (
+                              <Badge
+                                key={idx}
+                                variant="outline"
+                                className="text-[9px] bg-background font-mono"
+                              >
+                                {t}
+                              </Badge>
+                            ))}
+                        </div>
+                      </div>
+                    )}
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Escolas Vinculadas:</span>
                     <span className="font-semibold text-primary">

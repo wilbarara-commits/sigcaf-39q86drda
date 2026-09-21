@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-21T01:20:27.591Z",
+  "generatedAt": "2026-09-21T01:56:46.428Z",
   "collections": [
     {
       "name": "users",
@@ -264,6 +264,19 @@
         {
           "name": "num_rotas_logisticas",
           "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "tipo_importacao",
+          "type": "select",
+          "required": false,
+          "system": false,
+          "selectValues": ["unica", "fracionada"]
+        },
+        {
+          "name": "abas_planilha",
+          "type": "text",
           "required": false,
           "system": false
         }
