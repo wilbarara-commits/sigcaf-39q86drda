@@ -58,9 +58,12 @@ export default function Atestos() {
     contracts,
     contractSchools,
     contractItems,
+    rotas,
     rotasLogisticas,
     paradasRota,
     despachos,
+    ciclos,
+    activeCiclo,
     generateAtesto,
     confirmAtesto,
     refreshData,
@@ -219,8 +222,80 @@ export default function Atestos() {
 
     // Determinar o contrato vinculado a esta escola
     const schoolLink = contractSchools.find((cs) => cs.escola_id === order.schoolId)
-    const linkedContractId =
-      schoolLink?.contrato_id || contracts.find((c) => c.status === 'Ativo')?.id
+    const linkedContract = schoolLink?.contrato_id
+      ? contracts.find((c) => c.id === schoolLink.contrato_id)
+      : contracts.find((c) => c.status === 'Ativo')
+    const linkedContractId = linkedContract?.id
+
+    const isCentralizado = linkedContract?.modalidade_pedido === 'centralizado'
+
+    // Metadados específicos de contrato centralizado:
+    // 1. Ciclo
+    let cicloNome: string | undefined
+    if (isCentralizado) {
+      if (order.cicloId) {
+        const foundCiclo = ciclos.find((c) => c.id === order.cicloId)
+        if (foundCiclo?.nome) {
+          cicloNome = foundCiclo.nome
+        }
+      }
+      if (!cicloNome && activeCiclo?.nome) {
+        cicloNome = activeCiclo.nome
+      }
+    }
+
+    // 2. Parada e Rota
+    let rotaNome: string | undefined
+    let numeroParada: number | undefined
+
+    if (isCentralizado) {
+      // Procurar a parada da escola na rota logística
+      const todasParadasDaEscola = paradasRota.filter((p) => p.escola_id === order.schoolId)
+      let paradaMatched = todasParadasDaEscola[0]
+
+      if (order.rotaLogisticaId) {
+        paradaMatched =
+          todasParadasDaEscola.find((p) => p.rota_logistica_id === order.rotaLogisticaId) ||
+          paradaMatched
+      } else if (schoolLink?.rota_logistica_id) {
+        paradaMatched =
+          todasParadasDaEscola.find((p) => p.rota_logistica_id === schoolLink.rota_logistica_id) ||
+          paradaMatched
+      }
+
+      if (paradaMatched) {
+        numeroParada = paradaMatched.ordem
+        const rl = rotasLogisticas.find((r) => r.id === paradaMatched.rota_logistica_id)
+        if (rl?.nome) {
+          rotaNome = rl.nome
+        }
+      }
+
+      // Fallback para nome da Rota caso a rota logística não tenha sido encontrada ou parada ainda não criada
+      if (!rotaNome) {
+        if (order.rotaId) {
+          const foundRota = rotas.find((r) => r.id === order.rotaId)
+          if (foundRota?.nome) {
+            rotaNome = foundRota.nome
+          }
+        }
+        if (!rotaNome && order.rotaLogisticaId) {
+          const foundRl = rotasLogisticas.find((r) => r.id === order.rotaLogisticaId)
+          if (foundRl?.nome) {
+            rotaNome = foundRl.nome
+          }
+        }
+        if (!rotaNome && schoolLink?.rota_logistica_id) {
+          const foundRl = rotasLogisticas.find((r) => r.id === schoolLink.rota_logistica_id)
+          if (foundRl?.nome) {
+            rotaNome = foundRl.nome
+          }
+        }
+        if (!rotaNome && schoolLink?.rota?.trim()) {
+          rotaNome = schoolLink.rota.trim()
+        }
+      }
+    }
 
     const items =
       order.items && order.items.length > 0
@@ -266,6 +341,10 @@ export default function Atestos() {
       dataEmissao: dataEmissao || new Date(),
       items,
       logoUrl: logoUrl || undefined,
+      isCentralizado,
+      cicloNome,
+      rotaNome,
+      numeroParada,
     }
   }
 
@@ -1093,64 +1172,75 @@ export default function Atestos() {
             </div>
           </DialogHeader>
 
-          {orderForEmission && (
-            <div className="p-6 space-y-4">
-              {/* Documento A4 Estilizado */}
-              <DocumentoOficialView
-                order={orderForEmission}
-                config={config}
-                logoUrl={logoUrl}
-                numeroChamada={getNumeroChamadaForSchool(orderForEmission.schoolId)}
-                numeroAtesto={`AT-${String(atestos.length + 1).padStart(3, '0')}`}
-                dataEmissao={new Date()}
-              />
+          {orderForEmission &&
+            (() => {
+              const docDataPreview = prepareDocumentData(
+                orderForEmission,
+                `AT-${String(atestos.length + 1).padStart(3, '0')}`,
+              )
+              return (
+                <div className="p-6 space-y-4">
+                  {/* Documento A4 Estilizado */}
+                  <DocumentoOficialView
+                    order={orderForEmission}
+                    config={config}
+                    logoUrl={logoUrl}
+                    numeroChamada={docDataPreview.numeroChamada}
+                    numeroAtesto={docDataPreview.numeroAtesto}
+                    dataEmissao={docDataPreview.dataEmissao}
+                    isCentralizado={docDataPreview.isCentralizado}
+                    cicloNome={docDataPreview.cicloNome}
+                    rotaNome={docDataPreview.rotaNome}
+                    numeroParada={docDataPreview.numeroParada}
+                  />
 
-              {/* Ações do Modal */}
-              <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-4 border-t">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setPreviewOrderId(null)}
-                  disabled={isEmitting}
-                >
-                  Cancelar
-                </Button>
-                <div className="flex items-center gap-2 w-full sm:w-auto">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      const nextNum = `AT-${String(atestos.length + 1).padStart(3, '0')}`
-                      const docData = prepareDocumentData(orderForEmission, nextNum)
-                      createOfficialAtestoPdf(docData)
-                        .then((doc) => openPdfForPrint(doc))
-                        .catch(() => window.print())
-                    }}
-                    disabled={isEmitting}
-                    className="gap-1.5"
-                  >
-                    <Printer className="h-4 w-4" /> Imprimir
-                  </Button>
-                  <Button
-                    size="sm"
-                    className="bg-primary hover:bg-primary/90 text-primary-foreground gap-1.5 flex-1 sm:flex-none"
-                    onClick={handleEmitirAtesto}
-                    disabled={isEmitting}
-                  >
-                    {isEmitting ? (
-                      <>
-                        <Loader2 className="h-4 w-4 animate-spin" /> Emitindo e Gravando PDF...
-                      </>
-                    ) : (
-                      <>
-                        <Check className="h-4 w-4" /> Emitir Atesto & Gravar PDF
-                      </>
-                    )}
-                  </Button>
+                  {/* Ações do Modal */}
+                  <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-4 border-t">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setPreviewOrderId(null)}
+                      disabled={isEmitting}
+                    >
+                      Cancelar
+                    </Button>
+                    <div className="flex items-center gap-2 w-full sm:w-auto">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          const nextNum = `AT-${String(atestos.length + 1).padStart(3, '0')}`
+                          const docData = prepareDocumentData(orderForEmission, nextNum)
+                          createOfficialAtestoPdf(docData)
+                            .then((doc) => openPdfForPrint(doc))
+                            .catch(() => window.print())
+                        }}
+                        disabled={isEmitting}
+                        className="gap-1.5"
+                      >
+                        <Printer className="h-4 w-4" /> Imprimir
+                      </Button>
+                      <Button
+                        size="sm"
+                        className="bg-primary hover:bg-primary/90 text-primary-foreground gap-1.5 flex-1 sm:flex-none"
+                        onClick={handleEmitirAtesto}
+                        disabled={isEmitting}
+                      >
+                        {isEmitting ? (
+                          <>
+                            <Loader2 className="h-4 w-4 animate-spin" /> Emitindo e Gravando PDF...
+                          </>
+                        ) : (
+                          <>
+                            <Check className="h-4 w-4" /> Emitir Atesto & Gravar PDF
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  </div>
                 </div>
-              </div>
-            </div>
-          )}
+              )
+            })()}
         </DialogContent>
       </Dialog>
 
@@ -1188,14 +1278,27 @@ export default function Atestos() {
           {atestoForView && (
             <div className="p-6 space-y-4">
               {orderForView ? (
-                <DocumentoOficialView
-                  order={orderForView}
-                  config={config}
-                  logoUrl={logoUrl}
-                  numeroChamada={getNumeroChamadaForSchool(orderForView.schoolId)}
-                  numeroAtesto={atestoForView.numero}
-                  dataEmissao={atestoForView.date}
-                />
+                (() => {
+                  const docDataView = prepareDocumentData(
+                    orderForView,
+                    atestoForView.numero,
+                    atestoForView.date,
+                  )
+                  return (
+                    <DocumentoOficialView
+                      order={orderForView}
+                      config={config}
+                      logoUrl={logoUrl}
+                      numeroChamada={docDataView.numeroChamada}
+                      numeroAtesto={docDataView.numeroAtesto}
+                      dataEmissao={docDataView.dataEmissao}
+                      isCentralizado={docDataView.isCentralizado}
+                      cicloNome={docDataView.cicloNome}
+                      rotaNome={docDataView.rotaNome}
+                      numeroParada={docDataView.numeroParada}
+                    />
+                  )
+                })()
               ) : (
                 <div className="p-8 text-center text-sm text-muted-foreground border rounded-lg bg-muted/20">
                   Dados detalhados do pedido indisponíveis para visualização em tela. Utilize o
@@ -1511,6 +1614,10 @@ interface DocumentoOficialViewProps {
   numeroChamada: string
   numeroAtesto: string
   dataEmissao: Date | string
+  isCentralizado?: boolean
+  cicloNome?: string
+  rotaNome?: string
+  numeroParada?: number
 }
 
 function DocumentoOficialView({
@@ -1520,6 +1627,10 @@ function DocumentoOficialView({
   numeroChamada,
   numeroAtesto,
   dataEmissao,
+  isCentralizado,
+  cicloNome,
+  rotaNome,
+  numeroParada,
 }: DocumentoOficialViewProps) {
   const nomeCoop = config?.nome_cooperativa || 'CooperGestão — Cooperativa Agrícola Familiar'
   const cidadeUf = config?.cidade_uf || 'Região Serrana - RJ'
@@ -1698,6 +1809,23 @@ function DocumentoOficialView({
           {nomeEscola}
         </p>
       </div>
+
+      {/* 6. Rodapé do documento para contratos centralizados */}
+      {isCentralizado && (cicloNome || rotaNome || numeroParada !== undefined) && (
+        <div className="pt-3 border-t border-slate-200 text-center">
+          <p className="text-[11px] text-slate-500 font-medium tracking-wide">
+            {[
+              cicloNome ? `Ciclo: ${cicloNome}` : null,
+              rotaNome ? `Rota: ${rotaNome}` : null,
+              numeroParada !== undefined && numeroParada !== null
+                ? `Parada nº: ${numeroParada}`
+                : null,
+            ]
+              .filter(Boolean)
+              .join(' · ')}
+          </p>
+        </div>
+      )}
     </div>
   )
 }

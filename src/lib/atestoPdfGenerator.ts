@@ -46,6 +46,11 @@ export interface AtestoDocumentData {
   }>
   logoUrl?: string
   onLogoError?: (err: unknown) => void
+  // Metadados específicos para contratos na modalidade centralizada
+  isCentralizado?: boolean
+  cicloNome?: string
+  rotaNome?: string
+  numeroParada?: number
 }
 
 /**
@@ -449,10 +454,37 @@ export async function renderAtestoPageToDoc(
   doc.text('Representante da Unidade Escolar (conferente)', sigX, textY, { align: 'center' })
   textY += isDense ? 4 : 5
 
-  // e) A ÚLTIMA linha do bloco inferior deve ser o NOME DA ESCOLA
+  // e) A ÚLTIMA linha do bloco de assinatura é o NOME DA ESCOLA
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(isDense ? 9 : 10)
   doc.text(nomeEscola.toUpperCase(), sigX, textY, { align: 'center' })
+
+  // 6. RODAPÉ DO DOCUMENTO PARA CONTRATO CENTRALIZADO:
+  // "No rodapé do atesto, centralizado, imprimir o ciclo, a rota e o numero da parada."
+  if (data.isCentralizado && (data.cicloNome || data.rotaNome || data.numeroParada !== undefined)) {
+    const rodapeParts: string[] = []
+    if (data.cicloNome) {
+      rodapeParts.push(`Ciclo: ${data.cicloNome}`)
+    }
+    if (data.rotaNome) {
+      rodapeParts.push(`Rota: ${data.rotaNome}`)
+    }
+    if (data.numeroParada !== undefined && data.numeroParada !== null) {
+      rodapeParts.push(`Parada nº: ${data.numeroParada}`)
+    }
+
+    if (rodapeParts.length > 0) {
+      const rodapeText = rodapeParts.join(' · ')
+      // Posicionar no rodapé inferior da folha A4 (pageHeight = 297mm)
+      const pageHeight = doc.internal.pageSize.getHeight() // 297mm
+      const footerY = Math.max(textY + 10, pageHeight - (isDense ? 10 : 12))
+
+      doc.setFont('helvetica', 'normal')
+      doc.setFontSize(isDense ? 7.5 : 8)
+      doc.setTextColor(100, 116, 139) // slate-500
+      doc.text(rodapeText, pageWidth / 2, footerY, { align: 'center' })
+    }
+  }
 }
 
 /**
