@@ -37,8 +37,8 @@ const MODULES: ModuleSpec[] = [
     route: '/produtos',
     goal: 'Cadastro e manutenção do catálogo de produtos agrícolas e tabela de preços com diretrizes de safra.',
     details: [
-      'Campos: id, nome, unidade, apelidos (nomes alternativos/AKA para matching flexível).',
-      'Disponibilidade: desacoplada do produto cadastral — o catálogo mestre centraliza nome, unidade e apelidos.',
+      'Campos: id, nome, unidade (apelidos residem exclusivamente nos itens de contrato).',
+      'Disponibilidade: desacoplada do produto cadastral — o catálogo mestre centraliza nome e unidade.',
       'Edição Individual de Preços e Estoques: manutenção pontual direta por produto.',
     ],
   },
@@ -100,7 +100,7 @@ const MODULES: ModuleSpec[] = [
     route: '/importacao',
     goal: 'Carga de pedidos em contratos centralizados via planilha .xlsx da Secretaria de Educação.',
     details: [
-      'Matching de Produtos em Cascata (Dois Níveis): A identificação do produto na planilha da secretaria prioriza em 1º lugar os itens vinculados ao contrato (nome_contrato e apelidos/AKAs do contrato, tolerante a ruídos, pontuação e sufixos); em 2º lugar recorre ao catálogo mestre global (nome e apelidos globais do produto). Se não houver correspondência em nenhum dos níveis, o item é tratado como pendência bloqueante no preview da importação.',
+      'Matching de Produtos em Cascata (Dois Níveis): A identificação do produto na planilha da secretaria prioriza em 1º lugar os itens vinculados ao contrato (nome_contrato e apelidos/AKAs do contrato, tolerante a ruídos, pontuação e sufixos); em 2º lugar recorre ao catálogo mestre global (apenas pelo nome oficial do produto). Se não houver correspondência em nenhum dos níveis, o item é tratado como pendência bloqueante no preview da importação.',
       'Matching contra o Cadastro Mestre Global de Escolas: A identificação das colunas é feita contra o diretório global de escolas (e não somente contra os vínculos prévios do contrato).',
       'Fluxo de Pendências Inteligente: Se a escola existe no cadastro mestre mas não está vinculada ao contrato atual, exibe a pendência "Vincular ao contrato" com rota e vínculo pré-preenchidos para confirmação com 1 clique. Se não existe no cadastro mestre, exibe a pendência "Cadastrar escola" (o importador continua sem criar registros automaticamente na surdina).',
       'Regras Estritas de Matching: Mantém regras de tolerância a acentos, maiúsculas, pontuação e apelidos entre parênteses (CEDAL, CEROM, CMEI Várzea), com tratamento comprovado dos casos "EM PAULINO CUSTÓDUIO REZENDE" ≡ "EM PAULINO CUSTÓDIO DE REZENDE" e distinção mandatória "CM LAR DE ISABEL" ≠ "EM LAR DE ISABEL".',
@@ -292,7 +292,7 @@ const DATA_MODEL = [
   'users (id, email, nome/name, celular, foto [file], perfil [MASTER/ADMINISTRADOR/SECRETARIA], ativo [bool])',
   'configuracoes (id, nome_cooperativa, sigla, cnpj, telefone, email, cidade_uf, exibir_atalhos_demo [bool], logotipo [file])',
   'ciclos (id, nome, data_inicio, data_fim, status [coletando/correcao/fechado], snapshot [json])',
-  'produtos (id, nome, unidade, apelidos)',
+  'produtos (id, nome, unidade)',
   'escolas (id, nome, endereco, telefone, email, tipo [CMEI/CRECHE/INTEGRAL/FUNDAMENTAL], alunos) [Cadastro Mestre Global - rota atribuída via vínculos]',
   'contratos (id, numero, numero_chamada, tipo, modalidade_pedido [individualizado/centralizado], num_rotas_logisticas [opcional], valor_total, status)',
   'contrato_escolas (id, contrato_id → contratos, escola_id → escolas, rota [text - origem planilha], rota_logistica_id → rotas_logisticas, rota_id → rotas) [Vínculos N:N independentes]',

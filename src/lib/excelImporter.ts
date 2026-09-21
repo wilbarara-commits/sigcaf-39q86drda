@@ -274,9 +274,9 @@ export function matchSchoolName(
 }
 
 /**
- * Extrai a lista de apelidos individuais de um produto
+ * Extrai a lista de apelidos individuais de um item de contrato ou entidade com apelidos
  */
-export function extractProductAliases(p: Product | { apelidos?: string }): string[] {
+export function extractProductAliases(p: { apelidos?: string }): string[] {
   if (!p.apelidos) return []
   return p.apelidos
     .split(/[,;]/)

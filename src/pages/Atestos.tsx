@@ -300,23 +300,38 @@ export default function Atestos() {
     const items =
       order.items && order.items.length > 0
         ? order.items.map((i) => {
-            // Regra oficial de Atestos: O nome impresso no atesto é o NOME NO CONTRATO
-            // Fallback: se não tiver nome_contrato no item, usa o nome do produto
-            let nomeParaAtesto = i.name
+            // Regra oficial de Atestos: "o nome do produto exibido no atesto (prévia e PDF) deve ser o nome
+            // do item do contrato (nome_contrato quando existir; senão apelidos do item do contrato; senão nome do produto)
+            // — o apelido do contrato vale tanto para a planilha quanto para o atesto".
+            let nomeParaAtesto = (i.name || '').trim()
+            let foundCI: ContratoItemRecord | undefined
+
             if (linkedContractId && contractItems && contractItems.length > 0) {
-              const matchedCI = contractItems.find(
+              foundCI = contractItems.find(
                 (ci) => ci.contrato_id === linkedContractId && ci.produto_id === i.productId,
               )
-              if (matchedCI?.nome_contrato?.trim()) {
-                nomeParaAtesto = matchedCI.nome_contrato.trim()
-              }
-            } else if (contractItems && contractItems.length > 0) {
-              const anyCI = contractItems.find(
-                (ci) => ci.produto_id === i.productId && ci.nome_contrato?.trim(),
+            }
+            if (!foundCI && contractItems && contractItems.length > 0) {
+              foundCI = contractItems.find(
+                (ci) =>
+                  ci.produto_id === i.productId &&
+                  (ci.nome_contrato?.trim() || ci.apelidos?.trim()),
               )
-              if (anyCI?.nome_contrato?.trim()) {
-                nomeParaAtesto = anyCI.nome_contrato.trim()
+            }
+
+            if (foundCI) {
+              if (foundCI.nome_contrato?.trim()) {
+                nomeParaAtesto = foundCI.nome_contrato.trim()
+              } else if (foundCI.apelidos?.trim()) {
+                const firstAlias = foundCI.apelidos.split(/[,;]/)[0]?.trim()
+                if (firstAlias) {
+                  nomeParaAtesto = firstAlias
+                }
               }
+            }
+
+            if (!nomeParaAtesto) {
+              nomeParaAtesto = i.name || 'Gêneros Alimentícios'
             }
 
             return {
@@ -470,16 +485,22 @@ export default function Atestos() {
               total: 0,
               items: pedItens.map((it: any) => {
                 const ciMatch = fallbackContractItems.find(
-                  (c) => c.produto_id === it.produto_id && c.nome_contrato?.trim(),
+                  (c) =>
+                    c.produto_id === it.produto_id &&
+                    (c.nome_contrato?.trim() || c.apelidos?.trim()),
                 )
-                const nomeContrato =
+                const firstAlias = ciMatch?.apelidos
+                  ? String(ciMatch.apelidos).split(/[,;]/)[0]?.trim()
+                  : ''
+                const nomeResolvido =
                   ciMatch?.nome_contrato?.trim() ||
+                  firstAlias ||
                   it.expand?.produto_id?.nome ||
                   'Gêneros Alimentícios'
                 return {
                   id: it.id,
                   productId: it.produto_id,
-                  name: nomeContrato,
+                  name: nomeResolvido,
                   quantity: Number(it.quantidade) || 0,
                   price: Number(it.preco_unitario) || 0,
                 }
@@ -647,16 +668,22 @@ export default function Atestos() {
               total: 0,
               items: pedItens.map((it: any) => {
                 const ciMatch = fallbackContractItems.find(
-                  (c) => c.produto_id === it.produto_id && c.nome_contrato?.trim(),
+                  (c) =>
+                    c.produto_id === it.produto_id &&
+                    (c.nome_contrato?.trim() || c.apelidos?.trim()),
                 )
-                const nomeContrato =
+                const firstAlias = ciMatch?.apelidos
+                  ? String(ciMatch.apelidos).split(/[,;]/)[0]?.trim()
+                  : ''
+                const nomeResolvido =
                   ciMatch?.nome_contrato?.trim() ||
+                  firstAlias ||
                   it.expand?.produto_id?.nome ||
                   'Gêneros Alimentícios'
                 return {
                   id: it.id,
                   productId: it.produto_id,
-                  name: nomeContrato,
+                  name: nomeResolvido,
                   quantity: Number(it.quantidade) || 0,
                   price: Number(it.preco_unitario) || 0,
                 }
@@ -1182,18 +1209,18 @@ export default function Atestos() {
                 <div className="p-6 space-y-4">
                   {/* Documento A4 Estilizado */}
                   <DocumentoOficialView
-                    order={orderForEmission}
+                    order={previewOrder}
                     config={config}
                     logoUrl={logoUrl}
-                    numeroChamada={docDataPreview.numeroChamada}
-                    numeroAtesto={docDataPreview.numeroAtesto}
-                    dataEmissao={docDataPreview.dataEmissao}
-                    isCentralizado={docDataPreview.isCentralizado}
-                    cicloNome={docDataPreview.cicloNome}
-                    rotaNome={docDataPreview.rotaNome}
-                    numeroParada={docDataPreview.numeroParada}
+                    numeroChamada={previewDocData.numeroChamada}
+                    numeroAtesto={previewDocData.numeroAtesto}
+                    dataEmissao={previewDocData.dataEmissao}
+                    isCentralizado={previewDocData.isCentralizado}
+                    cicloNome={previewDocData.cicloNome}
+                    rotaNome={previewDocData.rotaNome}
+                    numeroParada={previewDocData.numeroParada}
+                    itemsOverride={previewDocData.items}
                   />
-
                   {/* Ações do Modal */}
                   <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-4 border-t">
                     <Button
@@ -1296,6 +1323,7 @@ export default function Atestos() {
                       cicloNome={docDataView.cicloNome}
                       rotaNome={docDataView.rotaNome}
                       numeroParada={docDataView.numeroParada}
+                      itemsOverride={docDataView.items}
                     />
                   )
                 })()
@@ -1618,6 +1646,7 @@ interface DocumentoOficialViewProps {
   cicloNome?: string
   rotaNome?: string
   numeroParada?: number
+  itemsOverride?: Array<{ nome: string; quantidade: number }>
 }
 
 function DocumentoOficialView({
@@ -1631,22 +1660,30 @@ function DocumentoOficialView({
   cicloNome,
   rotaNome,
   numeroParada,
+  itemsOverride,
 }: DocumentoOficialViewProps) {
   const nomeCoop = config?.nome_cooperativa || 'CooperGestão — Cooperativa Agrícola Familiar'
   const cidadeUf = config?.cidade_uf || 'Região Serrana - RJ'
   const nomeEscola = order.schoolName || 'Unidade Escolar'
 
   const items =
-    order.items && order.items.length > 0
-      ? order.items
-      : [
-          {
-            name: 'Gêneros alimentícios da agricultura familiar',
-            quantity: 1,
-            price: 0,
-            productId: '1',
-          },
-        ]
+    itemsOverride && itemsOverride.length > 0
+      ? itemsOverride.map((it, idx) => ({
+          name: it.nome,
+          quantity: it.quantidade,
+          price: 0,
+          productId: String(idx),
+        }))
+      : order.items && order.items.length > 0
+        ? order.items
+        : [
+            {
+              name: 'Gêneros alimentícios da agricultura familiar',
+              quantity: 1,
+              price: 0,
+              productId: '1',
+            },
+          ]
 
   const totalQuantidade = items.reduce((acc, it) => acc + (Number(it.quantity) || 0), 0)
   const isDense = items.length > 12

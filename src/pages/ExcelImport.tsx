@@ -948,7 +948,7 @@ export default function ExcelImport() {
                     className="gap-1.5 py-1 px-2.5 text-xs font-medium bg-sky-50 text-sky-800 border-sky-300 dark:bg-sky-950/50 dark:text-sky-200 dark:border-sky-800 shadow-sm"
                   >
                     <Tag className="h-3.5 w-3.5 text-sky-600 dark:text-sky-400 shrink-0" />
-                    <span>Casado via apelido / AKA</span>
+                    <span>Casado via apelido do contrato</span>
                   </Badge>
                   <Badge
                     variant="outline"
@@ -1258,7 +1258,7 @@ export default function ExcelImport() {
                       className="text-xs bg-sky-50 text-sky-700 border-sky-300 dark:bg-sky-950/40 dark:text-sky-300 gap-1"
                     >
                       <Tag className="h-3 w-3 text-sky-600 dark:text-sky-400" />
-                      Via Apelido (AKA): {parsedData.productsMatchedByAlias?.length || 0}
+                      Via Apelido do Contrato: {parsedData.productsMatchedByAlias?.length || 0}
                     </Badge>
                     {parsedData.unmatchedProducts && parsedData.unmatchedProducts.length > 0 && (
                       <Badge
@@ -1362,13 +1362,13 @@ export default function ExcelImport() {
                     )}
                   </div>
 
-                  {/* Grupo 2: Casados via Apelido / AKA */}
+                  {/* Grupo 2: Casados via Apelido do Contrato */}
                   <div className="space-y-2 rounded-md border p-3 bg-sky-500/5 border-sky-200 dark:border-sky-900/40">
                     <div className="flex items-center justify-between border-b border-sky-200/60 dark:border-sky-900/60 pb-2">
                       <div className="flex items-center gap-1.5">
                         <Tag className="h-4 w-4 text-sky-600 dark:text-sky-400" />
                         <span className="text-xs font-semibold text-foreground">
-                          Casados via Apelido / AKA (Quid Pro Quo)
+                          Casados via Apelido do Contrato (Quid Pro Quo)
                         </span>
                       </div>
                       <Badge
@@ -1382,7 +1382,7 @@ export default function ExcelImport() {
                     {!parsedData.productsMatchedByAlias ||
                     parsedData.productsMatchedByAlias.length === 0 ? (
                       <p className="text-xs text-muted-foreground py-4 text-center">
-                        Nenhum produto precisou de resolução por apelido/AKA.
+                        Nenhum produto precisou de resolução por apelido do contrato.
                       </p>
                     ) : (
                       <div className="max-h-[260px] overflow-y-auto space-y-1.5 pr-1">
@@ -1402,7 +1402,7 @@ export default function ExcelImport() {
                                     className="text-[9px] py-0 px-1.5 bg-sky-100 text-sky-800 border-sky-300 dark:bg-sky-950 dark:text-sky-300 font-medium gap-1"
                                   >
                                     <Tag className="h-2.5 w-2.5 text-sky-600" />
-                                    Apelido / AKA
+                                    Apelido do Contrato
                                   </Badge>
                                 </div>
                                 {p.productNameMatched &&
@@ -1423,12 +1423,12 @@ export default function ExcelImport() {
                                 "{p.productNameRaw}"
                               </strong>
                               <ArrowRight className="h-3 w-3 text-sky-600 dark:text-sky-400 shrink-0" />
-                              <span className="text-muted-foreground">Apelido casado:</span>
+                              <span className="text-muted-foreground">Apelido no Contrato:</span>
                               <Badge
                                 variant="outline"
                                 className="text-[10px] bg-sky-100 text-sky-800 border-sky-300 dark:bg-sky-950 dark:text-sky-300"
                               >
-                                {p.matchedViaAlias || 'AKA'}
+                                {p.matchedViaAlias || 'Apelido'}
                               </Badge>
                             </div>
 
@@ -2165,7 +2165,8 @@ export default function ExcelImport() {
                                         className="text-[10px] py-0.5 px-2 bg-sky-100 text-sky-800 border-sky-300 dark:bg-sky-950 dark:text-sky-300 font-medium gap-1"
                                       >
                                         <Tag className="h-3 w-3 text-sky-600" />
-                                        Casado via apelido: {item.matchedViaAlias || 'AKA'}
+                                        Casado via apelido do contrato:{' '}
+                                        {item.matchedViaAlias || 'Apelido'}
                                       </Badge>
                                     )}
                                     {isNone && (
