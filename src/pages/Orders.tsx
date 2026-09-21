@@ -1,3 +1,4 @@
+// Orders component
 import { useState, useMemo } from 'react'
 import { useApp } from '@/context/app-context'
 import { useAuth } from '@/context/auth-context'
