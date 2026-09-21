@@ -310,14 +310,14 @@ export async function renderAtestoPageToDoc(
   startY += splitAtesto.length * (isDense ? 4 : 4.8) + (isDense ? 2.5 : 4)
 
   // 3. TABELA DE PRODUTOS
-  // Centralizada na página com proporções fiéis ao modelo oficial
+  // Centralizada na página com largura reduzida para aproximar os valores e facilitar a leitura
   const totalQuantidade = data.items.reduce((sum, item) => sum + (Number(item.quantidade) || 0), 0)
 
-  // Definir dimensões da tabela para centralização perfeita
-  const tableWidth = 140 // mm
-  const tableMarginLeft = (pageWidth - tableWidth) / 2 // 35mm cada lado para 210mm total
-  const col1Width = 92 // PRODUTOS
-  const col2Width = 48 // QUANTIDADE (KG)
+  // Definir dimensões da tabela para centralização perfeita (largura mais compacta)
+  const tableWidth = 110 // mm (reduzido de 140mm para aproximar os valores)
+  const tableMarginLeft = (pageWidth - tableWidth) / 2 // 50mm de cada lado na folha A4 (210mm)
+  const col1Width = 72 // PRODUTOS
+  const col2Width = 38 // QUANTIDADE (KG)
 
   // Calcular preenchimento dinâmico para comportar confortavelmente 20 produtos em 1 página
   let cellPaddingY = 2.4
@@ -460,21 +460,28 @@ export async function renderAtestoPageToDoc(
   doc.text(nomeEscola.toUpperCase(), sigX, textY, { align: 'center' })
 
   // 6. RODAPÉ DO DOCUMENTO PARA CONTRATO CENTRALIZADO:
-  // "No rodapé do atesto, centralizado, imprimir o ciclo, a rota e o numero da parada."
-  if (data.isCentralizado && (data.cicloNome || data.rotaNome || data.numeroParada !== undefined)) {
+  // No rodapé do atesto, apenas os valores separados por traços (sem rótulos), ex.: "01/2026 - ROTA A - 7"
+  const hasParada =
+    data.numeroParada !== undefined &&
+    data.numeroParada !== null &&
+    String(data.numeroParada).trim() !== ''
+  const hasCiclo = Boolean(data.cicloNome && data.cicloNome.trim())
+  const hasRota = Boolean(data.rotaNome && data.rotaNome.trim())
+
+  if (data.isCentralizado && (hasCiclo || hasRota || hasParada)) {
     const rodapeParts: string[] = []
-    if (data.cicloNome) {
-      rodapeParts.push(`Ciclo: ${data.cicloNome}`)
+    if (hasCiclo) {
+      rodapeParts.push(data.cicloNome!.trim())
     }
-    if (data.rotaNome) {
-      rodapeParts.push(`Rota: ${data.rotaNome}`)
+    if (hasRota) {
+      rodapeParts.push(data.rotaNome!.trim())
     }
-    if (data.numeroParada !== undefined && data.numeroParada !== null) {
-      rodapeParts.push(`Parada nº: ${data.numeroParada}`)
+    if (hasParada) {
+      rodapeParts.push(String(data.numeroParada).trim())
     }
 
     if (rodapeParts.length > 0) {
-      const rodapeText = rodapeParts.join(' · ')
+      const rodapeText = rodapeParts.join(' - ')
       // Posicionar no rodapé inferior da folha A4 (pageHeight = 297mm)
       const pageHeight = doc.internal.pageSize.getHeight() // 297mm
       const footerY = Math.max(textY + 10, pageHeight - (isDense ? 10 : 12))

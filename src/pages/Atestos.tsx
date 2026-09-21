@@ -1695,18 +1695,18 @@ function DocumentoOficialView({
         </p>
       </div>
 
-      {/* 3. Tabela de Produtos centralizada */}
+      {/* 3. Tabela de Produtos centralizada com largura reduzida para aproximar os valores */}
       <div className="flex justify-center">
-        <div className="w-full max-w-[540px] overflow-hidden border border-slate-800 rounded-none shadow-none">
-          <table className="w-full text-xs text-left border-collapse">
+        <div className="w-full max-w-[430px] overflow-hidden border border-slate-800 rounded-none shadow-none">
+          <table className="w-full text-xs text-left border-collapse table-fixed">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-800 font-bold text-slate-900 text-center">
                 <th
-                  className={`border-r border-slate-800 ${isDense ? 'py-1 px-2.5' : 'py-1.5 px-3'} text-left`}
+                  className={`border-r border-slate-800 ${isDense ? 'py-1 px-2.5' : 'py-1.5 px-3'} text-left w-[65%]`}
                 >
                   PRODUTOS
                 </th>
-                <th className={`${isDense ? 'py-1 px-2.5 w-36' : 'py-1.5 px-3 w-40'} text-center`}>
+                <th className={`${isDense ? 'py-1 px-2.5' : 'py-1.5 px-3'} text-center w-[35%]`}>
                   QUANTIDADE (KG)
                 </th>
               </tr>
@@ -1717,7 +1717,8 @@ function DocumentoOficialView({
                   <td
                     className={`border-r border-slate-800 ${
                       isDense ? 'py-0.5 px-2.5 text-[11px]' : 'py-1 px-3 text-xs'
-                    } uppercase text-slate-800 font-medium`}
+                    } uppercase text-slate-800 font-medium truncate`}
+                    title={it.name}
                   >
                     {it.name}
                   </td>
@@ -1810,22 +1811,28 @@ function DocumentoOficialView({
         </p>
       </div>
 
-      {/* 6. Rodapé do documento para contratos centralizados */}
-      {isCentralizado && (cicloNome || rotaNome || numeroParada !== undefined) && (
-        <div className="pt-3 border-t border-slate-200 text-center">
-          <p className="text-[11px] text-slate-500 font-medium tracking-wide">
-            {[
-              cicloNome ? `Ciclo: ${cicloNome}` : null,
-              rotaNome ? `Rota: ${rotaNome}` : null,
-              numeroParada !== undefined && numeroParada !== null
-                ? `Parada nº: ${numeroParada}`
-                : null,
-            ]
-              .filter(Boolean)
-              .join(' · ')}
-          </p>
-        </div>
-      )}
+      {/* 6. Rodapé do documento para contratos centralizados (apenas valores separados por traços) */}
+      {(() => {
+        const hasParada =
+          numeroParada !== undefined && numeroParada !== null && String(numeroParada).trim() !== ''
+        const hasCiclo = Boolean(cicloNome && cicloNome.trim())
+        const hasRota = Boolean(rotaNome && rotaNome.trim())
+        if (!isCentralizado || (!hasCiclo && !hasRota && !hasParada)) {
+          return null
+        }
+        const rodapeParts: string[] = []
+        if (hasCiclo) rodapeParts.push(cicloNome!.trim())
+        if (hasRota) rodapeParts.push(rotaNome!.trim())
+        if (hasParada) rodapeParts.push(String(numeroParada).trim())
+
+        return (
+          <div className="pt-3 border-t border-slate-200 text-center">
+            <p className="text-[11px] text-slate-500 font-medium tracking-wide">
+              {rodapeParts.join(' - ')}
+            </p>
+          </div>
+        )
+      })()}
     </div>
   )
 }
