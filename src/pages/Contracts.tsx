@@ -2197,7 +2197,7 @@ export default function Contracts() {
                             <TableRow key={it.produtoId} className="text-xs">
                               <TableCell className="font-medium">{it.produtoNome}</TableCell>
                               <TableCell className="text-right font-mono">
-                                R$ {it.preco.toFixed(2)}
+                                R$ {(it.preco || 0).toFixed(2)}
                               </TableCell>
                               <TableCell className="text-right font-mono text-muted-foreground">
                                 {it.cotaContratada && it.cotaContratada > 0 ? (

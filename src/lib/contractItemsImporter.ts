@@ -344,19 +344,19 @@ export async function parseContractItemsFile(
     }
 
     // Preço
-    let finalPrice = matchedProduct.price
+    let finalPrice = matchedProduct.price || 0
     if (rawPrice) {
       const parsedPrice = parseBRLNumber(rawPrice)
       if (parsedPrice.isValid && parsedPrice.value >= 0) {
         finalPrice = parsedPrice.value
       } else {
         warnings.push(
-          `Preço "${rawPrice}" não reconhecido; assumido valor do catálogo R$ ${matchedProduct.price.toFixed(2)}`,
+          `Preço "${rawPrice}" não reconhecido; assumido valor do catálogo R$ ${(matchedProduct.price ?? 0).toFixed(2)}`,
         )
       }
     } else {
       warnings.push(
-        `Preço omitido; assumido valor do catálogo R$ ${matchedProduct.price.toFixed(2)}`,
+        `Preço omitido; assumido valor do catálogo R$ ${(matchedProduct.price ?? 0).toFixed(2)}`,
       )
     }
 

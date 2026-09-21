@@ -157,11 +157,7 @@ export function ContractItemsManager({
     const q = batchSearchQuery.trim().toLowerCase()
     return catalogProducts.filter((p) => {
       if (!q) return true
-      return (
-        p.name.toLowerCase().includes(q) ||
-        (p.category && p.category.toLowerCase().includes(q)) ||
-        (p.unit && p.unit.toLowerCase().includes(q))
-      )
+      return p.name.toLowerCase().includes(q) || (p.unit && p.unit.toLowerCase().includes(q))
     })
   }, [catalogProducts, batchSearchQuery])
 
@@ -284,6 +280,12 @@ export function ContractItemsManager({
     const it = items[index]
     const prod = productById.get(it.productId)
     if (!prod) return
+    if (prod.price === undefined || prod.price === null || prod.price <= 0) {
+      toast.warning(
+        'Este produto não possui preço no catálogo. O preço deve ser informado no item do contrato.',
+      )
+      return
+    }
     handlePriceChange(index, prod.price)
     toast.info(`Preço redefinido para o valor do catálogo (R$ ${prod.price.toFixed(2)})`)
   }
@@ -377,7 +379,7 @@ export function ContractItemsManager({
       }
 
       // Preço
-      let price = found.price
+      let price = found.price || 0
       if (pricePart) {
         const parsed = parseBRLNumber(pricePart)
         if (parsed.isValid && parsed.value >= 0) {
@@ -683,10 +685,11 @@ export function ContractItemsManager({
                 {items.map((item, index) => {
                   const prod = productById.get(item.productId)
                   const catalogPrice = prod?.price ?? 0
-                  const isDiff = Math.abs(item.price - catalogPrice) > 0.009 && catalogPrice > 0
+                  const isDiff =
+                    catalogPrice > 0 && Math.abs((item.price || 0) - catalogPrice) > 0.009
                   const qty =
                     item.quantity !== undefined && item.quantity !== null ? item.quantity : 0
-                  const subtotal = item.price * qty
+                  const subtotal = (item.price || 0) * qty
 
                   const nomeContratoEfetivo =
                     item.nomeContrato !== undefined ? item.nomeContrato : prod?.name || ''
@@ -737,16 +740,6 @@ export function ContractItemsManager({
                           </span>
                           {isNomeDiferente && (
                             <span className="text-[10px] text-muted-foreground/70">(mestre)</span>
-                          )}
-                          {prod?.category && (
-                            <div className="flex items-center gap-1 mt-0.5">
-                              <Badge
-                                variant="outline"
-                                className="text-[9px] py-0 px-1 font-normal text-muted-foreground"
-                              >
-                                {prod.category}
-                              </Badge>
-                            </div>
                           )}
                         </div>
                       </TableCell>
@@ -921,7 +914,7 @@ export function ContractItemsManager({
             <div className="relative">
               <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
               <Input
-                placeholder="Buscar por nome, categoria ou unidade..."
+                placeholder="Buscar por nome ou unidade..."
                 value={batchSearchQuery}
                 onChange={(e) => setBatchSearchQuery(e.target.value)}
                 className="pl-8 h-8 text-xs"
@@ -987,14 +980,6 @@ export function ContractItemsManager({
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-1.5">
                           <span className="font-semibold text-foreground truncate">{p.name}</span>
-                          {p.category && (
-                            <Badge
-                              variant="outline"
-                              className="text-[9px] py-0 px-1 font-normal text-muted-foreground shrink-0"
-                            >
-                              {p.category}
-                            </Badge>
-                          )}
                           {isAlreadyInContract && (
                             <Badge
                               variant="secondary"
@@ -1005,16 +990,24 @@ export function ContractItemsManager({
                           )}
                         </div>
                         <p className="text-[11px] text-muted-foreground truncate">
-                          Unidade: {p.unit} • Estoque: {p.stock}
+                          Unidade: {p.unit}
                         </p>
                       </div>
                     </div>
 
                     <div className="text-right shrink-0 pl-2">
-                      <span className="font-mono font-medium text-foreground block">
-                        R$ {p.price.toFixed(2)}
-                      </span>
-                      <span className="text-[10px] text-muted-foreground">preço base</span>
+                      {p.price !== undefined && p.price !== null && p.price > 0 ? (
+                        <>
+                          <span className="font-mono font-medium text-foreground block">
+                            R$ {p.price.toFixed(2)}
+                          </span>
+                          <span className="text-[10px] text-muted-foreground">preço base</span>
+                        </>
+                      ) : (
+                        <span className="text-[11px] text-muted-foreground italic block">
+                          Preço a definir no contrato
+                        </span>
+                      )}
                     </div>
                   </div>
                 )
