@@ -27,6 +27,8 @@ import * as XLSX from 'xlsx'
 import type { School, Product, ContractSchoolLink, ContratoItemRecord } from '@/lib/types'
 import { dePluralizeName } from '@/lib/productCsvImporter'
 
+export type ProductMatchMethod = 'contract_name' | 'alias' | 'none'
+
 export interface ParsedOrderItem {
   productNameRaw: string
   productId?: string
@@ -34,6 +36,7 @@ export interface ParsedOrderItem {
   nomeContratoMatched?: string
   matchedViaContractItem?: boolean
   matchedViaAlias?: string
+  matchMethod?: ProductMatchMethod
   isAmbiguous?: boolean
   quantity: number
   price: number
@@ -53,6 +56,7 @@ export interface ProductMatchResult {
   matchedViaAlias?: string
   nomeContratoMatched?: string
   matchedViaContractItem?: boolean
+  matchMethod?: ProductMatchMethod
   isAmbiguous?: boolean
   candidateCount?: number
 }
@@ -83,6 +87,33 @@ export interface ParsedSchoolOrder {
   mergedColumnsCount?: number
 }
 
+export interface MultiSheetSchoolInfo {
+  schoolId?: string
+  schoolName: string
+  sheets: string[]
+  totalQuantity: number
+  itemsCount: number
+}
+
+export interface ProductMatchSummaryItem {
+  productNameRaw: string
+  productNameMatched?: string
+  nomeContratoMatched?: string
+  productId?: string
+  matchedViaAlias?: string
+  matchMethod: ProductMatchMethod
+  totalQuantity: number
+  occurrencesCount: number
+  schoolsCount: number
+  sheets: string[]
+}
+
+export interface UnmatchedProductSummaryItem {
+  productNameRaw: string
+  sheets: string[]
+  occurrencesCount: number
+}
+
 export interface ParsedExcelResult {
   routesFound: string[]
   unmatchedSheets?: string[]
@@ -93,6 +124,10 @@ export interface ParsedExcelResult {
   anomalies: string[]
   pendingIssuesCount: number
   totalZeroItemsPendingCount?: number
+  multiSheetSchools?: MultiSheetSchoolInfo[]
+  productsMatchedByName?: ProductMatchSummaryItem[]
+  productsMatchedByAlias?: ProductMatchSummaryItem[]
+  unmatchedProducts?: UnmatchedProductSummaryItem[]
 }
 
 // Função de normalização de strings (remove acentos, pontuação, múltiplos espaços e lowercase)
@@ -340,6 +375,7 @@ export function matchProductNameDetailed(
         product: c.product,
         nomeContratoMatched: c.effectiveNomeContrato,
         matchedViaContractItem: true,
+        matchMethod: 'contract_name',
       }
     }
   }
@@ -361,6 +397,7 @@ export function matchProductNameDetailed(
       nomeContratoMatched: m.cand.effectiveNomeContrato,
       matchedViaAlias: m.alias,
       matchedViaContractItem: true,
+      matchMethod: 'alias',
     }
   } else if (exactContractAliasMatches.length > 1) {
     const exactNameMatch = exactContractAliasMatches.find(
@@ -371,6 +408,7 @@ export function matchProductNameDetailed(
         product: exactNameMatch.cand.product,
         nomeContratoMatched: exactNameMatch.cand.effectiveNomeContrato,
         matchedViaContractItem: true,
+        matchMethod: 'contract_name',
       }
     }
     return {
@@ -397,6 +435,7 @@ export function matchProductNameDetailed(
       product: m.product,
       nomeContratoMatched: m.effectiveNomeContrato,
       matchedViaContractItem: true,
+      matchMethod: 'contract_name',
     }
   } else if (depluralNameMatches.length > 1) {
     return {
@@ -425,6 +464,7 @@ export function matchProductNameDetailed(
       nomeContratoMatched: m.cand.effectiveNomeContrato,
       matchedViaAlias: m.alias,
       matchedViaContractItem: true,
+      matchMethod: 'alias',
     }
   } else if (depluralAliasMatches.length > 1) {
     return {
@@ -447,6 +487,7 @@ export function matchProductNameDetailed(
           product: c.product,
           nomeContratoMatched: c.effectiveNomeContrato,
           matchedViaContractItem: true,
+          matchMethod: 'contract_name',
         }
       }
       if (normRaw && (normRaw.includes(normNC) || normNC.includes(normRaw))) {
@@ -454,6 +495,7 @@ export function matchProductNameDetailed(
           product: c.product,
           nomeContratoMatched: c.effectiveNomeContrato,
           matchedViaContractItem: true,
+          matchMethod: 'contract_name',
         }
       }
     }
@@ -467,6 +509,7 @@ export function matchProductNameDetailed(
             nomeContratoMatched: c.effectiveNomeContrato,
             matchedViaAlias: an.alias,
             matchedViaContractItem: true,
+            matchMethod: 'alias',
           }
         }
         if (normRaw && (normRaw.includes(normA) || normA.includes(normRaw))) {
@@ -475,6 +518,7 @@ export function matchProductNameDetailed(
             nomeContratoMatched: c.effectiveNomeContrato,
             matchedViaAlias: an.alias,
             matchedViaContractItem: true,
+            matchMethod: 'alias',
           }
         }
       }
@@ -494,6 +538,7 @@ export function matchProductNameDetailed(
         product: fullMatch.product,
         nomeContratoMatched: fullMatch.effectiveNomeContrato,
         matchedViaContractItem: true,
+        matchMethod: 'contract_name',
       }
     }
 
@@ -507,6 +552,7 @@ export function matchProductNameDetailed(
             nomeContratoMatched: c.effectiveNomeContrato,
             matchedViaAlias: an.alias,
             matchedViaContractItem: true,
+            matchMethod: 'alias',
           }
         }
       }
@@ -521,6 +567,7 @@ export function matchProductNameDetailed(
         product: subsetMatch.product,
         nomeContratoMatched: subsetMatch.effectiveNomeContrato,
         matchedViaContractItem: true,
+        matchMethod: 'contract_name',
       }
     }
 
@@ -533,6 +580,7 @@ export function matchProductNameDetailed(
             nomeContratoMatched: c.effectiveNomeContrato,
             matchedViaAlias: an.alias,
             matchedViaContractItem: true,
+            matchMethod: 'alias',
           }
         }
       }
@@ -550,6 +598,7 @@ export function matchProductNameDetailed(
           product: firstMatch.product,
           nomeContratoMatched: firstMatch.effectiveNomeContrato,
           matchedViaContractItem: true,
+          matchMethod: 'contract_name',
         }
       }
     }
@@ -816,6 +865,8 @@ export function parseSecretaryExcel(
   const parsedOrders: ParsedSchoolOrder[] = []
   // Rastrear ocorrências de escolas por aba: escolaNorm -> Map<sheetName, count de colunas>
   const schoolSheetOccurrences = new Map<string, Map<string, number>>()
+  // Rastrear produtos não encontrados na planilha: productNameRaw -> Set<sheetName>
+  const unmatchedSheetProductsMap = new Map<string, Set<string>>()
   const anomalies: string[] = []
 
   for (const sheetName of routesToImport) {
@@ -1053,8 +1104,12 @@ export function parseSecretaryExcel(
             ? contractItems.find((ci) => ci.produto_id === matchedProd.id)
             : undefined
 
-        // REGRA: "só produtos listados no contrato (...), linhas de produtos não listados/inválidos DESCARTADAS SILENCIOSAMENTE (sem pendência, sem erro)"
+        // Rastrear produtos não encontrados na planilha para auditoria / prévia
         if (!matchedProd || !matchedContractItem) {
+          unmatchedSheetProductsMap.set(
+            productDescRaw,
+            (unmatchedSheetProductsMap.get(productDescRaw) || new Set()).add(sheetName),
+          )
           continue
         }
 
@@ -1069,6 +1124,8 @@ export function parseSecretaryExcel(
           nomeContratoMatched: resolvedNomeContrato,
           matchedViaContractItem: true,
           matchedViaAlias: matchInfo.matchedViaAlias,
+          matchMethod:
+            matchInfo.matchMethod || (matchInfo.matchedViaAlias ? 'alias' : 'contract_name'),
           quantity: qty,
           price: resolvedPrice,
           isContractItem: true,
@@ -1266,6 +1323,102 @@ export function parseSecretaryExcel(
   let totalWeight = 0
   let pendingIssuesCount = 0
 
+  // Identificar escolas que apareceram em mais de uma aba da planilha
+  const multiSheetSchools: MultiSheetSchoolInfo[] = []
+  for (const po of finalOrders) {
+    const sheetsList = po.routeRaw
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean)
+    if (sheetsList.length > 1) {
+      let orderQty = 0
+      for (const it of po.items) {
+        orderQty += it.quantity
+      }
+      multiSheetSchools.push({
+        schoolId: po.schoolId,
+        schoolName: po.schoolNameMatched || po.schoolNameRaw,
+        sheets: sheetsList,
+        totalQuantity: Math.round(orderQty * 100) / 100,
+        itemsCount: po.items.length,
+      })
+    }
+  }
+
+  // Agrupar produtos casados para exibição detalhada quid pro quo na prévia:
+  // Casados via nome do contrato vs casados via apelido/AKA
+  const matchedByNameMap = new Map<string, ProductMatchSummaryItem>()
+  const matchedByAliasMap = new Map<string, ProductMatchSummaryItem>()
+
+  for (const po of finalOrders) {
+    const orderSheets = po.routeRaw
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean)
+
+    for (const item of po.items) {
+      if (item.quantity <= 0) continue
+
+      const isAliasMatch = item.matchMethod === 'alias' || Boolean(item.matchedViaAlias)
+      const targetMap = isAliasMatch ? matchedByAliasMap : matchedByNameMap
+      // Chave única: para nome do contrato -> nomeContratoMatched; para alias -> chave composta (raw + matched)
+      const groupKey = isAliasMatch
+        ? `${item.productNameRaw}:::${item.productId || item.nomeContratoMatched || ''}:::${item.matchedViaAlias || ''}`
+        : `${item.productId || item.nomeContratoMatched || item.productNameRaw}`
+
+      const existing = targetMap.get(groupKey)
+      if (existing) {
+        existing.totalQuantity = Math.round((existing.totalQuantity + item.quantity) * 1000) / 1000
+        existing.occurrencesCount += 1
+        existing.schoolsCount += 1
+        for (const s of orderSheets) {
+          if (!existing.sheets.includes(s)) {
+            existing.sheets.push(s)
+          }
+        }
+      } else {
+        targetMap.set(groupKey, {
+          productNameRaw: item.productNameRaw,
+          productNameMatched: item.productNameMatched,
+          nomeContratoMatched: item.nomeContratoMatched,
+          productId: item.productId,
+          matchedViaAlias: item.matchedViaAlias,
+          matchMethod: isAliasMatch ? 'alias' : 'contract_name',
+          totalQuantity: item.quantity,
+          occurrencesCount: 1,
+          schoolsCount: 1,
+          sheets: [...orderSheets],
+        })
+      }
+    }
+  }
+
+  // Ordenar produtos casados por nome alfabético
+  const productsMatchedByName = Array.from(matchedByNameMap.values()).sort((a, b) =>
+    (a.nomeContratoMatched || a.productNameMatched || a.productNameRaw).localeCompare(
+      b.nomeContratoMatched || b.productNameMatched || b.productNameRaw,
+      'pt-BR',
+    ),
+  )
+
+  const productsMatchedByAlias = Array.from(matchedByAliasMap.values()).sort((a, b) =>
+    (a.nomeContratoMatched || a.productNameMatched || a.productNameRaw).localeCompare(
+      b.nomeContratoMatched || b.productNameMatched || b.productNameRaw,
+      'pt-BR',
+    ),
+  )
+
+  // Lista de produtos da planilha não encontrados no contrato
+  const unmatchedProducts: UnmatchedProductSummaryItem[] = []
+  for (const [rawDesc, sheetsSet] of unmatchedSheetProductsMap.entries()) {
+    unmatchedProducts.push({
+      productNameRaw: rawDesc,
+      sheets: Array.from(sheetsSet),
+      occurrencesCount: sheetsSet.size,
+    })
+  }
+  unmatchedProducts.sort((a, b) => a.productNameRaw.localeCompare(b.productNameRaw, 'pt-BR'))
+
   for (const po of finalOrders) {
     // Pedido é bloqueante se: escola não encontrada, não vinculada ao contrato,
     // ou se não tiver nenhum item com produto identificado e quantidade > 0.
@@ -1293,5 +1446,9 @@ export function parseSecretaryExcel(
     anomalies,
     pendingIssuesCount,
     totalZeroItemsPendingCount: 0,
+    multiSheetSchools,
+    productsMatchedByName,
+    productsMatchedByAlias,
+    unmatchedProducts,
   }
 }

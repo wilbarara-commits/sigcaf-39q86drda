@@ -40,6 +40,10 @@ import {
   Building2,
   Sparkles,
   Route,
+  Tag,
+  PackageCheck,
+  HelpCircle,
+  Merge,
 } from 'lucide-react'
 import {
   Dialog,
@@ -56,6 +60,9 @@ import {
   normalizeName,
   type ParsedExcelResult,
   type ParsedSchoolOrder,
+  type ProductMatchSummaryItem,
+  type MultiSheetSchoolInfo,
+  type UnmatchedProductSummaryItem,
 } from '@/lib/excelImporter'
 import { rotasService } from '@/services/rotas'
 import { pedidosService } from '@/services/pedidos'
@@ -1123,6 +1130,257 @@ export default function ExcelImport() {
                     </div>
                   </div>
                 )}
+
+              {/* Alerta de Escola em Mais de Uma Aba da Planilha */}
+              {parsedData.multiSheetSchools && parsedData.multiSheetSchools.length > 0 && (
+                <div className="p-4 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-950 dark:text-amber-200 text-xs space-y-3">
+                  <div className="flex items-start gap-2.5">
+                    <Merge className="h-5 w-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                    <div className="space-y-1 flex-1">
+                      <div className="flex items-center justify-between flex-wrap gap-2">
+                        <p className="font-semibold text-sm text-amber-900 dark:text-amber-300">
+                          Aviso: {parsedData.multiSheetSchools.length}{' '}
+                          {parsedData.multiSheetSchools.length === 1
+                            ? 'escola encontrada em mais de uma aba'
+                            : 'escolas encontradas em mais de uma aba'}
+                        </p>
+                        <Badge
+                          variant="outline"
+                          className="text-[10px] bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border-amber-400"
+                        >
+                          Itens consolidados no mesmo pedido
+                        </Badge>
+                      </div>
+                      <p className="text-muted-foreground leading-relaxed">
+                        As escolas abaixo constam em múltiplas abas da planilha da Secretaria. Os
+                        itens foram consolidados e as quantidades somadas no mesmo pedido para
+                        evitar duplicidades de despacho.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2 pt-1">
+                    {parsedData.multiSheetSchools.map((item, idx) => (
+                      <div
+                        key={idx}
+                        className="p-2.5 rounded-md bg-background/80 border border-amber-300/40 dark:border-amber-700/40 flex flex-col gap-1.5 shadow-sm"
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-semibold text-foreground truncate">
+                            {item.schoolName}
+                          </span>
+                          <span className="text-[10px] font-mono text-muted-foreground shrink-0">
+                            {item.totalQuantity.toLocaleString('pt-BR')} Kg/Un
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="text-[11px] text-muted-foreground">
+                            Presente nas abas:
+                          </span>
+                          {item.sheets.map((sheet, sIdx) => (
+                            <Badge
+                              key={sIdx}
+                              variant="secondary"
+                              className="text-[10px] bg-amber-200/60 dark:bg-amber-900/60 text-amber-900 dark:text-amber-200 font-mono"
+                            >
+                              {sheet}
+                            </Badge>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Bloco de Como Cada Produto Foi Casado (Quid Pro Quo) */}
+              <div className="rounded-lg border bg-card p-4 space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <PackageCheck className="h-5 w-5 text-primary" />
+                    <div>
+                      <h4 className="text-sm font-semibold text-foreground">
+                        Mapeamento de Produtos Casados (Quid Pro Quo)
+                      </h4>
+                      <p className="text-xs text-muted-foreground">
+                        Como cada descrição encontrada na planilha foi relacionada aos itens do
+                        contrato
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <Badge
+                      variant="outline"
+                      className="text-xs bg-emerald-50 text-emerald-700 border-emerald-300 dark:bg-emerald-950/40 dark:text-emerald-300"
+                    >
+                      Via Nome: {parsedData.productsMatchedByName?.length || 0}
+                    </Badge>
+                    <Badge
+                      variant="outline"
+                      className="text-xs bg-purple-50 text-purple-700 border-purple-300 dark:bg-purple-950/40 dark:text-purple-300"
+                    >
+                      Via Apelido (AKA): {parsedData.productsMatchedByAlias?.length || 0}
+                    </Badge>
+                    {parsedData.unmatchedProducts && parsedData.unmatchedProducts.length > 0 && (
+                      <Badge
+                        variant="outline"
+                        className="text-xs bg-rose-50 text-rose-700 border-rose-300 dark:bg-rose-950/40 dark:text-rose-300"
+                      >
+                        Não no Contrato: {parsedData.unmatchedProducts.length}
+                      </Badge>
+                    )}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                  {/* Grupo 1: Casados via Nome no Contrato */}
+                  <div className="space-y-2 rounded-md border p-3 bg-muted/20">
+                    <div className="flex items-center justify-between border-b pb-2">
+                      <div className="flex items-center gap-1.5">
+                        <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                        <span className="text-xs font-semibold text-foreground">
+                          Casados via Nome no Contrato
+                        </span>
+                      </div>
+                      <Badge variant="secondary" className="text-[10px]">
+                        {parsedData.productsMatchedByName?.length || 0} item(ns)
+                      </Badge>
+                    </div>
+
+                    {!parsedData.productsMatchedByName ||
+                    parsedData.productsMatchedByName.length === 0 ? (
+                      <p className="text-xs text-muted-foreground py-4 text-center">
+                        Nenhum produto casado exclusivamente pelo nome no contrato.
+                      </p>
+                    ) : (
+                      <div className="max-h-[260px] overflow-y-auto space-y-1.5 pr-1">
+                        {parsedData.productsMatchedByName.map((p, idx) => (
+                          <div
+                            key={idx}
+                            className="p-2 rounded bg-background border text-xs flex flex-col gap-1"
+                          >
+                            <div className="flex items-start justify-between gap-2">
+                              <span className="font-medium text-foreground">
+                                {p.nomeContratoMatched || p.productNameMatched}
+                              </span>
+                              <span className="font-mono text-[11px] font-semibold text-emerald-600 shrink-0">
+                                {p.totalQuantity.toLocaleString('pt-BR')} Kg/Un
+                              </span>
+                            </div>
+                            <div className="flex items-center justify-between text-[11px] text-muted-foreground gap-2">
+                              <span className="truncate" title={`Planilha: "${p.productNameRaw}"`}>
+                                Planilha:{' '}
+                                <strong className="font-normal text-foreground">
+                                  "{p.productNameRaw}"
+                                </strong>
+                              </span>
+                              <span className="text-[10px] shrink-0">
+                                {p.schoolsCount} pedido(s)
+                              </span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Grupo 2: Casados via Apelido / AKA */}
+                  <div className="space-y-2 rounded-md border p-3 bg-purple-500/5 border-purple-200 dark:border-purple-900/40">
+                    <div className="flex items-center justify-between border-b border-purple-200/60 dark:border-purple-900/60 pb-2">
+                      <div className="flex items-center gap-1.5">
+                        <Tag className="h-4 w-4 text-purple-600 dark:text-purple-400" />
+                        <span className="text-xs font-semibold text-foreground">
+                          Casados via Apelido / AKA (Quid Pro Quo)
+                        </span>
+                      </div>
+                      <Badge
+                        variant="secondary"
+                        className="text-[10px] bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-300"
+                      >
+                        {parsedData.productsMatchedByAlias?.length || 0} item(ns)
+                      </Badge>
+                    </div>
+
+                    {!parsedData.productsMatchedByAlias ||
+                    parsedData.productsMatchedByAlias.length === 0 ? (
+                      <p className="text-xs text-muted-foreground py-4 text-center">
+                        Nenhum produto precisou de resolução por apelido/AKA.
+                      </p>
+                    ) : (
+                      <div className="max-h-[260px] overflow-y-auto space-y-1.5 pr-1">
+                        {parsedData.productsMatchedByAlias.map((p, idx) => (
+                          <div
+                            key={idx}
+                            className="p-2.5 rounded bg-background border border-purple-200 dark:border-purple-900/40 text-xs space-y-1.5 shadow-sm"
+                          >
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="flex flex-col">
+                                <span className="font-semibold text-purple-950 dark:text-purple-200">
+                                  {p.nomeContratoMatched || p.productNameMatched}
+                                </span>
+                                {p.productNameMatched &&
+                                  p.productNameMatched !== p.nomeContratoMatched && (
+                                    <span className="text-[10px] text-muted-foreground">
+                                      Catálogo: {p.productNameMatched}
+                                    </span>
+                                  )}
+                              </div>
+                              <span className="font-mono text-[11px] font-semibold text-purple-700 dark:text-purple-300 shrink-0">
+                                {p.totalQuantity.toLocaleString('pt-BR')} Kg/Un
+                              </span>
+                            </div>
+
+                            <div className="p-1.5 rounded bg-purple-50/60 dark:bg-purple-950/30 border border-purple-200/50 dark:border-purple-800/40 text-[11px] flex items-center gap-2 flex-wrap">
+                              <span className="text-muted-foreground">Planilha:</span>
+                              <strong className="text-foreground font-medium">
+                                "{p.productNameRaw}"
+                              </strong>
+                              <ArrowRight className="h-3 w-3 text-purple-600 dark:text-purple-400 shrink-0" />
+                              <span className="text-muted-foreground">Apelido casado:</span>
+                              <Badge
+                                variant="outline"
+                                className="text-[10px] bg-purple-100 text-purple-800 border-purple-300 dark:bg-purple-950 dark:text-purple-300"
+                              >
+                                {p.matchedViaAlias || 'AKA'}
+                              </Badge>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Sub-bloco: Produtos da planilha não encontrados no contrato */}
+                {parsedData.unmatchedProducts && parsedData.unmatchedProducts.length > 0 && (
+                  <div className="p-3 rounded-lg bg-muted/40 border text-xs space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5 font-medium text-foreground">
+                        <Info className="h-4 w-4 text-muted-foreground" />
+                        <span>
+                          Produtos na planilha não encontrados no contrato selecionado (
+                          {parsedData.unmatchedProducts.length})
+                        </span>
+                      </div>
+                      <span className="text-[11px] text-muted-foreground">
+                        Descartados silenciosamente conforme regra contratual
+                      </span>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5 max-h-[90px] overflow-y-auto pt-1">
+                      {parsedData.unmatchedProducts.map((up, uIdx) => (
+                        <Badge
+                          key={uIdx}
+                          variant="outline"
+                          className="text-[11px] border-dashed bg-background text-muted-foreground"
+                          title={`Presente nas abas: ${up.sheets.join(', ')}`}
+                        >
+                          {up.productNameRaw} ({up.sheets.join(', ')})
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
 
               {/* Alertas de Anomalias de Duplicidade entre Abas Distintas */}
               {parsedData.anomalies.length > 0 && (
