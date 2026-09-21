@@ -633,7 +633,7 @@ export default function Atestos() {
   // 5. Emitir e Imprimir todos os atestos de uma ROTA ENTREGUE em um único PDF em ordem de entrega
   const handleEmitirEImprimirRota = async () => {
     if (!selectedRotaId) {
-      toast.error('Selecione uma rota logística entregue.')
+      toast.error('Selecione uma rota entregue.')
       return
     }
 
@@ -701,7 +701,7 @@ export default function Atestos() {
 
       setBatchProgress('Montando PDF único consolidado em ordem de entrega...')
 
-      // 2. Montar documentos em estrita ordem de entrega da rota logística
+      // 2. Montar documentos em estrita ordem de entrega da rota
       const batchDocumentDataList: AtestoDocumentData[] = []
 
       for (const order of pedidosParaProcessar) {
@@ -1284,13 +1284,12 @@ export default function Atestos() {
               <div className="p-6 text-center rounded-lg border border-dashed bg-muted/30 space-y-2">
                 <AlertCircle className="h-8 w-8 text-amber-500 mx-auto" />
                 <p className="text-sm font-semibold text-foreground">
-                  Nenhuma rota logística entregue com pedidos disponíveis
+                  Nenhuma rota entregue com pedidos disponíveis
                 </p>
                 <p className="text-xs text-muted-foreground max-w-md mx-auto">
-                  Para utilizar esta função, certifique-se de que a rota logística teve seu despacho
-                  marcado como <strong>"Entregue"</strong> na tela de{' '}
-                  <strong>Rotas de Entrega</strong> e possui pedidos com status{' '}
-                  <strong>"Entregue"</strong>.
+                  Para utilizar esta função, certifique-se de que a rota teve seu despacho marcado
+                  como <strong>"Entregue"</strong> na tela de <strong>Rotas de Entrega</strong> e
+                  possui pedidos com status <strong>"Entregue"</strong>.
                 </p>
               </div>
             ) : (

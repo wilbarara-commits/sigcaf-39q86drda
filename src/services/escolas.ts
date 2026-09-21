@@ -45,7 +45,6 @@ export const escolasService = {
       id?: string
       nome: string
       tipo?: string
-      rota?: string
       alunos?: number
       endereco?: string
       telefone?: string
@@ -55,7 +54,6 @@ export const escolasService = {
       // Colunas que estavam presentes no arquivo
       presentColumns?: {
         tipo?: boolean
-        rota?: boolean
         alunos?: boolean
         endereco?: boolean
         telefone?: boolean
@@ -112,7 +110,6 @@ export const escolasService = {
           const payload: any = {
             nome: item.nome.trim(),
             tipo: item.tipo || '',
-            rota: '',
             endereco: item.endereco || '',
             telefone: item.telefone || '',
             email: item.email || '',
@@ -143,8 +140,7 @@ export const escolasService = {
             }
           }
 
-          // Nota: a rota não é atualizada nem limpa pelo cadastro mestre (Regra 2)
-
+          // Alunos
           if (item.presentColumns?.alunos) {
             if (item.alunos !== undefined && item.alunos !== null) {
               payload.alunos = item.alunos

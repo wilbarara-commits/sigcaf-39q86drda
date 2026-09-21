@@ -342,7 +342,7 @@ export default function DeliveryRoutes() {
     }
   }
 
-  // Criar nova rota logística
+  // Criar nova rota
   const handleOpenCreateRoute = () => {
     setNewRouteName('')
     setCreateRouteDialogOpen(true)
@@ -351,7 +351,7 @@ export default function DeliveryRoutes() {
   const handleConfirmCreateRoute = async () => {
     const trimmed = newRouteName.trim()
     if (!trimmed) {
-      toast.error('Informe um nome para a rota logística.')
+      toast.error('Informe um nome para a rota.')
       return
     }
 
@@ -369,7 +369,7 @@ export default function DeliveryRoutes() {
         (r.nome || '').trim().replace(/\s+/g, ' ').toLowerCase() === normalizedTarget,
     )
     if (existeDuplicata) {
-      toast.error('Já existe uma rota logística com este nome neste contrato.')
+      toast.error('Já existe uma rota com este nome neste contrato.')
       return
     }
 
@@ -378,9 +378,7 @@ export default function DeliveryRoutes() {
       currentContrato.num_rotas_logisticas &&
       filteredRotasLogisticas.length >= currentContrato.num_rotas_logisticas
     ) {
-      toast.error(
-        `Este contrato permite no máximo ${currentContrato.num_rotas_logisticas} rotas logísticas.`,
-      )
+      toast.error(`Este contrato permite no máximo ${currentContrato.num_rotas_logisticas} rotas.`)
       return
     }
 
@@ -401,19 +399,19 @@ export default function DeliveryRoutes() {
     }
   }
 
-  // Abrir modal de edição/renomeação de rota logística
+  // Abrir modal de edição/renomeação de rota
   const handleOpenEditRoute = (rota: RotaLogisticaRecord) => {
     setRouteToEdit(rota)
     setEditRouteName(rota.nome)
     setEditRouteDialogOpen(true)
   }
 
-  // Confirmar edição/renomeação de rota logística
+  // Confirmar edição/renomeação de rota
   const handleConfirmEditRoute = async () => {
     if (!routeToEdit) return
     const trimmed = editRouteName.trim()
     if (!trimmed) {
-      toast.error('Informe um nome para a rota logística.')
+      toast.error('Informe um nome para a rota.')
       return
     }
 
@@ -426,7 +424,7 @@ export default function DeliveryRoutes() {
         (r.nome || '').trim().replace(/\s+/g, ' ').toLowerCase() === normalizedTarget,
     )
     if (existeDuplicata) {
-      toast.error('Já existe uma rota logística com este nome neste contrato.')
+      toast.error('Já existe uma rota com este nome neste contrato.')
       return
     }
 
@@ -445,7 +443,7 @@ export default function DeliveryRoutes() {
     }
   }
 
-  // Excluir rota logística
+  // Excluir rota
   const handleConfirmDeleteRoute = async () => {
     if (!routeToDelete) return
     setIsDeletingRoute(true)
@@ -526,7 +524,7 @@ export default function DeliveryRoutes() {
     }
   }
 
-  // Roteamento por contrato: Salvar atribuição de escolas à rota logística
+  // Roteamento por contrato: Salvar atribuição de escolas à rota
   // Preenche paradas_rota, atualiza pedidos pendentes automaticamente e sincroniza contrato_escolas
   const handleSaveRouting = async () => {
     if (!selectedRotaForRouting) return
@@ -601,10 +599,10 @@ export default function DeliveryRoutes() {
       {/* Header e Seleção de Contrato */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Roteamento & Despacho Logístico</h1>
+          <h1 className="text-2xl font-bold tracking-tight">Roteamento & Despacho</h1>
           <p className="text-muted-foreground text-sm">
-            Gestão de rotas logísticas da cooperativa, sequenciamento drag-and-drop de paradas e
-            despacho por rota inteira.
+            Gestão de rotas da cooperativa, sequenciamento drag-and-drop de paradas e despacho por
+            rota inteira.
           </p>
         </div>
 
@@ -642,7 +640,7 @@ export default function DeliveryRoutes() {
                 Boolean(currentContrato?.num_rotas_logisticas) &&
                 filteredRotasLogisticas.length >= (currentContrato?.num_rotas_logisticas || 0)
                   ? `Limite de ${currentContrato?.num_rotas_logisticas} rotas atingido`
-                  : 'Criar nova rota logística para este contrato'
+                  : 'Criar nova rota para este contrato'
               }
             >
               <Plus className="h-4 w-4" /> Nova Rota
@@ -657,9 +655,7 @@ export default function DeliveryRoutes() {
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
             <div className="flex items-center gap-2 text-amber-950 dark:text-amber-200 font-semibold">
               <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />
-              <span>
-                {escolasSemRota.length} escola(s) vinculada(s) ao contrato ainda sem rota logística
-              </span>
+              <span>{escolasSemRota.length} escola(s) vinculada(s) ao contrato ainda sem rota</span>
             </div>
             <Badge
               variant="outline"
@@ -670,7 +666,7 @@ export default function DeliveryRoutes() {
           </div>
           <p className="text-[11px] text-muted-foreground leading-relaxed">
             As escolas abaixo fazem parte do contrato mas ainda não foram distribuídas em nenhuma
-            rota logística. Os pedidos delas ficam como <strong>Pendente sem rota</strong> e{' '}
+            rota. Os pedidos delas ficam como <strong>Pendente sem rota</strong> e{' '}
             <strong>não bloqueiam o despacho das demais rotas</strong>. Atribua-as usando o botão
             "Roteamento" em uma das rotas.
           </p>
@@ -690,7 +686,7 @@ export default function DeliveryRoutes() {
         </div>
       )}
 
-      {/* Grid de Rotas Logísticas da Cooperativa */}
+      {/* Grid de Rotas da Cooperativa */}
       {filteredRotasLogisticas.length === 0 ? (
         <Card className="border-dashed border-2 border-primary/20 bg-primary/5">
           <CardContent className="py-12 text-center text-muted-foreground space-y-4">
@@ -705,7 +701,7 @@ export default function DeliveryRoutes() {
                 {currentContrato ? (
                   <>
                     O contrato <strong>{currentContrato.numero}</strong> ainda não possui rotas
-                    logísticas configuradas. Crie as rotas aqui mesmo com nomes livres (
+                    configuradas. Crie as rotas aqui mesmo com nomes livres (
                     {currentContrato.num_rotas_logisticas
                       ? `até ${currentContrato.num_rotas_logisticas} rota(s) conforme o contrato`
                       : 'quantas desejar'}
@@ -713,7 +709,7 @@ export default function DeliveryRoutes() {
                     drag-and-drop.
                   </>
                 ) : (
-                  'Selecione um contrato acima para iniciar a primeira configuração de rotas logísticas, atribuição de escolas e pedidos.'
+                  'Selecione um contrato acima para iniciar a primeira configuração de rotas, atribuição de escolas e pedidos.'
                 )}
               </p>
             </div>
@@ -721,7 +717,7 @@ export default function DeliveryRoutes() {
             {currentContrato && (
               <div className="pt-2">
                 <Button onClick={handleOpenCreateRoute} className="gap-2">
-                  <Plus className="h-4 w-4" /> Criar Primeira Rota Logística
+                  <Plus className="h-4 w-4" /> Criar Primeira Rota
                 </Button>
               </div>
             )}
@@ -785,17 +781,17 @@ export default function DeliveryRoutes() {
                         size="sm"
                         className="h-7 text-xs gap-1"
                         onClick={() => handleOpenRouting(item.rota)}
-                        title="Atribuir escolas a esta rota logística"
+                        title="Atribuir escolas a esta rota"
                       >
                         <SlidersHorizontal className="h-3.5 w-3.5 text-primary" />
                         Roteamento ({item.paradasOrdenadas.length} escolas)
                       </Button>
-                      {/* Opção para renomear rota logística */}
+                      {/* Opção para renomear rota */}
                       <Button
                         variant="ghost"
                         size="icon"
                         className="h-7 w-7 text-muted-foreground hover:text-foreground"
-                        title="Renomear rota logística"
+                        title="Renomear rota"
                         onClick={() => handleOpenEditRoute(item.rota)}
                       >
                         <Pencil className="h-3.5 w-3.5" />
@@ -806,7 +802,7 @@ export default function DeliveryRoutes() {
                           variant="ghost"
                           size="icon"
                           className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                          title="Excluir rota logística"
+                          title="Excluir rota"
                           onClick={() => setRouteToDelete(item.rota)}
                         >
                           <Trash2 className="h-3.5 w-3.5" />
@@ -895,7 +891,7 @@ export default function DeliveryRoutes() {
 
                     {item.paradasOrdenadas.length === 0 ? (
                       <div className="py-6 text-center text-muted-foreground border border-dashed rounded-lg text-xs">
-                        Nenhuma escola vinculada a esta rota logística.
+                        Nenhuma escola vinculada a esta rota.
                         <div className="mt-2">
                           <Button
                             variant="outline"
@@ -1037,23 +1033,23 @@ export default function DeliveryRoutes() {
         </div>
       )}
 
-      {/* MODAL 0: Criar Rota Logística no Contrato */}
+      {/* MODAL 0: Criar Rota no Contrato */}
       <Dialog open={createRouteDialogOpen} onOpenChange={setCreateRouteDialogOpen}>
         <DialogContent className="sm:max-w-[440px]">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <Truck className="h-5 w-5 text-primary" /> Nova Rota Logística
+              <Truck className="h-5 w-5 text-primary" /> Nova Rota
             </DialogTitle>
             <DialogDescription>
-              Crie uma rota logística para o contrato <strong>{currentContrato?.numero}</strong>. O
-              nome é livre e define o roteiro de despacho da cooperativa.
+              Crie uma rota para o contrato <strong>{currentContrato?.numero}</strong>. O nome é
+              livre e define o roteiro de despacho da cooperativa.
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-3 py-2 text-xs">
             <div className="space-y-1.5">
               <Label htmlFor="route-name" className="font-semibold">
-                Nome da Rota Logística <span className="text-destructive">*</span>
+                Nome da Rota <span className="text-destructive">*</span>
               </Label>
               <Input
                 id="route-name"
@@ -1101,7 +1097,7 @@ export default function DeliveryRoutes() {
         </DialogContent>
       </Dialog>
 
-      {/* MODAL: Renomear / Editar Rota Logística */}
+      {/* MODAL: Renomear / Editar Rota */}
       <Dialog
         open={editRouteDialogOpen}
         onOpenChange={(open) => {
@@ -1115,18 +1111,18 @@ export default function DeliveryRoutes() {
         <DialogContent className="sm:max-w-[440px]">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <Pencil className="h-5 w-5 text-primary" /> Renomear Rota Logística
+              <Pencil className="h-5 w-5 text-primary" /> Renomear Rota
             </DialogTitle>
             <DialogDescription>
-              Altere o nome da rota logística. A alteração será refletida em todas as paradas e
-              pedidos vinculados.
+              Altere o nome da rota. A alteração será refletida em todas as paradas e pedidos
+              vinculados.
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-3 py-2 text-xs">
             <div className="space-y-1.5">
               <Label htmlFor="edit-route-name" className="font-semibold">
-                Nome da Rota Logística <span className="text-destructive">*</span>
+                Nome da Rota <span className="text-destructive">*</span>
               </Label>
               <Input
                 id="edit-route-name"
@@ -1171,7 +1167,7 @@ export default function DeliveryRoutes() {
         </DialogContent>
       </Dialog>
 
-      {/* MODAL Excluir Rota Logística */}
+      {/* MODAL Excluir Rota */}
       <AlertDialog
         open={Boolean(routeToDelete)}
         onOpenChange={(open) => !open && setRouteToDelete(null)}
@@ -1179,11 +1175,11 @@ export default function DeliveryRoutes() {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2 text-destructive">
-              <Trash2 className="h-5 w-5" /> Excluir Rota Logística
+              <Trash2 className="h-5 w-5" /> Excluir Rota
             </AlertDialogTitle>
             <AlertDialogDescription>
-              Deseja remover a rota logística <strong>{routeToDelete?.nome}</strong>? Suas paradas
-              cadastradas e eventuais pedidos pendentes vinculados serão desatribuídos.
+              Deseja remover a rota <strong>{routeToDelete?.nome}</strong>? Suas paradas cadastradas
+              e eventuais pedidos pendentes vinculados serão desatribuídos.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -1370,8 +1366,8 @@ Ou apenas o nome da escola copiado do Excel/Word`}
                 </div>
               </div>
               <p className="text-[11px] text-muted-foreground">
-                Marque as escolas atendidas por esta rota logística. Ao salvar, as paradas serão
-                criadas em <code>paradas_rota</code> e os pedidos das escolas receberão esta rota
+                Marque as escolas atendidas por esta rota. Ao salvar, as paradas serão criadas em{' '}
+                <code>paradas_rota</code> e os pedidos das escolas receberão esta rota
                 automaticamente.
               </p>
 
@@ -1482,7 +1478,7 @@ Ou apenas o nome da escola copiado do Excel/Word`}
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2">
-              <Play className="h-5 w-5 text-amber-600" /> Colocar Rota Logística em Rota
+              <Play className="h-5 w-5 text-amber-600" /> Colocar em Rota
             </AlertDialogTitle>
             <AlertDialogDescription>
               Deseja despachar a rota <strong>{rotaToDispatch?.nome}</strong> inteira? Todos os

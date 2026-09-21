@@ -1312,7 +1312,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
 
       toast.success(
-        `Rota logística despachada com sucesso! ${pedidosDaRota.length} pedido(s) colocados "Em Rota".`,
+        `Rota despachada com sucesso! ${pedidosDaRota.length} pedido(s) colocados "Em Rota".`,
       )
       return true
     } catch (err: any) {
@@ -1320,7 +1320,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       // Rollback
       setOrders(prevOrders)
       setDespachos(prevDespachos)
-      toast.error('Falha ao despachar rota logística.')
+      toast.error('Falha ao despachar rota.')
       return false
     }
   }
@@ -1341,7 +1341,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     })
 
     if (pedidosEmRota.length === 0) {
-      toast.info('Não há pedidos "Em Rota" nesta rota logística para confirmar entrega.')
+      toast.info('Não há pedidos "Em Rota" nesta rota para confirmar entrega.')
       return false
     }
 
@@ -1388,7 +1388,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setOrders(prevOrders)
       setProducts(prevProducts)
       setDespachos(prevDespachos)
-      toast.error('Falha ao confirmar entrega da rota logística.')
+      toast.error('Falha ao confirmar entrega da rota.')
       return false
     }
   }
@@ -1461,7 +1461,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }): Promise<RotaLogisticaRecord | null> => {
     const cleanNome = (data.nome || '').trim().replace(/\s+/g, ' ')
     if (!cleanNome) {
-      toast.error('Informe um nome para a rota logística.')
+      toast.error('Informe um nome para a rota.')
       return null
     }
 
@@ -1473,7 +1473,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         (r.nome || '').trim().replace(/\s+/g, ' ').toLowerCase() === normalizedTarget,
     )
     if (existeDuplicata) {
-      toast.error('Já existe uma rota logística com este nome neste contrato.')
+      toast.error('Já existe uma rota com este nome neste contrato.')
       return null
     }
 
@@ -1512,18 +1512,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
           .map((r) => (r.id === tempId ? created : r))
           .sort((a, b) => (a.ordem || 0) - (b.ordem || 0))
       })
-      toast.success(`Rota logística "${cleanNome}" criada com sucesso!`)
+      toast.success(`Rota "${cleanNome}" criada com sucesso!`)
       return created
     } catch (err: any) {
-      console.error('Erro ao criar rota logística:', err)
+      console.error('Erro ao criar rota:', err)
       setRotasLogisticas((prev) => prev.filter((r) => r.id !== tempId))
       const serverMsg = err?.data?.message || err?.message || ''
-      if (serverMsg.includes('Já existe uma rota logística com este nome')) {
-        toast.error('Já existe uma rota logística com este nome neste contrato.')
+      if (
+        serverMsg.includes('Já existe uma rota logística com este nome') ||
+        serverMsg.includes('Já existe uma rota com este nome')
+      ) {
+        toast.error('Já existe uma rota com este nome neste contrato.')
       } else {
-        toast.error(
-          serverMsg ? `Falha ao criar rota: ${serverMsg}` : 'Falha ao criar rota logística.',
-        )
+        toast.error(serverMsg ? `Falha ao criar rota: ${serverMsg}` : 'Falha ao criar rota.')
       }
       return null
     }
@@ -1540,7 +1541,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   ): Promise<RotaLogisticaRecord | null> => {
     const rotaAtual = rotasLogisticas.find((r) => r.id === id)
     if (!rotaAtual) {
-      toast.error('Rota logística não encontrada.')
+      toast.error('Rota não encontrada.')
       return null
     }
 
@@ -1548,7 +1549,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (data.nome !== undefined) {
       cleanNome = data.nome.trim().replace(/\s+/g, ' ')
       if (!cleanNome) {
-        toast.error('Informe um nome para a rota logística.')
+        toast.error('Informe um nome para a rota.')
         return null
       }
 
@@ -1561,7 +1562,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           (r.nome || '').trim().replace(/\s+/g, ' ').toLowerCase() === normalizedTarget,
       )
       if (existeDuplicata) {
-        toast.error('Já existe uma rota logística com este nome neste contrato.')
+        toast.error('Já existe uma rota com este nome neste contrato.')
         return null
       }
     }
@@ -1596,20 +1597,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
         nome: cleanNome,
       })
       setRotasLogisticas((prev) => prev.map((r) => (r.id === id ? updated : r)))
-      toast.success(`Rota logística "${updated.nome}" atualizada com sucesso!`)
+      toast.success(`Rota "${updated.nome}" atualizada com sucesso!`)
       return updated
     } catch (err: any) {
-      console.error('Erro ao atualizar rota logística:', err)
+      console.error('Erro ao atualizar rota:', err)
       setRotasLogisticas(prevRotas)
       setOrders(prevOrders)
       const serverMsg = err?.data?.message || err?.message || ''
-      if (serverMsg.includes('Já existe uma rota logística com este nome')) {
-        toast.error('Já existe uma rota logística com este nome neste contrato.')
+      if (
+        serverMsg.includes('Já existe uma rota logística com este nome') ||
+        serverMsg.includes('Já existe uma rota com este nome')
+      ) {
+        toast.error('Já existe uma rota com este nome neste contrato.')
       } else {
         toast.error(
-          serverMsg
-            ? `Falha ao atualizar rota: ${serverMsg}`
-            : 'Falha ao atualizar rota logística.',
+          serverMsg ? `Falha ao atualizar rota: ${serverMsg}` : 'Falha ao atualizar rota.',
         )
       }
       return null
@@ -1656,14 +1658,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
 
       await rotasLogisticasService.delete(id)
-      toast.success('Rota logística excluída com sucesso!')
+      toast.success('Rota excluída com sucesso!')
       return true
     } catch (err: any) {
-      console.error('Erro ao excluir rota logística:', err)
+      console.error('Erro ao excluir rota:', err)
       setRotasLogisticas(prevRotas)
       setParadasRota(prevParadas)
       setOrders(prevOrders)
-      toast.error('Falha ao excluir rota logística.')
+      toast.error('Falha ao excluir rota.')
       return false
     }
   }
@@ -1806,11 +1808,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
 
       toast.success(
-        `Rota Logística "${nomeRota}" configurada com ${escolaIds.length} escola(s) e vínculos atualizados!`,
+        `Rota "${nomeRota}" configurada com ${escolaIds.length} escola(s) e vínculos atualizados!`,
       )
       return true
     } catch (err: any) {
-      console.error('Erro ao sincronizar escolas da rota logística:', err)
+      console.error('Erro ao sincronizar escolas da rota:', err)
       // Rollback
       setParadasRota(prevParadas)
       setOrders(prevOrders)
@@ -1820,7 +1822,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  // 4. ROTEAMENTO POR CONTRATO: Atribuir pedidos pendentes a rota logística
+  // 4. ROTEAMENTO POR CONTRATO: Atribuir pedidos pendentes a rota
   const atribuirPedidosARotaLogistica = async (
     pedidoIds: string[],
     rotaLogisticaId: string,
@@ -1861,10 +1863,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }
       }
 
-      toast.success(`${pedidoIds.length} pedido(s) atribuído(s) à rota logística com sucesso!`)
+      toast.success(`${pedidoIds.length} pedido(s) atribuído(s) à rota com sucesso!`)
       return true
     } catch (err: any) {
-      console.error('Erro ao atribuir pedidos à rota logística:', err)
+      console.error('Erro ao atribuir pedidos à rota:', err)
       setOrders(prevOrders)
       toast.error('Falha ao salvar atribuição de rota.')
       return false

@@ -223,7 +223,6 @@ export function ContractRouteSchoolEditorDialog({
           nome: trimmed,
           endereco: newSchoolAddress.trim(),
           telefone: '',
-          rota: '',
         })
         targetSchool = {
           id: created.id,
@@ -292,13 +291,7 @@ export function ContractRouteSchoolEditorDialog({
         }
       }
 
-      // 3. Limpeza defensiva do campo legado: pb.collection('escolas').update(escolaId, { rota: '' }) com try/catch silencioso
-      try {
-        await pb.collection('escolas').update(escolaId, { rota: '' })
-      } catch {
-        // Silencioso se campo não existir ou falhar
-      }
-
+      // 3. Limpeza defensiva do campo legado se necessário
       // 4. toast de sucesso com nome da escola e da rota, e await onSuccess() para refreshData() atualizar
       toast.success(
         `Escola "${escolaNome}" retirada da aba "${currentRouteName}". O cadastro mestre agora reflete o desvínculo.`,

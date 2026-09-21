@@ -18,7 +18,7 @@ export interface ParsedCsvSchoolRow {
   index: number
   rawNome: string
   rawTipo: string
-  rawRota: string
+  rawRota?: string
   rawAlunos: string
   rawEndereco: string
   rawTelefone: string
@@ -28,7 +28,6 @@ export interface ParsedCsvSchoolRow {
   // Mapeados
   nome: string
   tipo: EscolaTipo | ''
-  rota: string
   alunos?: number
   endereco?: string
   telefone?: string
@@ -242,7 +241,6 @@ export function looksLikePhoneNumber(val: string): boolean {
 export function findColumnIndexes(headerRow: string[]): {
   nomeIdx: number
   tipoIdx: number
-  rotaIdx: number
   alunosIdx: number
   enderecoIdx: number
   telefoneIdx: number
@@ -252,7 +250,6 @@ export function findColumnIndexes(headerRow: string[]): {
 } {
   let nomeIdx = -1
   let tipoIdx = -1
-  let rotaIdx = -1
   let alunosIdx = -1
   let enderecoIdx = -1
   let telefoneIdx = -1
@@ -364,19 +361,7 @@ export function findColumnIndexes(headerRow: string[]): {
       return
     }
 
-    // 8. Rota
-    if (
-      rotaIdx === -1 &&
-      (norm === 'rota' ||
-        norm === 'rota planilha' ||
-        norm.includes('roteiro') ||
-        norm.includes('linha'))
-    ) {
-      rotaIdx = idx
-      return
-    }
-
-    // 9. Nº de Alunos
+    // 8. Nº de Alunos
     if (
       alunosIdx === -1 &&
       (norm === 'alunos' ||
@@ -400,7 +385,6 @@ export function findColumnIndexes(headerRow: string[]): {
   return {
     nomeIdx,
     tipoIdx,
-    rotaIdx,
     alunosIdx,
     enderecoIdx,
     telefoneIdx,
@@ -414,7 +398,6 @@ export interface ExistingSchoolData {
   id: string
   nome: string
   tipo?: string
-  rota?: string
   alunos?: number
   endereco?: string
   telefone?: string
@@ -483,17 +466,8 @@ export async function parseSchoolsInput(options: ParseSchoolsOptions): Promise<C
     throw new Error('Linha de cabeçalho vazia ou não encontrada.')
   }
 
-  const {
-    nomeIdx,
-    tipoIdx,
-    rotaIdx,
-    alunosIdx,
-    enderecoIdx,
-    telefoneIdx,
-    emailIdx,
-    bairroIdx,
-    contatoIdx,
-  } = findColumnIndexes(header)
+  const { nomeIdx, tipoIdx, alunosIdx, enderecoIdx, telefoneIdx, emailIdx, bairroIdx, contatoIdx } =
+    findColumnIndexes(header)
 
   // REGRA 1: "A primeira coluna é obrigatoriamente o nome da escola (se não for, rejeite com mensagem clara)"
   const firstColText = (header[0] || '').trim()
@@ -563,7 +537,6 @@ export async function parseSchoolsInput(options: ParseSchoolsOptions): Promise<C
 
     const rawNome = row[0] !== undefined ? String(row[0]).trim() : ''
     const rawTipo = tipoIdx !== -1 && row[tipoIdx] !== undefined ? String(row[tipoIdx]).trim() : ''
-    const rawRota = rotaIdx !== -1 && row[rotaIdx] !== undefined ? String(row[rotaIdx]).trim() : ''
     const rawAlunos =
       alunosIdx !== -1 && row[alunosIdx] !== undefined ? String(row[alunosIdx]).trim() : ''
     const rawEndereco =
@@ -590,7 +563,6 @@ export async function parseSchoolsInput(options: ParseSchoolsOptions): Promise<C
         index: rowIdx + 2, // 1-based considerando cabeçalho na linha 1
         rawNome,
         rawTipo,
-        rawRota,
         rawAlunos,
         rawEndereco,
         rawTelefone,
@@ -599,7 +571,6 @@ export async function parseSchoolsInput(options: ParseSchoolsOptions): Promise<C
         rawContato,
         nome: '',
         tipo: '',
-        rota: '',
         presentColumns,
         blankPresentFieldsCount: 0,
         blankPresentFieldsList: [],
@@ -640,11 +611,7 @@ export async function parseSchoolsInput(options: ParseSchoolsOptions): Promise<C
       }
     }
 
-    // 5. Rota: no cadastro mestre, rota NÃO é atributo do cadastro global.
-    // Ignora completamente qualquer valor da coluna rota (não cria, não limpa, não atualiza).
-    const mappedRota = ''
-
-    // 6. Endereço, telefone, e-mail, bairro e contato
+    // 5. Endereço, telefone, e-mail, bairro e contato
     const mappedEndereco = rawEndereco || undefined
     const mappedTelefone = rawTelefone || undefined
     const mappedEmail = rawEmail || undefined
@@ -879,7 +846,6 @@ export async function parseSchoolsInput(options: ParseSchoolsOptions): Promise<C
       index: rowIdx + 2,
       rawNome,
       rawTipo,
-      rawRota,
       rawAlunos,
       rawEndereco,
       rawTelefone,
@@ -888,7 +854,6 @@ export async function parseSchoolsInput(options: ParseSchoolsOptions): Promise<C
       rawContato,
       nome: rawNome,
       tipo: mappedTipo,
-      rota: mappedRota,
       alunos: mappedAlunos,
       endereco: mappedEndereco,
       telefone: mappedTelefone,

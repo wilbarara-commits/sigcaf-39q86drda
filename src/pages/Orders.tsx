@@ -710,21 +710,21 @@ export default function Orders() {
               </Select>
             </div>
 
-            {/* Filtro Rota Logística */}
+            {/* Filtro Rota */}
             <div>
               <Label className="text-xs flex items-center gap-1">
-                <Truck className="h-3 w-3 text-amber-600" /> Rota Logística
+                <Truck className="h-3 w-3 text-amber-600" /> Rota
               </Label>
               <Select value={filterRotaLogistica} onValueChange={setFilterRotaLogistica}>
                 <SelectTrigger className="h-9 mt-1 text-xs">
-                  <SelectValue placeholder="Todas as Logísticas" />
+                  <SelectValue placeholder="Todas as Rotas" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="todas">Todas as Logísticas</SelectItem>
-                  <SelectItem value="sem_rota_logistica">Sem rota logística</SelectItem>
+                  <SelectItem value="todas">Todas as Rotas</SelectItem>
+                  <SelectItem value="sem_rota_logistica">Sem rota</SelectItem>
                   {availableRotasLogisticas.map((r) => (
                     <SelectItem key={r} value={r}>
-                      Rota Logística {r}
+                      Rota {r}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -779,7 +779,7 @@ export default function Orders() {
                   <TableHead>Origem</TableHead>
                   <TableHead>Instituição Escolar</TableHead>
                   <TableHead>Aba</TableHead>
-                  <TableHead>Rota Logística</TableHead>
+                  <TableHead>Rota</TableHead>
                   <TableHead>Data Prevista</TableHead>
                   <TableHead>Validação</TableHead>
                   <TableHead>Cancelamento</TableHead>
@@ -838,7 +838,7 @@ export default function Orders() {
                           </span>
                         )}
                       </TableCell>
-                      {/* Coluna 2: Rota Logística */}
+                      {/* Coluna 2: Rota */}
                       <TableCell>
                         {order.rotaLogisticaNome ? (
                           <Badge
@@ -846,14 +846,14 @@ export default function Orders() {
                             className="bg-amber-500/10 text-amber-800 dark:text-amber-300 border-amber-300 dark:border-amber-700 text-[10px] font-semibold gap-1"
                           >
                             <Truck className="h-3 w-3 text-amber-600 dark:text-amber-400 shrink-0" />
-                            Rota Logística: {order.rotaLogisticaNome}
+                            Rota {order.rotaLogisticaNome}
                           </Badge>
                         ) : (
                           <Badge
                             variant="outline"
                             className="text-[10px] text-muted-foreground border-dashed bg-muted/20"
                           >
-                            Sem rota logística
+                            Sem rota
                           </Badge>
                         )}
                       </TableCell>
@@ -1018,9 +1018,11 @@ export default function Orders() {
                   </span>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="text-muted-foreground">Rota Logística (Distribuição):</span>
+                  <span className="text-muted-foreground">Rota:</span>
                   <span className="font-medium text-amber-700 dark:text-amber-400">
-                    {viewingOrder.rotaLogisticaNome || 'Sem rota logística atribuída'}
+                    {viewingOrder.rotaLogisticaNome
+                      ? `Rota ${viewingOrder.rotaLogisticaNome}`
+                      : 'Sem rota atribuída'}
                   </span>
                 </div>
                 <div className="flex justify-between items-center">
@@ -1133,7 +1135,7 @@ export default function Orders() {
               </p>
               {orderToCancel?.rotaLogisticaNome && (
                 <p>
-                  <strong>Rota Logística:</strong> {orderToCancel?.rotaLogisticaNome}
+                  <strong>Rota:</strong> {orderToCancel?.rotaLogisticaNome}
                 </p>
               )}
             </div>

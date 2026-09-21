@@ -49,16 +49,13 @@ import {
   Trash2,
   AlertTriangle,
   Globe,
-  FileCheck,
   FileSpreadsheet,
   Users,
   Eye,
   FilterX,
   ChevronLeft,
   ChevronRight,
-  Briefcase,
   Info,
-  Truck,
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { useState, useMemo } from 'react'
@@ -70,22 +67,10 @@ import type { School, EscolaTipo } from '@/lib/types'
 const ESCOLA_TIPOS: EscolaTipo[] = ['CMEI', 'CRECHE', 'INTEGRAL', 'FUNDAMENTAL']
 
 export default function Schools() {
-  const {
-    schools,
-    contracts,
-    contractSchools,
-    rotas,
-    rotasLogisticas,
-    paradasRota,
-    isLoading,
-    refreshData,
-  } = useApp()
+  const { schools, isLoading, refreshData } = useApp()
   const { isAdmin } = useAuth()
   const [search, setSearch] = useState('')
   const [filterTipo, setFilterTipo] = useState<string>('todos')
-  const [filterContrato, setFilterContrato] = useState<string>('todos')
-  const [filterRotaPlanilha, setFilterRotaPlanilha] = useState<string>('todas')
-  const [filterRotaLogistica, setFilterRotaLogistica] = useState<string>('todas')
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1)
@@ -119,81 +104,12 @@ export default function Schools() {
   const [isCheckingDeps, setIsCheckingDeps] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
 
-  // Map of schoolId -> links with contracts, rota da planilha e rota logística
-  const schoolContractLinksMap = useMemo(() => {
-    const map = new Map<
-      string,
-      Array<{
-        contratoId: string
-        contratoNumero: string
-        contratoTipo?: string
-        rotaId?: string
-        rotaPlanilha: string
-        rotaLogisticaId?: string
-        rotaLogisticaNome?: string
-      }>
-    >()
-
-    for (const c of contracts) {
-      for (const link of c.escolas) {
-        const list = map.get(link.escolaId) || []
-        // Parada nesta rota logística
-        const parada = paradasRota.find((p) => p.escola_id === link.escolaId)
-        const rotaLogId = link.rotaLogisticaId || parada?.rota_logistica_id
-        const rotaLogObj = rotasLogisticas.find((r) => r.id === rotaLogId)
-        const rotaLogNome = link.rotaLogisticaNome || rotaLogObj?.nome
-
-        list.push({
-          contratoId: c.id,
-          contratoNumero: c.numero,
-          contratoTipo: c.tipo,
-          rotaId: link.rotaId,
-          rotaPlanilha: link.rotaPlanilha || link.rotaNome || 'Sem Rota',
-          rotaLogisticaId: rotaLogId,
-          rotaLogisticaNome: rotaLogNome,
-        })
-        map.set(link.escolaId, list)
-      }
-    }
-    return map
-  }, [contracts, paradasRota, rotasLogisticas])
-
-  // Rotas da Planilha distintas (referência da secretaria): exclusivamente a partir dos vínculos escola↔contrato (e tabela rotas dos contratos)
-  const availableRotasPlanilha = useMemo(() => {
-    const routeSet = new Set<string>()
-
-    for (const r of rotas) {
-      if (r.nome && r.nome.trim()) routeSet.add(r.nome.trim())
-    }
-
-    for (const c of contracts) {
-      for (const e of c.escolas) {
-        const nome = e.rotaPlanilha || e.rotaNome
-        if (nome && nome.trim() && nome !== 'Sem Rota') {
-          routeSet.add(nome.trim())
-        }
-      }
-    }
-
-    return Array.from(routeSet).sort((a, b) => a.localeCompare(b, 'pt-BR'))
-  }, [rotas, contracts])
-
-  // Rotas Logísticas da cooperativa distintas
-  const availableRotasLogisticas = useMemo(() => {
-    const routeSet = new Set<string>()
-    for (const r of rotasLogisticas) {
-      if (r.nome && r.nome.trim()) routeSet.add(r.nome.trim())
-    }
-    return Array.from(routeSet).sort((a, b) => a.localeCompare(b, 'pt-BR'))
-  }, [rotasLogisticas])
-
-  // Filtered schools
+  // Filtered schools (apenas atributos próprios da escola)
   const filteredSchools = useMemo(() => {
     return schools.filter((s) => {
       const searchLower = search.trim().toLowerCase()
-      const links = schoolContractLinksMap.get(s.id) || []
 
-      // Textual search: matches name, address, email, tipo, or linked contract numbers/routes
+      // Textual search: matches name, address, email, tipo, bairro, contact
       const matchesSearch =
         !searchLower ||
         s.name.toLowerCase().includes(searchLower) ||
@@ -202,78 +118,15 @@ export default function Schools() {
         (s.tipo && s.tipo.toLowerCase().includes(searchLower)) ||
         (s.bairro && s.bairro.toLowerCase().includes(searchLower)) ||
         (s.contatoResponsavel && s.contatoResponsavel.toLowerCase().includes(searchLower)) ||
-        (s.contact && s.contact.toLowerCase().includes(searchLower)) ||
-        links.some(
-          (l) =>
-            l.contratoNumero.toLowerCase().includes(searchLower) ||
-            (l.rotaPlanilha &&
-              l.rotaPlanilha !== 'Sem Rota' &&
-              l.rotaPlanilha.toLowerCase().includes(searchLower)) ||
-            (l.rotaLogisticaNome && l.rotaLogisticaNome.toLowerCase().includes(searchLower)),
-        )
+        (s.contact && s.contact.toLowerCase().includes(searchLower))
 
       // Filter by tipo
       const matchesTipo =
         filterTipo === 'todos' ? true : filterTipo === 'sem_tipo' ? !s.tipo : s.tipo === filterTipo
 
-      // Filter by contract
-      const matchesContrato =
-        filterContrato === 'todos'
-          ? true
-          : filterContrato === 'sem_contrato'
-            ? links.length === 0
-            : links.some((l) => l.contratoId === filterContrato)
-
-      // Filter by Rota da Planilha (Regra C: usa estritamente os vínculos escola↔contrato; escolas sem vínculo não aparecem se filtro ativo)
-      const matchesRotaPlanilha =
-        filterRotaPlanilha === 'todas'
-          ? true
-          : links.some(
-              (l) =>
-                l.rotaPlanilha &&
-                l.rotaPlanilha !== 'Sem Rota' &&
-                (l.rotaPlanilha.trim().toLowerCase() === filterRotaPlanilha.trim().toLowerCase() ||
-                  l.rotaId === filterRotaPlanilha),
-            )
-
-      // Filter by Rota Logística
-      const matchesRotaLogistica = (() => {
-        if (filterRotaLogistica === 'todas') return true
-        const parada = paradasRota.find((p) => p.escola_id === s.id)
-        const rotaLogId =
-          parada?.rota_logistica_id || links.find((l) => l.rotaLogisticaId)?.rotaLogisticaId
-        const rotaLogObj = rotasLogisticas.find((r) => r.id === rotaLogId)
-        const rotaLogNome = rotaLogObj?.nome
-
-        if (filterRotaLogistica === 'sem_rota_logistica') {
-          return !rotaLogId
-        }
-        return (
-          rotaLogId === filterRotaLogistica ||
-          (rotaLogNome &&
-            rotaLogNome.trim().toLowerCase() === filterRotaLogistica.trim().toLowerCase())
-        )
-      })()
-
-      return (
-        matchesSearch &&
-        matchesTipo &&
-        matchesContrato &&
-        matchesRotaPlanilha &&
-        matchesRotaLogistica
-      )
+      return matchesSearch && matchesTipo
     })
-  }, [
-    schools,
-    search,
-    filterTipo,
-    filterContrato,
-    filterRotaPlanilha,
-    filterRotaLogistica,
-    schoolContractLinksMap,
-    paradasRota,
-    rotasLogisticas,
-  ])
+  }, [schools, search, filterTipo])
 
   // Reset page when filters change
   const totalPages = Math.max(1, Math.ceil(filteredSchools.length / pageSize))
@@ -284,19 +137,11 @@ export default function Schools() {
     return filteredSchools.slice(start, start + pageSize)
   }, [filteredSchools, safeCurrentPage, pageSize])
 
-  const hasActiveFilters =
-    search.trim() !== '' ||
-    filterTipo !== 'todos' ||
-    filterContrato !== 'todos' ||
-    filterRotaPlanilha !== 'todas' ||
-    filterRotaLogistica !== 'todas'
+  const hasActiveFilters = search.trim() !== '' || filterTipo !== 'todos'
 
   const handleClearFilters = () => {
     setSearch('')
     setFilterTipo('todos')
-    setFilterContrato('todos')
-    setFilterRotaPlanilha('todas')
-    setFilterRotaLogistica('todas')
     setCurrentPage(1)
   }
 
@@ -466,17 +311,17 @@ export default function Schools() {
         )}
       </div>
 
-      {/* Barra de Filtros: Busca textual, Tipo, Contrato e Rota */}
+      {/* Barra de Filtros: Busca textual e Tipo */}
       <Card className="border-border/60">
         <CardContent className="p-4 space-y-3">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {/* 1. Busca textual */}
-            <div className="space-y-1.5">
+            <div className="space-y-1.5 sm:col-span-2">
               <Label className="text-xs text-muted-foreground">Busca Textual</Label>
               <div className="relative">
                 <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                 <Input
-                  placeholder="Nome, endereço..."
+                  placeholder="Nome, endereço, bairro, telefone, contato..."
                   className="pl-9 h-9 text-xs bg-background"
                   value={search}
                   onChange={(e) => {
@@ -508,82 +353,6 @@ export default function Schools() {
                     </SelectItem>
                   ))}
                   <SelectItem value="sem_tipo">Sem Tipo</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* 3. Filtro por Contrato */}
-            <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground">Vínculo de Contrato</Label>
-              <Select
-                value={filterContrato}
-                onValueChange={(val) => {
-                  setFilterContrato(val)
-                  setCurrentPage(1)
-                }}
-              >
-                <SelectTrigger className="h-9 bg-background text-xs">
-                  <SelectValue placeholder="Todos os Contratos" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="todos">Todos os Contratos</SelectItem>
-                  <SelectItem value="sem_contrato">Sem vínculo contratual</SelectItem>
-                  {contracts.map((c) => (
-                    <SelectItem key={c.id} value={c.id}>
-                      {c.numero} {c.tipo ? `(${c.tipo})` : ''}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* 4. Filtro por Aba da Planilha */}
-            <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground">Aba da Planilha</Label>
-              <Select
-                value={filterRotaPlanilha}
-                onValueChange={(val) => {
-                  setFilterRotaPlanilha(val)
-                  setCurrentPage(1)
-                }}
-              >
-                <SelectTrigger className="h-9 bg-background text-xs">
-                  <SelectValue placeholder="Todas as Abas" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="todas">Todas as Abas</SelectItem>
-                  {availableRotasPlanilha.map((r) => (
-                    <SelectItem key={r} value={r}>
-                      {r}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* 5. Filtro por Rota Logística */}
-            <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground flex items-center gap-1">
-                <Truck className="h-3 w-3 text-amber-600" /> Rota Logística
-              </Label>
-              <Select
-                value={filterRotaLogistica}
-                onValueChange={(val) => {
-                  setFilterRotaLogistica(val)
-                  setCurrentPage(1)
-                }}
-              >
-                <SelectTrigger className="h-9 bg-background text-xs">
-                  <SelectValue placeholder="Todas as Logísticas" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="todas">Todas as Logísticas</SelectItem>
-                  <SelectItem value="sem_rota_logistica">Sem rota logística atribuída</SelectItem>
-                  {availableRotasLogisticas.map((r) => (
-                    <SelectItem key={r} value={r}>
-                      Rota Logística {r}
-                    </SelectItem>
-                  ))}
                 </SelectContent>
               </Select>
             </div>
@@ -650,27 +419,20 @@ export default function Schools() {
             <Table>
               <TableHeader>
                 <TableRow className="bg-muted/40 hover:bg-muted/40">
-                  <TableHead className="w-[240px] font-semibold text-foreground">
+                  <TableHead className="w-[260px] font-semibold text-foreground">
                     Escola / Instituição
                   </TableHead>
-                  <TableHead className="w-[95px] font-semibold text-foreground">Tipo</TableHead>
-                  <TableHead className="w-[70px] text-right font-semibold text-foreground">
+                  <TableHead className="w-[100px] font-semibold text-foreground">Tipo</TableHead>
+                  <TableHead className="w-[80px] text-right font-semibold text-foreground">
                     Alunos
                   </TableHead>
-                  <TableHead className="w-[125px] font-semibold text-foreground">
+                  <TableHead className="w-[130px] font-semibold text-foreground">
                     Telefone
                   </TableHead>
-                  <TableHead className="w-[155px] font-semibold text-foreground">E-mail</TableHead>
-                  <TableHead className="w-[130px] font-semibold text-foreground">Contato</TableHead>
-                  <TableHead className="min-w-[190px] font-semibold text-foreground">
+                  <TableHead className="w-[170px] font-semibold text-foreground">E-mail</TableHead>
+                  <TableHead className="w-[140px] font-semibold text-foreground">Contato</TableHead>
+                  <TableHead className="min-w-[220px] font-semibold text-foreground">
                     Endereço & Bairro
-                  </TableHead>
-                  <TableHead className="min-w-[130px] font-semibold text-foreground">
-                    Vínculo Contrato
-                  </TableHead>
-                  <TableHead className="w-[135px] font-semibold text-foreground">Aba</TableHead>
-                  <TableHead className="w-[150px] font-semibold text-foreground">
-                    Rota Logística
                   </TableHead>
                   <TableHead className="w-[95px] text-right font-semibold text-foreground">
                     Ações
@@ -679,15 +441,11 @@ export default function Schools() {
               </TableHeader>
               <TableBody>
                 {paginatedSchools.map((school) => {
-                  const links = schoolContractLinksMap.get(school.id) || []
-                  const isLinkedToContract = links.length > 0
-
                   // Montagem de endereço + bairro na mesma linha: "Rua X, 123 — Bairro Y"
                   const fullAddressDisplay = (() => {
                     const addr = (school.address || '').trim()
                     const b = (school.bairro || '').trim()
                     if (addr && b) {
-                      // Se o endereço já contiver o bairro escrito explicitamente, evita duplicar
                       if (addr.toLowerCase().includes(b.toLowerCase())) return addr
                       return `${addr} — Bairro ${b}`
                     }
@@ -710,7 +468,7 @@ export default function Schools() {
                           </div>
                           <div className="min-w-0">
                             <span
-                              className="font-semibold text-foreground block truncate max-w-[210px]"
+                              className="font-semibold text-foreground block truncate max-w-[230px]"
                               title={school.name}
                             >
                               {school.name}
@@ -756,11 +514,11 @@ export default function Schools() {
                         )}
                       </TableCell>
 
-                      {/* 5. E-mail (Regra 3: incluído explicitamente na tela) */}
+                      {/* 5. E-mail */}
                       <TableCell className="align-middle text-xs">
                         {school.email ? (
                           <span
-                            className="flex items-center gap-1 text-foreground/90 truncate max-w-[145px]"
+                            className="flex items-center gap-1 text-foreground/90 truncate max-w-[160px]"
                             title={school.email}
                           >
                             <Mail className="h-3 w-3 text-muted-foreground shrink-0" />
@@ -771,11 +529,11 @@ export default function Schools() {
                         )}
                       </TableCell>
 
-                      {/* 6. Contato / Responsável (Regra 3: incluído explicitamente na tela) */}
+                      {/* 6. Contato / Responsável */}
                       <TableCell className="align-middle text-xs">
                         {school.contatoResponsavel ? (
                           <span
-                            className="text-foreground/90 block truncate max-w-[125px]"
+                            className="text-foreground/90 block truncate max-w-[135px]"
                             title={school.contatoResponsavel}
                           >
                             {school.contatoResponsavel}
@@ -785,11 +543,11 @@ export default function Schools() {
                         )}
                       </TableCell>
 
-                      {/* 7. Endereço + Bairro (Regra 3: Bairro junto do Endereço ex: "Rua X, 123 — Bairro Y") */}
+                      {/* 7. Endereço + Bairro */}
                       <TableCell className="align-middle text-xs">
                         {fullAddressDisplay ? (
                           <div
-                            className="flex items-start gap-1 text-muted-foreground truncate max-w-[240px]"
+                            className="flex items-start gap-1 text-muted-foreground truncate max-w-[260px]"
                             title={fullAddressDisplay}
                           >
                             <MapPin className="h-3 w-3 text-muted-foreground shrink-0 mt-0.5" />
@@ -802,110 +560,7 @@ export default function Schools() {
                         )}
                       </TableCell>
 
-                      {/* 8. Vínculo de Contrato */}
-                      <TableCell className="align-middle">
-                        {isLinkedToContract ? (
-                          <div className="flex flex-wrap items-center gap-1 max-w-[200px]">
-                            {links.map((link, idx) => (
-                              <Badge
-                                key={idx}
-                                variant="outline"
-                                className="text-[10px] font-medium border-primary/30 text-primary bg-primary/5 gap-1"
-                                title={`Contrato: ${link.contratoNumero} • Aba: ${link.rotaPlanilha}`}
-                              >
-                                <FileCheck className="h-2.5 w-2.5" />
-                                {link.contratoNumero}
-                              </Badge>
-                            ))}
-                          </div>
-                        ) : (
-                          <span className="text-xs text-muted-foreground/60 italic">—</span>
-                        )}
-                      </TableCell>
-
-                      {/* 9. Rota da Prefeitura / Planilha (Regra 3: à DIREITA após o vínculo de contrato; mostra "—" se sem vínculo) */}
-                      <TableCell className="align-middle">
-                        {isLinkedToContract ? (
-                          <div className="flex flex-col gap-1">
-                            {(() => {
-                              const rotasPlanilhaSet = Array.from(
-                                new Set(
-                                  links
-                                    .map((l) => l.rotaPlanilha)
-                                    .filter((r) => r && r !== 'Sem Rota'),
-                                ),
-                              )
-                              if (rotasPlanilhaSet.length > 0) {
-                                return (
-                                  <div className="flex flex-wrap items-center gap-1">
-                                    {rotasPlanilhaSet.map((r, idx) => (
-                                      <Badge
-                                        key={idx}
-                                        variant="secondary"
-                                        className="text-[10px] font-normal gap-1 bg-muted text-foreground border-border/80"
-                                        title="Origem na planilha da secretaria"
-                                      >
-                                        <FileSpreadsheet className="h-2.5 w-2.5 text-muted-foreground shrink-0" />
-                                        {r}
-                                      </Badge>
-                                    ))}
-                                  </div>
-                                )
-                              }
-                              return (
-                                <span className="text-xs text-muted-foreground/60 italic">—</span>
-                              )
-                            })()}
-                          </div>
-                        ) : (
-                          <span className="text-xs text-muted-foreground/60 italic">—</span>
-                        )}
-                      </TableCell>
-
-                      {/* 10. Rota Logística (Regra 3: à DIREITA após o vínculo de contrato; mostra "—" se sem vínculo) */}
-                      <TableCell className="align-middle">
-                        {isLinkedToContract ? (
-                          (() => {
-                            const parada = paradasRota.find((p) => p.escola_id === school.id)
-                            const linkWithLog = links.find(
-                              (l) => l.rotaLogisticaNome || l.rotaLogisticaId,
-                            )
-                            const rotaLogObj = rotasLogisticas.find(
-                              (r) =>
-                                r.id ===
-                                (parada?.rota_logistica_id || linkWithLog?.rotaLogisticaId),
-                            )
-                            const nomeLogistica = rotaLogObj?.nome || linkWithLog?.rotaLogisticaNome
-
-                            if (nomeLogistica) {
-                              return (
-                                <Badge
-                                  variant="outline"
-                                  className="text-[10px] font-medium gap-1 bg-amber-500/10 text-amber-800 dark:text-amber-300 border-amber-300 dark:border-amber-700"
-                                >
-                                  <Truck className="h-3 w-3 text-amber-600 dark:text-amber-400 shrink-0" />
-                                  Rota {nomeLogistica}
-                                  {parada?.ordem && (
-                                    <span className="text-[9px] opacity-75">({parada.ordem}ª)</span>
-                                  )}
-                                </Badge>
-                              )
-                            }
-                            return (
-                              <Badge
-                                variant="outline"
-                                className="text-[10px] font-normal text-muted-foreground border-dashed bg-muted/20"
-                              >
-                                Pendente
-                              </Badge>
-                            )
-                          })()
-                        ) : (
-                          <span className="text-xs text-muted-foreground/60 italic">—</span>
-                        )}
-                      </TableCell>
-
-                      {/* 11. Ações */}
+                      {/* 8. Ações */}
                       <TableCell
                         className="text-right align-middle"
                         onClick={(e) => e.stopPropagation()}
@@ -951,7 +606,7 @@ export default function Schools() {
 
                 {filteredSchools.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={11} className="py-12 text-center text-muted-foreground">
+                    <TableCell colSpan={8} className="py-12 text-center text-muted-foreground">
                       <div className="space-y-2">
                         <p className="text-sm">
                           {hasActiveFilters
@@ -1102,126 +757,6 @@ export default function Schools() {
                       </p>
                     </div>
                   </div>
-                </div>
-
-                {/* Bloco de Rota Logística de Distribuição */}
-                <div className="rounded-lg border border-amber-200/60 dark:border-amber-800/60 p-4 bg-amber-500/5 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <h4 className="text-xs font-semibold uppercase tracking-wider text-amber-900 dark:text-amber-200 flex items-center gap-1.5">
-                      <Truck className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" /> Rota
-                      Logística de Distribuição
-                    </h4>
-                    <span className="text-[11px] text-muted-foreground">
-                      Distribuição da Cooperativa
-                    </span>
-                  </div>
-                  {(() => {
-                    const parada = paradasRota.find((p) => p.escola_id === detailsSchool.id)
-                    const links = schoolContractLinksMap.get(detailsSchool.id) || []
-                    const linkWithLog = links.find((l) => l.rotaLogisticaNome || l.rotaLogisticaId)
-                    const rotaLogObj = rotasLogisticas.find(
-                      (r) => r.id === (parada?.rota_logistica_id || linkWithLog?.rotaLogisticaId),
-                    )
-                    const nomeLogistica = rotaLogObj?.nome || linkWithLog?.rotaLogisticaNome
-
-                    if (nomeLogistica) {
-                      return (
-                        <div className="flex items-center justify-between p-2.5 rounded bg-background border border-amber-200 dark:border-amber-800">
-                          <div>
-                            <p className="font-semibold text-foreground text-sm flex items-center gap-1.5">
-                              <Truck className="h-4 w-4 text-amber-600" /> Rota {nomeLogistica}
-                            </p>
-                            <p className="text-xs text-muted-foreground">
-                              {parada
-                                ? `Posição de entrega: ${parada.ordem}ª parada na sequência`
-                                : 'Atribuída ao roteamento'}
-                            </p>
-                          </div>
-                          <Badge
-                            variant="outline"
-                            className="bg-amber-100 text-amber-800 border-amber-300"
-                          >
-                            Ativa no despacho
-                          </Badge>
-                        </div>
-                      )
-                    }
-                    return (
-                      <div className="p-2.5 rounded bg-background border border-dashed text-xs text-muted-foreground text-center">
-                        Esta escola ainda <strong>não possui Rota Logística atribuída</strong>. A
-                        rota logística deve ser configurada na tela de{' '}
-                        <em>Roteamento & Despacho</em>.
-                      </div>
-                    )
-                  })()}
-                </div>
-
-                {/* Bloco de Contratos Vinculados & Aba da Planilha */}
-                <div className="space-y-2.5">
-                  <div className="flex items-center justify-between">
-                    <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-                      <Briefcase className="h-3.5 w-3.5 text-primary" /> Contratos Vinculados & Aba
-                      da Planilha
-                    </h4>
-                    <span className="text-xs text-muted-foreground">
-                      {(schoolContractLinksMap.get(detailsSchool.id) || []).length} vínculo(s)
-                      ativo(s)
-                    </span>
-                  </div>
-
-                  {(() => {
-                    const links = schoolContractLinksMap.get(detailsSchool.id) || []
-                    if (links.length === 0) {
-                      return (
-                        <div className="rounded-lg border border-dashed border-border p-4 text-center text-xs text-muted-foreground">
-                          Esta escola ainda não está vinculada a nenhum contrato vigente.
-                          {isAdmin && (
-                            <p className="mt-1 text-muted-foreground/80">
-                              Para vincular, acesse a tela de <strong>Contratos</strong> e adicione
-                              esta escola na aba de escolas participantes.
-                            </p>
-                          )}
-                        </div>
-                      )
-                    }
-
-                    return (
-                      <div className="divide-y divide-border/60 rounded-lg border border-border overflow-hidden bg-card">
-                        {links.map((link, idx) => (
-                          <div
-                            key={idx}
-                            className="p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-sm hover:bg-muted/30"
-                          >
-                            <div className="space-y-0.5">
-                              <div className="flex items-center gap-2">
-                                <span className="font-semibold text-foreground">
-                                  Contrato {link.contratoNumero}
-                                </span>
-                                {link.contratoTipo && (
-                                  <Badge variant="outline" className="text-[10px] font-normal">
-                                    {link.contratoTipo}
-                                  </Badge>
-                                )}
-                              </div>
-                              <p className="text-xs text-muted-foreground">
-                                Origem cadastral no contrato
-                              </p>
-                            </div>
-
-                            <div className="flex items-center gap-2 shrink-0">
-                              <Badge
-                                variant="secondary"
-                                className="text-xs font-normal gap-1 bg-muted text-foreground border border-border"
-                              >
-                                <FileSpreadsheet className="h-3 w-3 text-muted-foreground" />
-                                Aba: <strong>{link.rotaPlanilha}</strong>
-                              </Badge>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )
-                  })()}
                 </div>
               </div>
 

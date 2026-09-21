@@ -348,7 +348,7 @@ export default function Contracts() {
         (r) => (r.nome || '').trim().replace(/\s+/g, ' ').toLowerCase() === normalizedTarget,
       )
     ) {
-      toast.error('Já existe uma rota logística com este nome neste contrato.')
+      toast.error('Já existe uma rota com este nome neste contrato.')
       return
     }
 
@@ -368,7 +368,7 @@ export default function Contracts() {
     if (editRotaIndex === null || !contractRotasLogisticas[editRotaIndex]) return
     const cleanNome = editRotaNome.trim().replace(/\s+/g, ' ')
     if (!cleanNome) {
-      toast.error('Informe o nome da rota logística.')
+      toast.error('Informe o nome da rota.')
       return
     }
 
@@ -378,7 +378,7 @@ export default function Contracts() {
         idx !== editRotaIndex && r.nome.trim().replace(/\s+/g, ' ').toLowerCase() === normTarget,
     )
     if (jaExiste) {
-      toast.error('Já existe uma rota logística com este nome neste contrato.')
+      toast.error('Já existe uma rota com este nome neste contrato.')
       return
     }
 
@@ -541,18 +541,18 @@ export default function Contracts() {
     // num_rotas_logisticas é opcional: se preenchido, valida número positivo
     const parsedNumRotas = numRotasLogisticas.trim() ? parseInt(numRotasLogisticas, 10) : undefined
     if (parsedNumRotas !== undefined && (isNaN(parsedNumRotas) || parsedNumRotas < 1)) {
-      toast.error('Se preenchido, o número de rotas logísticas deve ser no mínimo 1.')
+      toast.error('Se preenchido, o número de rotas deve ser no mínimo 1.')
       return
     }
 
-    // Se o contrato já tiver rotas logísticas no banco e tiver um limite numérico preenchido:
+    // Se o contrato já tiver rotas no banco e tiver um limite numérico preenchido:
     if (editingContract && parsedNumRotas !== undefined) {
       const existingRotasDoContrato = rotasLogisticas.filter(
         (r) => r.contrato_id === editingContract.id,
       )
       if (existingRotasDoContrato.length > parsedNumRotas) {
         toast.error(
-          `O contrato já possui ${existingRotasDoContrato.length} rota(s) logística(s) configurada(s). O limite não pode ser inferior a esse valor.`,
+          `O contrato já possui ${existingRotasDoContrato.length} rota(s) configurada(s). O limite não pode ser inferior a esse valor.`,
         )
         return
       }
@@ -620,7 +620,7 @@ export default function Contracts() {
           for (const crl of contractRotasLogisticas) {
             const norm = (crl.nome || '').trim().replace(/\s+/g, ' ').toLowerCase()
             if (seenLogNames.has(norm)) {
-              toast.error('Já existe uma rota logística com este nome neste contrato.')
+              toast.error('Já existe uma rota com este nome neste contrato.')
               setIsSubmitting(false)
               return
             }
@@ -649,7 +649,7 @@ export default function Contracts() {
           }
         }
 
-        // Adicionar / Atualizar escolas marcadas com sua rota da planilha (sem mexer na rota logística)
+        // Adicionar / Atualizar escolas marcadas com sua rota da planilha (sem mexer na rota de entrega)
         for (const f of contractSchoolsForm) {
           // Resolver id da rota e nome da rota (se o form tiver o nome ou id da rota)
           let rId: string | undefined = undefined
@@ -829,8 +829,8 @@ export default function Contracts() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Contratos & Escolas Participantes</h1>
           <p className="text-muted-foreground">
-            Gestão N:N de escolas participantes, rotas logísticas, produtos contratados e
-            modalidades de pedido.
+            Gestão N:N de escolas participantes, rotas, produtos contratados e modalidades de
+            pedido.
           </p>
         </div>
         {isAdmin && (
@@ -1028,7 +1028,7 @@ export default function Contracts() {
                 <TabsList className="grid grid-cols-4 w-full">
                   <TabsTrigger value="geral">Dados Gerais</TabsTrigger>
                   <TabsTrigger value="rotas">
-                    Rotas Logísticas (
+                    Rotas (
                     {(() => {
                       const seen = new Set<string>()
                       return rotasLogisticas.filter((r) => {
@@ -1210,7 +1210,7 @@ export default function Contracts() {
                         htmlFor="c-num-rotas"
                         className="font-semibold text-xs text-foreground"
                       >
-                        Número de Rotas Logísticas da Cooperativa{' '}
+                        Número de Rotas da Cooperativa{' '}
                         <span className="text-muted-foreground font-normal">(Opcional)</span>
                       </Label>
                       <p className="text-[11px] text-muted-foreground">
@@ -1234,17 +1234,17 @@ export default function Contracts() {
                 </div>
               </TabsContent>
 
-              {/* Aba 2: Resumo Somente Leitura das Rotas Logísticas com Atalho */}
+              {/* Aba 2: Resumo Somente Leitura das Rotas com Atalho */}
               <TabsContent value="rotas" className="space-y-4 pt-3">
                 <div className="space-y-3 p-4 rounded-lg border bg-card">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                     <div>
                       <Label className="text-sm font-bold flex items-center gap-2 text-primary">
-                        <Route className="h-4 w-4" /> Rotas Logísticas do Contrato
+                        <Route className="h-4 w-4" /> Rotas do Contrato
                       </Label>
                       <p className="text-xs text-muted-foreground">
-                        As rotas logísticas, seus nomes, atribuição de escolas e sequenciamento de
-                        paradas são configurados diretamente na tela de Roteamento & Despacho.
+                        As rotas, seus nomes, atribuição de escolas e sequenciamento de paradas são
+                        configurados diretamente na tela de Roteamento & Despacho.
                         {numRotasLogisticas ? (
                           <>
                             {' '}
@@ -1295,12 +1295,11 @@ export default function Contracts() {
                         return (
                           <div className="py-8 text-center border rounded-lg bg-muted/20 text-xs text-muted-foreground space-y-2">
                             <p className="font-medium text-foreground">
-                              Nenhuma rota logística configurada para este contrato ainda.
+                              Nenhuma rota configurada para este contrato ainda.
                             </p>
                             <p>
                               Você pode salvar este contrato agora sem rotas e configurá-las
-                              diretamente na tela de{' '}
-                              <strong>Roteamento & Despacho Logístico</strong>.
+                              diretamente na tela de <strong>Roteamento & Despacho</strong>.
                             </p>
                             <Button
                               type="button"
@@ -1350,8 +1349,7 @@ export default function Contracts() {
                   ) : (
                     <div className="py-8 text-center border rounded-lg bg-muted/20 text-xs text-muted-foreground space-y-2">
                       <p className="font-medium text-foreground">
-                        Novo Contrato: As rotas logísticas são configuradas na tela de Roteamento &
-                        Despacho.
+                        Novo Contrato: As rotas são configuradas na tela de Roteamento & Despacho.
                       </p>
                       <p>
                         Salve os dados gerais, escolas e itens agora. Ao abrir a tela de{' '}
@@ -2204,11 +2202,11 @@ export default function Contracts() {
                 })()}
               </div>
 
-              {/* Seção 2: Escolas por Rota Logística da Cooperativa */}
+              {/* Seção 2: Escolas por Rota da Cooperativa */}
               <div>
                 <div className="flex items-center justify-between mb-1.5">
                   <h4 className="font-semibold text-sm flex items-center gap-1.5 text-foreground">
-                    <Truck className="h-4 w-4 text-amber-600" /> Escolas por Rota Logística
+                    <Truck className="h-4 w-4 text-amber-600" /> Escolas por Rota
                   </h4>
                   <Button
                     type="button"
@@ -2259,7 +2257,7 @@ export default function Contracts() {
                           >
                             <div className="flex items-center justify-between text-xs font-semibold">
                               <span className="text-foreground flex items-center gap-1">
-                                <Truck className="h-3 w-3 text-amber-600" /> Rota Logística {r.nome}
+                                <Truck className="h-3 w-3 text-amber-600" /> Rota {r.nome}
                               </span>
                               <Badge
                                 variant="secondary"
@@ -2294,11 +2292,11 @@ export default function Contracts() {
                         )
                       })}
 
-                      {/* Entrada explícita: Sem rota logística */}
+                      {/* Entrada explícita: Sem rota */}
                       <div className="p-2.5 rounded bg-muted/20 border space-y-1.5">
                         <div className="flex items-center justify-between text-xs font-semibold">
                           <span className="text-muted-foreground flex items-center gap-1">
-                            Sem rota logística atribuída
+                            Sem rota atribuída
                           </span>
                           <Badge variant="outline" className="text-[10px] text-muted-foreground">
                             {escolasSemRotaLogistica.length} escola(s)
@@ -2318,7 +2316,7 @@ export default function Contracts() {
                           </div>
                         ) : (
                           <p className="text-[11px] text-emerald-600">
-                            Todas as escolas deste contrato estão atribuídas a rotas logísticas.
+                            Todas as escolas deste contrato estão atribuídas a rotas.
                           </p>
                         )}
                       </div>

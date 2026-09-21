@@ -89,7 +89,6 @@ export function SchoolImportDialog({
         id: s.id,
         nome: s.name,
         tipo: s.tipo,
-        rota: s.route,
         alunos: s.alunos,
         endereco: s.address,
         telefone: s.contact,
@@ -166,14 +165,12 @@ export function SchoolImportDialog({
   }
 
   const handleDownloadModel = () => {
-    // Ordem esperada pelo usuário:
-    // Nome da Escola | Tipo | Rota | Nº Alunos | Telefone | Bairro | Endereço | Contato | E-mail
-    // com Bairro adjacente a Endereço e Contato adjacente a E-mail.
+    // Cadastro mestre de escolas: atributos próprios da instituição.
+    // Nome da Escola | Tipo | Nº Alunos | Telefone | Bairro | Endereço | Contato | E-mail
     const wsData = [
       [
         'Nome da Escola',
         'Tipo',
-        'Rota',
         'Nº Alunos',
         'Telefone',
         'Bairro',
@@ -184,7 +181,6 @@ export function SchoolImportDialog({
       [
         'CMEI MARIA TEREZA PRIES DE ABREU',
         'CMEI',
-        'Rota 01',
         '125',
         '(21) 98765-4321',
         'Centro',
@@ -195,7 +191,6 @@ export function SchoolImportDialog({
       [
         'CC LAR VOVÔ MIGUEL',
         'CRECHE',
-        'Rota 02',
         '47',
         '(21) 99887-1122',
         'Bairro Novo',
@@ -206,7 +201,6 @@ export function SchoolImportDialog({
       [
         'EM ALICE SALDANHA',
         'FUNDAMENTAL',
-        'Rota 01',
         '171',
         '(21) 97766-3344',
         'São Pedro',
@@ -313,8 +307,8 @@ export function SchoolImportDialog({
           </DialogTitle>
           <DialogDescription>
             Importe ou cole listas de escolas. O cabeçalho na 1ª linha mapeia as colunas (Nome da
-            Escola, Tipo, Rota, Nº Alunos, Telefone, Bairro, Endereço, Contato, E-mail). O nome da
-            escola é obrigatório; para escolas já existentes, colunas em branco mantêm os dados já
+            Escola, Tipo, Nº Alunos, Telefone, Bairro, Endereço, Contato, E-mail). O nome da escola
+            é obrigatório; para escolas já existentes, colunas em branco mantêm os dados já
             gravados.
           </DialogDescription>
         </DialogHeader>
@@ -384,9 +378,8 @@ export function SchoolImportDialog({
                   <p className="text-xs text-muted-foreground">
                     Colunas aceitas: <strong>Nome da Escola</strong> (obrigatória),{' '}
                     <strong>Tipo</strong>, <strong>Nº Alunos</strong>, <strong>Telefone</strong>,{' '}
-                    <strong>Bairro</strong>, <strong>Endereço</strong>, <strong>Contato</strong>,{' '}
-                    <strong>E-mail</strong>.{' '}
-                    <em>(Nota: rotas são geridas exclusivamente por contrato)</em>
+                    <strong>Bairro</strong>, <strong>Endereço</strong>, <strong>Contato</strong> e{' '}
+                    <strong>E-mail</strong>.
                   </p>
                 </div>
 
@@ -418,7 +411,7 @@ export function SchoolImportDialog({
             ) : (
               <div className="space-y-2 flex-1 flex flex-col">
                 <Textarea
-                  placeholder={`Cole as linhas do Excel ou CSV aqui (com cabeçalho na 1ª linha)...\nExemplo:\nNome da Escola\tTipo\tRota\tNº Alunos\tTelefone\tBairro\tEndereço\tContato\tE-mail\nEM ALICE SALDANHA\tFUNDAMENTAL\tRota 01\t171\t(21) 97766-3344\tSão Pedro\tRua São Pedro, 80\tMarcos Silva\tem.alice@educacao.gov.br\nCMEI MARIA TEREZA\tCMEI\tRota 01\t125\t(21) 98765-4321\tCentro\tRua das Palmeiras, 120\tDiretora Ana\tcmei.maria@educacao.gov.br`}
+                  placeholder={`Cole as linhas do Excel ou CSV aqui (com cabeçalho na 1ª linha)...\nExemplo:\nNome da Escola\tTipo\tNº Alunos\tTelefone\tBairro\tEndereço\tContato\tE-mail\nEM ALICE SALDANHA\tFUNDAMENTAL\t171\t(21) 97766-3344\tSão Pedro\tRua São Pedro, 80\tMarcos Silva\tem.alice@educacao.gov.br\nCMEI MARIA TEREZA\tCMEI\t125\t(21) 98765-4321\tCentro\tRua das Palmeiras, 120\tDiretora Ana\tcmei.maria@educacao.gov.br`}
                   value={pastedText}
                   onChange={(e) => setPastedText(e.target.value)}
                   className="flex-1 min-h-[200px] text-xs font-mono resize-none"
