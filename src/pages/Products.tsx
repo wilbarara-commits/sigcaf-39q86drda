@@ -22,50 +22,22 @@ import {
 } from '@/components/ui/dialog'
 import { Search, Plus, Loader2, FileSpreadsheet } from 'lucide-react'
 import { toast } from 'sonner'
-import { useState, useMemo } from 'react'
+import { useState } from 'react'
 import { Label } from '@/components/ui/label'
 import { produtosService } from '@/services/produtos'
-import {
-  DEFAULT_PRODUCT_UNIT,
-  DEFAULT_PRODUCT_CATEGORY,
-  BASE_PRODUCT_CATEGORIES,
-  areCategoriesEqual,
-} from '@/lib/productCsvImporter'
+import { DEFAULT_PRODUCT_UNIT } from '@/lib/productCsvImporter'
 import { ProductImportDialog } from '@/components/ProductImportDialog'
 
 export default function Products() {
   const { products, isLoading, refreshData } = useApp()
   const { isAdmin } = useAuth()
   const [search, setSearch] = useState('')
-  const [categoryFilter, setCategoryFilter] = useState('todas')
   const [importDialogOpen, setImportDialogOpen] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
-  // Lista dinâmica consolidada de categorias disponíveis (base + do banco/produtos existentes)
-  const availableCategories = useMemo(() => {
-    const set = new Map<string, string>() // normalized -> canonical display
-    BASE_PRODUCT_CATEGORIES.forEach((c) => {
-      set.set(c.toLowerCase(), c)
-    })
-    products.forEach((p) => {
-      if (p.category && p.category.trim()) {
-        const trimmed = p.category.trim()
-        const norm = trimmed.toLowerCase()
-        if (!set.has(norm)) {
-          set.set(norm, trimmed)
-        }
-      }
-    })
-    return Array.from(set.values()).sort((a, b) => a.localeCompare(b, 'pt-BR'))
-  }, [products])
-
-  // Estados de edição de produto (categoria, unidade, disponibilidade, estoque, preço e apelidos)
+  // Estados de edição de produto (unidade, disponibilidade e apelidos)
   const [editDialogOpen, setEditDialogOpen] = useState(false)
   const [editingProduct, setEditingProduct] = useState<any>(null)
-  const [editCategoria, setEditCategoria] = useState(DEFAULT_PRODUCT_CATEGORY)
-  const [editCustomCategoria, setEditCustomCategoria] = useState('')
-  const [editPreco, setEditPreco] = useState('')
-  const [editEstoque, setEditEstoque] = useState('')
   const [editUnidade, setEditUnidade] = useState(DEFAULT_PRODUCT_UNIT)
   const [editApelidos, setEditApelidos] = useState('')
   const [editDisponibilidade, setEditDisponibilidade] = useState<
@@ -75,11 +47,7 @@ export default function Products() {
   // Estado de criação de novo produto
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
   const [newNome, setNewNome] = useState('')
-  const [newCategoria, setNewCategoria] = useState(DEFAULT_PRODUCT_CATEGORY)
-  const [newCustomCategoria, setNewCustomCategoria] = useState('')
   const [newUnidade, setNewUnidade] = useState(DEFAULT_PRODUCT_UNIT)
-  const [newPreco, setNewPreco] = useState('')
-  const [newEstoque, setNewEstoque] = useState('')
   const [newApelidos, setNewApelidos] = useState('')
   const [newDisponibilidade, setNewDisponibilidade] = useState<
     'normal' | 'escassez' | 'abundancia'
@@ -87,24 +55,15 @@ export default function Products() {
 
   const filteredProducts = products.filter((p) => {
     const term = search.toLowerCase()
-    const matchesSearch =
+    return (
       !term ||
       p.name.toLowerCase().includes(term) ||
-      (p.apelidos && p.apelidos.toLowerCase().includes(term)) ||
-      (p.category && p.category.toLowerCase().includes(term))
-
-    const matchesCategory =
-      categoryFilter === 'todas' || areCategoriesEqual(p.category, categoryFilter)
-
-    return matchesSearch && matchesCategory
+      (p.apelidos && p.apelidos.toLowerCase().includes(term))
+    )
   })
 
   const handleOpenEdit = (p: any) => {
     setEditingProduct(p)
-    setEditCategoria(p.category || DEFAULT_PRODUCT_CATEGORY)
-    setEditCustomCategoria('')
-    setEditPreco(String(p.price ?? 0))
-    setEditEstoque(String(p.stock ?? 0))
     setEditUnidade(p.unit || DEFAULT_PRODUCT_UNIT)
     setEditApelidos(p.apelidos || '')
     setEditDisponibilidade(p.disponibilidade || 'normal')
@@ -113,11 +72,7 @@ export default function Products() {
 
   const handleOpenCreate = () => {
     setNewNome('')
-    setNewCategoria(DEFAULT_PRODUCT_CATEGORY)
-    setNewCustomCategoria('')
     setNewUnidade(DEFAULT_PRODUCT_UNIT)
-    setNewPreco('0')
-    setNewEstoque('0')
     setNewApelidos('')
     setNewDisponibilidade('normal')
     setCreateDialogOpen(true)
@@ -125,30 +80,12 @@ export default function Products() {
 
   const handleSaveProductConfig = async () => {
     if (!editingProduct) return
-    const parsedPrice = parseFloat(editPreco.replace(',', '.'))
-    const parsedStock = parseInt(editEstoque, 10)
-
-    if (isNaN(parsedPrice) || parsedPrice < 0) {
-      toast.error('Informe um preço unitário válido.')
-      return
-    }
-    if (isNaN(parsedStock) || parsedStock < 0) {
-      toast.error('Informe uma quantidade de estoque válida.')
-      return
-    }
 
     const trimmedUnidade = editUnidade.trim() || DEFAULT_PRODUCT_UNIT
-    const finalCategoria =
-      editCategoria === '__custom__'
-        ? editCustomCategoria.trim() || DEFAULT_PRODUCT_CATEGORY
-        : editCategoria.trim() || DEFAULT_PRODUCT_CATEGORY
 
     setIsSubmitting(true)
     try {
       await produtosService.update(editingProduct.id, {
-        categoria: finalCategoria,
-        preco_unitario: parsedPrice,
-        estoque: parsedStock,
         unidade: trimmedUnidade,
         disponibilidade: editDisponibilidade,
         apelidos: editApelidos.trim(),
@@ -171,21 +108,11 @@ export default function Products() {
       return
     }
 
-    const parsedPrice = parseFloat(newPreco.replace(',', '.')) || 0
-    const parsedStock = parseInt(newEstoque, 10) || 0
-    const finalCategoria =
-      newCategoria === '__custom__'
-        ? newCustomCategoria.trim() || DEFAULT_PRODUCT_CATEGORY
-        : newCategoria.trim() || DEFAULT_PRODUCT_CATEGORY
-
     setIsSubmitting(true)
     try {
       await produtosService.create({
         nome: trimmedNome,
-        categoria: finalCategoria,
         unidade: newUnidade.trim() || DEFAULT_PRODUCT_UNIT,
-        preco_unitario: parsedPrice,
-        estoque: parsedStock,
         disponibilidade: newDisponibilidade,
         apelidos: newApelidos.trim(),
       })
@@ -204,9 +131,9 @@ export default function Products() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Produtos & Preços</h1>
+          <h1 className="text-2xl font-bold tracking-tight">Produtos</h1>
           <p className="text-muted-foreground">
-            Gerencie o inventário e tabela de preços da cooperativa.
+            Gerencie o catálogo mestre de produtos da cooperativa.
           </p>
         </div>
         {isAdmin && (
@@ -227,23 +154,6 @@ export default function Products() {
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <CardTitle>Catálogo de Produtos</CardTitle>
             <div className="flex items-center gap-2 flex-wrap">
-              <div className="w-48">
-                <select
-                  value={categoryFilter}
-                  onChange={(e) => setCategoryFilter(e.target.value)}
-                  className="w-full h-9 rounded-md border border-input bg-background px-3 text-xs"
-                >
-                  <option value="todas">Todas as categorias ({products.length})</option>
-                  {availableCategories.map((cat) => {
-                    const count = products.filter((p) => areCategoriesEqual(p.category, cat)).length
-                    return (
-                      <option key={cat} value={cat}>
-                        {cat} ({count})
-                      </option>
-                    )
-                  })}
-                </select>
-              </div>
               <div className="relative w-64">
                 <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                 <Input
@@ -262,18 +172,15 @@ export default function Products() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Produto</TableHead>
-                  <TableHead>Categoria</TableHead>
-                  <TableHead>Disponibilidade</TableHead>
-                  <TableHead className="text-right">Estoque</TableHead>
                   <TableHead>Unidade</TableHead>
-                  <TableHead className="text-right">Preço Unit.</TableHead>
+                  <TableHead>Disponibilidade</TableHead>
                   {isAdmin && <TableHead className="text-right">Ação</TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {isLoading ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
                       <div className="flex items-center justify-center gap-2">
                         <Loader2 className="h-4 w-4 animate-spin" />
                         Carregando produtos do banco...
@@ -282,7 +189,7 @@ export default function Products() {
                   </TableRow>
                 ) : filteredProducts.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
                       Nenhum produto encontrado.
                     </TableCell>
                   </TableRow>
@@ -318,27 +225,8 @@ export default function Products() {
                             )}
                           </div>
                         </TableCell>
-                        <TableCell>
-                          <Badge variant="secondary" className="font-normal">
-                            {product.category}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>{dispBadge}</TableCell>
-                        <TableCell className="text-right">
-                          <span
-                            className={product.stock < 100 ? 'text-destructive font-medium' : ''}
-                          >
-                            {product.stock}
-                          </span>
-                        </TableCell>
                         <TableCell>{product.unit}</TableCell>
-                        <TableCell className="text-right font-medium font-mono">
-                          R${' '}
-                          {product.price.toLocaleString('pt-BR', {
-                            minimumFractionDigits: 2,
-                            maximumFractionDigits: 2,
-                          })}
-                        </TableCell>
+                        <TableCell>{dispBadge}</TableCell>
                         {isAdmin && (
                           <TableCell className="text-right">
                             <Button
@@ -367,87 +255,23 @@ export default function Products() {
           <DialogHeader>
             <DialogTitle>Editar Produto: {editingProduct?.name}</DialogTitle>
             <DialogDescription>
-              Ajuste individualmente a unidade de medida, preço, estoque e a disponibilidade de
-              safra deste produto.
+              Ajuste a unidade de medida, disponibilidade de safra e nomes alternativos deste
+              produto.
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4 pt-2">
             <div className="space-y-2">
-              <Label className="text-sm font-semibold">Categoria</Label>
-              <select
-                value={editCategoria}
-                onChange={(e) => setEditCategoria(e.target.value)}
-                className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm"
-              >
-                {/* Se a categoria atual não constar na lista padrão/existente, adiciona */}
-                {editCategoria &&
-                  editCategoria !== '__custom__' &&
-                  !availableCategories.some((c) => areCategoriesEqual(c, editCategoria)) && (
-                    <option value={editCategoria}>{editCategoria}</option>
-                  )}
-                {availableCategories.map((c) => (
-                  <option key={c} value={c}>
-                    {c}
-                  </option>
-                ))}
-                <option value="__custom__">+ Outra categoria (digitar nova)...</option>
-              </select>
-              {editCategoria === '__custom__' && (
-                <Input
-                  type="text"
-                  value={editCustomCategoria}
-                  onChange={(e) => setEditCustomCategoria(e.target.value)}
-                  placeholder="Digite o nome da nova categoria (ex: Folhosas, Ovos, Tubérculos...)"
-                  className="w-full h-9 mt-1 text-xs"
-                  autoFocus
-                />
-              )}
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-2">
-                <Label htmlFor="edit-unidade" className="text-sm font-semibold">
-                  Unidade de Medida
-                </Label>
-                <Input
-                  id="edit-unidade"
-                  type="text"
-                  value={editUnidade}
-                  onChange={(e) => setEditUnidade(e.target.value)}
-                  placeholder="Ex: kg, Dúzia, dz, Maço..."
-                  className="w-full h-9"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="edit-preco" className="text-sm font-semibold">
-                  Preço Unitário (R$)
-                </Label>
-                <Input
-                  id="edit-preco"
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={editPreco}
-                  onChange={(e) => setEditPreco(e.target.value)}
-                  placeholder="Ex: 5.50"
-                />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="edit-estoque" className="text-sm font-semibold">
-                Estoque ({editUnidade.trim() || DEFAULT_PRODUCT_UNIT})
+              <Label htmlFor="edit-unidade" className="text-sm font-semibold">
+                Unidade de Medida
               </Label>
               <Input
-                id="edit-estoque"
-                type="number"
-                step="1"
-                min="0"
-                value={editEstoque}
-                onChange={(e) => setEditEstoque(e.target.value)}
-                placeholder="Ex: 100"
+                id="edit-unidade"
+                type="text"
+                value={editUnidade}
+                onChange={(e) => setEditUnidade(e.target.value)}
+                placeholder="Ex: kg, Dúzia, dz, Maço..."
+                className="w-full h-9"
               />
             </div>
 
@@ -533,78 +357,18 @@ export default function Products() {
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-2">
-                <Label className="text-sm font-semibold">Categoria</Label>
-                <select
-                  value={newCategoria}
-                  onChange={(e) => setNewCategoria(e.target.value)}
-                  className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm"
-                >
-                  {availableCategories.map((c) => (
-                    <option key={c} value={c}>
-                      {c}
-                    </option>
-                  ))}
-                  <option value="__custom__">+ Outra categoria (digitar nova)...</option>
-                </select>
-                {newCategoria === '__custom__' && (
-                  <Input
-                    type="text"
-                    value={newCustomCategoria}
-                    onChange={(e) => setNewCustomCategoria(e.target.value)}
-                    placeholder="Digite o nome da categoria..."
-                    className="w-full h-8 mt-1 text-xs"
-                    autoFocus
-                  />
-                )}
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="new-unidade" className="text-sm font-semibold">
-                  Unidade
-                </Label>
-                <Input
-                  id="new-unidade"
-                  type="text"
-                  value={newUnidade}
-                  onChange={(e) => setNewUnidade(e.target.value)}
-                  placeholder="Ex: kg, Dúzia..."
-                  className="w-full h-9"
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-2">
-                <Label htmlFor="new-preco" className="text-sm font-semibold">
-                  Preço Unitário (R$)
-                </Label>
-                <Input
-                  id="new-preco"
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={newPreco}
-                  onChange={(e) => setNewPreco(e.target.value)}
-                  placeholder="Ex: 5.50"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="new-estoque" className="text-sm font-semibold">
-                  Estoque Inicial
-                </Label>
-                <Input
-                  id="new-estoque"
-                  type="number"
-                  step="1"
-                  min="0"
-                  value={newEstoque}
-                  onChange={(e) => setNewEstoque(e.target.value)}
-                  placeholder="Ex: 100"
-                />
-              </div>
+            <div className="space-y-2">
+              <Label htmlFor="new-unidade" className="text-sm font-semibold">
+                Unidade
+              </Label>
+              <Input
+                id="new-unidade"
+                type="text"
+                value={newUnidade}
+                onChange={(e) => setNewUnidade(e.target.value)}
+                placeholder="Ex: kg, Dúzia..."
+                className="w-full h-9"
+              />
             </div>
 
             <div className="space-y-2">

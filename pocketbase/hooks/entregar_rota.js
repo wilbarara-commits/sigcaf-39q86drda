@@ -1,7 +1,7 @@
 // Hook para confirmação de entrega de rota inteira em transação atômica única
 // POST /backend/v1/rotas-logisticas/entregar
 // Body: { rota_logistica_id: string, user_id?: string }
-// Atualiza pedidos 'Em Rota' para 'Entregue', baixa estoque dos produtos, atualiza despachos ativos.
+// Atualiza pedidos 'Em Rota' para 'Entregue' e atualiza despachos ativos.
 
 routerAdd('POST', '/backend/v1/rotas-logisticas/entregar', (e) => {
   const body = e.requestInfo().body || {}
@@ -13,7 +13,6 @@ routerAdd('POST', '/backend/v1/rotas-logisticas/entregar', (e) => {
   }
 
   const updatedOrders = []
-  const updatedProducts = []
 
   $app.runInTransaction((txApp) => {
     // 1. Identificar escolas da rota logística
@@ -35,7 +34,6 @@ routerAdd('POST', '/backend/v1/rotas-logisticas/entregar', (e) => {
     const pedidos = txApp.findRecordsByFilter('pedidos', 'status = "Em Rota"', '-created', 0, 0)
 
     const pedidosParaEntregar = []
-    const pedidoIds = []
     for (let i = 0; i < pedidos.length; i++) {
       const p = pedidos[i]
       const pedRotaLogId = p.getString('rota_logistica_id')
@@ -43,7 +41,6 @@ routerAdd('POST', '/backend/v1/rotas-logisticas/entregar', (e) => {
 
       if (pedRotaLogId === rotaLogisticaId || escolaIds.indexOf(pedEscolaId) !== -1) {
         pedidosParaEntregar.push(p)
-        pedidoIds.push(p.id)
       }
     }
 
@@ -65,46 +62,7 @@ routerAdd('POST', '/backend/v1/rotas-logisticas/entregar', (e) => {
       updatedOrders.push(p.publicExport())
     }
 
-    // 4. Buscar pedido_itens dos pedidos para dar baixa de estoque consolidada
-    const estoqueBaixas = {}
-    for (let i = 0; i < pedidoIds.length; i++) {
-      const pId = pedidoIds[i]
-      const itens = txApp.findRecordsByFilter(
-        'pedido_itens',
-        'pedido_id = {:pId}',
-        'created',
-        0,
-        0,
-        { pId: pId },
-      )
-      for (let j = 0; j < itens.length; j++) {
-        const it = itens[j]
-        const prodId = it.getString('produto_id')
-        const qtd = it.getFloat('quantidade') || 0
-        if (prodId && qtd > 0) {
-          estoqueBaixas[prodId] = (estoqueBaixas[prodId] || 0) + qtd
-        }
-      }
-    }
-
-    // 5. Baixar estoque dos produtos
-    const prodIds = Object.keys(estoqueBaixas)
-    for (let i = 0; i < prodIds.length; i++) {
-      const prId = prodIds[i]
-      const qtdBaixar = estoqueBaixas[prId]
-      try {
-        const prodRec = txApp.findRecordById('produtos', prId)
-        const currentEstoque = prodRec.getFloat('estoque') || 0
-        const novoEstoque = Math.max(0, currentEstoque - qtdBaixar)
-        prodRec.set('estoque', novoEstoque)
-        txApp.save(prodRec)
-        updatedProducts.push(prodRec.publicExport())
-      } catch (err) {
-        // se produto não existir, ignora
-      }
-    }
-
-    // 6. Atualizar status dos despachos ativos da rota para 'Entregue'
+    // 4. Atualizar status dos despachos ativos da rota para 'Entregue'
     const despachosAtivos = txApp.findRecordsByFilter(
       'despachos',
       'rota_logistica_id = {:rId} && status = "Em Rota"',
@@ -123,6 +81,6 @@ routerAdd('POST', '/backend/v1/rotas-logisticas/entregar', (e) => {
   return e.json(200, {
     success: true,
     pedidos: updatedOrders,
-    produtos: updatedProducts,
+    produtos: [],
   })
 })

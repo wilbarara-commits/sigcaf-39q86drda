@@ -153,12 +153,12 @@ export function ProductImportDialog({
 
   const handleDownloadModel = () => {
     const csvContent =
-      'nome,categoria,unidade,estoque,preco_unitario,disponibilidade\n' +
-      'Alface Crespa,Hortaliças,kg,"1.250","8,50",Normal\n' +
-      'Banana Prata,Frutas,kg,"850","6,00",Normal\n' +
-      'Feijão Carioca,Grãos,kg,"500","12,50",Escassez\n' +
-      'Cenoura,Legumes,kg,"400","4,80",Abundância\n' +
-      'Couve Manteiga,,,"250",,\n'
+      'nome,unidade,disponibilidade\n' +
+      'Alface Crespa,kg,Normal\n' +
+      'Banana Prata,kg,Normal\n' +
+      'Feijão Carioca,kg,Escassez\n' +
+      'Cenoura,kg,Abundância\n' +
+      'Couve Manteiga,,\n'
 
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
     const url = URL.createObjectURL(blob)
@@ -184,10 +184,7 @@ export function ProductImportDialog({
           // Produto NOVO: colunas preenchidas usam o valor da linha; colunas em branco usam os defaults
           const createData: Partial<ProdutoRecord> = {
             nome: r.nome,
-            categoria: r.categoria,
             unidade: r.unidade,
-            estoque: r.estoque,
-            preco_unitario: r.preco_unitario,
             disponibilidade: r.disponibilidade,
           }
           return {
@@ -199,10 +196,7 @@ export function ProductImportDialog({
           // Produto EXISTENTE: apenas colunas presentes/preenchidas são enviadas
           // Colunas em branco não sobrescrevem os dados existentes
           const updateData: Partial<ProdutoRecord> = {}
-          if (r.presentColumns.categoria) updateData.categoria = r.categoria
           if (r.presentColumns.unidade) updateData.unidade = r.unidade
-          if (r.presentColumns.estoque) updateData.estoque = r.estoque
-          if (r.presentColumns.preco) updateData.preco_unitario = r.preco_unitario
           if (r.presentColumns.disponibilidade) updateData.disponibilidade = r.disponibilidade
 
           return {
@@ -346,10 +340,7 @@ export function ProductImportDialog({
                       : 'Arraste seu arquivo CSV ou Excel aqui'}
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    Colunas aceitas:{' '}
-                    <strong>
-                      nome, categoria, unidade, estoque, preco_unitario, disponibilidade
-                    </strong>
+                    Colunas aceitas: <strong>nome, unidade, disponibilidade</strong>
                   </p>
                 </div>
 
@@ -381,7 +372,7 @@ export function ProductImportDialog({
             ) : (
               <div className="space-y-2 flex-1 flex flex-col">
                 <Textarea
-                  placeholder={`Cole as linhas do Excel ou CSV aqui...\nExemplo:\nAlface Crespa\tHortaliças\tkg\t1.250\t8,50\tNormal\nBanana Prata\tFrutas\tkg\t850\t6,00\tNormal\nCenoura\t\t\t400\t4,50\t`}
+                  placeholder={`Cole as linhas do Excel ou CSV aqui...\nExemplo:\nAlface Crespa\tkg\tNormal\nBanana Prata\tkg\tNormal\nCenoura\tkg\t`}
                   value={pastedText}
                   onChange={(e) => setPastedText(e.target.value)}
                   className="flex-1 min-h-[200px] text-xs font-mono resize-none"
@@ -545,10 +536,7 @@ export function ProductImportDialog({
                   <tr>
                     <th className="py-2.5 px-3 w-12 bg-muted font-semibold">#</th>
                     <th className="py-2.5 px-3 bg-muted font-semibold">Produto</th>
-                    <th className="py-2.5 px-3 bg-muted font-semibold">Categoria</th>
                     <th className="py-2.5 px-3 bg-muted font-semibold">Unidade</th>
-                    <th className="py-2.5 px-3 text-right bg-muted font-semibold">Estoque</th>
-                    <th className="py-2.5 px-3 text-right bg-muted font-semibold">Preço</th>
                     <th className="py-2.5 px-3 bg-muted font-semibold">Disponibilidade</th>
                     <th className="py-2.5 px-3 bg-muted font-semibold">Ação / Status</th>
                   </tr>
@@ -617,23 +605,23 @@ export function ProductImportDialog({
                           )}
                         </td>
                         <td className="py-2 px-3">
-                          {isUpdate && row.fieldChanges.some((fc) => fc.field === 'categoria') ? (
+                          {isUpdate && row.fieldChanges.some((fc) => fc.field === 'unidade') ? (
                             <div className="flex flex-col gap-0.5">
                               {(() => {
-                                const catChange = row.fieldChanges.find(
-                                  (fc) => fc.field === 'categoria',
+                                const uChange = row.fieldChanges.find(
+                                  (fc) => fc.field === 'unidade',
                                 )!
                                 return (
                                   <div className="flex items-center gap-1">
                                     <span className="line-through text-muted-foreground text-[10px]">
-                                      {catChange.oldValue}
+                                      {uChange.oldValue}
                                     </span>
                                     <ArrowRight className="h-2.5 w-2.5 text-blue-600 dark:text-blue-400" />
                                     <Badge
                                       variant="secondary"
                                       className="text-[10px] font-semibold bg-blue-100/80 dark:bg-blue-900/40 text-blue-900 dark:text-blue-200 border-blue-300 dark:border-blue-700"
                                     >
-                                      {catChange.newValue}
+                                      {uChange.newValue}
                                     </Badge>
                                   </div>
                                 )
@@ -641,43 +629,13 @@ export function ProductImportDialog({
                             </div>
                           ) : (
                             <>
-                              <Badge variant="secondary" className="text-[10px] font-normal">
-                                {row.categoria}
-                              </Badge>
-                              {!row.presentColumns.categoria && isCreate && (
+                              {row.unidade}
+                              {!row.presentColumns.unidade && isCreate && (
                                 <span className="text-[9px] text-muted-foreground block italic">
                                   (default)
                                 </span>
                               )}
                             </>
-                          )}
-                        </td>
-                        <td className="py-2 px-3">
-                          {row.unidade}
-                          {!row.presentColumns.unidade && isCreate && (
-                            <span className="text-[9px] text-muted-foreground block italic">
-                              (default)
-                            </span>
-                          )}
-                        </td>
-                        <td className="py-2 px-3 text-right font-mono">
-                          {row.estoque.toLocaleString('pt-BR')}
-                          {!row.presentColumns.estoque && isCreate && (
-                            <span className="text-[9px] text-muted-foreground block italic">
-                              (default 0)
-                            </span>
-                          )}
-                        </td>
-                        <td className="py-2 px-3 text-right font-mono font-medium">
-                          R${' '}
-                          {row.preco_unitario.toLocaleString('pt-BR', {
-                            minimumFractionDigits: 2,
-                            maximumFractionDigits: 2,
-                          })}
-                          {!row.presentColumns.preco && isCreate && (
-                            <span className="text-[9px] text-muted-foreground block italic">
-                              (default 0)
-                            </span>
                           )}
                         </td>
                         <td className="py-2 px-3">
@@ -754,7 +712,7 @@ export function ProductImportDialog({
                   })}
                   {displayRows.length === 0 && (
                     <tr>
-                      <td colSpan={8} className="py-8 text-center text-muted-foreground text-xs">
+                      <td colSpan={5} className="py-8 text-center text-muted-foreground text-xs">
                         Nenhuma linha encontrada neste filtro.
                       </td>
                     </tr>

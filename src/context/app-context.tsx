@@ -240,12 +240,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const mappedProds: Product[] = rawProds.map((p) => ({
         id: p.id,
         name: p.nome,
-        category: p.categoria,
-        stock: Number(p.estoque) || 0,
         unit: p.unidade,
-        price: Number(p.preco_unitario) || 0,
         disponibilidade: p.disponibilidade || 'normal',
         apelidos: p.apelidos || '',
+        category: p.categoria || '',
+        stock: p.estoque !== undefined ? Number(p.estoque) : undefined,
+        price: p.preco_unitario !== undefined ? Number(p.preco_unitario) : undefined,
       }))
       setProducts(mappedProds)
 
@@ -293,7 +293,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const items = pItens.map((pi) => {
           const prod = mappedProds.find((p) => p.id === pi.produto_id)
           const prodName = pi.expand?.produto_id?.nome || prod?.name || 'Produto'
-          const preco = Number(pi.preco_unitario) || prod?.price || 0
+          const preco = Number(pi.preco_unitario) || Number(prod?.price) || 0
           const qtd = Number(pi.quantidade) || 0
           total += preco * qtd
           return {
@@ -653,15 +653,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
           copy[existingIdx] = {
             ...copy[existingIdx],
             name: p.nome !== undefined ? p.nome : copy[existingIdx].name,
-            category: p.categoria !== undefined ? p.categoria : copy[existingIdx].category,
-            stock: p.estoque !== undefined ? Number(p.estoque) : copy[existingIdx].stock,
             unit: p.unidade !== undefined ? p.unidade : copy[existingIdx].unit,
-            price:
-              p.preco_unitario !== undefined ? Number(p.preco_unitario) : copy[existingIdx].price,
+            apelidos: p.apelidos !== undefined ? p.apelidos : copy[existingIdx].apelidos,
             disponibilidade:
               p.disponibilidade !== undefined
                 ? p.disponibilidade
                 : copy[existingIdx].disponibilidade,
+            category: p.categoria !== undefined ? p.categoria : copy[existingIdx].category,
+            stock: p.estoque !== undefined ? Number(p.estoque) : copy[existingIdx].stock,
+            price:
+              p.preco_unitario !== undefined ? Number(p.preco_unitario) : copy[existingIdx].price,
           }
           return copy
         }
@@ -669,11 +670,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const item: Product = {
           id: p.id,
           name: p.nome,
-          category: p.categoria,
-          stock: Number(p.estoque) || 0,
           unit: p.unidade,
-          price: Number(p.preco_unitario) || 0,
           disponibilidade: p.disponibilidade || 'normal',
+          apelidos: p.apelidos || '',
+          category: p.categoria || '',
+          stock: p.estoque !== undefined ? Number(p.estoque) : undefined,
+          price: p.preco_unitario !== undefined ? Number(p.preco_unitario) : undefined,
         }
         return [...prev, item]
       })
@@ -1150,23 +1152,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const prevOrders = [...orders]
     const prevProducts = [...products]
 
-    // Optimistic update: marca pedido como entregue e baixa estoque na UI
+    // Optimistic update: marca pedido como entregue na UI
     setOrders((prev) =>
       prev.map((o) =>
         o.id === id ? { ...o, status: 'Entregue', entregue_em: nowIso, entregue_por: userId } : o,
       ),
     )
-
-    const itensToDec = targetOrder.items.filter((i) => i.productId && i.quantity > 0)
-    if (itensToDec.length > 0) {
-      setProducts((prev) =>
-        prev.map((p) => {
-          const matchItem = itensToDec.find((it) => it.productId === p.id)
-          if (!matchItem) return p
-          return { ...p, stock: Math.max(0, p.stock - matchItem.quantity) }
-        }),
-      )
-    }
 
     try {
       // 1. Atualizar pedido para Entregue
@@ -1175,18 +1166,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         entregue_por: userId || undefined,
       })
 
-      // 2. Dar baixa no estoque no banco
-      for (const item of targetOrder.items) {
-        if (item.productId && item.quantity > 0) {
-          try {
-            await produtosService.decrementarEstoque(item.productId, item.quantity)
-          } catch (stkErr) {
-            console.error(`Erro ao baixar estoque do produto ${item.productId}:`, stkErr)
-          }
-        }
-      }
-
-      toast.success(`Pedido ${targetOrder.numero} entregue com sucesso! Estoque atualizado.`)
+      toast.success(`Pedido ${targetOrder.numero} entregue com sucesso!`)
       return true
     } catch (err: any) {
       console.error('Erro ao confirmar entrega do pedido:', err)
@@ -1400,49 +1380,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
       ),
     )
 
-    // Optimistic Update: estoque dos produtos dos pedidos da rota
-    const estoqueBaixasLocal = new Map<string, number>()
-    for (const ped of pedidosEmRota) {
-      for (const it of ped.items) {
-        if (it.productId && it.quantity > 0) {
-          estoqueBaixasLocal.set(
-            it.productId,
-            (estoqueBaixasLocal.get(it.productId) || 0) + it.quantity,
-          )
-        }
-      }
-    }
-
-    if (estoqueBaixasLocal.size > 0) {
-      setProducts((prev) =>
-        prev.map((p) => {
-          const qtd = estoqueBaixasLocal.get(p.id)
-          if (!qtd) return p
-          return { ...p, stock: Math.max(0, p.stock - qtd) }
-        }),
-      )
-    }
-
     try {
-      const res = await rotasLogisticasService.entregarRotaBatch({
+      await rotasLogisticasService.entregarRotaBatch({
         rota_logistica_id: rotaLogisticaId,
         user_id: userId,
       })
 
-      // Se o backend retornou produtos atualizados com precisão
-      if (res.produtos && res.produtos.length > 0) {
-        const prodMap = new Map(res.produtos.map((pr: any) => [pr.id, pr]))
-        setProducts((prev) =>
-          prev.map((p) => {
-            const up = prodMap.get(p.id)
-            return up ? { ...p, stock: Number(up.estoque) || 0 } : p
-          }),
-        )
-      }
-
-      toast.success(
-        `Rota confirmada como entregue! ${pedidosEmRota.length} pedido(s) finalizados e estoque baixado.`,
-      )
+      toast.success(`Rota confirmada como entregue! ${pedidosEmRota.length} pedido(s) finalizados.`)
       return true
     } catch (err: any) {
       console.error('Erro ao confirmar entrega da rota inteira:', err)

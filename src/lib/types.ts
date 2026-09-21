@@ -1,12 +1,12 @@
 export interface ProdutoRecord {
   id: string
   nome: string
-  categoria: string
   unidade: string
-  estoque: number
-  preco_unitario: number
   disponibilidade?: 'normal' | 'escassez' | 'abundancia'
   apelidos?: string
+  categoria?: string
+  estoque?: number
+  preco_unitario?: number
   created?: string
   updated?: string
 }
@@ -248,12 +248,12 @@ export interface ImportacaoRecord {
 export interface Product {
   id: string
   name: string
-  category: string
-  stock: number
   unit: string
-  price: number
   disponibilidade: 'normal' | 'escassez' | 'abundancia'
   apelidos?: string
+  category?: string
+  stock?: number
+  price?: number
 }
 
 export interface School {
