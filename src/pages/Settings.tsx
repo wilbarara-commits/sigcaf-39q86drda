@@ -32,8 +32,10 @@ import {
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { toast } from 'sonner'
+import { useApp } from '@/context/app-context'
 
 export default function SettingsPage() {
+  const { refreshData } = useApp()
   const [config, setConfig] = useState<ConfiguracoesRecord | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
@@ -43,6 +45,7 @@ export default function SettingsPage() {
     'CooperGestão — Cooperativa Agrícola Familiar',
   )
   const [sigla, setSigla] = useState('COOPGESTÃO')
+  const [subtituloSistema, setSubtituloSistema] = useState('')
   const [cnpj, setCnpj] = useState('')
   const [telefone, setTelefone] = useState('')
   const [email, setEmail] = useState('')
@@ -61,6 +64,7 @@ export default function SettingsPage() {
           setConfig(data)
           setNomeCooperativa(data.nome_cooperativa || '')
           setSigla(data.sigla || '')
+          setSubtituloSistema(data.subtitulo_sistema || '')
           setCnpj(data.cnpj || '')
           setTelefone(data.telefone || '')
           setEmail(data.email || '')
@@ -99,6 +103,7 @@ export default function SettingsPage() {
         const formData = new FormData()
         formData.append('nome_cooperativa', nomeCooperativa.trim())
         formData.append('sigla', sigla.trim())
+        formData.append('subtitulo_sistema', subtituloSistema.trim())
         formData.append('cnpj', cnpj.trim())
         formData.append('telefone', telefone.trim())
         formData.append('email', email.trim())
@@ -111,6 +116,7 @@ export default function SettingsPage() {
         const formData = new FormData()
         formData.append('nome_cooperativa', nomeCooperativa.trim())
         formData.append('sigla', sigla.trim())
+        formData.append('subtitulo_sistema', subtituloSistema.trim())
         formData.append('cnpj', cnpj.trim())
         formData.append('telefone', telefone.trim())
         formData.append('email', email.trim())
@@ -123,6 +129,7 @@ export default function SettingsPage() {
           {
             nome_cooperativa: nomeCooperativa.trim(),
             sigla: sigla.trim(),
+            subtitulo_sistema: subtituloSistema.trim(),
             cnpj: cnpj.trim(),
             telefone: telefone.trim(),
             email: email.trim(),
@@ -138,6 +145,7 @@ export default function SettingsPage() {
       setLogoPreview(newUrl || null)
       setLogoFile(null)
       setLogoRemoved(false)
+      await refreshData()
       toast.success('Configurações e logotipo da cooperativa salvos com sucesso!')
     } catch (err: any) {
       console.error('Erro detalhado ao salvar configurações:', err)
@@ -257,6 +265,20 @@ export default function SettingsPage() {
                   placeholder="Ex: COOPGESTÃO"
                 />
               </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="subtituloSistema">Subtítulo do Sistema (opcional)</Label>
+              <Input
+                id="subtituloSistema"
+                value={subtituloSistema}
+                onChange={(e) => setSubtituloSistema(e.target.value)}
+                placeholder="Ex: CooperGestão (padrão)"
+              />
+              <p className="text-xs text-muted-foreground">
+                Texto exibido abaixo da sigla no topo do menu lateral (desktop) e no menu gaveta
+                (mobile). Se não informado, o sistema utilizará o padrão &quot;CooperGestão&quot;.
+              </p>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

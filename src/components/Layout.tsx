@@ -84,6 +84,7 @@ export default function Layout() {
   const [changePasswordOpen, setChangePasswordOpen] = useState(false)
 
   const coopNomeExibicao = config?.sigla || config?.nome_cooperativa || 'CoopGestão'
+  const coopSubtitulo = config?.subtitulo_sistema || 'CooperGestão'
   const temLogoValido = Boolean(logoUrl && !logoError)
 
   const handleLogout = () => {
@@ -166,7 +167,7 @@ export default function Layout() {
                   {coopNomeExibicao}
                 </span>
                 <span className="text-[10px] text-muted-foreground uppercase font-medium tracking-wider">
-                  CooperGestão
+                  {coopSubtitulo}
                 </span>
               </div>
             </div>
@@ -268,7 +269,7 @@ export default function Layout() {
                             {coopNomeExibicao}
                           </span>
                           <span className="text-[10px] text-muted-foreground uppercase font-medium tracking-wider">
-                            CooperGestão
+                            {coopSubtitulo}
                           </span>
                         </div>
                       </div>

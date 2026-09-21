@@ -372,6 +372,7 @@ export interface ConfiguracoesRecord {
   id: string
   nome_cooperativa: string
   sigla?: string
+  subtitulo_sistema?: string
   cnpj?: string
   telefone?: string
   email?: string
