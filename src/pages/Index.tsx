@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import { useApp } from '@/context/app-context'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -6,24 +7,175 @@ import {
   ShoppingCart,
   FileText,
   Truck,
-  DollarSign,
-  ArrowRight,
   CheckCircle2,
+  ArrowRight,
   Clock,
   School,
   Sprout,
   Loader2,
+  PackageCheck,
 } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { MonthlyReportButton } from '@/components/MonthlyReportButton'
 
 export default function Index() {
-  const { orders, contracts, atestos, isLoading } = useApp()
+  const { orders, contracts, contractItems, contractSchools, atestos, isLoading } = useApp()
 
   const pendingOrders = orders.filter((o) => o.status === 'Pendente').length
   const deliveriesToday = orders.filter((o) => o.status === 'Em Rota').length
   const activeContracts = contracts.filter((c) => c.status === 'Ativo').length
-  const totalRevenue = contracts.reduce((acc, c) => acc + c.totalValue, 0)
+
+  // Preço unitário do contrato: mapeia escola -> contrato_id -> itens de contrato
+  const { receitaEntregueMes, receitaTotalMes, percentEntregue, currentMonthName } = useMemo(() => {
+    const now = new Date()
+    const currentYear = now.getFullYear()
+    const currentMonth = now.getMonth() // 0-indexed
+
+    const monthNames = [
+      'Janeiro',
+      'Fevereiro',
+      'Março',
+      'Abril',
+      'Maio',
+      'Junho',
+      'Julho',
+      'Agosto',
+      'Setembro',
+      'Outubro',
+      'Novembro',
+      'Dezembro',
+    ]
+    const curMonthName = `${monthNames[currentMonth]} de ${currentYear}`
+
+    // Mapeamento rápido de escolaId -> contratoId
+    const escolaToContractId = new Map<string, string>()
+    if (contractSchools && contractSchools.length > 0) {
+      for (const cs of contractSchools) {
+        if (cs.escola_id && cs.contrato_id) {
+          escolaToContractId.set(cs.escola_id, cs.contrato_id)
+        }
+      }
+    } else if (contracts && contracts.length > 0) {
+      for (const c of contracts) {
+        if (c.escolas) {
+          for (const esc of c.escolas) {
+            if (esc.escolaId) {
+              escolaToContractId.set(esc.escolaId, c.id)
+            }
+          }
+        }
+      }
+    }
+
+    // Mapa de preço por (contrato_id, produto_id) e fallback por produto_id
+    const contractProductPriceMap = new Map<string, number>()
+    const fallbackProductPriceMap = new Map<string, number>()
+    if (contractItems && contractItems.length > 0) {
+      for (const ci of contractItems) {
+        const preco = Number(ci.preco) || 0
+        if (preco > 0) {
+          if (ci.contrato_id && ci.produto_id) {
+            contractProductPriceMap.set(`${ci.contrato_id}:${ci.produto_id}`, preco)
+          }
+          if (ci.produto_id && !fallbackProductPriceMap.has(ci.produto_id)) {
+            fallbackProductPriceMap.set(ci.produto_id, preco)
+          }
+        }
+      }
+    }
+
+    // Função para calcular a receita de um pedido com base nos itens de contrato
+    const calcularReceitaPedido = (order: (typeof orders)[0]): number => {
+      if (!order.items || order.items.length === 0) {
+        return Number(order.total) || 0
+      }
+
+      const contratoId = escolaToContractId.get(order.schoolId)
+      let pedidoTotalCalculado = 0
+      let calculouPorContrato = false
+
+      for (const item of order.items) {
+        const qtd = Number(item.quantity) || 0
+        if (qtd <= 0) continue
+
+        let preco = 0
+        if (contratoId) {
+          preco = contractProductPriceMap.get(`${contratoId}:${item.productId}`) || 0
+        }
+        if (!preco) {
+          preco = fallbackProductPriceMap.get(item.productId) || 0
+        }
+        if (!preco) {
+          preco = Number(item.price) || 0
+        }
+
+        if (preco > 0) {
+          calculouPorContrato = true
+        }
+        pedidoTotalCalculado += qtd * preco
+      }
+
+      // Se nenhum item encontrou preço no contrato nem no item, usa o total gravado no pedido (se houver)
+      if (!calculouPorContrato && pedidoTotalCalculado === 0 && Number(order.total) > 0) {
+        return Number(order.total)
+      }
+
+      return pedidoTotalCalculado
+    }
+
+    // Filtrar pedidos cujo mês e ano correspondam ao mês corrente
+    // Não consideramos pedidos com status "Cancelado" na receita
+    let entregueTotal = 0
+    let geralMesTotal = 0
+
+    for (const order of orders) {
+      if (order.status === 'Cancelado') continue
+
+      // Extrair data do pedido (ou entregue_em se entregue)
+      const rawDateStr =
+        (order.status === 'Entregue' && order.entregue_em ? order.entregue_em : null) ||
+        order.date ||
+        ''
+      if (!rawDateStr) continue
+
+      const orderDate = new Date(rawDateStr)
+      if (isNaN(orderDate.getTime())) continue
+
+      const isInCurrentMonth =
+        orderDate.getFullYear() === currentYear && orderDate.getMonth() === currentMonth
+
+      if (!isInCurrentMonth) continue
+
+      const valorPedido = calcularReceitaPedido(order)
+      geralMesTotal += valorPedido
+
+      if (order.status === 'Entregue') {
+        entregueTotal += valorPedido
+      }
+    }
+
+    const pct = geralMesTotal > 0 ? (entregueTotal / geralMesTotal) * 100 : 0
+
+    return {
+      receitaEntregueMes: entregueTotal,
+      receitaTotalMes: geralMesTotal,
+      percentEntregue: pct,
+      currentMonthName: curMonthName,
+    }
+  }, [orders, contracts, contractItems, contractSchools])
+
+  const formattedReceitaEntregue = receitaEntregueMes.toLocaleString('pt-BR', {
+    style: 'currency',
+    currency: 'BRL',
+  })
+  const formattedReceitaTotal = receitaTotalMes.toLocaleString('pt-BR', {
+    style: 'currency',
+    currency: 'BRL',
+  })
+  const formattedPercent = `${percentEntregue.toLocaleString('pt-BR', {
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 1,
+  })}%`
 
   const metrics = [
     {
@@ -48,11 +200,13 @@ export default function Index() {
       bg: 'bg-blue-500/10',
     },
     {
-      title: 'Receita Total (Mês)',
-      value: `R$ ${(totalRevenue / 12).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-      icon: DollarSign,
-      color: 'text-green-600',
-      bg: 'bg-green-600/10',
+      title: 'Receita Entregue do Mês',
+      value: formattedReceitaEntregue,
+      subtext: `${formattedPercent} do total do mês (${formattedReceitaTotal})`,
+      badge: formattedPercent,
+      icon: PackageCheck,
+      color: 'text-emerald-600',
+      bg: 'bg-emerald-600/10',
     },
   ]
 
@@ -119,7 +273,24 @@ export default function Index() {
                   <Loader2 className="h-4 w-4 animate-spin" /> Carregando...
                 </div>
               ) : (
-                <div className="text-2xl font-bold">{m.value}</div>
+                <div className="space-y-1">
+                  <div className="flex items-baseline justify-between gap-2">
+                    <span className="text-2xl font-bold">{m.value}</span>
+                    {m.badge && (
+                      <Badge
+                        variant="secondary"
+                        className="bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 font-semibold text-xs px-2 py-0.5"
+                      >
+                        {m.badge}
+                      </Badge>
+                    )}
+                  </div>
+                  {m.subtext && (
+                    <p className="text-xs text-muted-foreground line-clamp-1" title={m.subtext}>
+                      {m.subtext}
+                    </p>
+                  )}
+                </div>
               )}
             </CardContent>
           </Card>
