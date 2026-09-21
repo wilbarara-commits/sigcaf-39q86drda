@@ -460,7 +460,7 @@ export async function renderAtestoPageToDoc(
   doc.text(nomeEscola.toUpperCase(), sigX, textY, { align: 'center' })
 
   // 6. RODAPÉ DO DOCUMENTO PARA CONTRATO CENTRALIZADO:
-  // No rodapé do atesto, apenas os valores separados por traços (sem rótulos), ex.: "01/2026 - ROTA A - 7"
+  // No rodapé do atesto, apenas os valores separados por traços (sem rótulos), ex.: "38/2026 - ROTA A - 7"
   const hasParada =
     data.numeroParada !== undefined &&
     data.numeroParada !== null &&
@@ -471,7 +471,10 @@ export async function renderAtestoPageToDoc(
   if (data.isCentralizado && (hasCiclo || hasRota || hasParada)) {
     const rodapeParts: string[] = []
     if (hasCiclo) {
-      rodapeParts.push(data.cicloNome!.trim())
+      const rawCiclo = data.cicloNome!.trim()
+      // Se vier "Ciclo 38/2026 - Teste Operacional" ou "Ciclo 38/2026", extrair o código numérico "38/2026"
+      const matchCodigo = rawCiclo.match(/(\d{1,2}\/\d{4})/)
+      rodapeParts.push(matchCodigo ? matchCodigo[1] : rawCiclo)
     }
     if (hasRota) {
       rodapeParts.push(data.rotaNome!.trim())

@@ -32,8 +32,15 @@ import {
   Clock,
   Eye,
   BarChart2,
+  Truck,
 } from 'lucide-react'
 import type { CicloRecord } from '@/lib/types'
+import {
+  formatDespachoAmigavel,
+  formatIntervaloCiclo,
+  calcularCicloSemanal,
+  getDespachoPrevistoCiclo,
+} from '@/lib/cicloUtils'
 
 export default function CycleHistory() {
   const { ciclos, orders, products, schools } = useApp()
@@ -225,9 +232,10 @@ export default function CycleHistory() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Ciclo</TableHead>
-                  <TableHead>Período</TableHead>
+                  <TableHead>Período (Qua → Ter)</TableHead>
+                  <TableHead>Despacho Previsto</TableHead>
                   <TableHead>Fase / Status</TableHead>
-                  <TableHead className="text-center">Escolas Atendidas</TableHead>
+                  <TableHead className="text-center">Escolas</TableHead>
                   <TableHead className="text-center">Pedidos</TableHead>
                   <TableHead className="text-right">Volume Consolidado</TableHead>
                   <TableHead className="text-right">Valor Total</TableHead>
@@ -237,7 +245,7 @@ export default function CycleHistory() {
               <TableBody>
                 {filteredCiclos.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
                       Nenhum ciclo encontrado com os filtros aplicados.
                     </TableCell>
                   </TableRow>
@@ -259,12 +267,21 @@ export default function CycleHistory() {
                         <Badge variant="secondary">Fechado</Badge>
                       )
 
+                    const despachoDate = c.snapshot?.despacho_previsto_segunda
+                      ? new Date(c.snapshot.despacho_previsto_segunda)
+                      : getDespachoPrevistoCiclo(c.data_inicio)
+
                     return (
                       <TableRow key={c.id}>
                         <TableCell className="font-semibold text-primary">{c.nome}</TableCell>
                         <TableCell className="text-xs">
-                          {new Date(c.data_inicio).toLocaleDateString('pt-BR')} a{' '}
-                          {new Date(c.data_fim).toLocaleDateString('pt-BR')}
+                          {formatIntervaloCiclo(c.data_inicio, c.data_fim)}
+                        </TableCell>
+                        <TableCell className="text-xs">
+                          <span className="inline-flex items-center gap-1 font-medium text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded border border-emerald-200 dark:border-emerald-800">
+                            <Truck className="h-3 w-3" />
+                            {formatDespachoAmigavel(despachoDate)}
+                          </span>
                         </TableCell>
                         <TableCell>{statusBadge}</TableCell>
                         <TableCell className="text-center font-medium">{st.escolasCount}</TableCell>
@@ -306,9 +323,16 @@ export default function CycleHistory() {
             <DialogTitle>{selectedCiclo?.nome}</DialogTitle>
             <DialogDescription>
               Período de{' '}
-              {selectedCiclo && new Date(selectedCiclo.data_inicio).toLocaleDateString('pt-BR')} a{' '}
-              {selectedCiclo && new Date(selectedCiclo.data_fim).toLocaleDateString('pt-BR')} •
-              Status: {selectedCiclo?.status}
+              {selectedCiclo &&
+                formatIntervaloCiclo(selectedCiclo.data_inicio, selectedCiclo.data_fim)}{' '}
+              • Despacho previsto:{' '}
+              {selectedCiclo &&
+                formatDespachoAmigavel(
+                  selectedCiclo.snapshot?.despacho_previsto_segunda ||
+                    getDespachoPrevistoCiclo(selectedCiclo.data_inicio),
+                  true,
+                )}{' '}
+              • Status: {selectedCiclo?.status}
             </DialogDescription>
           </DialogHeader>
 

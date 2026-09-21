@@ -2064,8 +2064,19 @@ export default function ExcelImport() {
                 <div>
                   <span className="text-[11px] text-muted-foreground block">Ciclo & Contrato:</span>
                   <span className="text-foreground">
-                    Ciclo: <strong>{activeCiclo?.nome || '—'}</strong> | Contrato:{' '}
-                    <strong>{selectedContract?.numero || '—'}</strong>
+                    Ciclo: <strong>{activeCiclo?.nome || '—'}</strong>
+                    {activeCiclo && (
+                      <span className="text-muted-foreground ml-1">
+                        ({new Date(activeCiclo.data_inicio).toLocaleDateString('pt-BR')} a{' '}
+                        {new Date(activeCiclo.data_fim).toLocaleDateString('pt-BR')} — Despacho: seg{' '}
+                        {new Date(
+                          activeCiclo.snapshot?.despacho_previsto_segunda ||
+                            new Date(new Date(activeCiclo.data_inicio).getTime() + 5 * 86400000),
+                        ).toLocaleDateString('pt-BR')}
+                        )
+                      </span>
+                    )}{' '}
+                    | Contrato: <strong>{selectedContract?.numero || '—'}</strong>
                   </span>
                 </div>
               </div>

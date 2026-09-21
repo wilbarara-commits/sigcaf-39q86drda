@@ -141,6 +141,7 @@ interface AppState {
     data_inicio: string
     data_fim: string
     status: 'coletando' | 'correcao' | 'fechado'
+    snapshot?: any
   }) => Promise<CicloRecord | null>
 }
 
@@ -2130,6 +2131,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     data_inicio: string
     data_fim: string
     status: 'coletando' | 'correcao' | 'fechado'
+    snapshot?: any
   }): Promise<CicloRecord | null> => {
     const tempId = `temp-ciclo-${Date.now()}`
     const tempCiclo: CicloRecord = {
@@ -2138,6 +2140,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       data_inicio: data.data_inicio,
       data_fim: data.data_fim,
       status: data.status,
+      snapshot: data.snapshot,
       created: new Date().toISOString(),
       updated: new Date().toISOString(),
     }

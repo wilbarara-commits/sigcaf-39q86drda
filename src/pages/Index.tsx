@@ -14,12 +14,14 @@ import {
   Sprout,
   Loader2,
   PackageCheck,
+  Calendar,
 } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { MonthlyReportButton } from '@/components/MonthlyReportButton'
 
 export default function Index() {
-  const { orders, contracts, contractItems, contractSchools, atestos, isLoading } = useApp()
+  const { orders, contracts, contractItems, contractSchools, atestos, activeCiclo, isLoading } =
+    useApp()
 
   const pendingOrders = orders.filter((o) => o.status === 'Pendente').length
   const deliveriesToday = orders.filter((o) => o.status === 'Em Rota').length
@@ -296,6 +298,51 @@ export default function Index() {
           </Card>
         ))}
       </div>
+
+      {/* Faixa Informativa do Ciclo Operacional Ativo (Regra Semanal Quarta->Terça com Despacho na Segunda) */}
+      {activeCiclo && (
+        <Card className="border-l-4 border-l-primary bg-primary/5 dark:bg-primary/10">
+          <CardContent className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <Calendar className="h-4 w-4 text-primary" />
+                <span className="font-semibold text-sm text-foreground">{activeCiclo.nome}</span>
+                <Badge
+                  variant="outline"
+                  className="text-[11px] capitalize border-primary/30 text-primary bg-background"
+                >
+                  Fase: {activeCiclo.status}
+                </Badge>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Semana do ciclo:{' '}
+                <strong>
+                  quarta-feira ({new Date(activeCiclo.data_inicio).toLocaleDateString('pt-BR')})
+                </strong>{' '}
+                a{' '}
+                <strong>
+                  terça-feira ({new Date(activeCiclo.data_fim).toLocaleDateString('pt-BR')})
+                </strong>
+              </p>
+            </div>
+            <div className="flex items-center gap-2 bg-background dark:bg-card px-3 py-1.5 rounded-md border text-xs shadow-sm">
+              <Truck className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+              <div>
+                <span className="text-muted-foreground block text-[10px]">
+                  Previsão de Despacho em Rota
+                </span>
+                <strong className="text-emerald-700 dark:text-emerald-400 font-semibold">
+                  Segunda-feira,{' '}
+                  {new Date(
+                    activeCiclo.snapshot?.despacho_previsto_segunda ||
+                      new Date(new Date(activeCiclo.data_inicio).getTime() + 5 * 86400000),
+                  ).toLocaleDateString('pt-BR')}
+                </strong>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         <Card className="lg:col-span-2">

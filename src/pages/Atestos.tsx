@@ -39,7 +39,13 @@ import { toast } from 'sonner'
 import pb from '@/lib/pocketbase/client'
 import { configuracoesService } from '@/services/configuracoes'
 import { atestosService } from '@/services/atestos'
-import type { ConfiguracoesRecord, Order, Atesto, RotaLogisticaRecord } from '@/lib/types'
+import type {
+  ConfiguracoesRecord,
+  Order,
+  Atesto,
+  RotaLogisticaRecord,
+  ContratoItemRecord,
+} from '@/lib/types'
 import {
   createOfficialAtestoPdf,
   createBatchAtestosPdf,
@@ -1209,17 +1215,17 @@ export default function Atestos() {
                 <div className="p-6 space-y-4">
                   {/* Documento A4 Estilizado */}
                   <DocumentoOficialView
-                    order={previewOrder}
+                    order={orderForEmission}
                     config={config}
                     logoUrl={logoUrl}
-                    numeroChamada={previewDocData.numeroChamada}
-                    numeroAtesto={previewDocData.numeroAtesto}
-                    dataEmissao={previewDocData.dataEmissao}
-                    isCentralizado={previewDocData.isCentralizado}
-                    cicloNome={previewDocData.cicloNome}
-                    rotaNome={previewDocData.rotaNome}
-                    numeroParada={previewDocData.numeroParada}
-                    itemsOverride={previewDocData.items}
+                    numeroChamada={docDataPreview.numeroChamada}
+                    numeroAtesto={docDataPreview.numeroAtesto}
+                    dataEmissao={docDataPreview.dataEmissao}
+                    isCentralizado={docDataPreview.isCentralizado}
+                    cicloNome={docDataPreview.cicloNome}
+                    rotaNome={docDataPreview.rotaNome}
+                    numeroParada={docDataPreview.numeroParada}
+                    itemsOverride={docDataPreview.items}
                   />
                   {/* Ações do Modal */}
                   <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-4 border-t">
@@ -1858,7 +1864,11 @@ function DocumentoOficialView({
           return null
         }
         const rodapeParts: string[] = []
-        if (hasCiclo) rodapeParts.push(cicloNome!.trim())
+        if (hasCiclo) {
+          const rawCiclo = cicloNome!.trim()
+          const matchCodigo = rawCiclo.match(/(\d{1,2}\/\d{4})/)
+          rodapeParts.push(matchCodigo ? matchCodigo[1] : rawCiclo)
+        }
         if (hasRota) rodapeParts.push(rotaNome!.trim())
         if (hasParada) rodapeParts.push(String(numeroParada).trim())
 

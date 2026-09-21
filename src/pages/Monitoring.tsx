@@ -111,8 +111,26 @@ export default function Monitoring() {
               </CardTitle>
               <CardDescription>
                 Ciclo Atual:{' '}
-                <strong className="text-foreground">{activeCiclo?.nome || 'Nenhum'}</strong> • Fluxo
-                Operacional: <em>Coletando → Correção → Fechado</em>
+                <strong className="text-foreground">{activeCiclo?.nome || 'Nenhum'}</strong>
+                {activeCiclo && (
+                  <>
+                    {' '}
+                    • Período:{' '}
+                    <span className="font-medium text-foreground">
+                      {new Date(activeCiclo.data_inicio).toLocaleDateString('pt-BR')} (Qua) a{' '}
+                      {new Date(activeCiclo.data_fim).toLocaleDateString('pt-BR')} (Ter)
+                    </span>{' '}
+                    • Despacho em rota previsto para{' '}
+                    <span className="inline-flex items-center font-semibold text-emerald-700 dark:text-emerald-400">
+                      Segunda-feira,{' '}
+                      {new Date(
+                        activeCiclo.snapshot?.despacho_previsto_segunda ||
+                          new Date(new Date(activeCiclo.data_inicio).getTime() + 5 * 86400000),
+                      ).toLocaleDateString('pt-BR')}
+                    </span>
+                  </>
+                )}{' '}
+                • Fluxo Operacional: <em>Coletando → Correção → Fechado</em>
               </CardDescription>
             </div>
             <Badge

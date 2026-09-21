@@ -454,6 +454,20 @@ export default function Orders() {
                 Ciclo Ativo:{' '}
                 <strong className="text-foreground">{activeCiclo?.nome || 'Nenhum'}</strong> (
                 {activeCiclo?.status || '-'})
+                {activeCiclo && (
+                  <>
+                    {' '}
+                    • {new Date(activeCiclo.data_inicio).toLocaleDateString('pt-BR')} a{' '}
+                    {new Date(activeCiclo.data_fim).toLocaleDateString('pt-BR')} • Despacho:{' '}
+                    <span className="font-semibold text-emerald-600 dark:text-emerald-400">
+                      Seg{' '}
+                      {new Date(
+                        activeCiclo.snapshot?.despacho_previsto_segunda ||
+                          new Date(new Date(activeCiclo.data_inicio).getTime() + 5 * 86400000),
+                      ).toLocaleDateString('pt-BR')}
+                    </span>
+                  </>
+                )}
               </DialogDescription>
             </DialogHeader>
 
