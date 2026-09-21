@@ -2,7 +2,6 @@ export interface ProdutoRecord {
   id: string
   nome: string
   unidade: string
-  apelidos?: string
   disponibilidade?: 'normal' | 'escassez' | 'abundancia'
   categoria?: string
   estoque?: number
@@ -253,7 +252,6 @@ export interface Product {
   id: string
   name: string
   unit: string
-  apelidos?: string
   disponibilidade?: 'normal' | 'escassez' | 'abundancia'
   category?: string
   stock?: number

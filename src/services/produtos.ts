@@ -104,21 +104,9 @@ export const produtosService = {
     const target = norm(nome)
     if (!target) return null
 
-    // 1. Match pelo nome oficial
+    // Match pelo nome oficial
     const exactName = all.find((p) => norm(p.nome) === target)
     if (exactName) return exactName
-
-    // 2. Match por apelidos
-    for (const p of all) {
-      if (!p.apelidos) continue
-      const aliases = p.apelidos
-        .split(/[,;]/)
-        .map((a) => norm(a))
-        .filter(Boolean)
-      if (aliases.includes(target)) {
-        return p
-      }
-    }
 
     return null
   },

@@ -34,38 +34,30 @@ export default function Products() {
   const [importDialogOpen, setImportDialogOpen] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
-  // Estados de edição de produto (unidade e apelidos)
+  // Estados de edição de produto (unidade)
   const [editDialogOpen, setEditDialogOpen] = useState(false)
   const [editingProduct, setEditingProduct] = useState<any>(null)
   const [editUnidade, setEditUnidade] = useState(DEFAULT_PRODUCT_UNIT)
-  const [editApelidos, setEditApelidos] = useState('')
 
   // Estado de criação de novo produto
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
   const [newNome, setNewNome] = useState('')
   const [newUnidade, setNewUnidade] = useState(DEFAULT_PRODUCT_UNIT)
-  const [newApelidos, setNewApelidos] = useState('')
 
   const filteredProducts = products.filter((p) => {
     const term = search.toLowerCase()
-    return (
-      !term ||
-      p.name.toLowerCase().includes(term) ||
-      (p.apelidos && p.apelidos.toLowerCase().includes(term))
-    )
+    return !term || p.name.toLowerCase().includes(term)
   })
 
   const handleOpenEdit = (p: any) => {
     setEditingProduct(p)
     setEditUnidade(p.unit || DEFAULT_PRODUCT_UNIT)
-    setEditApelidos(p.apelidos || '')
     setEditDialogOpen(true)
   }
 
   const handleOpenCreate = () => {
     setNewNome('')
     setNewUnidade(DEFAULT_PRODUCT_UNIT)
-    setNewApelidos('')
     setCreateDialogOpen(true)
   }
 
@@ -78,7 +70,6 @@ export default function Products() {
     try {
       await produtosService.update(editingProduct.id, {
         unidade: trimmedUnidade,
-        apelidos: editApelidos.trim(),
       })
       toast.success(`Produto "${editingProduct.name}" atualizado com sucesso!`)
       setEditDialogOpen(false)
@@ -103,7 +94,6 @@ export default function Products() {
       await produtosService.create({
         nome: trimmedNome,
         unidade: newUnidade.trim() || DEFAULT_PRODUCT_UNIT,
-        apelidos: newApelidos.trim(),
       })
       toast.success(`Produto "${trimmedNome}" cadastrado com sucesso!`)
       setCreateDialogOpen(false)
@@ -185,19 +175,7 @@ export default function Products() {
                   filteredProducts.map((product) => (
                     <TableRow key={product.id}>
                       <TableCell className="font-medium">
-                        <div>
-                          <span>{product.name}</span>
-                          {product.apelidos && (
-                            <div className="text-[11px] text-muted-foreground flex items-center gap-1 mt-0.5">
-                              <span className="font-semibold text-[10px] uppercase tracking-wider text-primary/80">
-                                AKA:
-                              </span>
-                              <span className="truncate max-w-[280px]" title={product.apelidos}>
-                                {product.apelidos}
-                              </span>
-                            </div>
-                          )}
-                        </div>
+                        <span>{product.name}</span>
                       </TableCell>
                       <TableCell>{product.unit}</TableCell>
                       {isAdmin && (
@@ -226,9 +204,7 @@ export default function Products() {
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>Editar Produto: {editingProduct?.name}</DialogTitle>
-            <DialogDescription>
-              Ajuste a unidade de medida e os nomes alternativos deste produto.
-            </DialogDescription>
+            <DialogDescription>Ajuste a unidade de medida deste produto.</DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4 pt-2">
@@ -244,25 +220,6 @@ export default function Products() {
                 placeholder="Ex: kg, Dúzia, dz, Maço..."
                 className="w-full h-9"
               />
-            </div>
-
-            <div className="space-y-1.5 pt-1">
-              <Label htmlFor="edit-apelidos" className="text-sm font-semibold">
-                Nomes Alternativos (AKA — "Also Known As")
-              </Label>
-              <Input
-                id="edit-apelidos"
-                type="text"
-                value={editApelidos}
-                onChange={(e) => setEditApelidos(e.target.value)}
-                placeholder="Ex: TANGERINA PONCÃ; TANGERINA PONKAN; MEXERICA"
-                className="w-full h-9 text-xs"
-              />
-              <p className="text-[11px] text-muted-foreground">
-                Separe os apelidos por vírgula ou ponto-e-vírgula. Nomes na planilha de pedidos ou
-                no contrato que coincidirem com esses apelidos casarão automaticamente com este
-                produto.
-              </p>
             </div>
           </div>
 
@@ -325,24 +282,6 @@ export default function Products() {
                 placeholder="Ex: kg, Dúzia..."
                 className="w-full h-9"
               />
-            </div>
-
-            <div className="space-y-1.5 pt-1">
-              <Label htmlFor="new-apelidos" className="text-sm font-semibold">
-                Nomes Alternativos (AKA — "Also Known As")
-              </Label>
-              <Input
-                id="new-apelidos"
-                type="text"
-                value={newApelidos}
-                onChange={(e) => setNewApelidos(e.target.value)}
-                placeholder="Ex: TANGERINA PONCÃ; TANGERINA PONKAN; MEXERICA"
-                className="w-full h-9 text-xs"
-              />
-              <p className="text-[11px] text-muted-foreground">
-                Separe os apelidos por vírgula ou ponto-e-vírgula. Usado nas importações de
-                planilhas.
-              </p>
             </div>
           </div>
 

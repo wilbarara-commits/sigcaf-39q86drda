@@ -240,8 +240,6 @@ export async function parseProductsInput(
   // Mapear produtos cadastrados existentes no banco por nome normalizado
   const masterByNorm = new Map<string, Product>()
   const masterByDePlural = new Map<string, Product>()
-  const masterByAlias = new Map<string, Array<{ product: Product; alias: string }>>()
-  const masterByAliasDePlural = new Map<string, Array<{ product: Product; alias: string }>>()
 
   for (const p of existingProducts) {
     const n = normalizeName(p.name)
@@ -254,30 +252,7 @@ export async function parseProductsInput(
         masterByDePlural.set(deplural, p)
       }
     }
-
-    if (p.apelidos) {
-      const aliases = p.apelidos
-        .split(/[,;]/)
-        .map((a) => a.trim())
-        .filter(Boolean)
-      for (const a of aliases) {
-        const aNorm = normalizeName(a)
-        if (aNorm) {
-          const list = masterByAlias.get(aNorm) || []
-          list.push({ product: p, alias: a })
-          masterByAlias.set(aNorm, list)
-
-          const aDeplural = dePluralizeName(aNorm)
-          if (aDeplural) {
-            const depList = masterByAliasDePlural.get(aDeplural) || []
-            depList.push({ product: p, alias: a })
-            masterByAliasDePlural.set(aDeplural, depList)
-          }
-        }
-      }
-    }
   }
-
   // Rastrear duplicidades dentro do próprio arquivo/colagem
   const seenInFile = new Map<string, number>()
   const allRows: ParsedCsvProductRow[] = []
@@ -337,42 +312,12 @@ export async function parseProductsInput(
 
     // Identificar se o produto já existe no banco de dados
     let existingMaster = masterByNorm.get(normNome)
-    let matchedViaAlias: string | undefined
-    let isAmbiguous = false
+    const isAmbiguous = false
 
     if (!existingMaster) {
-      const aliasMatches = masterByAlias.get(normNome)
-      if (aliasMatches && aliasMatches.length > 0) {
-        if (aliasMatches.length === 1) {
-          existingMaster = aliasMatches[0].product
-          matchedViaAlias = aliasMatches[0].alias
-        } else {
-          const exactNameInConflict = aliasMatches.find(
-            (m) => normalizeName(m.product.name) === normNome,
-          )
-          if (exactNameInConflict) {
-            existingMaster = exactNameInConflict.product
-          } else {
-            isAmbiguous = true
-            warnings.push(
-              `Nome ambíguo: "${rawNome}" coincide com o apelido de ${aliasMatches.length} produtos diferentes (${aliasMatches.map((m) => m.product.name).join(', ')}). Será criado como novo produto.`,
-            )
-          }
-        }
-      }
-    }
-
-    if (!existingMaster && !isAmbiguous) {
       const depluralInput = dePluralizeName(normNome)
       if (depluralInput) {
         existingMaster = masterByDePlural.get(depluralInput)
-        if (!existingMaster) {
-          const aliasDepMatches = masterByAliasDePlural.get(depluralInput)
-          if (aliasDepMatches && aliasDepMatches.length === 1) {
-            existingMaster = aliasDepMatches[0].product
-            matchedViaAlias = aliasDepMatches[0].alias
-          }
-        }
       }
     }
     const isExisting = Boolean(existingMaster)
@@ -414,12 +359,11 @@ export async function parseProductsInput(
     let statusReason: string
 
     if (isExisting) {
-      const aliasNote = matchedViaAlias ? ` (via apelido "${matchedViaAlias}")` : ''
       if (fieldChanges.length > 0) {
         const changedNames = fieldChanges.map((f) => f.label).join(', ')
-        statusReason = `Produto existente${aliasNote}; atualizará: ${changedNames}.`
+        statusReason = `Produto existente; atualizará: ${changedNames}.`
       } else {
-        statusReason = `Produto existente${aliasNote}; dados no arquivo idênticos aos já cadastrados.`
+        statusReason = 'Produto existente; dados no arquivo idênticos aos já cadastrados.'
       }
     } else if (isAmbiguous) {
       statusReason =
@@ -444,7 +388,7 @@ export async function parseProductsInput(
       presentColumns,
       existingProductId: existingMaster?.id,
       existingProductName: existingMaster?.name,
-      matchedViaAlias,
+      matchedViaAlias: undefined,
       isAmbiguous,
       fieldChanges,
       status,

@@ -565,20 +565,11 @@ export function ProductImportDialog({
                               [Nome Vazio] (bruto: "{row.rawNome}")
                             </span>
                           )}
-                          {row.matchedViaAlias && (
-                            <span className="text-[10px] text-primary font-normal flex items-center gap-1 mt-0.5">
-                              <Sparkles className="h-3 w-3 shrink-0" />
-                              Casou via apelido: <strong>{row.matchedViaAlias}</strong> →{' '}
-                              {row.existingProductName}
+                          {row.existingProductName && row.existingProductName !== row.nome && (
+                            <span className="text-[10px] text-muted-foreground block">
+                              Mestre: "{row.existingProductName}"
                             </span>
                           )}
-                          {!row.matchedViaAlias &&
-                            row.existingProductName &&
-                            row.existingProductName !== row.nome && (
-                              <span className="text-[10px] text-muted-foreground block">
-                                Mestre: "{row.existingProductName}"
-                              </span>
-                            )}
                           {row.warnings.length > 0 && (
                             <div className="text-[10px] text-amber-600 dark:text-amber-400 flex items-center gap-1 mt-0.5">
                               <AlertTriangle className="h-3 w-3 shrink-0" />

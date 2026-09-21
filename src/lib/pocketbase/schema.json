@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-21T08:32:22.990Z",
+  "generatedAt": "2026-09-21T09:08:38.374Z",
   "collections": [
     {
       "name": "users",
@@ -111,12 +111,6 @@
           "required": false,
           "system": false,
           "autodateTriggers": ["onCreate", "onUpdate"]
-        },
-        {
-          "name": "apelidos",
-          "type": "text",
-          "required": false,
-          "system": false
         }
       ],
       "indexes": ["CREATE INDEX idx_produtos_nome ON produtos (nome)"]
