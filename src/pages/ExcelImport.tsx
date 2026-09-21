@@ -45,6 +45,7 @@ import {
   HelpCircle,
   Merge,
   Eye,
+  XCircle,
 } from 'lucide-react'
 import {
   Dialog,
@@ -928,6 +929,37 @@ export default function ExcelImport() {
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
+              {/* Legenda Visual dos Três Estados de Casamento */}
+              <div className="p-3 rounded-lg border bg-muted/40 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                <div className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
+                  <Info className="h-4 w-4 text-primary" />
+                  <span>Legenda de Casamento de Itens:</span>
+                </div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <Badge
+                    variant="outline"
+                    className="gap-1.5 py-1 px-2.5 text-xs font-medium bg-emerald-50 text-emerald-800 border-emerald-300 dark:bg-emerald-950/50 dark:text-emerald-200 dark:border-emerald-800 shadow-sm"
+                  >
+                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                    <span>Casado via nome no contrato</span>
+                  </Badge>
+                  <Badge
+                    variant="outline"
+                    className="gap-1.5 py-1 px-2.5 text-xs font-medium bg-sky-50 text-sky-800 border-sky-300 dark:bg-sky-950/50 dark:text-sky-200 dark:border-sky-800 shadow-sm"
+                  >
+                    <Tag className="h-3.5 w-3.5 text-sky-600 dark:text-sky-400 shrink-0" />
+                    <span>Casado via apelido / AKA</span>
+                  </Badge>
+                  <Badge
+                    variant="outline"
+                    className="gap-1.5 py-1 px-2.5 text-xs font-medium bg-rose-50 text-rose-800 border-rose-300 dark:bg-rose-950/50 dark:text-rose-200 dark:border-rose-800 shadow-sm"
+                  >
+                    <XCircle className="h-3.5 w-3.5 text-rose-600 dark:text-rose-400 shrink-0" />
+                    <span>Não encontrado — será descartado</span>
+                  </Badge>
+                </div>
+              </div>
+
               {/* Cards de Resumo da Leitura */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 <Card className="bg-muted/30">
@@ -1216,21 +1248,24 @@ export default function ExcelImport() {
                   <div className="flex items-center gap-2 flex-wrap">
                     <Badge
                       variant="outline"
-                      className="text-xs bg-emerald-50 text-emerald-700 border-emerald-300 dark:bg-emerald-950/40 dark:text-emerald-300"
+                      className="text-xs bg-emerald-50 text-emerald-700 border-emerald-300 dark:bg-emerald-950/40 dark:text-emerald-300 gap-1"
                     >
+                      <CheckCircle2 className="h-3 w-3 text-emerald-600 dark:text-emerald-400" />
                       Via Nome: {parsedData.productsMatchedByName?.length || 0}
                     </Badge>
                     <Badge
                       variant="outline"
-                      className="text-xs bg-purple-50 text-purple-700 border-purple-300 dark:bg-purple-950/40 dark:text-purple-300"
+                      className="text-xs bg-sky-50 text-sky-700 border-sky-300 dark:bg-sky-950/40 dark:text-sky-300 gap-1"
                     >
+                      <Tag className="h-3 w-3 text-sky-600 dark:text-sky-400" />
                       Via Apelido (AKA): {parsedData.productsMatchedByAlias?.length || 0}
                     </Badge>
                     {parsedData.unmatchedProducts && parsedData.unmatchedProducts.length > 0 && (
                       <Badge
                         variant="outline"
-                        className="text-xs bg-rose-50 text-rose-700 border-rose-300 dark:bg-rose-950/40 dark:text-rose-300"
+                        className="text-xs bg-rose-50 text-rose-700 border-rose-300 dark:bg-rose-950/40 dark:text-rose-300 gap-1"
                       >
+                        <XCircle className="h-3 w-3 text-rose-600 dark:text-rose-400" />
                         Não no Contrato: {parsedData.unmatchedProducts.length}
                       </Badge>
                     )}
@@ -1265,13 +1300,22 @@ export default function ExcelImport() {
                         {parsedData.productsMatchedByName.map((p, idx) => (
                           <div
                             key={idx}
-                            className="p-2.5 rounded bg-background border border-emerald-200 dark:border-emerald-900/40 text-xs space-y-1.5 shadow-sm"
+                            className="p-2.5 rounded bg-background border border-emerald-300 dark:border-emerald-800 text-xs space-y-1.5 shadow-sm border-l-4 border-l-emerald-500"
                           >
                             <div className="flex items-start justify-between gap-2">
-                              <div className="flex flex-col">
-                                <span className="font-semibold text-emerald-950 dark:text-emerald-200">
-                                  {p.nomeContratoMatched || p.productNameMatched}
-                                </span>
+                              <div className="flex flex-col gap-0.5">
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <span className="font-semibold text-emerald-950 dark:text-emerald-200">
+                                    {p.nomeContratoMatched || p.productNameMatched}
+                                  </span>
+                                  <Badge
+                                    variant="outline"
+                                    className="text-[9px] py-0 px-1.5 bg-emerald-100 text-emerald-800 border-emerald-300 dark:bg-emerald-950 dark:text-emerald-300 font-medium gap-1"
+                                  >
+                                    <CheckCircle2 className="h-2.5 w-2.5 text-emerald-600" />
+                                    Nome no contrato
+                                  </Badge>
+                                </div>
                                 {p.productNameMatched &&
                                   p.productNameMatched !== p.nomeContratoMatched && (
                                     <span className="text-[10px] text-muted-foreground">
@@ -1319,17 +1363,17 @@ export default function ExcelImport() {
                   </div>
 
                   {/* Grupo 2: Casados via Apelido / AKA */}
-                  <div className="space-y-2 rounded-md border p-3 bg-purple-500/5 border-purple-200 dark:border-purple-900/40">
-                    <div className="flex items-center justify-between border-b border-purple-200/60 dark:border-purple-900/60 pb-2">
+                  <div className="space-y-2 rounded-md border p-3 bg-sky-500/5 border-sky-200 dark:border-sky-900/40">
+                    <div className="flex items-center justify-between border-b border-sky-200/60 dark:border-sky-900/60 pb-2">
                       <div className="flex items-center gap-1.5">
-                        <Tag className="h-4 w-4 text-purple-600 dark:text-purple-400" />
+                        <Tag className="h-4 w-4 text-sky-600 dark:text-sky-400" />
                         <span className="text-xs font-semibold text-foreground">
                           Casados via Apelido / AKA (Quid Pro Quo)
                         </span>
                       </div>
                       <Badge
                         variant="secondary"
-                        className="text-[10px] bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-300"
+                        className="text-[10px] bg-sky-100 text-sky-800 dark:bg-sky-950 dark:text-sky-300"
                       >
                         {parsedData.productsMatchedByAlias?.length || 0} item(ns)
                       </Badge>
@@ -1345,13 +1389,22 @@ export default function ExcelImport() {
                         {parsedData.productsMatchedByAlias.map((p, idx) => (
                           <div
                             key={idx}
-                            className="p-2.5 rounded bg-background border border-purple-200 dark:border-purple-900/40 text-xs space-y-1.5 shadow-sm"
+                            className="p-2.5 rounded bg-background border border-sky-300 dark:border-sky-800 text-xs space-y-1.5 shadow-sm border-l-4 border-l-sky-500"
                           >
                             <div className="flex items-start justify-between gap-2">
-                              <div className="flex flex-col">
-                                <span className="font-semibold text-purple-950 dark:text-purple-200">
-                                  {p.nomeContratoMatched || p.productNameMatched}
-                                </span>
+                              <div className="flex flex-col gap-0.5">
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <span className="font-semibold text-sky-950 dark:text-sky-200">
+                                    {p.nomeContratoMatched || p.productNameMatched}
+                                  </span>
+                                  <Badge
+                                    variant="outline"
+                                    className="text-[9px] py-0 px-1.5 bg-sky-100 text-sky-800 border-sky-300 dark:bg-sky-950 dark:text-sky-300 font-medium gap-1"
+                                  >
+                                    <Tag className="h-2.5 w-2.5 text-sky-600" />
+                                    Apelido / AKA
+                                  </Badge>
+                                </div>
                                 {p.productNameMatched &&
                                   p.productNameMatched !== p.nomeContratoMatched && (
                                     <span className="text-[10px] text-muted-foreground">
@@ -1359,24 +1412,38 @@ export default function ExcelImport() {
                                     </span>
                                   )}
                               </div>
-                              <span className="font-mono text-[11px] font-semibold text-purple-700 dark:text-purple-300 shrink-0">
+                              <span className="font-mono text-[11px] font-semibold text-sky-700 dark:text-sky-300 shrink-0">
                                 {p.totalQuantity.toLocaleString('pt-BR')} Kg/Un
                               </span>
                             </div>
 
-                            <div className="p-1.5 rounded bg-purple-50/60 dark:bg-purple-950/30 border border-purple-200/50 dark:border-purple-800/40 text-[11px] flex items-center gap-2 flex-wrap">
+                            <div className="p-1.5 rounded bg-sky-50/70 dark:bg-sky-950/30 border border-sky-200/60 dark:border-sky-800/40 text-[11px] flex items-center gap-2 flex-wrap">
                               <span className="text-muted-foreground">Planilha:</span>
                               <strong className="text-foreground font-medium">
                                 "{p.productNameRaw}"
                               </strong>
-                              <ArrowRight className="h-3 w-3 text-purple-600 dark:text-purple-400 shrink-0" />
+                              <ArrowRight className="h-3 w-3 text-sky-600 dark:text-sky-400 shrink-0" />
                               <span className="text-muted-foreground">Apelido casado:</span>
                               <Badge
                                 variant="outline"
-                                className="text-[10px] bg-purple-100 text-purple-800 border-purple-300 dark:bg-purple-950 dark:text-purple-300"
+                                className="text-[10px] bg-sky-100 text-sky-800 border-sky-300 dark:bg-sky-950 dark:text-sky-300"
                               >
                                 {p.matchedViaAlias || 'AKA'}
                               </Badge>
+                            </div>
+
+                            <div className="flex items-center justify-between text-[10px] text-muted-foreground pt-0.5">
+                              <span>
+                                Presente em <strong>{p.schoolsCount}</strong> pedido(s)
+                              </span>
+                              {p.sheets && p.sheets.length > 0 && (
+                                <span
+                                  className="truncate max-w-[200px]"
+                                  title={p.sheets.join(', ')}
+                                >
+                                  Abas: {p.sheets.join(', ')}
+                                </span>
+                              )}
                             </div>
                           </div>
                         ))}
@@ -1387,29 +1454,36 @@ export default function ExcelImport() {
 
                 {/* Sub-bloco: Produtos da planilha não encontrados no contrato */}
                 {parsedData.unmatchedProducts && parsedData.unmatchedProducts.length > 0 && (
-                  <div className="p-3 rounded-lg bg-muted/40 border text-xs space-y-2">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-1.5 font-medium text-foreground">
-                        <Info className="h-4 w-4 text-muted-foreground" />
+                  <div className="p-3.5 rounded-lg bg-rose-500/10 border-2 border-rose-400 dark:border-rose-900/60 text-xs space-y-2.5">
+                    <div className="flex items-center justify-between flex-wrap gap-2">
+                      <div className="flex items-center gap-2 font-semibold text-rose-800 dark:text-rose-200">
+                        <XCircle className="h-4 w-4 text-rose-600 shrink-0" />
                         <span>
                           Produtos na planilha não encontrados no contrato selecionado (
                           {parsedData.unmatchedProducts.length})
                         </span>
                       </div>
-                      <span className="text-[11px] text-muted-foreground">
-                        Descartados silenciosamente conforme regra contratual
-                      </span>
+                      <Badge
+                        variant="destructive"
+                        className="text-[10px] bg-rose-600 text-white font-medium gap-1"
+                      >
+                        <XCircle className="h-3 w-3" />
+                        Não encontrado no contrato (descarte automático)
+                      </Badge>
                     </div>
-                    <div className="flex flex-wrap gap-1.5 max-h-[90px] overflow-y-auto pt-1">
+                    <div className="flex flex-wrap gap-2 pt-0.5 max-h-[140px] overflow-y-auto">
                       {parsedData.unmatchedProducts.map((up, uIdx) => (
-                        <Badge
+                        <div
                           key={uIdx}
-                          variant="outline"
-                          className="text-[11px] border-dashed bg-background text-muted-foreground"
+                          className="flex items-center gap-1.5 px-2.5 py-1 rounded bg-background border-2 border-rose-300 dark:border-rose-800 text-rose-900 dark:text-rose-200 shadow-sm"
                           title={`Presente nas abas: ${up.sheets.join(', ')}`}
                         >
-                          {up.productNameRaw} ({up.sheets.join(', ')})
-                        </Badge>
+                          <XCircle className="h-3 w-3 text-rose-600 shrink-0" />
+                          <span className="font-medium">{up.productNameRaw}</span>
+                          <span className="text-[10px] text-muted-foreground font-mono">
+                            ({up.sheets.join(', ')})
+                          </span>
+                        </div>
                       ))}
                     </div>
                   </div>
@@ -1501,44 +1575,54 @@ export default function ExcelImport() {
                             )}
                           </TableCell>
                           <TableCell className="text-xs">
-                            <span
-                              className="text-muted-foreground"
-                              title={po.items
-                                .map((i) => {
-                                  const aliasInfo = i.matchedViaAlias
-                                    ? ` [via apelido "${i.matchedViaAlias}"]`
-                                    : ''
-                                  return `${i.quantity}x ${i.productNameMatched || i.productNameRaw}${aliasInfo} (R$ ${i.price.toFixed(2)})`
-                                })
-                                .join('\n')}
-                            >
-                              <div className="space-y-0.5">
-                                <span>{po.items.length} produto(s) válido(s)</span>
-                                {po.items.some((i) => i.matchedViaAlias) && (
-                                  <span className="text-[10px] text-primary flex items-center gap-1 font-medium">
-                                    ✓ {po.items.filter((i) => i.matchedViaAlias).length} via apelido
-                                  </span>
-                                )}
-                                {po.items.some(
-                                  (i) =>
-                                    i.matchedViaContractItem &&
-                                    i.nomeContratoMatched &&
-                                    i.nomeContratoMatched !== i.productNameMatched,
-                                ) && (
-                                  <span className="text-[10px] text-muted-foreground flex items-center gap-1">
-                                    {
-                                      po.items.filter(
-                                        (i) =>
-                                          i.matchedViaContractItem &&
-                                          i.nomeContratoMatched &&
-                                          i.nomeContratoMatched !== i.productNameMatched,
-                                      ).length
-                                    }{' '}
-                                    casado(s) via nome no contrato
-                                  </span>
-                                )}
-                              </div>
-                            </span>
+                            {(() => {
+                              const countAlias = po.items.filter(
+                                (i) => i.matchMethod === 'alias' || Boolean(i.matchedViaAlias),
+                              ).length
+                              const countContract = po.items.filter(
+                                (i) =>
+                                  i.matchMethod === 'contract_name' ||
+                                  (!i.matchMethod && !i.matchedViaAlias),
+                              ).length
+
+                              return (
+                                <div
+                                  className="space-y-1"
+                                  title={po.items
+                                    .map((i) => {
+                                      const aliasInfo = i.matchedViaAlias
+                                        ? ` [via apelido "${i.matchedViaAlias}"]`
+                                        : ' [via nome no contrato]'
+                                      return `${i.quantity}x ${i.nomeContratoMatched || i.productNameMatched || i.productNameRaw}${aliasInfo} (R$ ${i.price.toFixed(2)})`
+                                    })
+                                    .join('\n')}
+                                >
+                                  <div className="font-medium text-foreground">
+                                    {po.items.length} produto(s) mapeado(s)
+                                  </div>
+                                  <div className="flex items-center gap-1 flex-wrap">
+                                    {countContract > 0 && (
+                                      <Badge
+                                        variant="outline"
+                                        className="text-[10px] py-0 px-1.5 bg-emerald-50 text-emerald-800 border-emerald-300 dark:bg-emerald-950 dark:text-emerald-300 gap-1 font-medium"
+                                      >
+                                        <CheckCircle2 className="h-2.5 w-2.5 text-emerald-600 shrink-0" />
+                                        {countContract} via contrato
+                                      </Badge>
+                                    )}
+                                    {countAlias > 0 && (
+                                      <Badge
+                                        variant="outline"
+                                        className="text-[10px] py-0 px-1.5 bg-sky-50 text-sky-800 border-sky-300 dark:bg-sky-950 dark:text-sky-300 gap-1 font-medium"
+                                      >
+                                        <Tag className="h-2.5 w-2.5 text-sky-600 shrink-0" />
+                                        {countAlias} via apelido
+                                      </Badge>
+                                    )}
+                                  </div>
+                                </div>
+                              )
+                            })()}
                           </TableCell>
                           <TableCell className="text-right font-mono text-xs">
                             R${' '}
@@ -2024,39 +2108,73 @@ export default function ExcelImport() {
                         viewingOrder.items.map((item, itIdx) => {
                           const subtotal = (item.quantity || 0) * (item.price || 0)
                           const unit = item.unit || 'Kg'
+                          const isContract =
+                            item.matchMethod === 'contract_name' ||
+                            (!item.matchMethod && !item.matchedViaAlias && Boolean(item.productId))
+                          const isAlias =
+                            item.matchMethod === 'alias' || Boolean(item.matchedViaAlias)
+                          const isNone =
+                            item.matchMethod === 'none' ||
+                            (!item.productId && !item.nomeContratoMatched)
+
+                          let rowClass = 'text-xs transition-colors '
+                          if (isContract) {
+                            rowClass +=
+                              'bg-emerald-500/10 border-l-4 border-l-emerald-500 hover:bg-emerald-500/15'
+                          } else if (isAlias) {
+                            rowClass +=
+                              'bg-sky-500/10 border-l-4 border-l-sky-500 hover:bg-sky-500/15'
+                          } else {
+                            rowClass +=
+                              'bg-rose-500/10 border-l-4 border-l-rose-500 hover:bg-rose-500/15'
+                          }
 
                           return (
-                            <TableRow key={itIdx} className="text-xs">
+                            <TableRow key={itIdx} className={rowClass}>
                               <TableCell className="font-medium">
-                                <span className="text-foreground">{item.productNameRaw}</span>
+                                <span className="text-foreground font-semibold">
+                                  {item.productNameRaw}
+                                </span>
                               </TableCell>
                               <TableCell>
                                 <div className="space-y-0.5">
                                   {item.nomeContratoMatched && (
-                                    <div className="font-medium text-emerald-900 dark:text-emerald-200">
+                                    <div className="font-medium text-foreground">
                                       {item.nomeContratoMatched}
                                     </div>
                                   )}
                                   {item.productNameMatched &&
                                     item.productNameMatched !== item.nomeContratoMatched && (
                                       <div className="text-[10px] text-muted-foreground">
-                                        {item.productNameMatched}
+                                        Catálogo: {item.productNameMatched}
                                       </div>
                                     )}
                                   <div className="flex items-center gap-1 flex-wrap pt-0.5">
-                                    {item.matchedViaAlias ? (
+                                    {isContract && (
                                       <Badge
                                         variant="outline"
-                                        className="text-[9px] py-0 bg-sky-50 text-sky-800 border-sky-300 dark:bg-sky-950 dark:text-sky-300"
+                                        className="text-[10px] py-0.5 px-2 bg-emerald-100 text-emerald-800 border-emerald-300 dark:bg-emerald-950 dark:text-emerald-300 font-medium gap-1"
                                       >
-                                        Apelido: {item.matchedViaAlias}
+                                        <CheckCircle2 className="h-3 w-3 text-emerald-600" />
+                                        Casado via nome no contrato
                                       </Badge>
-                                    ) : (
+                                    )}
+                                    {isAlias && (
                                       <Badge
                                         variant="outline"
-                                        className="text-[9px] py-0 bg-emerald-50 text-emerald-800 border-emerald-300 dark:bg-emerald-950 dark:text-emerald-300"
+                                        className="text-[10px] py-0.5 px-2 bg-sky-100 text-sky-800 border-sky-300 dark:bg-sky-950 dark:text-sky-300 font-medium gap-1"
                                       >
-                                        Nome no Contrato
+                                        <Tag className="h-3 w-3 text-sky-600" />
+                                        Casado via apelido: {item.matchedViaAlias || 'AKA'}
+                                      </Badge>
+                                    )}
+                                    {isNone && (
+                                      <Badge
+                                        variant="destructive"
+                                        className="text-[10px] py-0.5 px-2 bg-rose-600 text-white font-medium gap-1"
+                                      >
+                                        <XCircle className="h-3 w-3" />
+                                        Não encontrado — será descartado
                                       </Badge>
                                     )}
                                   </div>
