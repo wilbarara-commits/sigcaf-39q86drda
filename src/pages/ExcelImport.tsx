@@ -264,11 +264,7 @@ export default function ExcelImport() {
         nome: r.nome,
       }))
 
-      if (
-        selectedContract.modalidade_pedido === 'centralizado' &&
-        selectedContract.tipo_importacao !== 'fracionada' &&
-        selectedContract.abas_planilha
-      ) {
+      if (selectedContract.abas_planilha) {
         const abasCadastradas = selectedContract.abas_planilha
           .split(';')
           .map((s) => s.trim())
@@ -371,11 +367,7 @@ export default function ExcelImport() {
       nome: r.nome,
     }))
 
-    if (
-      selectedContract.modalidade_pedido === 'centralizado' &&
-      selectedContract.tipo_importacao !== 'fracionada' &&
-      selectedContract.abas_planilha
-    ) {
+    if (selectedContract.abas_planilha) {
       const abasCadastradas = selectedContract.abas_planilha
         .split(';')
         .map((s) => s.trim())
@@ -561,17 +553,19 @@ export default function ExcelImport() {
     if (!parsedData || !selectedContract) return
 
     // Validar se existem pedidos prontos sem pendências impeditivas:
-    // Deve ter escola cadastrada, vinculada ao contrato, sem anomalia de duplicidade em outras abas,
-    // e conter pelo menos 1 item com quantidade > 0.
+    // Critério: escola identificada (schoolId), vinculada ao contrato (isLinkedToContract === true)
+    // e pelo menos 1 item com productId identificado e quantidade > 0.
+    // Não há mais amarração escola-aba nem bloqueio por duplicidade em outras abas (itens já foram consolidados).
     const validOrders = parsedData.orders.filter(
       (o) =>
-        o.schoolId &&
-        o.isLinkedToContract &&
-        !o.isDuplicateInOtherSheets &&
-        !o.isSheetUnmatchedInContract &&
+        Boolean(o.schoolId) &&
+        o.isLinkedToContract === true &&
         o.items.length > 0 &&
-        o.items.every((it) => Boolean(it.productId)),
+        o.items.some((it) => Boolean(it.productId) && it.quantity > 0),
     )
+
+    // Identificar pedidos/linhas rejeitados para compor o relatório detalhado de erros
+    const rejectedOrders = parsedData.orders.filter((o) => !validOrders.includes(o))
 
     if (validOrders.length === 0) {
       toast.error('Nenhum pedido válido encontrado para importação neste contrato.')
@@ -587,6 +581,16 @@ export default function ExcelImport() {
       const errorLog: any[] = []
 
       // Mapear rotas: identificar a rota no contrato ou criar
+      // Mapear rota do contrato a partir da escola vinculada ou da aba
+      // Prioridade 1: Rota cadastrada para a escola em selectedContract.escolas
+      // Prioridade 2: findOrCreate com a aba (primeira aba caso consolidada)
+      const contractSchoolLinkMap = new Map<string, string>() // escolaId -> rotaId
+      for (const es of selectedContract.escolas) {
+        if (es.escolaId && es.rotaId) {
+          contractSchoolLinkMap.set(es.escolaId, es.rotaId)
+        }
+      }
+
       const routeMap = new Map<string, string>() // sheetName -> rotaId
 
       for (const sheetName of parsedData.routesFound) {
@@ -596,7 +600,12 @@ export default function ExcelImport() {
 
       // Preparar payload de pedidos para criação atômica e em lote seguro
       const pedidosPayload = validOrders.map((o) => {
-        const rotaId = routeMap.get(o.routeRaw)
+        // Rota preferencial da escola no contrato; fallback para a rota da primeira aba
+        const firstSheet = o.routeRaw.split(',')[0].trim()
+        const rotaId =
+          (o.schoolId ? contractSchoolLinkMap.get(o.schoolId) : undefined) ||
+          routeMap.get(firstSheet) ||
+          routeMap.get(o.routeRaw)
         const orderNum = `IMP-${Date.now().toString().slice(-4)}-${Math.floor(Math.random() * 900 + 100)}`
 
         // Herdar rota logística da escola caso a escola já tenha sido roteada (paradas_rota)
@@ -644,7 +653,27 @@ export default function ExcelImport() {
       if (errorCount > 0) {
         errorLog.push({
           escola: 'Geral',
-          erro: `${errorCount} pedido(s) não puderam ser gravados.`,
+          erro: `${errorCount} pedido(s) não puderam ser gravados no banco de dados.`,
+        })
+      }
+
+      // Adicionar motivos em português para linhas/escolas rejeitadas
+      for (const rej of rejectedOrders) {
+        let motivo = 'Dados incompletos ou inválidos'
+        if (!rej.schoolId) {
+          motivo = 'Escola não identificada no cadastro'
+        } else if (!rej.isLinkedToContract) {
+          motivo = 'Escola não pertence a este contrato'
+        } else if (rej.items.length === 0) {
+          motivo = 'Nenhum produto solicitado com quantidade maior que zero'
+        } else if (!rej.items.some((it) => it.productId)) {
+          motivo = 'Produto não encontrado no contrato'
+        }
+
+        errorLog.push({
+          escola: rej.schoolNameMatched || rej.schoolNameRaw,
+          aba: rej.routeRaw,
+          erro: motivo,
         })
       }
 
@@ -653,7 +682,7 @@ export default function ExcelImport() {
       if (parsedData.ignoredUnmatchedSheets && parsedData.ignoredUnmatchedSheets.length > 0) {
         auditLog.push({
           tipo: 'info',
-          observacao: `Abas ignoradas (sem rota cadastrada correspondente): ${parsedData.ignoredUnmatchedSheets.join(', ')}`,
+          observacao: `Abas de resumo ignoradas: ${parsedData.ignoredUnmatchedSheets.join(', ')}`,
         })
       }
 
@@ -665,7 +694,7 @@ export default function ExcelImport() {
         usuario_id: user?.id,
         linhas_total: parsedData.orders.length,
         linhas_ok: okCount,
-        linhas_erro: errorCount + (parsedData.orders.length - validOrders.length),
+        linhas_erro: errorCount + rejectedOrders.length,
         erros: auditLog.length > 0 ? auditLog : undefined,
       })
 
@@ -760,30 +789,29 @@ export default function ExcelImport() {
                         : `Única ${selectedContract.abas_planilha ? '(com abas)' : '(simples)'}`}
                     </Badge>
                   </div>
-                  {selectedContract.tipo_importacao !== 'fracionada' &&
-                    selectedContract.abas_planilha && (
-                      <div className="flex flex-col gap-1 pt-1 border-t border-border/50">
-                        <span className="text-muted-foreground text-[11px]">
-                          Abas mapeadas (
-                          {selectedContract.abas_planilha.split(';').filter(Boolean).length}):
-                        </span>
-                        <div className="flex flex-wrap gap-1">
-                          {selectedContract.abas_planilha
-                            .split(';')
-                            .map((t) => t.trim())
-                            .filter(Boolean)
-                            .map((t, idx) => (
-                              <Badge
-                                key={idx}
-                                variant="outline"
-                                className="text-[9px] bg-background font-mono"
-                              >
-                                {t}
-                              </Badge>
-                            ))}
-                        </div>
+                  {selectedContract.abas_planilha && (
+                    <div className="flex flex-col gap-1 pt-1 border-t border-border/50">
+                      <span className="text-muted-foreground text-[11px]">
+                        Abas mapeadas no contrato (
+                        {selectedContract.abas_planilha.split(';').filter(Boolean).length}):
+                      </span>
+                      <div className="flex flex-wrap gap-1">
+                        {selectedContract.abas_planilha
+                          .split(';')
+                          .map((t) => t.trim())
+                          .filter(Boolean)
+                          .map((t, idx) => (
+                            <Badge
+                              key={idx}
+                              variant="outline"
+                              className="text-[9px] bg-background font-mono"
+                            >
+                              {t}
+                            </Badge>
+                          ))}
                       </div>
-                    )}
+                    </div>
+                  )}
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Escolas Vinculadas:</span>
                     <span className="font-semibold text-primary">
@@ -1125,13 +1153,11 @@ export default function ExcelImport() {
                   </TableHeader>
                   <TableBody>
                     {parsedData.orders.map((po, idx) => {
+                      const hasValidItem = po.items.some(
+                        (it) => Boolean(it.productId) && it.quantity > 0,
+                      )
                       const hasBlockingIssues =
-                        po.matchStatus !== 'ok' ||
-                        !po.isLinkedToContract ||
-                        po.isDuplicateInOtherSheets ||
-                        po.isSheetUnmatchedInContract ||
-                        po.items.length === 0 ||
-                        po.items.some((it) => !it.productId)
+                        !po.schoolId || !po.isLinkedToContract || !hasValidItem
 
                       return (
                         <TableRow key={idx} className={hasBlockingIssues ? 'bg-amber-500/5' : ''}>

@@ -217,6 +217,23 @@ export function matchSchoolName(
     }
   }
 
+  // Segunda passada tolerante por tokens significativos (> 2 letras)
+  const tokensExcel = (normExcelNoParen || normExcel).split(/\s+/).filter((t) => t.length > 2)
+  if (tokensExcel.length >= 2) {
+    for (const sch of availableSchools) {
+      const normSch = normalizeName(stripParentheses(sch.name))
+      const tokensSch = normSch.split(/\s+/).filter((t) => t.length > 2)
+      // Se todos os tokens da escola estão na planilha ou vice-versa
+      const matchAllSch = tokensSch.length >= 2 && tokensSch.every((t) => tokensExcel.includes(t))
+      const matchAllExcel =
+        tokensExcel.length >= 2 && tokensExcel.every((t) => tokensSch.includes(t))
+      if (matchAllSch || matchAllExcel) {
+        const isLinked = contractSchools.some((cs) => cs.escolaId === sch.id)
+        return { school: sch, isLinked }
+      }
+    }
+  }
+
   return { school: null, isLinked: false }
 }
 
@@ -782,20 +799,18 @@ export function parseSecretaryExcel(
 
   const sheetMatchedMap = new Map<string, string | null>() // sheetName -> matchedContractRotaNome
 
-  // Quando o contrato possui rotas cadastradas:
-  // Abas não cadastradas são COMPLETAMENTE IGNORADAS (não lidas, não geram pedidos, nem pendências/erros).
+  // Regra de processamento de abas:
+  // Em importações centralizadas, processar todas as candidateSheets (exceto abas de resumo tipo TOTAL/TOTAIS/RESUMO/CONSOLIDADO).
+  // Se existirem rotas/abas de referência cadastradas no contrato, associar o nome correspondente via sheetMatchedMap,
+  // mas NÃO bloquear nem descartar abas que possam conter escolas válidas do contrato.
   for (const sheetName of candidateSheets) {
     if (hasContractRotas && contractRotas) {
       const matched = matchSheetToContractRota(sheetName, contractRotas)
       if (matched) {
         sheetMatchedMap.set(sheetName, matched)
-        routesToImport.push(sheetName)
-      } else {
-        ignoredUnmatchedSheets.push(sheetName)
       }
-    } else {
-      routesToImport.push(sheetName)
     }
+    routesToImport.push(sheetName)
   }
 
   const parsedOrders: ParsedSchoolOrder[] = []
@@ -955,22 +970,17 @@ export function parseSecretaryExcel(
       ? sheetMatchedMap.get(sheetName) || undefined
       : undefined
     const isSheetUnmatched = false
-    const suggestedRotaName = matchedContractRota || sheetName
 
     // Extrair dados de cada coluna individual
     const extractedCols: ExtractedColumnData[] = []
 
     for (const sc of schoolColumns) {
-      // Matching da escola:
-      // REGRA: Na importação de pedidos, só podem gerar pedido as escolas VINCULADAS ao contrato ativo.
-      // Coluna de escola da planilha que não casar com uma escola vinculada ao contrato deve ser
-      // IGNORADA silenciosamente no preview (sem criar pedido, sem erro bloqueante, sem aviso)
-      // — mesma política de "só produtos do contrato".
+      // Matching tolerante da escola com o contrato ativo
       const matchResult = matchSchoolName(sc.schoolNameRaw, availableSchools, contractSchools)
       const matchedSchool = matchResult.school
       const isLinked = matchResult.isLinked
 
-      // Se não for casada com escola vinculada ao contrato, descartar silenciosamente
+      // Validação: somente escolas vinculadas ao contrato selecionado podem gerar pedidos
       if (!matchedSchool || !isLinked) {
         continue
       }
@@ -1180,57 +1190,87 @@ export function parseSecretaryExcel(
     }
   }
 
-  // Verificar anomalias de duplicidade:
-  // APENAS quando a mesma escola aparece em ABAS DISTINTAS (ex.: ROTA A e ROTA B).
-  // Múltiplas colunas na MESMA aba já foram unificadas acima e NÃO geram mais anomalia nem isDuplicateInOtherSheets.
-  // Mapear escolas das ordens geradas por aba para identificar abas distintas
-  const schoolDistinctSheets = new Map<string, Set<string>>()
+  // Consolidação entre abas:
+  // "Se a mesma escola tiver itens em mais de uma aba, consolidar os itens no mesmo pedido
+  // (somar quantidades do mesmo produto) em vez de marcar duplicidade impeditiva."
+  // Não há mais pré-definição de que escola está em que aba. A exigência é apenas que a escola
+  // esteja no contrato não importa em que aba da planilha.
+  const consolidatedOrdersMap = new Map<string, ParsedSchoolOrder>()
+
   for (const po of parsedOrders) {
     const key = po.schoolId ? `id:${po.schoolId}` : `raw:${normalizeName(po.schoolNameRaw)}`
-    let set = schoolDistinctSheets.get(key)
-    if (!set) {
-      set = new Set<string>()
-      schoolDistinctSheets.set(key, set)
-    }
-    set.add(po.routeRaw)
-  }
+    const existing = consolidatedOrdersMap.get(key)
 
-  for (const [key, sheetsSet] of schoolDistinctSheets.entries()) {
-    if (sheetsSet.size > 1) {
-      const distinctSheets = Array.from(sheetsSet)
-      const matchingOrders = parsedOrders.filter((po) => {
-        const orderKey = po.schoolId
-          ? `id:${po.schoolId}`
-          : `raw:${normalizeName(po.schoolNameRaw)}`
-        return orderKey === key
-      })
-      const schDisplayName =
-        matchingOrders[0]?.schoolNameMatched || matchingOrders[0]?.schoolNameRaw || key
+    if (!existing) {
+      consolidatedOrdersMap.set(key, { ...po, issues: [...po.issues] })
+    } else {
+      // Registrar abas consolidadas
+      const existingSheets = existing.routeRaw.split(', ').map((s) => s.trim())
+      if (!existingSheets.includes(po.routeRaw)) {
+        existingSheets.push(po.routeRaw)
+        existing.routeRaw = existingSheets.join(', ')
+      }
 
-      const msg = `Anomalia de duplicidade: A escola "${schDisplayName}" foi encontrada em múltiplas abas (${distinctSheets.join(', ')}).`
-      anomalies.push(msg)
+      // Consolidar itens somando quantidades do mesmo produto
+      const itemMap = new Map<string, ParsedOrderItem>()
+      for (const it of existing.items) {
+        const prodKey = it.productId
+          ? `id:${it.productId}`
+          : `raw:${normalizeName(it.productNameRaw)}`
+        itemMap.set(prodKey, { ...it })
+      }
 
-      for (const po of matchingOrders) {
-        po.isDuplicateInOtherSheets = true
-        po.issues.push(
-          `Atenção: Esta escola apareceu em mais de uma aba da planilha (${distinctSheets.join(', ')}).`,
-        )
+      for (const it of po.items) {
+        const prodKey = it.productId
+          ? `id:${it.productId}`
+          : `raw:${normalizeName(it.productNameRaw)}`
+        const exItem = itemMap.get(prodKey)
+        if (exItem) {
+          exItem.quantity = Math.round((exItem.quantity + it.quantity) * 1000) / 1000
+        } else {
+          itemMap.set(prodKey, { ...it })
+        }
+      }
+
+      existing.items = Array.from(itemMap.values()).filter((it) => it.quantity > 0)
+
+      // Recalcular valor total do pedido consolidado
+      let newTotal = 0
+      for (const it of existing.items) {
+        newTotal += it.quantity * it.price
+      }
+      existing.totalCalculated = Math.round(newTotal * 100) / 100
+
+      // Atualizar contagem de colunas mescladas se aplicável
+      const priorCount = existing.mergedColumnsCount || 1
+      const extraCount = po.mergedColumnsCount || 1
+      existing.mergedColumnsCount = priorCount + extraCount
+
+      // Juntar observações informativas sem duplicação
+      for (const iss of po.issues) {
+        if (!existing.issues.includes(iss)) {
+          existing.issues.push(iss)
+        }
+      }
+
+      const multiSheetNote = `Itens consolidados de múltiplas abas (${existing.routeRaw}).`
+      if (!existing.issues.includes(multiSheetNote)) {
+        existing.issues.push(multiSheetNote)
       }
     }
   }
+
+  const finalOrders = Array.from(consolidatedOrdersMap.values())
 
   let totalItemsCount = 0
   let totalWeight = 0
   let pendingIssuesCount = 0
 
-  for (const po of parsedOrders) {
-    const hasBlockingIssues =
-      po.matchStatus !== 'ok' ||
-      !po.isLinkedToContract ||
-      po.isDuplicateInOtherSheets ||
-      po.isSheetUnmatchedInContract ||
-      po.items.length === 0 ||
-      po.items.some((it) => !it.productId)
+  for (const po of finalOrders) {
+    // Pedido é bloqueante se: escola não encontrada, não vinculada ao contrato,
+    // ou se não tiver nenhum item com produto identificado e quantidade > 0.
+    const hasValidItem = po.items.some((it) => Boolean(it.productId) && it.quantity > 0)
+    const hasBlockingIssues = !po.schoolId || !po.isLinkedToContract || !hasValidItem
 
     if (hasBlockingIssues) {
       pendingIssuesCount++
@@ -1247,7 +1287,7 @@ export function parseSecretaryExcel(
     routesFound: routesToImport,
     unmatchedSheets: ignoredUnmatchedSheets.length > 0 ? ignoredUnmatchedSheets : undefined,
     ignoredUnmatchedSheets: ignoredUnmatchedSheets.length > 0 ? ignoredUnmatchedSheets : undefined,
-    orders: parsedOrders,
+    orders: finalOrders,
     totalItemsCount,
     totalWeight: Math.round(totalWeight * 100) / 100,
     anomalies,
