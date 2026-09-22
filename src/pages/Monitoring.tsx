@@ -70,7 +70,6 @@ export default function Monitoring() {
   const [selectedContratoId, setSelectedContratoId] = useState<string>('todos')
   const [updating, setUpdating] = useState(false)
   const [abrirCicloOpen, setAbrirCicloOpen] = useState(false)
-  const [cancelarDialogOpen, setCancelarDialogOpen] = useState(false)
   const [cancelarCicloInteiroOpen, setCancelarCicloInteiroOpen] = useState(false)
 
   // Atualizar seleção padrão quando o ativo mudar ou na carga inicial
@@ -385,22 +384,6 @@ export default function Monitoring() {
           <Button onClick={() => setAbrirCicloOpen(true)} className="gap-2 h-9">
             <CalendarPlus className="h-4 w-4" /> Abrir Ciclo
           </Button>
-
-          {/* Botão Cancelar Contrato (quando um contrato específico estiver selecionado) */}
-          {selectedCiclo &&
-            selectedContratoId !== 'todos' &&
-            currentFase !== 'fechado' &&
-            currentFase !== 'cancelado' && (
-              <Button
-                variant="outline"
-                onClick={() => setCancelarDialogOpen(true)}
-                className="gap-2 h-9 text-destructive border-destructive/30 hover:bg-destructive/10"
-                title="Cancelar Contrato selecionado no ciclo"
-              >
-                <Ban className="h-4 w-4" />
-                Cancelar Contrato
-              </Button>
-            )}
 
           {/* Botão Cancelar Ciclo (cancela o CICLO INTEIRO selecionado no seletor) */}
           {selectedCiclo &&
@@ -804,7 +787,7 @@ export default function Monitoring() {
         </CardContent>
       </Card>
 
-      {/* Modais de Abrir e Cancelar Ciclo / Contrato */}
+      {/* Modais de Abrir e Cancelar Ciclo */}
       <AbrirCicloDialog
         open={abrirCicloOpen}
         onOpenChange={setAbrirCicloOpen}
@@ -813,14 +796,6 @@ export default function Monitoring() {
             setSelectedCicloId(activeCiclo.id)
           }
         }}
-      />
-
-      {/* Modal Cancelar Contrato Específico no Ciclo */}
-      <CancelarCicloDialog
-        ciclo={selectedCiclo}
-        contratoId={selectedContratoId !== 'todos' ? selectedContratoId : undefined}
-        open={cancelarDialogOpen}
-        onOpenChange={setCancelarDialogOpen}
       />
 
       {/* Modal Cancelar Ciclo Inteiro (operando sobre o ciclo selecionado) */}
