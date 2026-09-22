@@ -1510,7 +1510,7 @@ export default function Contracts() {
                         <div className="space-y-2 max-h-[240px] overflow-y-auto">
                           {contractLogRoutes.map((r, idx) => {
                             const paradasCount = paradasRota.filter(
-                              (p) => p.rota_logistica_id === r.id,
+                              (p) => (p.rota_id || (p as any).rota_logistica_id) === r.id,
                             ).length
                             return (
                               <div
@@ -2489,7 +2489,7 @@ export default function Contracts() {
                       {logRoutes.map((r) => {
                         // Paradas desta rota
                         const paradas = paradasRota
-                          .filter((p) => p.rota_logistica_id === r.id)
+                          .filter((p) => (p.rota_id || (p as any).rota_logistica_id) === r.id)
                           .sort((a, b) => a.ordem - b.ordem)
                         const count = paradas.length
 

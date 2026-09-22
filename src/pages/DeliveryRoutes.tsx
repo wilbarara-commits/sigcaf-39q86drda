@@ -209,14 +209,15 @@ export default function DeliveryRoutes() {
 
       // Paradas cadastradas no banco (collection paradas_rota) - estrutura da rota baseada em escolas
       const paradasCadastradas = paradasRota
-        .filter((p) => p.rota_logistica_id === rota.id)
+        .filter((p) => (p.rota_id || (p as any).rota_logistica_id) === rota.id)
         .sort((a, b) => a.ordem - b.ordem)
 
       const escolaIdsDaRota = new Set(paradasCadastradas.map((p) => p.escola_id))
 
-      // Pedidos desta rota logística: herdados da escola (paradas_rota) OU com rotaLogisticaId definido
+      // Pedidos desta rota: herdados da escola (paradas_rota) OU com rotaLogisticaId/rotaId definido
       const pedidosDaRota = orders.filter(
-        (o) => escolaIdsDaRota.has(o.schoolId) || o.rotaLogisticaId === rota.id,
+        (o) =>
+          escolaIdsDaRota.has(o.schoolId) || o.rotaLogisticaId === rota.id || o.rotaId === rota.id,
       )
 
       const pedidosPendentes = pedidosDaRota.filter((o) => o.status === 'Pendente')
@@ -249,7 +250,7 @@ export default function DeliveryRoutes() {
 
       // Último despacho realizado desta rota
       const ultimoDespacho = despachos
-        .filter((d) => d.rota_logistica_id === rota.id)
+        .filter((d) => (d.rota_id || (d as any).rota_logistica_id) === rota.id)
         .sort(
           (a, b) => new Date(b.data_despacho).getTime() - new Date(a.data_despacho).getTime(),
         )[0]
@@ -475,7 +476,7 @@ export default function DeliveryRoutes() {
 
     // Pré-selecionar escolas já vinculadas a esta rota (pela collection paradas_rota)
     const paradasDaRota = paradasRota
-      .filter((p) => p.rota_logistica_id === rota.id)
+      .filter((p) => (p.rota_id || (p as any).rota_logistica_id) === rota.id)
       .map((p) => p.escola_id)
     setSelectedSchoolsToAssign(paradasDaRota)
     setPastedSchoolsText('')
@@ -1600,14 +1601,17 @@ Ou apenas o nome da escola copiado do Excel/Word`}
                 {currentContrato ? (
                   currentContrato.escolas.map((esc) => {
                     const isChecked = selectedSchoolsToAssign.includes(esc.escolaId)
-                    // Verificar se já está em outra rota logística
+                    // Verificar se já está em outra rota
                     const paradaOutraRota = paradasRota.find(
                       (p) =>
                         p.escola_id === esc.escolaId &&
-                        p.rota_logistica_id !== selectedRotaForRouting?.id,
+                        (p.rota_id || (p as any).rota_logistica_id) !== selectedRotaForRouting?.id,
                     )
-                    const outraRotaObj = paradaOutraRota
-                      ? rotasLogisticas.find((r) => r.id === paradaOutraRota.rota_logistica_id)
+                    const outraRotaId = paradaOutraRota
+                      ? paradaOutraRota.rota_id || (paradaOutraRota as any).rota_logistica_id
+                      : null
+                    const outraRotaObj = outraRotaId
+                      ? rotasLogisticas.find((r) => r.id === outraRotaId)
                       : null
 
                     return (
@@ -1871,7 +1875,9 @@ Ou apenas o nome da escola copiado do Excel/Word`}
             await refreshData()
             // Atualizar o estado local de escolas selecionadas se o modal de roteamento estiver aberto
             const paradasDaRota = paradasRota
-              .filter((p) => p.rota_logistica_id === selectedRotaForRouting.id)
+              .filter(
+                (p) => (p.rota_id || (p as any).rota_logistica_id) === selectedRotaForRouting.id,
+              )
               .map((p) => p.escola_id)
             setSelectedSchoolsToAssign(paradasDaRota)
           }}

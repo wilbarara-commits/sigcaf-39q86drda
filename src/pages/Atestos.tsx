@@ -115,18 +115,19 @@ export default function Atestos() {
     return orders.filter((o) => o.status === 'Entregue' && !atestos.find((a) => a.orderId === o.id))
   }, [orders, atestos])
 
-  // Rotas logísticas com status "Entregue" (via despacho entregue ou com pedidos entregues na rota)
+  // Rotas com status "Entregue" (via despacho entregue ou com pedidos entregues na rota)
   const deliveredRoutesData = useMemo(() => {
     return rotasLogisticas.map((rota) => {
       const paradasCadastradas = paradasRota
-        .filter((p) => p.rota_logistica_id === rota.id)
+        .filter((p) => (p.rota_id || (p as any).rota_logistica_id) === rota.id)
         .sort((a, b) => (a.ordem || 0) - (b.ordem || 0))
 
       const escolaIdsDaRota = new Set(paradasCadastradas.map((p) => p.escola_id))
 
-      // Pedidos desta rota logística
+      // Pedidos desta rota
       const pedidosDaRota = orders.filter(
-        (o) => escolaIdsDaRota.has(o.schoolId) || o.rotaLogisticaId === rota.id,
+        (o) =>
+          escolaIdsDaRota.has(o.schoolId) || o.rotaLogisticaId === rota.id || o.rotaId === rota.id,
       )
 
       // Apenas pedidos entregues da rota
@@ -134,7 +135,7 @@ export default function Atestos() {
 
       // Verificar se a rota possui despacho entregue ou se possui pedidos entregues
       const despachosDaRota = despachos
-        .filter((d) => d.rota_logistica_id === rota.id)
+        .filter((d) => (d.rota_id || (d as any).rota_logistica_id) === rota.id)
         .sort((a, b) => new Date(b.data_despacho).getTime() - new Date(a.data_despacho).getTime())
 
       const ultimoDespacho = despachosDaRota[0]
@@ -255,29 +256,35 @@ export default function Atestos() {
     let numeroParada: number | undefined
 
     if (isCentralizado) {
-      // Procurar a parada da escola na rota logística
+      // Procurar a parada da escola na rota
       const todasParadasDaEscola = paradasRota.filter((p) => p.escola_id === order.schoolId)
       let paradaMatched = todasParadasDaEscola[0]
 
-      if (order.rotaLogisticaId) {
+      const targetRotaId =
+        order.rotaId ||
+        order.rotaLogisticaId ||
+        schoolLink?.rota_id ||
+        (schoolLink as any)?.rota_logistica_id
+
+      if (targetRotaId) {
         paradaMatched =
-          todasParadasDaEscola.find((p) => p.rota_logistica_id === order.rotaLogisticaId) ||
-          paradaMatched
-      } else if (schoolLink?.rota_logistica_id) {
-        paradaMatched =
-          todasParadasDaEscola.find((p) => p.rota_logistica_id === schoolLink.rota_logistica_id) ||
-          paradaMatched
+          todasParadasDaEscola.find(
+            (p) => (p.rota_id || (p as any).rota_logistica_id) === targetRotaId,
+          ) || paradaMatched
       }
 
       if (paradaMatched) {
         numeroParada = paradaMatched.ordem
-        const rl = rotasLogisticas.find((r) => r.id === paradaMatched.rota_logistica_id)
+        const matchedRotaId = paradaMatched.rota_id || (paradaMatched as any).rota_logistica_id
+        const rl =
+          rotas.find((r) => r.id === matchedRotaId) ||
+          rotasLogisticas.find((r) => r.id === matchedRotaId)
         if (rl?.nome) {
           rotaNome = rl.nome
         }
       }
 
-      // Fallback para nome da Rota caso a rota logística não tenha sido encontrada ou parada ainda não criada
+      // Fallback para nome da Rota caso a rota não tenha sido encontrada ou parada ainda não criada
       if (!rotaNome) {
         if (order.rotaId) {
           const foundRota = rotas.find((r) => r.id === order.rotaId)
@@ -286,19 +293,25 @@ export default function Atestos() {
           }
         }
         if (!rotaNome && order.rotaLogisticaId) {
-          const foundRl = rotasLogisticas.find((r) => r.id === order.rotaLogisticaId)
+          const foundRl = rotas.find((r) => r.id === order.rotaLogisticaId)
           if (foundRl?.nome) {
             rotaNome = foundRl.nome
           }
         }
-        if (!rotaNome && schoolLink?.rota_logistica_id) {
-          const foundRl = rotasLogisticas.find((r) => r.id === schoolLink.rota_logistica_id)
+        if (!rotaNome && schoolLink?.rota_id) {
+          const foundRl = rotas.find((r) => r.id === schoolLink.rota_id)
           if (foundRl?.nome) {
             rotaNome = foundRl.nome
           }
         }
-        if (!rotaNome && schoolLink?.rota?.trim()) {
-          rotaNome = schoolLink.rota.trim()
+        if (!rotaNome && (schoolLink as any)?.rota_logistica_id) {
+          const foundRl = rotas.find((r) => r.id === (schoolLink as any).rota_logistica_id)
+          if (foundRl?.nome) {
+            rotaNome = foundRl.nome
+          }
+        }
+        if (!rotaNome && (schoolLink as any)?.rota?.trim()) {
+          rotaNome = (schoolLink as any).rota.trim()
         }
       }
     }

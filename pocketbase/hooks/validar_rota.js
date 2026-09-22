@@ -1,11 +1,11 @@
-// Hook de validação de unicidade de nome para rotas_logisticas dentro do mesmo contrato
+// Hook de validação de unicidade de nome para rotas dentro do mesmo contrato
 // Garante a regra no servidor mesmo sob concorrência (race conditions)
 // e formata o nome com trim e espaços normalizados.
 
 onRecordCreate((e) => {
   const record = e.record
   const col = record.collection()
-  if (col.name !== 'rotas_logisticas') {
+  if (col.name !== 'rotas') {
     return e.next()
   }
 
@@ -14,11 +14,11 @@ onRecordCreate((e) => {
   const contratoId = record.getString('contrato_id') || ''
 
   if (!cleanNome) {
-    throw new BadRequestError('O nome da rota logística é obrigatório.')
+    throw new BadRequestError('O nome da rota é obrigatório.')
   }
 
   if (!contratoId) {
-    throw new BadRequestError('O contrato da rota logística é obrigatório.')
+    throw new BadRequestError('O contrato da rota é obrigatório.')
   }
 
   // Normaliza o nome gravado no banco
@@ -26,7 +26,7 @@ onRecordCreate((e) => {
 
   // Checa unicidade case-insensitive dentro do contrato
   const existingRotas = $app.findRecordsByFilter(
-    'rotas_logisticas',
+    'rotas',
     'contrato_id = {:contratoId}',
     'ordem',
     0,
@@ -44,17 +44,17 @@ onRecordCreate((e) => {
       .replace(/\s+/g, ' ')
       .toLowerCase()
     if (existingNomeNorm === lowerTarget) {
-      throw new BadRequestError('Já existe uma rota logística com este nome neste contrato.')
+      throw new BadRequestError('Já existe uma rota com este nome neste contrato.')
     }
   }
 
   return e.next()
-}, 'rotas_logisticas')
+}, 'rotas')
 
 onRecordUpdate((e) => {
   const record = e.record
   const col = record.collection()
-  if (col.name !== 'rotas_logisticas') {
+  if (col.name !== 'rotas') {
     return e.next()
   }
 
@@ -63,11 +63,11 @@ onRecordUpdate((e) => {
   const contratoId = record.getString('contrato_id') || ''
 
   if (!cleanNome) {
-    throw new BadRequestError('O nome da rota logística é obrigatório.')
+    throw new BadRequestError('O nome da rota é obrigatório.')
   }
 
   if (!contratoId) {
-    throw new BadRequestError('O contrato da rota logística é obrigatório.')
+    throw new BadRequestError('O contrato da rota é obrigatório.')
   }
 
   // Normaliza o nome gravado no banco
@@ -75,7 +75,7 @@ onRecordUpdate((e) => {
 
   // Checa unicidade case-insensitive dentro do contrato
   const existingRotas = $app.findRecordsByFilter(
-    'rotas_logisticas',
+    'rotas',
     'contrato_id = {:contratoId}',
     'ordem',
     0,
@@ -93,9 +93,9 @@ onRecordUpdate((e) => {
       .replace(/\s+/g, ' ')
       .toLowerCase()
     if (existingNomeNorm === lowerTarget) {
-      throw new BadRequestError('Já existe uma rota logística com este nome neste contrato.')
+      throw new BadRequestError('Já existe uma rota com este nome neste contrato.')
     }
   }
 
   return e.next()
-}, 'rotas_logisticas')
+}, 'rotas')

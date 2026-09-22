@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-22T02:22:32.050Z",
+  "generatedAt": "2026-09-22T02:45:44.358Z",
   "collections": [
     {
       "name": "users",
@@ -435,13 +435,6 @@
           "collectionRef": "users"
         },
         {
-          "name": "rota_logistica_id",
-          "type": "relation",
-          "required": false,
-          "system": false,
-          "collectionRef": "rotas_logisticas"
-        },
-        {
           "name": "motivo_cancelamento",
           "type": "text",
           "required": false,
@@ -687,6 +680,12 @@
           "required": false,
           "system": false,
           "autodateTriggers": ["onCreate", "onUpdate"]
+        },
+        {
+          "name": "ativa",
+          "type": "bool",
+          "required": false,
+          "system": false
         }
       ],
       "indexes": [
@@ -739,25 +738,12 @@
           "required": false,
           "system": false,
           "autodateTriggers": ["onCreate", "onUpdate"]
-        },
-        {
-          "name": "rota",
-          "type": "text",
-          "required": false,
-          "system": false
-        },
-        {
-          "name": "rota_logistica_id",
-          "type": "relation",
-          "required": false,
-          "system": false,
-          "collectionRef": "rotas_logisticas"
         }
       ],
       "indexes": [
         "CREATE INDEX idx_contrato_escolas_contrato ON contrato_escolas (contrato_id)",
         "CREATE INDEX idx_contrato_escolas_escola ON contrato_escolas (escola_id)",
-        "CREATE INDEX `idx_contrato_escolas_rota_log` ON `contrato_escolas` (rota_logistica_id)"
+        "CREATE INDEX `idx_contrato_escolas_rota_id` ON `contrato_escolas` (rota_id)"
       ]
     },
     {
@@ -989,63 +975,6 @@
       "indexes": []
     },
     {
-      "name": "rotas_logisticas",
-      "type": "base",
-      "apiRules": {
-        "list": "@request.auth.id != \"\"",
-        "view": "@request.auth.id != \"\"",
-        "create": "@request.auth.id != \"\"",
-        "update": "@request.auth.id != \"\"",
-        "delete": "@request.auth.id != \"\""
-      },
-      "fields": [
-        {
-          "name": "contrato_id",
-          "type": "relation",
-          "required": true,
-          "system": false,
-          "collectionRef": "contratos"
-        },
-        {
-          "name": "nome",
-          "type": "text",
-          "required": true,
-          "system": false
-        },
-        {
-          "name": "ordem",
-          "type": "number",
-          "required": false,
-          "system": false
-        },
-        {
-          "name": "ativa",
-          "type": "bool",
-          "required": false,
-          "system": false
-        },
-        {
-          "name": "created",
-          "type": "autodate",
-          "required": false,
-          "system": false,
-          "autodateTriggers": ["onCreate"]
-        },
-        {
-          "name": "updated",
-          "type": "autodate",
-          "required": false,
-          "system": false,
-          "autodateTriggers": ["onCreate", "onUpdate"]
-        }
-      ],
-      "indexes": [
-        "CREATE INDEX idx_rotas_log_contrato ON rotas_logisticas (contrato_id)",
-        "CREATE INDEX idx_rotas_log_ordem ON rotas_logisticas (ordem)",
-        "CREATE UNIQUE INDEX `idx_rotas_log_contrato_nome_unique` ON `rotas_logisticas` (contrato_id, nome)"
-      ]
-    },
-    {
       "name": "paradas_rota",
       "type": "base",
       "apiRules": {
@@ -1056,13 +985,6 @@
         "delete": "@request.auth.id != \"\""
       },
       "fields": [
-        {
-          "name": "rota_logistica_id",
-          "type": "relation",
-          "required": true,
-          "system": false,
-          "collectionRef": "rotas_logisticas"
-        },
         {
           "name": "escola_id",
           "type": "relation",
@@ -1089,10 +1011,17 @@
           "required": false,
           "system": false,
           "autodateTriggers": ["onCreate", "onUpdate"]
+        },
+        {
+          "name": "rota_id",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "rotas"
         }
       ],
       "indexes": [
-        "CREATE INDEX idx_paradas_rota ON paradas_rota (rota_logistica_id, ordem)",
+        "CREATE INDEX idx_paradas_rota ON paradas_rota (rota_id, ordem)",
         "CREATE INDEX idx_paradas_escola ON paradas_rota (escola_id)"
       ]
     },
@@ -1120,13 +1049,6 @@
           "required": false,
           "system": false,
           "collectionRef": "ciclos"
-        },
-        {
-          "name": "rota_logistica_id",
-          "type": "relation",
-          "required": true,
-          "system": false,
-          "collectionRef": "rotas_logisticas"
         },
         {
           "name": "data_despacho",
@@ -1161,10 +1083,17 @@
           "required": false,
           "system": false,
           "autodateTriggers": ["onCreate", "onUpdate"]
+        },
+        {
+          "name": "rota_id",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "rotas"
         }
       ],
       "indexes": [
-        "CREATE INDEX idx_despachos_rota ON despachos (rota_logistica_id)",
+        "CREATE INDEX idx_despachos_rota ON despachos (rota_id)",
         "CREATE INDEX idx_despachos_contrato ON despachos (contrato_id)",
         "CREATE INDEX idx_despachos_ciclo ON despachos (ciclo_id)"
       ]

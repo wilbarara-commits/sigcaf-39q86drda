@@ -1,6 +1,6 @@
 // Hook para criação de pedidos com itens em transação atômica única ou lote
 // POST /backend/v1/pedidos/batch-create
-// Body: { pedidos: Array<{ numero, escola_id, ciclo_id, origem, rota_id, rota_logistica_id, validacao, data_prevista, status, itens: [...] }> }
+// Body: { pedidos: Array<{ numero, escola_id, ciclo_id, origem, rota_id, validacao, data_prevista, status, itens: [...] }> }
 
 routerAdd('POST', '/backend/v1/pedidos/batch-create', (e) => {
   const body = e.requestInfo().body || {}
@@ -38,8 +38,8 @@ routerAdd('POST', '/backend/v1/pedidos/batch-create', (e) => {
       pRecord.set('escola_id', pData.escola_id)
       if (pData.ciclo_id) pRecord.set('ciclo_id', pData.ciclo_id)
       pRecord.set('origem', pData.origem || 'excel')
-      if (pData.rota_id) pRecord.set('rota_id', pData.rota_id)
-      if (pData.rota_logistica_id) pRecord.set('rota_logistica_id', pData.rota_logistica_id)
+      const rotaId = pData.rota_id || pData.rota_logistica_id
+      if (rotaId) pRecord.set('rota_id', rotaId)
       if (pData.validacao) pRecord.set('validacao', pData.validacao)
       pRecord.set('data_prevista', pData.data_prevista || new Date().toISOString())
       pRecord.set('status', pData.status || 'Pendente')

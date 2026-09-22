@@ -4,7 +4,7 @@ import type { PedidoRecord, PedidoItemRecord, PedidoValidacao } from '@/lib/type
 export const pedidosService = {
   async getAll(): Promise<PedidoRecord[]> {
     return await pb.collection('pedidos').getFullList<PedidoRecord>({
-      expand: 'escola_id,ciclo_id,rota_id,rota_logistica_id,entregue_por',
+      expand: 'escola_id,ciclo_id,rota_id,entregue_por',
       sort: '-data_prevista',
     })
   },
@@ -53,6 +53,7 @@ export const pedidosService = {
 
     // Tentar via endpoint backend atômico para garantir consistência e evitar rate limiting
     try {
+      const effectiveRotaId = data.rota_id || data.rota_logistica_id || ''
       const res = await pb.send<{
         success: boolean
         totalCreated: number
@@ -66,8 +67,7 @@ export const pedidosService = {
               escola_id: data.escola_id,
               ciclo_id: data.ciclo_id || '',
               origem: data.origem || 'manual',
-              rota_id: data.rota_id || '',
-              rota_logistica_id: data.rota_logistica_id || '',
+              rota_id: effectiveRotaId,
               validacao: data.validacao || { status: 'validado', motivo: 'Lançamento manual' },
               data_prevista: data.data_prevista,
               status: data.status,
@@ -83,13 +83,13 @@ export const pedidosService = {
       console.warn('Fallback para criação direta via SDK PocketBase:', batchErr)
     }
 
+    const effectiveRotaId = data.rota_id || data.rota_logistica_id || ''
     const pedido = await pb.collection('pedidos').create<PedidoRecord>({
       numero: data.numero,
       escola_id: data.escola_id,
       ciclo_id: data.ciclo_id || '',
       origem: data.origem || 'manual',
-      rota_id: data.rota_id || '',
-      rota_logistica_id: data.rota_logistica_id || '',
+      ...(effectiveRotaId ? { rota_id: effectiveRotaId } : {}),
       validacao: data.validacao || { status: 'validado', motivo: 'Lançamento manual' },
       data_prevista: data.data_prevista,
       status: data.status,
@@ -202,6 +202,7 @@ export const pedidosService = {
       entregue_por?: string
       motivo_cancelamento?: string
       cancelado_em?: string
+      rota_id?: string
       rota_logistica_id?: string
     },
   ): Promise<PedidoRecord> {
@@ -218,15 +219,22 @@ export const pedidosService = {
     if (options?.cancelado_em !== undefined) {
       payload.cancelado_em = options.cancelado_em
     }
-    if (options?.rota_logistica_id !== undefined) {
-      payload.rota_logistica_id = options.rota_logistica_id
+    const rId = options?.rota_id || options?.rota_logistica_id
+    if (rId !== undefined) {
+      payload.rota_id = rId
     }
     return await pb.collection('pedidos').update<PedidoRecord>(id, payload)
   },
 
-  async atribuirRotaLogistica(pedidoId: string, rotaLogisticaId: string): Promise<PedidoRecord> {
+  async atribuirRotaLogistica(pedidoId: string, rotaId: string): Promise<PedidoRecord> {
     return await pb.collection('pedidos').update<PedidoRecord>(pedidoId, {
-      rota_logistica_id: rotaLogisticaId,
+      rota_id: rotaId,
+    })
+  },
+
+  async atribuirRota(pedidoId: string, rotaId: string): Promise<PedidoRecord> {
+    return await pb.collection('pedidos').update<PedidoRecord>(pedidoId, {
+      rota_id: rotaId,
     })
   },
 

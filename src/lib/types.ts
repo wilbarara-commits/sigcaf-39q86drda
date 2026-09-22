@@ -43,28 +43,22 @@ export interface RotaRecord {
   contrato_id: string
   nome: string
   ordem?: number
-  created?: string
-  updated?: string
-}
-
-export interface RotaLogisticaRecord {
-  id: string
-  contrato_id: string
-  nome: string
-  ordem?: number
   ativa?: boolean
   created?: string
   updated?: string
 }
 
+// Alias de retrocompatibilidade durante a transição
+export type RotaLogisticaRecord = RotaRecord
+
 export interface ParadaRotaRecord {
   id: string
-  rota_logistica_id: string
+  rota_id: string
   escola_id: string
   ordem: number
   expand?: {
     escola_id?: EscolaRecord
-    rota_logistica_id?: RotaLogisticaRecord
+    rota_id?: RotaRecord
   }
   created?: string
   updated?: string
@@ -74,14 +68,14 @@ export interface DespachoRecord {
   id: string
   contrato_id: string
   ciclo_id?: string
-  rota_logistica_id: string
+  rota_id: string
   data_despacho: string
   usuario_id?: string
   status: 'Em Rota' | 'Entregue' | 'Cancelado'
   expand?: {
     contrato_id?: ContratoRecord
     ciclo_id?: CicloRecord
-    rota_logistica_id?: RotaLogisticaRecord
+    rota_id?: RotaRecord
     usuario_id?: UserRecord
   }
   created?: string
@@ -120,12 +114,9 @@ export interface ContratoEscolaRecord {
   contrato_id: string
   escola_id: string
   rota_id?: string
-  rota?: string
-  rota_logistica_id?: string
   expand?: {
     escola_id?: EscolaRecord
     rota_id?: RotaRecord
-    rota_logistica_id?: RotaLogisticaRecord
     contrato_id?: ContratoRecord
   }
   created?: string
@@ -160,7 +151,6 @@ export interface PedidoRecord {
   ciclo_id?: string
   origem?: 'excel' | 'whatsapp' | 'manual'
   rota_id?: string
-  rota_logistica_id?: string
   validacao?: PedidoValidacao
   data_prevista: string
   status: 'Pendente' | 'Em Rota' | 'Entregue' | 'Cancelado'
@@ -172,7 +162,6 @@ export interface PedidoRecord {
     escola_id?: EscolaRecord
     ciclo_id?: CicloRecord
     rota_id?: RotaRecord
-    rota_logistica_id?: RotaLogisticaRecord
     entregue_por?: UserRecord
   }
   created?: string
@@ -275,6 +264,8 @@ export interface ContractSchoolLink {
   contratoId: string
   escolaId: string
   rotaId?: string
+  rotaNome?: string
+  // Campos de compatibilidade para transição suave
   rotaPlanilha?: string
   rotaLogisticaId?: string
   rotaLogisticaNome?: string
@@ -286,7 +277,6 @@ export interface ContractSchoolLink {
   escolaContato?: string
   escolaTipo?: string
   escolaAlunos?: number
-  rotaNome?: string // compatibilidade (aponta para rota da planilha)
 }
 
 export interface Contract {

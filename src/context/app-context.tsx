@@ -194,9 +194,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         atestosService.getAll(),
         ciclosService.getAll(),
         rotasService.getAll(),
-        rotasLogisticasService.getAll(),
-        rotasLogisticasService.getParadas(),
-        rotasLogisticasService.getDespachos(),
+        rotasService.getAll(),
+        rotasService.getParadas(),
+        rotasService.getDespachos(),
         configuracoesService.get(),
       ])
 
@@ -236,7 +236,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const currentActive = rawCiclos.find((c) => c.status !== 'fechado') || rawCiclos[0] || null
       setActiveCiclo(currentActive)
       setRotas(rawRotas)
-      setRotasLogisticas(rawRotasLogisticas)
+      setRotasLogisticas(rawRotas)
       setParadasRota(rawParadasRota)
       setDespachos(rawDespachos)
       setContractSchools(rawContratoEscolas)
@@ -286,11 +286,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const rotaObj = rawRotas.find((r) => r.id === ped.rota_id)
         const rotaNome = ped.expand?.rota_id?.nome || rotaObj?.nome
 
-        // Derivar Rota Logística prioritariamente da ESCOLA (paradas_rota) e fallback para ped.rota_logistica_id
+        // Derivar Rota Logística prioritariamente da ESCOLA (paradas_rota) e fallback para ped.rota_id
         const paradaEscola = escolaParadaMap.get(ped.escola_id)
-        const effectiveRotaLogisticaId = paradaEscola?.rota_logistica_id || ped.rota_logistica_id
-        const rotaLogObj = rawRotasLogisticas.find((r) => r.id === effectiveRotaLogisticaId)
-        const rotaLogisticaNome = rotaLogObj?.nome || ped.expand?.rota_logistica_id?.nome
+        const effectiveRotaLogisticaId = paradaEscola?.rota_id || ped.rota_id
+        const rotaLogObj = rawRotas.find((r) => r.id === effectiveRotaLogisticaId)
+        const rotaLogisticaNome = rotaLogObj?.nome || ped.expand?.rota_id?.nome
 
         const pItens = rawPedidoItens.filter((pi) => pi.pedido_id === ped.id)
         let total = 0
@@ -358,24 +358,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const linkedSchools = links.map((ce) => {
           const sch = mappedSchools.find((s) => s.id === ce.escola_id)
           const rt = rawRotas.find((r) => r.id === ce.rota_id)
-          // Rota da planilha: ce.rota guarda o nome texto livre da planilha.
-          // Se ce.rota for um ID de 15 caracteres alfanuméricos, descartar porque é ID corrompido, não nome.
-          const ceRotaRaw = ce.rota?.trim()
+          const ceRotaRaw = (ce as any).rota?.trim()
           const ceRotaTexto = ceRotaRaw && !/^[a-z0-9]{15}$/.test(ceRotaRaw) ? ceRotaRaw : undefined
 
           const rotaPlanilhaNome = ceRotaTexto || ce.expand?.rota_id?.nome || rt?.nome || 'Sem Rota'
 
-          // Rota logística da cooperativa associada a esta escola
+          // Rota unificada associada a esta escola
           const paradaEscola = rawParadasRota.find((p) => p.escola_id === ce.escola_id)
-          const rotaLogId = ce.rota_logistica_id || paradaEscola?.rota_logistica_id
-          const rotaLogObj = rawRotasLogisticas.find((r) => r.id === rotaLogId)
-          const rotaLogisticaNome = ce.expand?.rota_logistica_id?.nome || rotaLogObj?.nome
+          const rotaLogId = ce.rota_id || paradaEscola?.rota_id
+          const rotaLogObj = rawRotas.find((r) => r.id === rotaLogId)
+          const rotaLogisticaNome = ce.expand?.rota_id?.nome || rotaLogObj?.nome || rt?.nome
 
           return {
             id: ce.id,
             contratoId: ce.contrato_id,
             escolaId: ce.escola_id,
-            rotaId: ce.rota_id,
+            rotaId: ce.rota_id || rotaLogId,
             rotaPlanilha: rotaPlanilhaNome,
             rotaLogisticaId: rotaLogId,
             rotaLogisticaNome: rotaLogisticaNome,
@@ -464,9 +462,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const schoolObj = schools.find((s) => s.id === rec.escola_id)
         const schoolName = rec.expand?.escola_id?.nome || schoolObj?.name || 'Escola'
         const paradaEscola = paradasRota.find((p) => p.escola_id === rec.escola_id)
-        const effectiveRotaLogisticaId = paradaEscola?.rota_logistica_id || rec.rota_logistica_id
-        const rotaLogObj = rotasLogisticas.find((r) => r.id === effectiveRotaLogisticaId)
-        const rotaLogisticaNome = rotaLogObj?.nome || rec.expand?.rota_logistica_id?.nome
+        const effectiveRotaLogisticaId = paradaEscola?.rota_id || rec.rota_id
+        const rotaLogObj = rotas.find((r) => r.id === effectiveRotaLogisticaId)
+        const rotaLogisticaNome = rotaLogObj?.nome || rec.expand?.rota_id?.nome
         const rotaObj = rotas.find((r) => r.id === rec.rota_id)
         const rotaNome = rec.expand?.rota_id?.nome || rotaObj?.nome
 
@@ -546,12 +544,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   })
 
-  useRealtime<any>('rotas_logisticas', (e) => {
+  useRealtime<any>('rotas', (e) => {
     if (e.action === 'delete') {
+      setRotas((prev) => prev.filter((r) => r.id !== e.record.id))
       setRotasLogisticas((prev) => prev.filter((r) => r.id !== e.record.id))
     } else if (e.action === 'create' || e.action === 'update') {
-      const rec = e.record as RotaLogisticaRecord
-      setRotasLogisticas((prev) => {
+      const rec = e.record as RotaRecord
+      const updateList = (prev: RotaRecord[]) => {
         const existingIdx = prev.findIndex((r) => r.id === rec.id)
         if (existingIdx !== -1) {
           const copy = [...prev]
@@ -559,7 +558,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
           return copy.sort((a, b) => (a.ordem || 0) - (b.ordem || 0))
         }
 
-        // Se houver um registro temporário otimista com mesmo contrato e nome correspondente, substitui
         const cleanNome = (rec.nome || '').trim().replace(/\s+/g, ' ').toLowerCase()
         const tempIdx = prev.findIndex(
           (r) =>
@@ -575,7 +573,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }
 
         return [...prev, rec].sort((a, b) => (a.ordem || 0) - (b.ordem || 0))
-      })
+      }
+      setRotas(updateList)
+      setRotasLogisticas(updateList)
     }
   })
 
@@ -595,9 +595,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         // Se houver parada temporária para a mesma rota e mesma escola, substitui
         const tempIdx = prev.findIndex(
           (p) =>
-            p.id.startsWith('temp-') &&
-            p.rota_logistica_id === rec.rota_logistica_id &&
-            p.escola_id === rec.escola_id,
+            p.id.startsWith('temp-') && p.rota_id === rec.rota_id && p.escola_id === rec.escola_id,
         )
         if (tempIdx !== -1) {
           const copy = [...prev]
@@ -628,7 +626,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           (d) =>
             d.id.startsWith('temp-') &&
             d.contrato_id === rec.contrato_id &&
-            d.rota_logistica_id === rec.rota_logistica_id,
+            d.rota_id === rec.rota_id,
         )
         if (tempIdx !== -1) {
           const copy = [...prev]
@@ -803,19 +801,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
     // Quando houver criação, alteração ou exclusão de vínculo escola↔contrato,
     // recarregar vínculos e contratos para manter o estado global e a tela /escolas sincronizados
     try {
-      const [updatedContratoEscolas, rawContratos, rawRotas, rawParadasRota, rawRotasLogisticas] =
-        await Promise.all([
-          contratosService.getEscolas(),
-          contratosService.getAll(),
-          rotasService.getAll(),
-          rotasLogisticasService.getParadas(),
-          rotasLogisticasService.getAll(),
-        ])
+      const [updatedContratoEscolas, rawContratos, rawRotas, rawParadasRota] = await Promise.all([
+        contratosService.getEscolas(),
+        contratosService.getAll(),
+        rotasService.getAll(),
+        rotasService.getParadas(),
+      ])
 
       setContractSchools(updatedContratoEscolas)
       setRotas(rawRotas)
+      setRotasLogisticas(rawRotas)
       setParadasRota(rawParadasRota)
-      setRotasLogisticas(rawRotasLogisticas)
 
       setContracts((prevContracts) => {
         return (rawContratos.length > 0 ? rawContratos : prevContracts).map((c) => {
@@ -823,7 +819,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           const linkedSchools = links.map((ce) => {
             const sch = schools.find((s) => s.id === ce.escola_id)
             const rt = rawRotas.find((r) => r.id === ce.rota_id)
-            const ceRotaRaw = ce.rota?.trim()
+            const ceRotaRaw = (ce as any).rota?.trim()
             const ceRotaTexto =
               ceRotaRaw && !/^[a-z0-9]{15}$/.test(ceRotaRaw) ? ceRotaRaw : undefined
 
@@ -831,15 +827,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
               ceRotaTexto || ce.expand?.rota_id?.nome || rt?.nome || 'Sem Rota'
 
             const paradaEscola = rawParadasRota.find((p) => p.escola_id === ce.escola_id)
-            const rotaLogId = ce.rota_logistica_id || paradaEscola?.rota_logistica_id
-            const rotaLogObj = rawRotasLogisticas.find((r) => r.id === rotaLogId)
-            const rotaLogisticaNome = ce.expand?.rota_logistica_id?.nome || rotaLogObj?.nome
+            const rotaLogId = ce.rota_id || paradaEscola?.rota_id
+            const rotaLogObj = rawRotas.find((r) => r.id === rotaLogId)
+            const rotaLogisticaNome = ce.expand?.rota_id?.nome || rotaLogObj?.nome || rt?.nome
 
             return {
               id: ce.id,
               contratoId: ce.contrato_id,
               escolaId: ce.escola_id,
-              rotaId: ce.rota_id,
+              rotaId: ce.rota_id || rotaLogId,
               rotaPlanilha: rotaPlanilhaNome,
               rotaLogisticaId: rotaLogId,
               rotaLogisticaNome: rotaLogisticaNome,
@@ -943,13 +939,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
       ? orderData.date
       : `${orderData.date} 12:00:00.000Z`
 
-    // Herança automática da Rota Logística da Escola
-    let rotaLogisticaIdFinal = orderData.rotaLogisticaId
+    // Herança automática da Rota da Escola
+    let rotaLogisticaIdFinal = orderData.rotaLogisticaId || orderData.rotaId
     if (!rotaLogisticaIdFinal) {
       const paradaDaEscola = paradasRota.find((p) => p.escola_id === orderData.schoolId)
       if (paradaDaEscola) {
-        rotaLogisticaIdFinal = paradaDaEscola.rota_logistica_id
+        rotaLogisticaIdFinal = paradaDaEscola.rota_id
       }
+    }
+    if (!rotaId && rotaLogisticaIdFinal) {
+      rotaId = rotaLogisticaIdFinal
     }
 
     const tempId = `temp-${Date.now()}`
@@ -999,8 +998,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         escola_id: orderData.schoolId,
         ciclo_id: orderData.cicloId || activeCiclo?.id,
         origem: orderData.origem || 'manual',
-        rota_id: rotaId,
-        rota_logistica_id: rotaLogisticaIdFinal,
+        rota_id: rotaId || rotaLogisticaIdFinal,
         validacao: validationResult,
         data_prevista: datePrevista,
         status: 'Pendente',
@@ -1237,16 +1235,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
     contratoId: string,
     userId?: string,
   ): Promise<boolean> => {
-    // Escolas que pertencem a esta rota logística (via paradas_rota)
+    // Escolas que pertencem a esta rota (via paradas_rota)
     const escolasDaRota = new Set(
-      paradasRota.filter((p) => p.rota_logistica_id === rotaLogisticaId).map((p) => p.escola_id),
+      paradasRota.filter((p) => p.rota_id === rotaLogisticaId).map((p) => p.escola_id),
     )
 
     // Identificar pedidos pendentes do ciclo ativo (ou pendentes em geral)
     const pedidosDaRota = orders.filter((o) => {
       if (o.status !== 'Pendente') return false
       if (activeCiclo?.id && o.cicloId && o.cicloId !== activeCiclo.id) return false
-      return escolasDaRota.has(o.schoolId) || o.rotaLogisticaId === rotaLogisticaId
+      return (
+        escolasDaRota.has(o.schoolId) ||
+        o.rotaLogisticaId === rotaLogisticaId ||
+        o.rotaId === rotaLogisticaId
+      )
     })
 
     if (pedidosDaRota.length === 0) {
@@ -1278,7 +1280,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       id: `temp-desp-${Date.now()}`,
       contrato_id: contratoId,
       ciclo_id: activeCiclo?.id,
-      rota_logistica_id: rotaLogisticaId,
+      rota_id: rotaLogisticaId,
       usuario_id: userId,
       data_despacho: nowIso,
       status: 'Em Rota',
@@ -1328,12 +1330,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
     userId?: string,
   ): Promise<boolean> => {
     const escolasDaRota = new Set(
-      paradasRota.filter((p) => p.rota_logistica_id === rotaLogisticaId).map((p) => p.escola_id),
+      paradasRota.filter((p) => p.rota_id === rotaLogisticaId).map((p) => p.escola_id),
     )
 
     const pedidosEmRota = orders.filter((o) => {
       if (o.status !== 'Em Rota') return false
-      return escolasDaRota.has(o.schoolId) || o.rotaLogisticaId === rotaLogisticaId
+      return (
+        escolasDaRota.has(o.schoolId) ||
+        o.rotaLogisticaId === rotaLogisticaId ||
+        o.rotaId === rotaLogisticaId
+      )
     })
 
     if (pedidosEmRota.length === 0) {
@@ -1364,9 +1370,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     // Optimistic Update: despachos da rota -> Entregue
     setDespachos((prev) =>
       prev.map((d) =>
-        d.rota_logistica_id === rotaLogisticaId && d.status === 'Em Rota'
-          ? { ...d, status: 'Entregue' }
-          : d,
+        d.rota_id === rotaLogisticaId && d.status === 'Em Rota' ? { ...d, status: 'Entregue' } : d,
       ),
     )
 
@@ -1627,19 +1631,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const prevOrders = [...orders]
 
     // Optimistic update
+    setRotas((prev) => prev.filter((r) => r.id !== id))
     setRotasLogisticas((prev) => prev.filter((r) => r.id !== id))
-    setParadasRota((prev) => prev.filter((p) => p.rota_logistica_id !== id))
+    setParadasRota((prev) => prev.filter((p) => p.rota_id !== id))
     setOrders((prev) =>
       prev.map((o) =>
-        o.rotaLogisticaId === id
-          ? { ...o, rotaLogisticaId: undefined, rotaLogisticaNome: undefined }
+        o.rotaLogisticaId === id || o.rotaId === id
+          ? {
+              ...o,
+              rotaId: undefined,
+              rotaNome: undefined,
+              rotaLogisticaId: undefined,
+              rotaLogisticaNome: undefined,
+            }
           : o,
       ),
     )
 
     try {
       // Desvincular paradas cadastradas no backend
-      const paradas = paradasRota.filter((p) => p.rota_logistica_id === id)
+      const paradas = paradasRota.filter((p) => p.rota_id === id)
       for (const p of paradas) {
         await rotasLogisticasService.removerParada(p.id)
       }
@@ -1665,7 +1676,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }
 
   // Sincronizar escolas atribuídas a uma rota logística:
-  // Preenche paradas_rota, atualiza contrato_escolas.rota_logistica_id (SEM tocar na rota da planilha!),
+  // Preenche paradas_rota, atualiza contrato_escolas.rota_id,
   // atualiza pedidos pendentes dessas escolas e limpa as desatribuídas
   const sincronizarEscolasRotaLogistica = async (
     contratoId: string,
@@ -1676,7 +1687,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const rotaLog = rotasLogisticas.find((r) => r.id === rotaLogisticaId)
     const nomeRota = rotaLog?.nome || 'Rota'
 
-    const paradasAnteriores = paradasRota.filter((p) => p.rota_logistica_id === rotaLogisticaId)
+    const paradasAnteriores = paradasRota.filter((p) => p.rota_id === rotaLogisticaId)
     const escolasAnterioresIds = paradasAnteriores.map((p) => p.escola_id)
     const novasEscolasSet = new Set(escolaIds)
     const escolasDesatribuidas = escolasAnterioresIds.filter((id) => !novasEscolasSet.has(id))
@@ -1688,7 +1699,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     // 1. Optimistic Update das Paradas
     const novasParadasOptimistic: ParadaRotaRecord[] = escolaIds.map((escId, idx) => ({
       id: `temp-parada-${escId}`,
-      rota_logistica_id: rotaLogisticaId,
+      rota_id: rotaLogisticaId,
       escola_id: escId,
       ordem: idx + 1,
       created: new Date().toISOString(),
@@ -1696,7 +1707,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }))
 
     setParadasRota((prev) => [
-      ...prev.filter((p) => p.rota_logistica_id !== rotaLogisticaId),
+      ...prev.filter((p) => p.rota_id !== rotaLogisticaId),
       ...novasParadasOptimistic,
     ])
 
@@ -1705,10 +1716,25 @@ export function AppProvider({ children }: { children: ReactNode }) {
       prev.map((o) => {
         if (o.status !== 'Pendente') return o
         if (escolaIds.includes(o.schoolId)) {
-          return { ...o, rotaLogisticaId, rotaLogisticaNome: nomeRota }
+          return {
+            ...o,
+            rotaId: rotaLogisticaId,
+            rotaNome: nomeRota,
+            rotaLogisticaId,
+            rotaLogisticaNome: nomeRota,
+          }
         }
-        if (escolasDesatribuidas.includes(o.schoolId) && o.rotaLogisticaId === rotaLogisticaId) {
-          return { ...o, rotaLogisticaId: undefined, rotaLogisticaNome: undefined }
+        if (
+          escolasDesatribuidas.includes(o.schoolId) &&
+          (o.rotaLogisticaId === rotaLogisticaId || o.rotaId === rotaLogisticaId)
+        ) {
+          return {
+            ...o,
+            rotaId: undefined,
+            rotaNome: undefined,
+            rotaLogisticaId: undefined,
+            rotaLogisticaNome: undefined,
+          }
         }
         return o
       }),
@@ -1719,37 +1745,34 @@ export function AppProvider({ children }: { children: ReactNode }) {
       prev.map((ce) => {
         if (ce.contrato_id !== contratoId) return ce
         if (escolaIds.includes(ce.escola_id)) {
-          return { ...ce, rota_logistica_id: rotaLogisticaId }
+          return { ...ce, rota_id: rotaLogisticaId }
         }
-        if (
-          escolasDesatribuidas.includes(ce.escola_id) &&
-          ce.rota_logistica_id === rotaLogisticaId
-        ) {
-          return { ...ce, rota_logistica_id: '' }
+        if (escolasDesatribuidas.includes(ce.escola_id) && ce.rota_id === rotaLogisticaId) {
+          return { ...ce, rota_id: undefined }
         }
         return ce
       }),
     )
 
     try {
-      // Atualizar vínculo de rota logística em contrato_escolas.rota_logistica_id
+      // Atualizar vínculo de rota em contrato_escolas.rota_id
       for (const escId of escolaIds) {
         try {
-          await contratosService.updateEscolaRotaLogisticaByContratoEscola(
+          await contratosService.updateEscolaRotaByContratoEscola(
             contratoId,
             escId,
             rotaLogisticaId,
           )
         } catch (linkErr) {
-          console.warn(`Erro ao sincronizar rota_logistica_id para escola ${escId}:`, linkErr)
+          console.warn(`Erro ao sincronizar rota_id para escola ${escId}:`, linkErr)
         }
       }
 
       for (const escId of escolasDesatribuidas) {
         try {
-          await contratosService.updateEscolaRotaLogisticaByContratoEscola(contratoId, escId, '')
+          await contratosService.updateEscolaRotaByContratoEscola(contratoId, escId, '')
         } catch (linkErr) {
-          console.warn(`Erro ao limpar rota_logistica_id para escola ${escId}:`, linkErr)
+          console.warn(`Erro ao limpar rota_id para escola ${escId}:`, linkErr)
         }
       }
 
@@ -1774,7 +1797,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
       if (savedParadas && savedParadas.length > 0) {
         setParadasRota((prev) => [
-          ...prev.filter((p) => p.rota_logistica_id !== rotaLogisticaId),
+          ...prev.filter((p) => p.rota_id !== rotaLogisticaId),
           ...savedParadas,
         ])
       }
@@ -1878,7 +1901,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const paradaOrdemMap = new Map(paradas.map((p) => [p.escola_id, p.ordem]))
     setParadasRota((prev) =>
       prev.map((p) => {
-        if (p.rota_logistica_id !== rotaLogisticaId) return p
+        if (p.rota_id !== rotaLogisticaId) return p
         const novaOrdem = paradaOrdemMap.get(p.escola_id)
         return novaOrdem !== undefined ? { ...p, ordem: novaOrdem } : p
       }),
@@ -1887,10 +1910,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     try {
       const saved = await rotasLogisticasService.reordenarParadas(rotaLogisticaId, paradas)
       if (saved && saved.length > 0) {
-        setParadasRota((prev) => [
-          ...prev.filter((p) => p.rota_logistica_id !== rotaLogisticaId),
-          ...saved,
-        ])
+        setParadasRota((prev) => [...prev.filter((p) => p.rota_id !== rotaLogisticaId), ...saved])
       }
       return true
     } catch (err: any) {
@@ -1929,14 +1949,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     // Identificar a rota de origem real caso não informada
     const efetivaOrigemId =
-      origemRotaId || paradasRota.find((p) => p.escola_id === escolaId)?.rota_logistica_id
+      origemRotaId || paradasRota.find((p) => p.escola_id === escolaId)?.rota_id
 
     // --- OPTIMISTIC UPDATE ---
     // 1. Atualizar paradas da rota de origem e da rota de destino
     if (efetivaOrigemId === destinoRotaId) {
       // Reordenação na mesma rota
       const paradasMesmaRota = paradasRota
-        .filter((p) => p.rota_logistica_id === destinoRotaId)
+        .filter((p) => p.rota_id === destinoRotaId)
         .sort((a, b) => a.ordem - b.ordem)
 
       const curIdx = paradasMesmaRota.findIndex((p) => p.escola_id === escolaId)
@@ -1951,7 +1971,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }))
 
         setParadasRota((prev) => [
-          ...prev.filter((p) => p.rota_logistica_id !== destinoRotaId),
+          ...prev.filter((p) => p.rota_id !== destinoRotaId),
           ...reordenadas,
         ])
       }
@@ -1959,18 +1979,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
       // Mover entre rotas distintas
       // Paradas de origem restantes (sem a escola)
       const paradasOrigemRestantes = paradasRota
-        .filter((p) => p.rota_logistica_id === efetivaOrigemId && p.escola_id !== escolaId)
+        .filter((p) => p.rota_id === efetivaOrigemId && p.escola_id !== escolaId)
         .sort((a, b) => a.ordem - b.ordem)
         .map((p, idx) => ({ ...p, ordem: idx + 1 }))
 
       // Paradas de destino (com a escola inserida)
       const paradasDestinoAtuais = paradasRota
-        .filter((p) => p.rota_logistica_id === destinoRotaId && p.escola_id !== escolaId)
+        .filter((p) => p.rota_id === destinoRotaId && p.escola_id !== escolaId)
         .sort((a, b) => a.ordem - b.ordem)
 
       const novaParada: ParadaRotaRecord = {
         id: `temp-parada-${escolaId}-${destinoRotaId}`,
-        rota_logistica_id: destinoRotaId,
+        rota_id: destinoRotaId,
         escola_id: escolaId,
         ordem: targetOrdem || paradasDestinoAtuais.length + 1,
         created: new Date().toISOString(),
@@ -1991,8 +2011,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setParadasRota((prev) => [
         ...prev.filter(
           (p) =>
-            p.rota_logistica_id !== efetivaOrigemId &&
-            p.rota_logistica_id !== destinoRotaId &&
+            p.rota_id !== efetivaOrigemId &&
+            p.rota_id !== destinoRotaId &&
             p.escola_id !== escolaId,
         ),
         ...paradasOrigemRestantes,
@@ -2006,6 +2026,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         if (o.schoolId === escolaId && o.status === 'Pendente') {
           return {
             ...o,
+            rotaId: destinoRotaId,
+            rotaNome: nomeRotaDestino,
             rotaLogisticaId: destinoRotaId,
             rotaLogisticaNome: nomeRotaDestino,
           }
@@ -2019,7 +2041,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setContractSchools((prev) =>
         prev.map((ce) => {
           if (ce.contrato_id === contratoId && ce.escola_id === escolaId) {
-            return { ...ce, rota_logistica_id: destinoRotaId }
+            return { ...ce, rota_id: destinoRotaId }
           }
           return ce
         }),
@@ -2060,8 +2082,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
           setParadasRota((prev) => {
             let next = prev.filter(
               (p) =>
-                p.rota_logistica_id !== destinoRotaId &&
-                (efetivaOrigemId ? p.rota_logistica_id !== efetivaOrigemId : true),
+                p.rota_id !== destinoRotaId &&
+                (efetivaOrigemId ? p.rota_id !== efetivaOrigemId : true),
             )
             if (res.paradas_origem && res.paradas_origem.length > 0) {
               next = [...next, ...res.paradas_origem]

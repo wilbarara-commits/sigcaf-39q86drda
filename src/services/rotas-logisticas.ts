@@ -1,18 +1,15 @@
-import pb from '@/lib/pocketbase/client'
-import type { RotaLogisticaRecord, ParadaRotaRecord, DespachoRecord } from '@/lib/types'
+// Wrapper de compatibilidade que repassa chamadas diretamente para rotasService
+// Garante que nenhum código legado quebre e que TODAS as queries usem a coleção 'rotas' e o campo 'rota_id'
+import { rotasService } from '@/services/rotas'
+import type { RotaRecord, ParadaRotaRecord, DespachoRecord } from '@/lib/types'
 
 export const rotasLogisticasService = {
-  async getAll(): Promise<RotaLogisticaRecord[]> {
-    return await pb.collection('rotas_logisticas').getFullList<RotaLogisticaRecord>({
-      sort: 'ordem,nome',
-    })
+  async getAll(): Promise<RotaRecord[]> {
+    return await rotasService.getAll()
   },
 
-  async getByContrato(contratoId: string): Promise<RotaLogisticaRecord[]> {
-    return await pb.collection('rotas_logisticas').getFullList<RotaLogisticaRecord>({
-      filter: `contrato_id = "${contratoId}"`,
-      sort: 'ordem,nome',
-    })
+  async getByContrato(contratoId: string): Promise<RotaRecord[]> {
+    return await rotasService.getByContrato(contratoId)
   },
 
   async create(data: {
@@ -20,111 +17,73 @@ export const rotasLogisticasService = {
     nome: string
     ordem?: number
     ativa?: boolean
-  }): Promise<RotaLogisticaRecord> {
-    const cleanNome = (data.nome || '').trim().replace(/\s+/g, ' ')
-    return await pb.collection('rotas_logisticas').create<RotaLogisticaRecord>({
-      ...data,
-      nome: cleanNome,
-      ativa: data.ativa ?? true,
-    })
+  }): Promise<RotaRecord> {
+    return await rotasService.create(data)
   },
 
-  async update(id: string, data: Partial<RotaLogisticaRecord>): Promise<RotaLogisticaRecord> {
-    const payload = { ...data }
-    if (payload.nome !== undefined) {
-      payload.nome = (payload.nome || '').trim().replace(/\s+/g, ' ')
-    }
-    return await pb.collection('rotas_logisticas').update<RotaLogisticaRecord>(id, payload)
+  async update(id: string, data: Partial<RotaRecord>): Promise<RotaRecord> {
+    return await rotasService.update(id, data)
   },
 
   async delete(id: string): Promise<boolean> {
-    return await pb.collection('rotas_logisticas').delete(id)
+    return await rotasService.delete(id)
   },
 
-  // Paradas da Rota
-  async getParadas(rotaLogisticaId?: string): Promise<ParadaRotaRecord[]> {
-    const filter = rotaLogisticaId ? `rota_logistica_id = "${rotaLogisticaId}"` : ''
-    return await pb.collection('paradas_rota').getFullList<ParadaRotaRecord>({
-      filter,
-      sort: 'ordem',
-      expand: 'escola_id,rota_logistica_id',
-    })
+  async getParadas(rotaId?: string): Promise<ParadaRotaRecord[]> {
+    return await rotasService.getParadas(rotaId)
   },
 
   async salvarParada(data: {
-    rota_logistica_id: string
+    rota_id?: string
+    rota_logistica_id?: string
     escola_id: string
     ordem: number
   }): Promise<ParadaRotaRecord> {
-    const existing = await pb.collection('paradas_rota').getFullList<ParadaRotaRecord>({
-      filter: `rota_logistica_id = "${data.rota_logistica_id}" && escola_id = "${data.escola_id}"`,
+    const rId = data.rota_id || data.rota_logistica_id || ''
+    return await rotasService.salvarParada({
+      rota_id: rId,
+      escola_id: data.escola_id,
+      ordem: data.ordem,
     })
-    if (existing.length > 0) {
-      return await pb.collection('paradas_rota').update<ParadaRotaRecord>(existing[0].id, {
-        ordem: data.ordem,
-      })
-    }
-    return await pb.collection('paradas_rota').create<ParadaRotaRecord>(data)
   },
 
   async reordenarParadas(
-    rotaLogisticaId: string,
+    rotaId: string,
     paradas: Array<{ escola_id: string; ordem: number }>,
   ): Promise<ParadaRotaRecord[]> {
-    try {
-      const res = await pb.send<{ success: boolean; paradas: ParadaRotaRecord[] }>(
-        '/backend/v1/rotas-logisticas/salvar-paradas',
-        {
-          method: 'POST',
-          body: { rota_logistica_id: rotaLogisticaId, paradas },
-        },
-      )
-      return res.paradas
-    } catch {
-      // Fallback local se o hook falhar
-      const results: ParadaRotaRecord[] = []
-      for (const p of paradas) {
-        const saved = await this.salvarParada({
-          rota_logistica_id: rotaLogisticaId,
-          escola_id: p.escola_id,
-          ordem: p.ordem,
-        })
-        results.push(saved)
-      }
-      return results
-    }
+    return await rotasService.reordenarParadas(rotaId, paradas)
   },
 
   async despacharRotaBatch(data: {
-    rota_logistica_id: string
+    rota_id?: string
+    rota_logistica_id?: string
     contrato_id: string
     ciclo_id?: string
     user_id?: string
   }): Promise<{ despacho: DespachoRecord; pedidos: any[] }> {
-    return await pb.send<{ success: boolean; despacho: DespachoRecord; pedidos: any[] }>(
-      '/backend/v1/rotas-logisticas/despachar',
-      {
-        method: 'POST',
-        body: data,
-      },
-    )
+    const rId = data.rota_id || data.rota_logistica_id || ''
+    return await rotasService.despacharRotaBatch({
+      rota_id: rId,
+      contrato_id: data.contrato_id,
+      ciclo_id: data.ciclo_id,
+      user_id: data.user_id,
+    })
   },
 
   async entregarRotaBatch(data: {
-    rota_logistica_id: string
+    rota_id?: string
+    rota_logistica_id?: string
     user_id?: string
   }): Promise<{ pedidos: any[]; produtos: any[] }> {
-    return await pb.send<{ success: boolean; pedidos: any[]; produtos: any[] }>(
-      '/backend/v1/rotas-logisticas/entregar',
-      {
-        method: 'POST',
-        body: data,
-      },
-    )
+    const rId = data.rota_id || data.rota_logistica_id || ''
+    return await rotasService.entregarRotaBatch({
+      rota_id: rId,
+      user_id: data.user_id,
+    })
   },
 
   async removerParada(id: string): Promise<boolean> {
-    return await pb.collection('paradas_rota').delete(id)
+    return await rotasService.removerParada(id)
   },
 
   async moverEscolaEntreRotas(data: {
@@ -137,41 +96,37 @@ export const rotasLogisticasService = {
     paradas_origem?: ParadaRotaRecord[]
     paradas_destino?: ParadaRotaRecord[]
   }> {
-    return await pb.send<{
-      success: boolean
-      paradas_origem?: ParadaRotaRecord[]
-      paradas_destino?: ParadaRotaRecord[]
-    }>('/backend/v1/rotas-logisticas/mover-escola', {
-      method: 'POST',
-      body: data,
-    })
+    return await rotasService.moverEscolaEntreRotas(data)
   },
 
-  // Despachos
   async getDespachos(contratoId?: string): Promise<DespachoRecord[]> {
-    const filter = contratoId ? `contrato_id = "${contratoId}"` : ''
-    return await pb.collection('despachos').getFullList<DespachoRecord>({
-      filter,
-      sort: '-data_despacho',
-      expand: 'contrato_id,ciclo_id,rota_logistica_id,usuario_id',
-    })
+    return await rotasService.getDespachos(contratoId)
   },
 
   async criarDespacho(data: {
     contrato_id: string
     ciclo_id?: string
-    rota_logistica_id: string
+    rota_id?: string
+    rota_logistica_id?: string
     usuario_id?: string
     data_despacho: string
     status: 'Em Rota' | 'Entregue' | 'Cancelado'
   }): Promise<DespachoRecord> {
-    return await pb.collection('despachos').create<DespachoRecord>(data)
+    const rId = data.rota_id || data.rota_logistica_id || ''
+    return await rotasService.criarDespacho({
+      contrato_id: data.contrato_id,
+      ciclo_id: data.ciclo_id,
+      rota_id: rId,
+      usuario_id: data.usuario_id,
+      data_despacho: data.data_despacho,
+      status: data.status,
+    })
   },
 
   async atualizarStatusDespacho(
     despachoId: string,
     status: 'Em Rota' | 'Entregue' | 'Cancelado',
   ): Promise<DespachoRecord> {
-    return await pb.collection('despachos').update<DespachoRecord>(despachoId, { status })
+    return await rotasService.atualizarStatusDespacho(despachoId, status)
   },
 }

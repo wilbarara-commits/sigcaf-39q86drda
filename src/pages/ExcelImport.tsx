@@ -626,12 +626,13 @@ export default function ExcelImport() {
           routeMap.get(o.routeRaw)
         const orderNum = `IMP-${Date.now().toString().slice(-4)}-${Math.floor(Math.random() * 900 + 100)}`
 
-        // Herdar rota logística da escola caso a escola já tenha sido roteada (paradas_rota)
+        // Herdar rota da escola caso a escola já tenha sido roteada (paradas_rota)
         let rotaLogisticaHerdadaId: string | undefined
         if (o.schoolId) {
           const paradaExistente = paradasRota.find((p) => p.escola_id === o.schoolId)
           if (paradaExistente) {
-            rotaLogisticaHerdadaId = paradaExistente.rota_logistica_id
+            rotaLogisticaHerdadaId =
+              paradaExistente.rota_id || (paradaExistente as any).rota_logistica_id
           }
         }
 
@@ -650,8 +651,7 @@ export default function ExcelImport() {
           escola_id: o.schoolId!,
           ciclo_id: activeCiclo?.id,
           origem: 'excel' as const,
-          rota_id: rotaId,
-          rota_logistica_id: rotaLogisticaHerdadaId,
+          rota_id: rotaId || rotaLogisticaHerdadaId,
           validacao: {
             status: 'validado' as const,
             motivo: `Importado de planilha centralizada (${o.routeRaw})`,

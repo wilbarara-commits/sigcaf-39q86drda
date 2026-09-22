@@ -493,10 +493,12 @@ export function analyzeRouteSchoolsBatch(options: {
     }
 
     for (const p of paradasRota) {
-      const rotaLogObj = rotasLogById.get(p.rota_logistica_id) || p.expand?.rota_logistica_id
+      const pRotaId = p.rota_id || (p as any).rota_logistica_id
+      const rotaLogObj =
+        rotasLogById.get(pRotaId) || p.expand?.rota_id || (p.expand as any)?.rota_logistica_id
       const rlNome = (rotaLogObj?.nome || '').trim()
       const isTarget =
-        p.rota_logistica_id === targetRouteId ||
+        pRotaId === targetRouteId ||
         (normTargetRoute.length > 0 && rlNome.toLowerCase() === normTargetRoute)
 
       const rlContratoId = rotaLogObj?.contrato_id
@@ -799,12 +801,14 @@ export async function executeRouteSchoolsBatchImport(options: {
           if (targetRouteId) {
             // Determinar próxima ordem
             const nextOrdem =
-              currentParadasRota.filter((p) => p.rota_logistica_id === targetRouteId).length +
+              currentParadasRota.filter(
+                (p) => (p.rota_id || (p as any).rota_logistica_id) === targetRouteId,
+              ).length +
               newlyLinkedSchoolIds.length +
               1
 
             await rotasLogisticasService.salvarParada({
-              rota_logistica_id: targetRouteId,
+              rota_id: targetRouteId,
               escola_id: schoolId,
               ordem: nextOrdem,
             })
