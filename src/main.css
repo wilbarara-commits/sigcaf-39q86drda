@@ -37,7 +37,7 @@
     --input: 214.3 31.8% 91.4%;
     --ring: 145 64% 24%;
 
-    --radius: 0.75rem; /* Soft borders */
+    --radius: 1rem; /* Soft borders */
   }
 
   .dark {
