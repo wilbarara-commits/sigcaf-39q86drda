@@ -26,20 +26,20 @@ const MODULES: ModuleSpec[] = [
     route: '/ (Página Inicial)',
     goal: 'Fornecer uma visão executiva das operações.',
     details: [
-      'Métricas em cards: Pedidos Pendentes, Contratos Ativos, Entregas Hoje, Receita Total do Mês.',
-      'Lista de Entregas Recentes com badges de status.',
-      'Ações rápidas: "Novo Pedido", "Emitir Atesto" e "Consolidação".',
+      'Métricas em cards: Pedidos Pendentes, Contratos Ativos, Entregas Hoje e Receita Entregue do Mês com % de realização.',
+      'Cartão informativo de ciclo: "Ciclo ativo: XX/AAAA — Fase: ..." e aviso destacado de "N ciclo(s) pendente(s) de fechamento" quando houver ciclos não-terminais anteriores em aberto.',
+      'Lista de Entregas Recentes com badges de status e feed de atividade recente.',
+      'Ações rápidas: "Novo Pedido", "Emitir Atesto" e fechamento mensal com geração de relatório.',
     ],
   },
   {
     id: '3.2',
     title: 'Produtos & Preços',
     route: '/produtos',
-    goal: 'Cadastro e manutenção do catálogo de produtos agrícolas e tabela de preços com diretrizes de safra.',
+    goal: 'Cadastro e manutenção do catálogo de produtos agrícolas e diretrizes de safra.',
     details: [
-      'Campos: id, nome, unidade (apelidos residem exclusivamente nos itens de contrato).',
-      'Disponibilidade: desacoplada do produto cadastral — o catálogo mestre centraliza nome e unidade.',
-      'Edição Individual de Preços e Estoques: manutenção pontual direta por produto.',
+      'Campos do Produto Cadastral: id, nome, unidade (+ disponibilidade normal/escassez/abundância utilizada nas diretrizes de safra e avisos). Apelidos e nomes específicos residem exclusivamente nos itens de contrato.',
+      'Desacoplamento Financeiro e Quantitativo: No SIGCAF, o produto cadastral mantém apenas seus dados essenciais de catálogo. Preço unitário e quantidade contratada vivem exclusivamente na collection contrato_itens.',
     ],
   },
   {
@@ -48,12 +48,12 @@ const MODULES: ModuleSpec[] = [
     route: '/escolas',
     goal: 'Cadastro mestre único, global e independente de contratos para todas as instituições parceiras atendidas, com listagem compacta em linhas, visão detalhada e filtros operacionais por contrato e rota.',
     details: [
-      'Campos Cadastrais do Mestre: O cadastro mestre mantém apenas nome, tipo (CMEI, CRECHE, INTEGRAL, FUNDAMENTAL), nº de alunos, telefone/WhatsApp, e-mail e endereço.',
-      'Regra de Negócio de Rotas: A rota logística NÃO é atributo da escola no cadastro mestre. Rota (planilha) é atribuída no vínculo escola↔contrato ou importação; e a rota logística é atribuída exclusivamente na tela de Roteamento & Despacho Logístico (campo contrato_escolas.rota_logistica_id, permanecendo vazio até o roteamento).',
-      'Listagem Compacta em Linhas (Tabela): Apresentação em linhas via componente Table do shadcn/ui para visualização de mais escolas por página (com paginação configurável: 10, 25, 50, 100 linhas), contendo colunas separadas: Escola/Instituição, Tipo, Aba, Rota Logística (com status de parada ou pendente de roteamento), Nº de Alunos, Telefone, Contratos Vinculados (badges) e Ações.',
-      'Visão Detalhada da Escola Selecionada: Ao clicar em uma linha da tabela ou no botão "Ver detalhes", é aberto um painel/diálogo modal exibindo os dados mestres (nome, endereço completo, telefone, e-mail institucional, tipo, alunos), bloco dedicado de Rota Logística de Distribuição (com status ou posição de parada derivado do vínculo) e bloco de Contratos Vinculados & Aba da Planilha (collection contrato_escolas).',
-      'Filtros Independentes por Aba da Planilha e Rota Logística: Selects dedicados para filtrar por Contrato, por Aba da Planilha e por Rota Logística (com opção explícita "Sem rota logística atribuída"), combináveis simultaneamente com a busca textual e com o filtro por Tipo de instituição, derivados dos vínculos das escolas.',
-      'Importador Inteligente com Upsert (CSV/XLSX): Importação e reimportação de planilhas de escolas com atualização automática de dados existentes. Escolas já cadastradas não são ignoradas, mas marcadas no preview com status de "Atualização", exibindo comparativo de alterações campo a campo (ex.: tipo, nº de alunos, contato, endereço). O usuário conta com seletor de regra de conflito: "Atualizar campos preenchidos no arquivo (manter valores existentes quando o arquivo estiver vazio)" [padrão seguro] vs "Sobrescrever todos os campos com os valores do arquivo". Resumo final detalha separadamente criadas, atualizadas, duplicadas no arquivo e erros.',
+      'Campos Cadastrais do Mestre: O cadastro mestre mantém apenas nome, tipo (CMEI, CRECHE, INTEGRAL, FUNDAMENTAL), nº de alunos, telefone/WhatsApp, e-mail, bairro, contato e endereço.',
+      'Regra de Negócio de Rotas: A rota NÃO é atributo fixo da escola no cadastro mestre global. A rota (unificada, correspondente à aba da planilha e ao percurso de entrega) é atribuída no vínculo escola↔contrato (contrato_escolas.rota_id) ou na importação, e sequenciada nas paradas de entrega.',
+      'Listagem Compacta em Linhas (Tabela): Apresentação em linhas via componente Table do shadcn/ui para visualização de mais escolas por página (com paginação configurável: 10, 25, 50, 100 linhas), contendo colunas separadas: Escola/Instituição, Tipo, Rota, Nº de Alunos, Telefone, Contratos Vinculados (badges) e Ações.',
+      'Visão Detalhada da Escola Selecionada: Ao clicar em uma linha da tabela ou no botão "Ver detalhes", é aberto um painel modal exibindo os dados mestres (nome, endereço completo, telefone, e-mail institucional, tipo, alunos), bloco de Rota & Posição de Parada e bloco de Contratos Vinculados (collection contrato_escolas).',
+      'Filtros por Contrato e Rota: Selects dedicados para filtrar por Contrato e por Rota vinculada (com opção "Sem rota atribuída"), combináveis simultaneamente com a busca textual e com o filtro por Tipo de instituição.',
+      'Importador Inteligente com Upsert (CSV/XLSX): Importação e reimportação de planilhas de escolas com atualização automática de dados existentes. Escolas já cadastradas exibem comparativo de alterações campo a campo. O usuário conta com seletor de regra de conflito: "Atualizar campos preenchidos no arquivo (manter valores existentes quando o arquivo estiver vazio)" [padrão seguro] vs "Sobrescrever todos os campos com os valores do arquivo". Resumo final detalha separadamente criadas, atualizadas, duplicadas no arquivo e erros.',
       'Princípio de Unicidade & Integridade: Uma escola é criada uma única vez no cadastro mestre global e depois vinculada a múltiplos contratos PNAE/PAA. Prevenção de duplicidade por normalização estrita de nomes e exclusão protegida com verificação prévia de dependências contratuais e pedidos.',
     ],
   },
@@ -61,7 +61,7 @@ const MODULES: ModuleSpec[] = [
     id: '3.4',
     title: 'Contratos, Vínculo N:N de Escolas, Quantidades Contratadas & Rotas',
     route: '/contratos',
-    goal: 'Gestão institucional dos contratos PNAE/PAA, vínculo de N escolas participantes, rotas logísticas, quantidades contratadas por produto e tabela de preços acordados com valor total automático ou informado diretamente.',
+    goal: 'Gestão institucional dos contratos PNAE/PAA, vínculo de N escolas participantes, rotas unificadas, quantidades contratadas por produto e tabela de preços acordados com valor total automático ou informado diretamente.',
     details: [
       'Modelo de Dois Níveis de Nome de Produto (Nome no Contrato vs Nome Mestre): Na collection contrato_itens, cada item possui os campos nome_contrato e apelidos (AKAs no contrato). O nome no contrato nasce pré-preenchido com o nome do produto mestre e pode ser customizado livremente para refletir a redação exata do edital/contrato assinado. A interface exibe o Nome no Contrato em destaque com campo editável e o nome mestre do catálogo atenuado quando diferente.',
       'Quantidades Contratadas por Produto & Valor Total Calculado: Cada item do contrato permite informar preço unitário e quantidade contratada (campo quantidade_contratada em contrato_itens). Quando os itens têm quantidades informadas, o Valor Total Contratado é a soma exata dos produtos (preço × quantidade contratada) e o campo total é recalculado automaticamente em tempo real.',
@@ -69,11 +69,10 @@ const MODULES: ModuleSpec[] = [
       'Importação em Massa via Planilha / CSV: Suporte a upload de arquivo (.xlsx ou .csv) contendo Produto, Preço Unitário e Quantidade Contratada, com preview estruturado, validação estrita contra o catálogo de produtos, cálculo do total da planilha e confirmação em lote. O nome original na planilha é gravado no campo nome_contrato do item.',
       'Colar em Massa com Quantidades: Aceita colar linhas copiadas do Excel ou texto com separadores (tabulação, ponto-e-vírgula ou vírgula) nas colunas "Produto; Preço; Quantidade", com preview comparativo e resolução inteligente de nomes contra o catálogo.',
       'Execução e Cotas de Referência: O realizado do contrato continua derivado dos pedidos entregues. A quantidade contratada cadastrada no item passa a atuar como cota do produto no contrato, permitindo acompanhar o saldo e a porcentagem de execução por produto e por escola participante.',
-      'Nº de Rotas Logísticas Opcional no Contrato: No modal de criação/edição de contrato, o campo "Número de Rotas Logísticas" é opcional (sem valor pré-fixado obrigatório). Caso não seja preenchido, o contrato aceita rotas logísticas ilimitadas.',
-      'Aba "Escolas" do Contrato rotulada "Aba da Planilha": No vínculo da escola ao contrato, o campo de rota/aba é estritamente rotulado "Aba da Planilha", servindo de referência cadastral da secretaria. A Rota Logística NÃO é definida nesta tela.',
-      'Detalhamento do Contrato com Seções Separadas: A visualização de detalhes do contrato divide explicitamente "Escolas por Aba da Planilha" (contagem e relação por aba da secretaria) e "Escolas por Rota Logística" (paradas da cooperativa e relação destacada de escolas "Sem rota logística atribuída").',
+      'Nº de Rotas Opcional no Contrato: No modal de criação/edição de contrato, o campo "Número de Rotas" (num_rotas_logisticas) é opcional (sem valor pré-fixado obrigatório). Caso não seja preenchido, o contrato aceita rotas ilimitadas.',
+      'Modelo Unificado de Rotas: As rotas cadastradas no contrato (collection rotas) representam tanto a referência da aba da planilha da secretaria quanto a rota de distribuição da cooperativa, vinculadas via contrato_escolas.rota_id.',
       'Vínculo de Escolas via Cadastro Mestre: Na aba de escolas do contrato, o usuário realiza busca e autocomplete sobre a collection escolas do cadastro mestre.',
-      'Roteamento Estrutural por Escolas: As rotas logísticas e o sequenciamento são estruturados sobre as escolas vinculadas ao contrato (contrato_escolas), de forma duradoura entre ciclos. Pedidos não exigem atribuição manual, herdando a rota logística automaticamente da respectiva escola.',
+      'Roteamento Estrutural por Escolas: As rotas e o sequenciamento são estruturados sobre as escolas vinculadas ao contrato (contrato_escolas), de forma duradoura entre ciclos. Pedidos herdam a rota automaticamente da respectiva escola.',
       'Cadastro Rápido sem Duplicação: Permite cadastrar uma nova escola diretamente dentro do contrato; o sistema normaliza o nome e reutiliza o registro existente no cadastro mestre caso já haja escola correspondente.',
       'Modalidade de Pedido: individualizado (cada escola faz seu pedido via WhatsApp/manual) ou centralizado (pedidos consolidados via importação de planilha Excel da secretaria).',
       'Relatório de Execução do Contrato: cards globais de Total Contratado, Total Realizado e % Execução, com detalhamento de entregas por escola participante (quantidades realizadas, preços unitários e valores realizados).',
@@ -85,7 +84,7 @@ const MODULES: ModuleSpec[] = [
     route: '/pedidos',
     goal: 'Registro, validação, acompanhamento de status e rastreamento de pedidos das escolas.',
     details: [
-      'Campos: id, numero, escola_id, ciclo_id (FK ciclos), origem (excel / whatsapp / manual), rota_id (FK rotas - referência da planilha), rota_logistica_id (FK rotas_logisticas), validacao (json: status, motivo, detalhes), data_prevista, status (Pendente / Em Rota / Entregue / Cancelado), entregue_em, entregue_por (FK users), motivo_cancelamento, cancelado_em.',
+      'Campos: id, numero, escola_id (FK escolas), ciclo_id (FK ciclos), origem (excel / whatsapp / manual), rota_id (FK rotas — rota unificada que mapeia a aba de origem e o percurso), validacao (json: status, motivo, detalhes), data_prevista, status (Pendente / Em Rota / Entregue / Cancelado), entregue_em, entregue_por (FK users), motivo_cancelamento, cancelado_em.',
       'Fluxo de Status do Pedido: transições controladas na listagem de pedidos (Pendente → Em Rota → Entregue, e Cancelado).',
       'Regras Estritas de Cancelamento: pedidos Pendentes (não despachados) podem ser cancelados com motivo livre; pedidos despachados (Em Rota) só podem ser cancelados por motivos logísticos da cooperativa (veículo indisponível, produto indisponível, endereço inacessível, escola fechada, outro motivo logístico com detalhe livre). O cancelamento é definitivo e irreversível (sem retorno para Pendente).',
       'Coluna e Detalhes de Cancelamento: exibição destacada do motivo do cancelamento e timestamp cancelado_em tanto na tabela de pedidos quanto no diálogo de visualização detalhada.',
@@ -127,29 +126,31 @@ const MODULES: ModuleSpec[] = [
     route: '/rotas',
     goal: 'Roteamento por contrato baseado em escolas, sequenciamento drag-and-drop de paradas com volume de alunos, pedidos herdando a rota da escola, despacho e entrega por rota inteira.',
     details: [
-      'Conceito Central de ROTA LOGÍSTICA: Atributo operacional exclusivo de distribuição da cooperativa, definindo a sequência de paradas (ordem 1..N). Não se confunde com a ABA DA PLANILHA (origem do pedido).',
-      'Roteamento Baseado em Escolas: Atribuição e sequenciamento operam diretamente sobre as escolas vinculadas ao contrato (contrato_escolas.rota_logistica_id e paradas_rota), mantendo a aba da planilha intacta.',
-      'Herança Automática da Rota pelos Pedidos: Os pedidos não recebem rota manualmente — herdam a rota logística da respectiva escola (via paradas_rota/contrato_escolas). Novos pedidos importados ou criados entram automaticamente na rota da escola já roteada.',
-      'Painel de Escolas Sem Rota Logística: Escolas vinculadas ao contrato sem rota logística aparecem em destaque na listagem de pendências. Pedidos dessas escolas permanecem com status Pendente sem rota e não bloqueiam o despacho das demais rotas.',
-      'Separação Total de Campos: contrato_escolas armazena separadamente `rota` (texto da planilha) e `rota_logistica_id` (relação com rotas_logisticas). O despacho e sequenciamento usam exclusivamente a rota logística.',
-      'Primeira Configuração Direto na Tela de Roteamento: Ao selecionar um contrato sem rotas logísticas, a interface permite criar rotas de nome livre, vincular as escolas e reordenar paradas.',
-      'Sequenciamento Drag-and-Drop de Paradas: Reordenação manual das escolas atendidas gravada em batch transacional único na collection paradas_rota (rota_logistica_id, escola_id, ordem), com atualização otimista imediata na UI.',
-      'Despacho da Rota Inteira Otimizado (Batch Único): Botão "Colocar em Rota" processa a transação em batch único no servidor (/backend/v1/rotas-logisticas/despachar), gerando registro de despacho e passando todos os pedidos para "Em Rota" sem recarregar o banco globalmente, aplicando atualização otimista local.',
-      'Entrega por Rota Inteira (Batch Único & Baixa de Estoque): Botão "Rota Entregue" marca todos os pedidos "Em Rota" dela como Entregue em transação atômica única (/backend/v1/rotas-logisticas/entregar), realizando baixa consolidada de estoque, atualizando despachos e refletindo os dados no estado local com rollback em caso de falha.',
-      'Atualizações Locais e SSE Granular: Removidos reloads globais após operações (loadAllData eliminado pós-escrita); o estado sincroniza de forma atômica e granular via SSE por collection, garantindo resposta instantânea da interface.',
-      'Tratamento de "Não Entregue": Pedidos despachados que o motorista não entregou podem ser cancelados definitivamente pela central por motivos logísticos da cooperativa.',
+      'Modelo Unificado de Rotas: Estrutura consolidada na collection `rotas` (id, contrato_id, nome, ordem, ativa), que atua simultaneamente como referência da aba da planilha da secretaria e como rota de despacho/entrega da cooperativa.',
+      'Roteamento Baseado em Escolas: Atribuição opera sobre as escolas vinculadas ao contrato (contrato_escolas.rota_id) e o sequenciamento das paradas de entrega reside na collection `paradas_rota` (rota_id, escola_id, ordem).',
+      'Herança Automática da Rota pelos Pedidos: Os pedidos não exigem atribuição manual de rota — herdam o `rota_id` da respectiva escola vinculado no contrato. Novos pedidos importados ou criados entram automaticamente na rota da escola.',
+      'Painel de Escolas Sem Rota: Escolas vinculadas ao contrato sem rota definida aparecem em destaque na listagem de pendências. Pedidos dessas escolas permanecem com status Pendente sem rota e não bloqueiam o despacho das rotas regulares.',
+      'Sequenciamento Drag-and-Drop de Paradas: Reordenação das escolas atendidas na rota gravada na collection paradas_rota (rota_id, escola_id, ordem), com atualização imediata na interface.',
+      'Despacho da Rota Inteira (Batch Único): Botão "Colocar em Rota" processa a transação em batch, gerando o registro na collection `despachos` e atualizando todos os pedidos da rota para "Em Rota" sem recarregar o banco globalmente.',
+      'Entrega por Rota Inteira: Botão "Rota Entregue" marca todos os pedidos "Em Rota" dela como Entregue em transação atômica única, atualizando despachos e sincronizando os dados em tempo real.',
+      'Tratamento de "Não Entregue": Pedidos despachados que a entrega não pôde ser concluída podem ser cancelados pela central exclusivamente por motivos logísticos da cooperativa.',
     ],
   },
   {
     id: '3.9',
-    title: 'Monitoramento & Simulador de Ciclo',
+    title: 'Monitoramento do Ciclo Operacional',
     route: '/monitoramento',
-    goal: 'Controle das fases do ciclo operacional e painel de alertas para contato direto.',
+    goal: 'Controle das fases do ciclo operacional, regras de transição, gestão de fechamento e painel de alertas para contato direto.',
     details: [
-      'Ciclos operacionais: coletando → correcao → fechado.',
-      'Simulador de transição de fase com regras de validação aplicadas.',
-      'Painel de alertas de pendências: escolas sem pedidos ou pedidos com inconsistências.',
-      'Botão de contato direto via WhatsApp (wa.me) com mensagem contextualizada.',
+      'Cadeia Real de Fases Operacionais: Coletando → Correção → Coleta Encerrada → Fechado (+ estado terminal Cancelado). O ciclo só FECHA após o armazenamento de TODOS os atestos das entregas realizadas; "Fechado" é estado do CICLO, não da coleta.',
+      'Seletor de Ciclo e Operação Independente: O Monitoramento opera sobre o ciclo SELECIONADO (dropdown, ordenado do mais recente para o mais antigo, padrão = ciclo ativo). Cada ciclo e seus contratos vinculados evoluem sua própria fase de forma independente.',
+      'Ciclo Ativo: Corresponde ao ciclo mais recente em fase não-terminal (máximo 1). Pedidos de qualquer origem (importação Excel, WhatsApp ou lançamento manual) caem automaticamente no ciclo ativo.',
+      'Badge Derivado de Fechamento Pendente: Qualquer ciclo não-terminal que não seja o ciclo mais recente ativo recebe o badge visual "Fechamento Pendente (atrasado X dias)", alertando sobre pendências operacionais.',
+      'Botão "Abrir Ciclo": Modal com nome e datas pré-preenchidos pela fórmula padrão semanal (nº = mais recente + 1; início = quarta-feira seguinte; fim = início + 6 dias, terça-feira; despacho previsto = início + 5 dias, segunda-feira), todos editáveis. Inclui trava contra nome duplicado e confirmação obrigatória quando o ciclo anterior ainda estiver em fase não-terminal (que passa a receber o badge Fechamento Pendente).',
+      'Ação "Cancelar Ciclo": Exige justificativa/motivo obrigatório. Quando existirem pedidos vinculados, questiona e cancela os pedidos em conjunto (impedindo registros órfãos). Caso existam atestos emitidos, o cancelamento é expressamente BLOQUEADO (o caminho regulamentar é fechar o ciclo). Ciclos já Fechados ou Cancelados não podem ser cancelados.',
+      'Fechamento Manual: Habilitado na fase "Coleta Encerrada" com todos os atestos de entrega devidamente emitidos e armazenados no sistema. O botão exibe o progresso de fechamento "Atestos: X/N armazenados".',
+      'Travas Estritas por Fase: Coletando / Correção = importa ✓ · recebe pedido ✓ · despacha ✗; Coleta Encerrada = importa ✗ · recebe pedido ✗ · despacha ✓ · cancela pedido ✗ (exceto motivo logístico); Fechado = nada entra nem sai (ciclo totalmente congelado para auditoria e histórico); Cancelado = nada.',
+      'Painel de Alertas das Escolas: Identificação imediata de pendências por escola (sem pedido lançado ou pedidos com pendências de validação), com botão de contato direto via WhatsApp (wa.me / api.whatsapp.com) munido de mensagem contextualizada.',
     ],
   },
   {
@@ -167,10 +168,11 @@ const MODULES: ModuleSpec[] = [
     id: '3.11',
     title: 'Histórico de Ciclos & Comparação de Consumo',
     route: '/historico-ciclos',
-    goal: 'Auditoria de fechamentos semanais e análise comparativa de volume entre períodos.',
+    goal: 'Auditoria cronológica, acompanhamento de fechamentos e análise comparativa de volume entre períodos.',
     details: [
-      'Relação cronológica dos ciclos com total de escolas atendidas, volume consolidado e valor faturado.',
-      'Modal de comparação direta entre dois ciclos (base vs comparado) com cálculo de variação absoluta e percentual por produto.',
+      'Relação cronológica de todos os ciclos cadastrados exibindo a FASE PRÓPRIA de cada ciclo (Coletando, Correção, Coleta Encerrada, Fechado ou Cancelado), com indicação de período, previsão de despacho, total de escolas atendidas, pedidos, volume e valor.',
+      'Badges Derivados e Motivo de Cancelamento: Exibe o badge "Fechamento Pendente (atrasado X dias)" para ciclos não-terminais que não sejam o ativo mais recente, e exibe o motivo de cancelamento de forma destacada em ciclos/contratos cancelados.',
+      'Ações Disponíveis: Botão "Abrir Ciclo" para iniciar novo período operacional, ação de visualização de "Detalhes", ação "Cancelar Ciclo" para ciclos não-terminais e modal de "Comparar Ciclos" (base vs comparado) com variação absoluta e percentual por produto.',
     ],
   },
   {
@@ -266,7 +268,7 @@ const PROFILES = [
 ]
 
 const VISUAL = [
-  ['Nome do sistema', 'CoopGestão'],
+  ['Nome do sistema', 'SIGCAF (Sistema de Gestão da Cooperativa Agrícola Familiar)'],
   [
     'Logotipo da cooperativa',
     'Personalizado via Configurações da Cooperativa (upload singleton); exibido no menu lateral, header mobile, login, favicon da aba do navegador e Termo de Atesto oficial',
@@ -279,9 +281,9 @@ const VISUAL = [
 ]
 
 const STACK = [
-  'React 18 + Vite',
+  'React 19 (19.2.7) + Vite',
   'TypeScript',
-  'React Router DOM v6',
+  'React Router 7.18.0',
   'Tailwind CSS + shadcn/ui',
   'Lucide React',
   'Sonner (toasts)',
@@ -290,21 +292,22 @@ const STACK = [
 
 const DATA_MODEL = [
   'users (id, email, nome/name, celular, foto [file], perfil [MASTER/ADMINISTRADOR/SECRETARIA], ativo [bool])',
-  'configuracoes (id, nome_cooperativa, sigla, cnpj, telefone, email, cidade_uf, exibir_atalhos_demo [bool], logotipo [file])',
-  'ciclos (id, nome, data_inicio, data_fim, status [coletando/correcao/fechado], snapshot [json])',
-  'produtos (id, nome, unidade)',
-  'escolas (id, nome, endereco, telefone, email, tipo [CMEI/CRECHE/INTEGRAL/FUNDAMENTAL], alunos) [Cadastro Mestre Global - rota atribuída via vínculos]',
-  'contratos (id, numero, numero_chamada, tipo, modalidade_pedido [individualizado/centralizado], num_rotas_logisticas [opcional], valor_total, status)',
-  'contrato_escolas (id, contrato_id → contratos, escola_id → escolas, rota_id → rotas) [Vínculos N:N]',
-  'rotas (id, contrato_id → contratos, nome, ordem, ativa [bool]) [Rotas Unificadas - Distribuição e Roteamento]',
-  'paradas_rota (id, rota_id → rotas, escola_id → escolas, ordem) [Sequenciamento Drag-and-Drop]',
+  'configuracoes (id, nome_cooperativa, sigla, cnpj, telefone, email, cidade_uf, exibir_atalhos_demo [bool], logotipo [file], subtitulo_sistema)',
+  'ciclos (id, nome, data_inicio, data_fim, status [texto extensível: coletando / correcao / coleta_encerrada / fechado / cancelado], motivo_cancelamento [texto], data_cancelamento [data], snapshot [json com regra semanal e despacho_previsto_segunda]) [Terminal: fechado e cancelado × Não-terminal: todo o resto]',
+  'ciclo_contratos (id, ciclo_id → ciclos, contrato_id → contratos, fase [texto extensível por contrato], motivo_cancelamento [texto], data_cancelamento [data]) [Controle granular de fase por contrato vinculado]',
+  'produtos (id, nome, unidade, categoria) [Catálogo cadastral mestre — sem preço/estoque, valores financeiros e quantidades residem em contrato_itens]',
+  'escolas (id, nome, endereco, telefone, email, tipo [CMEI/CRECHE/INTEGRAL/FUNDAMENTAL], alunos, bairro, contato) [Cadastro Mestre Global — rota atribuída via vínculos]',
+  'contratos (id, numero, numero_chamada, tipo, modalidade_pedido [individualizado/centralizado], tipo_importacao [unica/fracionada], abas_planilha, num_rotas_logisticas [opcional], valor_total, status [Ativo/Encerrado/Pendente])',
+  'contrato_escolas (id, contrato_id → contratos, escola_id → escolas, rota_id → rotas) [Vínculos N:N — rota unificada que mapeia tanto a aba da planilha quanto o roteamento logístico]',
+  'rotas (id, contrato_id → contratos, nome, ordem, ativa [bool]) [Rotas Unificadas — serve como referência da aba da planilha da secretaria e como rota de entrega/roteamento logístico da cooperativa]',
+  'paradas_rota (id, rota_id → rotas, escola_id → escolas, ordem) [Sequenciamento Drag-and-Drop das paradas de entrega da rota]',
   'despachos (id, contrato_id → contratos, ciclo_id → ciclos, rota_id → rotas, data_despacho, usuario_id → users, status [Em Rota/Entregue/Cancelado])',
   'contrato_itens (id, contrato_id → contratos, produto_id → produtos, preco, quantidade_contratada [numérico opcional], nome_contrato [texto opcional], apelidos [texto opcional])',
   'pedidos (id, numero, escola_id → escolas, ciclo_id → ciclos, origem [excel/whatsapp/manual], rota_id → rotas, validacao [json], data_prevista, status [Pendente/Em Rota/Entregue/Cancelado], entregue_em, entregue_por → users, motivo_cancelamento, cancelado_em)',
   'pedido_itens (id, pedido_id → pedidos, produto_id → produtos, quantidade, preco_unitario)',
   'envios_whatsapp (id, ciclo_id → ciclos, escola_id → escolas, status [pendente/enviado/falha], enviado_em)',
   'importacoes (id, ciclo_id → ciclos, contrato_id → contratos, arquivo, data, usuario_id, linhas_total, linhas_ok, linhas_erro, erros [json])',
-  'atestos (id, numero, pedido_id → pedidos, data_emissao, status, arquivo [file])',
+  'atestos (id, numero, pedido_id → pedidos, data_emissao, status [Pendente Assinatura/Confirmado/Arquivado], assinatura_file [file], arquivo [file])',
 ]
 
 /* ----------------------------------------------------------------------------
@@ -361,7 +364,7 @@ function buildPrintHtml(): string {
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8" />
-<title>Documento de Requisitos do Sistema (DRS) — CoopGestão</title>
+<title>Documento de Requisitos do Sistema (DRS) — SIGCAF</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
   * { box-sizing: border-box; }
@@ -401,10 +404,10 @@ function buildPrintHtml(): string {
 </head>
 <body>
   <h1>Documento de Requisitos do Sistema (DRS)</h1>
-  <p class="subtitle">CooperGestão — Gestão para Cooperativa Agrícola Familiar</p>
+  <p class="subtitle">SIGCAF — Sistema de Gestão da Cooperativa Agrícola Familiar</p>
 
   <h2>1. Visão Geral do Produto</h2>
-  <p>O CooperGestão é um sistema web voltado para cooperativas agrícolas de pequeno porte que participam de programas institucionais como o PNAE (Programa Nacional de Alimentação Escolar) e o PAA (Programa de Aquisição de Alimentos). A plataforma centraliza a gestão operacional com dois focos principais: Coleta de pedidos das escolas parceiras e Emissão de atestos de entrega para comprovação de recebimento e posterior faturamento. O público-alvo inclui administradores da cooperativa (coordenação, finanças) e secretárias (operacional, lançamento de pedidos e emissão de documentos).</p>
+  <p>O SIGCAF (Sistema de Gestão da Cooperativa Agrícola Familiar) é um sistema web voltado para cooperativas agrícolas de pequeno porte que participam de programas institucionais como o PNAE (Programa Nacional de Alimentação Escolar) e o PAA (Programa de Aquisição de Alimentos). A plataforma centraliza a gestão operacional com dois focos principais: Coleta de pedidos das escolas parceiras e Emissão de atestos de entrega para comprovação de recebimento e posterior faturamento. O público-alvo inclui administradores da cooperativa (coordenação, finanças) e secretárias (operacional, lançamento de pedidos e emissão de documentos).</p>
 
   <h2>2. Perfis de Acesso e Segurança</h2>
   ${profileTable}
@@ -421,7 +424,7 @@ function buildPrintHtml(): string {
   <h2>6. Stack Técnica</h2>
   ${stackList}
 
-  <div class="footer">Documento de Requisitos do Sistema — CoopGestão • Gerado em ${new Date().toLocaleDateString('pt-BR')}</div>
+  <div class="footer">Documento de Requisitos do Sistema — SIGCAF • Gerado em ${new Date().toLocaleDateString('pt-BR')}</div>
 </body>
 </html>`
 }
@@ -432,7 +435,7 @@ function downloadHtmlFallback(html: string) {
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
-  a.download = 'DRS-CoopGestao.html'
+  a.download = 'DRS-SIGCAF.html'
   document.body.appendChild(a)
   a.click()
   document.body.removeChild(a)
@@ -573,7 +576,7 @@ export default function Requirements() {
               Documento de Requisitos do Sistema (DRS)
             </CardTitle>
             <p className="text-muted-foreground mt-2 font-medium">
-              CooperGestão — Gestão para Cooperativa Agrícola Familiar
+              SIGCAF — Sistema de Gestão da Cooperativa Agrícola Familiar
             </p>
           </div>
           <Button onClick={handleDownloadPdf} className="shrink-0">
@@ -595,13 +598,14 @@ export default function Requirements() {
       {/* 1. Visão Geral */}
       <SectionTitle>1. Visão Geral do Produto</SectionTitle>
       <p className="text-foreground/90 leading-relaxed">
-        O CooperGestão é um sistema web voltado para cooperativas agrícolas de pequeno porte que
-        participam de programas institucionais como o PNAE (Programa Nacional de Alimentação
-        Escolar) e o PAA (Programa de Aquisição de Alimentos). A plataforma centraliza a gestão
-        operacional com dois focos principais: Coleta de pedidos das escolas parceiras e Emissão de
-        atestos de entrega para comprovação de recebimento e posterior faturamento. O público-alvo
-        inclui administradores da cooperativa (coordenação, finanças) e secretárias (operacional,
-        lançamento de pedidos e emissão de documentos).
+        O SIGCAF (Sistema de Gestão da Cooperativa Agrícola Familiar) é um sistema web voltado para
+        cooperativas agrícolas de pequeno porte que participam de programas institucionais como o
+        PNAE (Programa Nacional de Alimentação Escolar) e o PAA (Programa de Aquisição de
+        Alimentos). A plataforma centraliza a gestão operacional com dois focos principais: Coleta
+        de pedidos das escolas parceiras e Emissão de atestos de entrega para comprovação de
+        recebimento e posterior faturamento. O público-alvo inclui administradores da cooperativa
+        (coordenação, finanças) e secretárias (operacional, lançamento de pedidos e emissão de
+        documentos).
       </p>
 
       {/* 2. Perfis de Acesso */}
@@ -690,7 +694,7 @@ export default function Requirements() {
       </ul>
 
       <div className="mt-12 pt-6 border-t border-border text-center text-xs text-muted-foreground">
-        Documento de Requisitos do Sistema — CoopGestão • Conectado ao Skip Cloud (PocketBase)
+        Documento de Requisitos do Sistema — SIGCAF • Conectado ao Skip Cloud (PocketBase)
       </div>
     </div>
   )
