@@ -94,10 +94,15 @@ export default function Orders() {
     marcarNaoEntreguePedido,
     isLoading,
   } = useApp()
-  const { user } = useAuth()
+  const { user, isAdmin: isAuthAdmin, isMaster } = useAuth()
 
   const isAdmin =
-    user?.role === 'admin' || user?.perfil === 'administrador' || user?.email?.includes('admin')
+    isAuthAdmin ||
+    isMaster ||
+    (user as any)?.role === 'admin' ||
+    user?.perfil === 'ADMINISTRADOR' ||
+    user?.perfil === 'administrador' ||
+    user?.email?.includes('admin')
 
   const [open, setOpen] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -409,12 +414,15 @@ export default function Orders() {
   // Helpers para fase do contrato do pedido
   const getFaseContratoDoPedido = (order: Order): string => {
     const linkEscola = contractSchools.find((cs) => cs.escola_id === order.schoolId)
+    const contratoIdDaEscola =
+      linkEscola?.contrato_id ||
+      contracts.find((cnt) => cnt.escolas.some((e) => e.escolaId === order.schoolId))?.id
     const cicloId = order.cicloId || activeCiclo?.id
-    if (cicloId && linkEscola) {
+    if (cicloId && contratoIdDaEscola) {
       const cc = cicloContratos.find(
-        (c) => c.ciclo_id === cicloId && c.contrato_id === linkEscola.contrato_id,
+        (c) => c.ciclo_id === cicloId && c.contrato_id === contratoIdDaEscola,
       )
-      if (cc) return (cc.fase || 'coletando').toLowerCase()
+      if (cc && cc.fase) return cc.fase.toLowerCase()
     }
     const pedidoCiclo = ciclos.find((c) => c.id === order.cicloId) || activeCiclo
     return (pedidoCiclo?.status || 'coletando').toLowerCase()
@@ -453,6 +461,13 @@ export default function Orders() {
     }
     if (order.status === 'Cancelado') {
       toast.error('Pedido cancelado não pode ser editado.')
+      return
+    }
+
+    // Regra: Não pode editar pedidos de contrato já cancelado
+    const faseContrato = getFaseContratoDoPedido(order)
+    if (faseContrato === 'cancelado') {
+      toast.error('O contrato deste pedido está cancelado. Edição bloqueada.')
       return
     }
 

@@ -96,7 +96,15 @@ export default function Monitoring() {
     if (!selectedCiclo) return []
     const ccList = cicloContratos.filter((cc) => cc.ciclo_id === selectedCiclo.id)
     if (ccList.length === 0) {
-      return contracts.filter((c) => c.status === 'Ativo')
+      return contracts
+        .filter((c) => c.status === 'Ativo')
+        .map((c) => ({
+          contratoId: c.id,
+          numero: c.numero,
+          fase: selectedCiclo.status || 'coletando',
+          motivo_cancelamento: undefined as string | undefined,
+          data_cancelamento: undefined as string | undefined,
+        }))
     }
     return ccList
       .map((cc) => {
