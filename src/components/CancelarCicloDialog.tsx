@@ -79,8 +79,11 @@ export function CancelarCicloDialog({
   const atestosEmitidos = atestos.filter((a) => pedidoIdsSet.has(a.orderId))
   const isBloqueadoPorAtestos = atestosEmitidos.length > 0
 
-  // Proteção 3: FECHADO não pode ser cancelado
+  // Proteção 3: FECHADO ou CANCELADO não pode ser cancelado
   const isFechado = isContratoScope ? currentCC?.fase === 'fechado' : ciclo.status === 'fechado'
+  const isJaCancelado = isContratoScope
+    ? currentCC?.fase === 'cancelado'
+    : ciclo.status === 'cancelado'
 
   // Proteção 2: COM pedidos -> pergunta se cancela pedidos junto
   const hasPedidos = pedidosNaoCancelados.length > 0
@@ -133,13 +136,26 @@ export function CancelarCicloDialog({
               <AlertDescription className="text-xs mt-1">
                 {isContratoScope
                   ? 'Contrato já fechado neste ciclo não pode ser cancelado (o caminho é o ciclo seguinte).'
-                  : 'Ciclo fechado não pode ser cancelado (o caminho é o ciclo seguinte).'}
+                  : 'Ciclo já fechado não pode ser cancelado (o caminho é o ciclo seguinte).'}
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {/* Bloqueio por Já Cancelado */}
+          {!isFechado && isJaCancelado && (
+            <Alert variant="destructive">
+              <AlertOctagon className="h-4 w-4" />
+              <AlertTitle className="font-semibold text-xs">Ação Não Permitida</AlertTitle>
+              <AlertDescription className="text-xs mt-1">
+                {isContratoScope
+                  ? 'Este contrato já está cancelado neste ciclo.'
+                  : 'Este ciclo já está cancelado.'}
               </AlertDescription>
             </Alert>
           )}
 
           {/* Bloqueio por Atestos Emitidos */}
-          {!isFechado && isBloqueadoPorAtestos && (
+          {!isFechado && !isJaCancelado && isBloqueadoPorAtestos && (
             <Alert variant="destructive">
               <ShieldAlert className="h-4 w-4" />
               <AlertTitle className="font-semibold text-xs">Cancelamento Bloqueado</AlertTitle>
@@ -152,7 +168,7 @@ export function CancelarCicloDialog({
           )}
 
           {/* Fluxo Permitido */}
-          {!isFechado && !isBloqueadoPorAtestos && (
+          {!isFechado && !isJaCancelado && !isBloqueadoPorAtestos && (
             <>
               {hasPedidos && (
                 <Alert className="border-amber-400 bg-amber-50 text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
@@ -205,10 +221,10 @@ export function CancelarCicloDialog({
             disabled={isSubmitting}
             onClick={() => onOpenChange(false)}
           >
-            {isFechado || isBloqueadoPorAtestos ? 'Fechar' : 'Abortar'}
+            {isFechado || isJaCancelado || isBloqueadoPorAtestos ? 'Fechar' : 'Abortar'}
           </Button>
 
-          {!isFechado && !isBloqueadoPorAtestos && (
+          {!isFechado && !isJaCancelado && !isBloqueadoPorAtestos && (
             <>
               {hasPedidos ? (
                 <Button

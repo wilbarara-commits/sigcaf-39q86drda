@@ -37,6 +37,7 @@ import { rotasLogisticasService } from '@/services/rotas-logisticas'
 import { toast } from 'sonner'
 import useRealtime from '@/hooks/use-realtime'
 import { validateOrder } from '@/lib/orderValidation'
+import { derivarStatusCiclo, getCicloAtivo } from '@/lib/cicloUtils'
 
 export interface CreateOrderData {
   schoolId: string
@@ -2485,39 +2486,28 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return false
     }
 
-    const vinculados = cicloContratos.filter((cc) => cc.ciclo_id === cicloId)
-    if (vinculados.length > 0) {
-      // Cancelar todos os contratos do ciclo
-      try {
-        for (const cc of vinculados) {
-          if (cc.fase !== 'cancelado') {
-            await cancelarCicloContrato(cicloId, cc.contrato_id, motivo, cancelarPedidosJunto)
-          }
-        }
-        await ciclosService.cancelar(cicloId, motivo)
-        toast.success(`Ciclo "${targetCiclo.nome}" cancelado com sucesso.`)
-        return true
-      } catch (err) {
-        return false
-      }
-    }
-
-    if (targetCiclo.status === 'fechado') {
-      toast.error('Ciclo fechado não pode ser cancelado (o caminho é o ciclo seguinte).')
-      return false
-    }
-
-    if (targetCiclo.status === 'cancelado') {
-      toast.info('Este ciclo já está cancelado.')
-      return true
-    }
-
     const cleanMotivo = motivo.trim()
     if (!cleanMotivo) {
       toast.error('Informe obrigatoriamente o motivo do cancelamento.')
       return false
     }
 
+    const vinculados = cicloContratos.filter((cc) => cc.ciclo_id === cicloId)
+    const statusDerivado = derivarStatusCiclo(cicloId, cicloContratos, targetCiclo.status)
+
+    // Proteção 1: Ciclo Fechado não pode ser cancelado
+    if (statusDerivado === 'fechado' || targetCiclo.status === 'fechado') {
+      toast.error('Ciclo fechado não pode ser cancelado (o caminho é o ciclo seguinte).')
+      return false
+    }
+
+    // Proteção 2: Ciclo já Cancelado
+    if (statusDerivado === 'cancelado' && targetCiclo.status === 'cancelado') {
+      toast.info('Este ciclo já está cancelado.')
+      return true
+    }
+
+    // Proteção 3: Bloqueio por atestos emitidos no ciclo inteiro
     const pedidosDoCiclo = orders.filter((o) => o.cicloId === cicloId)
     const pedidoIdsCiclo = new Set(pedidosDoCiclo.map((o) => o.id))
     const atestosEmitidos = atestos.filter((a) => pedidoIdsCiclo.has(a.orderId))
@@ -2531,9 +2521,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     const nowIso = new Date().toISOString()
     const prevCiclos = [...ciclos]
+    const prevCC = [...cicloContratos]
     const prevOrders = [...orders]
     const prevActive = activeCiclo
 
+    // Atualização otimista do ciclo
     const updatedCiclos = prevCiclos.map((c) =>
       c.id === cicloId
         ? {
@@ -2546,6 +2538,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
     )
     setCiclos(updatedCiclos)
 
+    // Atualização otimista dos contratos do ciclo (todos os não terminais para 'cancelado')
+    let updatedCC = prevCC
+    if (vinculados.length > 0) {
+      updatedCC = prevCC.map((cc) =>
+        cc.ciclo_id === cicloId && cc.fase !== 'fechado'
+          ? {
+              ...cc,
+              fase: 'cancelado',
+              motivo_cancelamento: cleanMotivo,
+              data_cancelamento: nowIso,
+            }
+          : cc,
+      )
+      setCicloContratos(updatedCC)
+    }
+
+    // Atualização otimista de pedidos cancelados
     if (cancelarPedidosJunto && pedidosDoCiclo.length > 0) {
       setOrders((prev) =>
         prev.map((o) =>
@@ -2561,14 +2570,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
       )
     }
 
-    const naoTerminais = updatedCiclos.filter(
-      (c) => c.status !== 'fechado' && c.status !== 'cancelado',
-    )
-    setActiveCiclo(naoTerminais[0] || null)
+    // Recalcular ciclo ativo usando getCicloAtivo
+    const novoAtivo = getCicloAtivo(updatedCiclos, updatedCC)
+    setActiveCiclo(novoAtivo)
 
     try {
+      // 1. Cancelar registros de ciclo_contratos vinculados no PocketBase
+      for (const cc of vinculados) {
+        if (cc.fase !== 'cancelado' && cc.fase !== 'fechado') {
+          await cicloContratosService.cancelar(cc.id, cleanMotivo)
+        }
+      }
+
+      // 2. Cancelar o registro do ciclo no PocketBase
       await ciclosService.cancelar(cicloId, cleanMotivo)
 
+      // 3. Se solicitado, cancelar pedidos em aberto no PocketBase
       if (cancelarPedidosJunto && pedidosDoCiclo.length > 0) {
         const pedidosNaoCancelados = pedidosDoCiclo.filter((o) => o.status !== 'Cancelado')
         await Promise.all(
@@ -2586,6 +2603,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     } catch (err: any) {
       console.error('Erro ao cancelar ciclo:', err)
       setCiclos(prevCiclos)
+      setCicloContratos(prevCC)
       setOrders(prevOrders)
       setActiveCiclo(prevActive)
       toast.error('Falha ao cancelar ciclo no banco.')

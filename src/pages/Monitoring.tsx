@@ -39,6 +39,7 @@ import {
   calcularDiasAtrasoFechamento,
   formatFaseAmigavel,
   gerarResumoFasesCiclo,
+  derivarStatusCiclo,
 } from '@/lib/cicloUtils'
 import { AbrirCicloDialog } from '@/components/AbrirCicloDialog'
 import { CancelarCicloDialog } from '@/components/CancelarCicloDialog'
@@ -70,6 +71,7 @@ export default function Monitoring() {
   const [updating, setUpdating] = useState(false)
   const [abrirCicloOpen, setAbrirCicloOpen] = useState(false)
   const [cancelarDialogOpen, setCancelarDialogOpen] = useState(false)
+  const [cancelarCicloInteiroOpen, setCancelarCicloInteiroOpen] = useState(false)
 
   // Atualizar seleção padrão quando o ativo mudar ou na carga inicial
   useEffect(() => {
@@ -384,18 +386,48 @@ export default function Monitoring() {
             <CalendarPlus className="h-4 w-4" /> Abrir Ciclo
           </Button>
 
-          {/* Botão Cancelar (do contrato ou ciclo) */}
-          {selectedCiclo && currentFase !== 'fechado' && currentFase !== 'cancelado' && (
-            <Button
-              variant="outline"
-              onClick={() => setCancelarDialogOpen(true)}
-              className="gap-2 h-9 text-destructive border-destructive/30 hover:bg-destructive/10"
-              title={selectedContratoId !== 'todos' ? 'Cancelar Contrato' : 'Cancelar Ciclo'}
-            >
-              <Ban className="h-4 w-4" />
-              {selectedContratoId !== 'todos' ? 'Cancelar Contrato' : 'Cancelar Ciclo'}
-            </Button>
-          )}
+          {/* Botão Cancelar Contrato (quando um contrato específico estiver selecionado) */}
+          {selectedCiclo &&
+            selectedContratoId !== 'todos' &&
+            currentFase !== 'fechado' &&
+            currentFase !== 'cancelado' && (
+              <Button
+                variant="outline"
+                onClick={() => setCancelarDialogOpen(true)}
+                className="gap-2 h-9 text-destructive border-destructive/30 hover:bg-destructive/10"
+                title="Cancelar Contrato selecionado no ciclo"
+              >
+                <Ban className="h-4 w-4" />
+                Cancelar Contrato
+              </Button>
+            )}
+
+          {/* Botão Cancelar Ciclo (cancela o CICLO INTEIRO selecionado no seletor) */}
+          {selectedCiclo &&
+            (() => {
+              const statusCiclo = derivarStatusCiclo(
+                selectedCiclo.id,
+                cicloContratos,
+                selectedCiclo.status,
+              )
+              const canCancelCiclo =
+                statusCiclo !== 'fechado' &&
+                statusCiclo !== 'cancelado' &&
+                selectedCiclo.status !== 'fechado' &&
+                selectedCiclo.status !== 'cancelado'
+              if (!canCancelCiclo) return null
+              return (
+                <Button
+                  variant="outline"
+                  onClick={() => setCancelarCicloInteiroOpen(true)}
+                  className="gap-2 h-9 text-destructive border-destructive/40 hover:bg-destructive/10 font-medium"
+                  title="Cancelar Ciclo Inteiro"
+                >
+                  <Ban className="h-4 w-4" />
+                  Cancelar Ciclo
+                </Button>
+              )
+            })()}
         </div>
       </div>
 
@@ -783,11 +815,19 @@ export default function Monitoring() {
         }}
       />
 
+      {/* Modal Cancelar Contrato Específico no Ciclo */}
       <CancelarCicloDialog
         ciclo={selectedCiclo}
         contratoId={selectedContratoId !== 'todos' ? selectedContratoId : undefined}
         open={cancelarDialogOpen}
         onOpenChange={setCancelarDialogOpen}
+      />
+
+      {/* Modal Cancelar Ciclo Inteiro (operando sobre o ciclo selecionado) */}
+      <CancelarCicloDialog
+        ciclo={selectedCiclo}
+        open={cancelarCicloInteiroOpen}
+        onOpenChange={setCancelarCicloInteiroOpen}
       />
     </div>
   )

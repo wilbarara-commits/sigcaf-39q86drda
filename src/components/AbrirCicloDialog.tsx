@@ -48,12 +48,34 @@ export function AbrirCicloDialog({ open, onOpenChange, onSuccess }: AbrirCicloDi
     if (open) {
       const info = sugerirProximoCiclo(ciclos, new Date())
       setNome(info.nomeCicloPadrao)
-      setDataInicio(info.quartaInicio.toISOString().split('T')[0])
-      setDataFim(info.tercaFim.toISOString().split('T')[0])
-      setDataDespacho(info.segundaDespacho.toISOString().split('T')[0])
+      setDataInicio(info.dataInicioIso.split('T')[0])
+      setDataFim(info.dataFimIso.split('T')[0])
+      setDataDespacho(info.dataDespachoIso.split('T')[0])
       setStep('form')
     }
   }, [open, ciclos])
+
+  // Recalcular Fim (+6 dias = terça) e Despacho (+5 dias = segunda) quando o usuário alterar Início
+  const handleDataInicioChange = (novoInicioStr: string) => {
+    setDataInicio(novoInicioStr)
+    if (!novoInicioStr) return
+
+    // Normalizar a data informada (YYYY-MM-DD)
+    const match = novoInicioStr.match(/^(\d{4})-(\d{2})-(\d{2})/)
+    if (match) {
+      const ano = parseInt(match[1], 10)
+      const mes = parseInt(match[2], 10) - 1
+      const dia = parseInt(match[3], 10)
+
+      // Fim = início + 6 dias (sempre terça-feira)
+      const tFim = new Date(Date.UTC(ano, mes, dia + 6, 0, 0, 0, 0))
+      // Despacho = início + 5 dias (sempre segunda-feira)
+      const tDesp = new Date(Date.UTC(ano, mes, dia + 5, 0, 0, 0, 0))
+
+      setDataFim(tFim.toISOString().split('T')[0])
+      setDataDespacho(tDesp.toISOString().split('T')[0])
+    }
+  }
 
   // Verificação de nome duplicado
   const nomeDuplicado = useMemo(() => {
@@ -188,7 +210,7 @@ export function AbrirCicloDialog({ open, onOpenChange, onSuccess }: AbrirCicloDi
                   id="ciclo-inicio"
                   type="date"
                   value={dataInicio}
-                  onChange={(e) => setDataInicio(e.target.value)}
+                  onChange={(e) => handleDataInicioChange(e.target.value)}
                 />
               </div>
 

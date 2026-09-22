@@ -322,9 +322,16 @@ export default function CycleHistory() {
                     } else if (statusDerivado === 'fechado') {
                       statusBadge = <Badge variant="secondary">Fechado</Badge>
                     } else if (statusDerivado === 'cancelado') {
+                      const motivoCancelExibir =
+                        c.motivo_cancelamento ||
+                        ccCancelados.find((cc) => cc.motivo_cancelamento)?.motivo_cancelamento
                       statusBadge = (
-                        <Badge variant="destructive" className="text-xs">
-                          Cancelado
+                        <Badge
+                          variant="destructive"
+                          className="text-xs"
+                          title={motivoCancelExibir ? `Motivo: ${motivoCancelExibir}` : undefined}
+                        >
+                          Cancelado{motivoCancelExibir ? ` — ${motivoCancelExibir}` : ''}
                         </Badge>
                       )
                     }
@@ -412,20 +419,24 @@ export default function CycleHistory() {
                             >
                               <Eye className="h-3.5 w-3.5" /> Detalhes
                             </Button>
-                            {c.status !== 'fechado' && c.status !== 'cancelado' && (
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={() => {
-                                  setCancelarCiclo(c)
-                                  setCancelarCicloOpen(true)
-                                }}
-                                className="text-destructive hover:bg-destructive/10 text-xs px-2"
-                                title="Cancelar Ciclo"
-                              >
-                                <Ban className="h-3.5 w-3.5" />
-                              </Button>
-                            )}
+                            {statusDerivado !== 'fechado' &&
+                              statusDerivado !== 'cancelado' &&
+                              c.status !== 'fechado' &&
+                              c.status !== 'cancelado' && (
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => {
+                                    setCancelarCiclo(c)
+                                    setCancelarCicloOpen(true)
+                                  }}
+                                  className="text-destructive hover:bg-destructive/10 text-xs px-2 gap-1"
+                                  title="Cancelar Ciclo"
+                                >
+                                  <Ban className="h-3.5 w-3.5" />
+                                  <span>Cancelar Ciclo</span>
+                                </Button>
+                              )}
                           </div>
                         </TableCell>
                       </TableRow>

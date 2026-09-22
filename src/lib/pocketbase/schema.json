@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-22T19:28:47.023Z",
+  "generatedAt": "2026-09-22T22:32:43.135Z",
   "collections": [
     {
       "name": "users",
@@ -615,7 +615,7 @@
           "type": "select",
           "required": true,
           "system": false,
-          "selectValues": ["coletando", "correcao", "fechado"]
+          "selectValues": ["coletando", "correcao", "fechado", "cancelado"]
         },
         {
           "name": "snapshot",

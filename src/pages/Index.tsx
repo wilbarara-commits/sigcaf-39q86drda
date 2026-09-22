@@ -316,7 +316,9 @@ export default function Index() {
 
       {/* Faixa Informativa do Ciclo Operacional Ativo e Pendentes de Fechamento */}
       {(() => {
-        const ciclosNaoTerminais = ciclos.filter((c) => isCicloNaoTerminal(c.status))
+        const ciclosNaoTerminais = ciclos.filter((c) => {
+          return isCicloNaoTerminal(c.status)
+        })
         const ciclosPendentesFechamento = activeCiclo
           ? ciclosNaoTerminais.filter((c) => c.id !== activeCiclo.id)
           : ciclosNaoTerminais

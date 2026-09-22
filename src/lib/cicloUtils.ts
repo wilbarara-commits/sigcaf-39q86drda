@@ -74,13 +74,11 @@ function parseDateSegura(referencia: Date | string): Date {
  * Retorna a primeira Quarta-feira do ano especificado (às 00:00:00 local).
  */
 export function getPrimeiraQuartaDoAno(ano: number): Date {
-  const data = new Date(ano, 0, 1, 12, 0, 0, 0)
-  // getDay(): 0=Dom, 1=Seg, 2=Ter, 3=Qua, 4=Qui, 5=Sex, 6=Sab
-  // Quantos dias faltam para a primeira quarta (dia 3)?
-  const diaSemana = data.getDay()
+  // getUTCDay(): 0=Dom, 1=Seg, 2=Ter, 3=Qua, 4=Qui, 5=Sex, 6=Sab
+  const data = new Date(Date.UTC(ano, 0, 1, 0, 0, 0, 0))
+  const diaSemana = data.getUTCDay()
   const diasAteQuarta = (3 - diaSemana + 7) % 7
-  data.setDate(data.getDate() + diasAteQuarta)
-  data.setHours(0, 0, 0, 0)
+  data.setUTCDate(data.getUTCDate() + diasAteQuarta)
   return data
 }
 
@@ -121,34 +119,25 @@ export function calcularCicloSemanal(referencia: Date | string = new Date()): Ci
     quartaInicio.getDate(),
   )
   const utcPrimeira = Date.UTC(
-    primeiraQuarta.getFullYear(),
-    primeiraQuarta.getMonth(),
-    primeiraQuarta.getDate(),
+    primeiraQuarta.getUTCFullYear(),
+    primeiraQuarta.getUTCMonth(),
+    primeiraQuarta.getUTCDate(),
   )
   const diffDias = Math.round((utcQuarta - utcPrimeira) / (1000 * 60 * 60 * 24))
   const numeroSemana = Math.floor(diffDias / 7) + 1
 
-  // Terça-feira final (quarta + 6 dias)
-  const tercaFim = new Date(
-    quartaInicio.getFullYear(),
-    quartaInicio.getMonth(),
-    quartaInicio.getDate() + 6,
-    23,
-    59,
-    59,
-    999,
-  )
+  // Usar UTC consistente para evitar discrepância entre data local e UTC
+  const uAno = quartaInicio.getFullYear()
+  const uMes = quartaInicio.getMonth()
+  const uDia = quartaInicio.getDate()
 
-  // Segunda-feira de despacho (quarta + 5 dias)
-  const segundaDespacho = new Date(
-    quartaInicio.getFullYear(),
-    quartaInicio.getMonth(),
-    quartaInicio.getDate() + 5,
-    12,
-    0,
-    0,
-    0,
-  )
+  const quartaInicioUtc = new Date(Date.UTC(uAno, uMes, uDia, 0, 0, 0, 0))
+
+  // Terça-feira final (quarta + 6 dias às 23:59:59.999 UTC)
+  const tercaFim = new Date(Date.UTC(uAno, uMes, uDia + 6, 23, 59, 59, 999))
+
+  // Segunda-feira de despacho (quarta + 5 dias às 12:00:00 UTC)
+  const segundaDespacho = new Date(Date.UTC(uAno, uMes, uDia + 5, 12, 0, 0, 0))
 
   const numFormatado = String(numeroSemana).padStart(2, '0')
   const codigoCiclo = `${numFormatado}/${anoCiclo}`
@@ -159,10 +148,10 @@ export function calcularCicloSemanal(referencia: Date | string = new Date()): Ci
     numeroSemana,
     codigoCiclo,
     nomeCicloPadrao,
-    quartaInicio,
+    quartaInicio: quartaInicioUtc,
     tercaFim,
     segundaDespacho,
-    dataInicioIso: quartaInicio.toISOString(),
+    dataInicioIso: quartaInicioUtc.toISOString(),
     dataFimIso: tercaFim.toISOString(),
     dataDespachoIso: segundaDespacho.toISOString(),
   }
@@ -512,43 +501,43 @@ export function sugerirProximoCiclo(
       quartaBase = getPrimeiraQuartaDoAno(parsed?.ano || dHoje.getFullYear())
     }
 
-    // Quarta seguinte: +7 dias
-    const proxQuarta = new Date(
-      quartaBase.getFullYear(),
-      quartaBase.getMonth(),
-      quartaBase.getDate() + 7,
-      0,
-      0,
-      0,
-      0,
-    )
+    // Quarta seguinte: +7 dias da quarta de início do ciclo mais recente
+    const anoQuarta = quartaBase.getFullYear()
+    const mesQuarta = quartaBase.getMonth()
+    const diaQuarta = quartaBase.getDate()
 
-    const anoProx = proxQuarta.getFullYear()
+    const proxQuarta = new Date(Date.UTC(anoQuarta, mesQuarta, diaQuarta + 7, 0, 0, 0, 0))
+
+    const anoProx = proxQuarta.getUTCFullYear()
     const proxNumero = parsed && parsed.ano === anoProx ? parsed.numero + 1 : 1
     const numFmt = String(proxNumero).padStart(2, '0')
     const codigoCiclo = `${numFmt}/${anoProx}`
     const nomeCicloPadrao = `Ciclo ${codigoCiclo}`
 
-    // Fim = terça-feira seguinte (início + 6 dias às 23:59:59.999)
+    // Fim = terça-feira seguinte (início + 6 dias às 23:59:59.999 UTC)
     const tercaFim = new Date(
-      proxQuarta.getFullYear(),
-      proxQuarta.getMonth(),
-      proxQuarta.getDate() + 6,
-      23,
-      59,
-      59,
-      999,
+      Date.UTC(
+        proxQuarta.getUTCFullYear(),
+        proxQuarta.getUTCMonth(),
+        proxQuarta.getUTCDate() + 6,
+        23,
+        59,
+        59,
+        999,
+      ),
     )
 
-    // Despacho = segunda-feira seguinte (início + 5 dias às 12:00:00)
+    // Despacho = segunda-feira seguinte (início + 5 dias às 12:00:00 UTC)
     const segundaDespacho = new Date(
-      proxQuarta.getFullYear(),
-      proxQuarta.getMonth(),
-      proxQuarta.getDate() + 5,
-      12,
-      0,
-      0,
-      0,
+      Date.UTC(
+        proxQuarta.getUTCFullYear(),
+        proxQuarta.getUTCMonth(),
+        proxQuarta.getUTCDate() + 5,
+        12,
+        0,
+        0,
+        0,
+      ),
     )
 
     return {
@@ -590,7 +579,7 @@ export function calcularProximoCicloParaAbertura(dataRef: Date = new Date()): Ci
     d.getFullYear(),
     d.getMonth(),
     d.getDate() + diasAteQuarta,
-    0,
+    12,
     0,
     0,
     0,
