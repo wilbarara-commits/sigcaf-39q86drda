@@ -13,7 +13,11 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { AlertTriangle, CalendarPlus, Loader2 } from 'lucide-react'
-import { calcularProximoCicloParaAbertura, isCicloNaoTerminal } from '@/lib/cicloUtils'
+import {
+  calcularProximoCicloParaAbertura,
+  isCicloNaoTerminal,
+  derivarStatusCiclo,
+} from '@/lib/cicloUtils'
 
 interface AbrirCicloDialogProps {
   open: boolean
@@ -22,7 +26,7 @@ interface AbrirCicloDialogProps {
 }
 
 export function AbrirCicloDialog({ open, onOpenChange, onSuccess }: AbrirCicloDialogProps) {
-  const { ciclos, createCiclo } = useApp()
+  const { ciclos, cicloContratos, contracts, createCiclo } = useApp()
 
   const [nome, setNome] = useState('')
   const [dataInicio, setDataInicio] = useState('')
@@ -32,7 +36,10 @@ export function AbrirCicloDialog({ open, onOpenChange, onSuccess }: AbrirCicloDi
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   // Ciclo não-terminal existente mais recente (se houver)
-  const cicloNaoTerminalExistente = ciclos.find((c) => isCicloNaoTerminal(c.status))
+  const cicloNaoTerminalExistente = ciclos.find((c) => {
+    const status = derivarStatusCiclo(c.id, cicloContratos, c.status)
+    return isCicloNaoTerminal(status)
+  })
 
   const faseCapitalizada = (fase?: string) => {
     if (!fase) return 'Coletando'

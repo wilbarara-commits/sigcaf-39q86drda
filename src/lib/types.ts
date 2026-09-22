@@ -27,14 +27,29 @@ export interface EscolaRecord {
   updated?: string
 }
 
-export type CicloStatus = 'coletando' | 'correcao' | 'fechado' | 'cancelado' | string
+export type CicloStatus = 'coletando' | 'correcao' | 'coletado' | 'fechado' | 'cancelado' | string
+
+export interface CicloContratoRecord {
+  id: string
+  ciclo_id: string
+  contrato_id: string
+  fase: CicloStatus
+  motivo_cancelamento?: string
+  data_cancelamento?: string
+  expand?: {
+    ciclo_id?: CicloRecord
+    contrato_id?: ContratoRecord
+  }
+  created?: string
+  updated?: string
+}
 
 export interface CicloRecord {
   id: string
   nome: string
   data_inicio: string
   data_fim: string
-  status: CicloStatus
+  status?: CicloStatus
   snapshot?: any
   motivo_cancelamento?: string
   data_cancelamento?: string

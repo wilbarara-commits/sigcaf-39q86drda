@@ -86,6 +86,7 @@ export default function ExcelImport() {
     products,
     contractItems,
     ciclos,
+    cicloContratos,
     activeCiclo,
     rotas,
     paradasRota,
@@ -574,22 +575,34 @@ export default function ExcelImport() {
     if (!parsedData || !selectedContract) return
 
     // Obter ou criar ciclo para importação:
-    // Se NÃO existir ciclo ativo, cria automaticamente com a fórmula atual.
+    // Se NÃO existir ciclo ativo, cria automaticamente com a fórmula atual (e cria os vínculos ciclo_contratos).
     // Se existir, usa o ativo.
-    // Validação de fase do ciclo alvo: Coletando ou Correção.
+    // Validação de fase DO CONTRATO ALVO: Coletando ou Correção (trava MUDANÇA 3).
     let cicloAlvo = activeCiclo
 
     if (cicloAlvo) {
-      if (cicloAlvo.status === 'fechado') {
-        toast.error('Ciclo fechado — abra o próximo ciclo')
+      // Validar a fase específica deste contrato no ciclo ativo
+      const ccContrato = cicloContratos.find(
+        (cc) => cc.ciclo_id === cicloAlvo?.id && cc.contrato_id === selectedContract.id,
+      )
+      const faseContrato = (ccContrato?.fase || cicloAlvo.status || 'coletando').toLowerCase()
+
+      if (faseContrato === 'coletado') {
+        toast.error(
+          'Coleta encerrada para este contrato — ciclo em fase Coletado. Importação bloqueada.',
+        )
         return
       }
-      if (cicloAlvo.status === 'cancelado') {
-        toast.error('Ciclo cancelado')
+      if (faseContrato === 'fechado') {
+        toast.error('Ciclo fechado para este contrato — abra o próximo ciclo.')
+        return
+      }
+      if (faseContrato === 'cancelado') {
+        toast.error('Ciclo cancelado para este contrato.')
         return
       }
     } else {
-      // Criar automaticamente com a fórmula padrão semanal
+      // Criar automaticamente com a fórmula padrão semanal vinculando os contratos ativos
       const infoCiclo = calcularProximoCicloParaAbertura(new Date())
       const novo = await createCiclo({
         nome: infoCiclo.nomeCicloPadrao,
@@ -600,6 +613,7 @@ export default function ExcelImport() {
           regra_semanal: 'quarta_a_terca',
           despacho_previsto_segunda: infoCiclo.segundaDespacho.toISOString(),
         },
+        contratoIds: [selectedContract.id],
       })
 
       if (!novo) {
@@ -878,7 +892,16 @@ export default function ExcelImport() {
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Ciclo Ativo Vinculado:</span>
                     <span className="font-semibold text-foreground">
-                      {activeCiclo?.nome || 'Sem ciclo ativo'} ({activeCiclo?.status || '-'})
+                      {activeCiclo?.nome || 'Sem ciclo ativo'}{' '}
+                      {(() => {
+                        if (!activeCiclo) return ''
+                        const cc = cicloContratos.find(
+                          (c) =>
+                            c.ciclo_id === activeCiclo.id && c.contrato_id === selectedContract.id,
+                        )
+                        const f = cc?.fase || activeCiclo.status || 'coletando'
+                        return `(Fase do contrato: ${f.charAt(0).toUpperCase() + f.slice(1)})`
+                      })()}
                     </span>
                   </div>
                 </div>

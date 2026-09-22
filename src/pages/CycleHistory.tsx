@@ -44,12 +44,15 @@ import {
   getDespachoPrevistoCiclo,
   isCicloNaoTerminal,
   calcularDiasAtrasoFechamento,
+  formatFaseAmigavel,
+  derivarStatusCiclo,
+  gerarResumoFasesCiclo,
 } from '@/lib/cicloUtils'
 import { AbrirCicloDialog } from '@/components/AbrirCicloDialog'
 import { CancelarCicloDialog } from '@/components/CancelarCicloDialog'
 
 export default function CycleHistory() {
-  const { ciclos, activeCiclo, orders, products, schools } = useApp()
+  const { ciclos, cicloContratos, contracts, activeCiclo, orders, products, schools } = useApp()
 
   const [dataInicio, setDataInicio] = useState('')
   const [dataFim, setDataFim] = useState('')
@@ -276,30 +279,46 @@ export default function CycleHistory() {
                     }
 
                     const isAtivo = activeCiclo?.id === c.id
-                    const isNaoTerminal = isCicloNaoTerminal(c.status)
+                    const statusDerivado = derivarStatusCiclo(c.id, cicloContratos, c.status)
+                    const isNaoTerminal = isCicloNaoTerminal(statusDerivado)
                     const isPendente = isNaoTerminal && !isAtivo
                     const diasAtraso = calcularDiasAtrasoFechamento(c.data_fim)
 
+                    // Resumo das fases por contrato
+                    const contratosMap = new Map(
+                      contracts.map((ct) => [ct.id, { numero: ct.numero }]),
+                    )
+                    const resumoFases = gerarResumoFasesCiclo(c.id, cicloContratos, contratosMap)
+
+                    // Contratos cancelados deste ciclo
+                    const ccCancelados = cicloContratos.filter(
+                      (cc) => cc.ciclo_id === c.id && cc.fase === 'cancelado',
+                    )
+
                     let statusBadge = (
                       <Badge variant="secondary" className="capitalize">
-                        {c.status}
+                        {formatFaseAmigavel(statusDerivado)}
                       </Badge>
                     )
 
-                    if (c.status === 'coletando') {
+                    if (statusDerivado === 'coletando') {
                       statusBadge = (
                         <Badge className="bg-blue-600 hover:bg-blue-700">Coletando</Badge>
                       )
-                    } else if (c.status === 'correcao') {
+                    } else if (statusDerivado === 'correcao') {
                       statusBadge = (
                         <Badge className="bg-amber-600 hover:bg-amber-700">Correção</Badge>
                       )
-                    } else if (c.status === 'fechado') {
+                    } else if (statusDerivado === 'coletado') {
+                      statusBadge = (
+                        <Badge className="bg-purple-600 hover:bg-purple-700">Coletado</Badge>
+                      )
+                    } else if (statusDerivado === 'fechado') {
                       statusBadge = <Badge variant="secondary">Fechado</Badge>
-                    } else if (c.status === 'cancelado') {
+                    } else if (statusDerivado === 'cancelado') {
                       statusBadge = (
                         <Badge variant="destructive" className="text-xs">
-                          Cancelado{c.motivo_cancelamento ? ` — ${c.motivo_cancelamento}` : ''}
+                          Cancelado
                         </Badge>
                       )
                     }
@@ -321,7 +340,7 @@ export default function CycleHistory() {
                           </span>
                         </TableCell>
                         <TableCell>
-                          <div className="flex flex-col gap-1 items-start">
+                          <div className="flex flex-col gap-1 items-start max-w-[280px]">
                             <div className="flex items-center gap-1.5 flex-wrap">
                               {statusBadge}
                               {isAtivo && (
@@ -333,6 +352,31 @@ export default function CycleHistory() {
                                 </Badge>
                               )}
                             </div>
+                            <span className="text-[11px] text-muted-foreground leading-tight">
+                              {resumoFases}
+                            </span>
+                            {ccCancelados.length > 0 && statusDerivado !== 'cancelado' && (
+                              <div className="flex flex-wrap gap-1 mt-0.5">
+                                {ccCancelados.map((cc) => {
+                                  const cNome =
+                                    contratosMap.get(cc.contrato_id)?.numero || 'Contrato'
+                                  return (
+                                    <Badge
+                                      key={cc.id}
+                                      variant="destructive"
+                                      className="text-[9px] py-0 px-1"
+                                      title={
+                                        cc.motivo_cancelamento
+                                          ? `Motivo: ${cc.motivo_cancelamento}`
+                                          : undefined
+                                      }
+                                    >
+                                      {cNome} cancelado
+                                    </Badge>
+                                  )
+                                })}
+                              </div>
+                            )}
                             {isPendente && (
                               <Badge className="bg-amber-600 hover:bg-amber-700 text-[10px]">
                                 Fechamento Pendente (atrasado {diasAtraso} dias)

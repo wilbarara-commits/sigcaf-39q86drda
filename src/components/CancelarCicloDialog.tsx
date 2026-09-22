@@ -17,6 +17,7 @@ import { AlertOctagon, AlertTriangle, Ban, Loader2, ShieldAlert } from 'lucide-r
 
 interface CancelarCicloDialogProps {
   ciclo: CicloRecord | null
+  contratoId?: string
   open: boolean
   onOpenChange: (open: boolean) => void
   onSuccess?: () => void
@@ -24,11 +25,20 @@ interface CancelarCicloDialogProps {
 
 export function CancelarCicloDialog({
   ciclo,
+  contratoId,
   open,
   onOpenChange,
   onSuccess,
 }: CancelarCicloDialogProps) {
-  const { orders, atestos, cancelarCiclo } = useApp()
+  const {
+    orders,
+    atestos,
+    contracts,
+    contractSchools,
+    cicloContratos,
+    cancelarCiclo,
+    cancelarCicloContrato,
+  } = useApp()
   const [motivo, setMotivo] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
 
@@ -40,19 +50,39 @@ export function CancelarCicloDialog({
 
   if (!ciclo) return null
 
-  // Identificar pedidos deste ciclo
-  const pedidosDoCiclo = orders.filter((o) => o.cicloId === ciclo.id)
-  const pedidosNaoCancelados = pedidosDoCiclo.filter((o) => o.status !== 'Cancelado')
-  const pedidoIdsSet = new Set(pedidosDoCiclo.map((o) => o.id))
+  const contratoAlvo = contratoId ? contracts.find((c) => c.id === contratoId) : null
+  const currentCC = contratoId
+    ? cicloContratos.find((cc) => cc.ciclo_id === ciclo.id && cc.contrato_id === contratoId)
+    : null
 
-  // Proteção 1: Ciclo COM atestos emitidos -> BLOQUEADO
+  const isContratoScope = Boolean(contratoId && contratoAlvo)
+
+  // Escolas do contrato alvo (se escopo de contrato)
+  const contratoEscolaIds = isContratoScope
+    ? new Set(
+        contractSchools.filter((cs) => cs.contrato_id === contratoId).map((cs) => cs.escola_id),
+      )
+    : null
+
+  // Identificar pedidos afetados
+  const pedidosAfetados = orders.filter((o) => {
+    if (o.cicloId !== ciclo.id) return false
+    if (contratoEscolaIds) {
+      return contratoEscolaIds.has(o.schoolId)
+    }
+    return true
+  })
+  const pedidosNaoCancelados = pedidosAfetados.filter((o) => o.status !== 'Cancelado')
+  const pedidoIdsSet = new Set(pedidosAfetados.map((o) => o.id))
+
+  // Proteção 1: COM atestos emitidos -> BLOQUEADO
   const atestosEmitidos = atestos.filter((a) => pedidoIdsSet.has(a.orderId))
   const isBloqueadoPorAtestos = atestosEmitidos.length > 0
 
-  // Proteção 3: Ciclo FECHADO não pode ser cancelado
-  const isCicloFechado = ciclo.status === 'fechado'
+  // Proteção 3: FECHADO não pode ser cancelado
+  const isFechado = isContratoScope ? currentCC?.fase === 'fechado' : ciclo.status === 'fechado'
 
-  // Proteção 2: Ciclo COM pedidos -> pergunta se cancela pedidos junto
+  // Proteção 2: COM pedidos -> pergunta se cancela pedidos junto
   const hasPedidos = pedidosNaoCancelados.length > 0
 
   const handleConfirmCancel = async (cancelarPedidosJunto: boolean) => {
@@ -61,7 +91,12 @@ export function CancelarCicloDialog({
 
     setIsSubmitting(true)
     try {
-      const ok = await cancelarCiclo(ciclo.id, trimmed, cancelarPedidosJunto)
+      let ok = false
+      if (isContratoScope && contratoId) {
+        ok = await cancelarCicloContrato(ciclo.id, contratoId, trimmed, cancelarPedidosJunto)
+      } else {
+        ok = await cancelarCiclo(ciclo.id, trimmed, cancelarPedidosJunto)
+      }
       if (ok) {
         onOpenChange(false)
         onSuccess?.()
@@ -71,54 +106,61 @@ export function CancelarCicloDialog({
     }
   }
 
+  const tituloDialog = isContratoScope
+    ? `Cancelar Contrato ${contratoAlvo?.numero} no Ciclo: ${ciclo.nome}`
+    : `Cancelar Ciclo: ${ciclo.nome}`
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-destructive">
-            <Ban className="h-5 w-5" /> Cancelar Ciclo: {ciclo.nome}
+            <Ban className="h-5 w-5" /> {tituloDialog}
           </DialogTitle>
           <DialogDescription>
-            O cancelamento congela o ciclo e impede novas coletas ou importações.
+            {isContratoScope
+              ? 'O cancelamento afetará apenas este contrato neste ciclo. Os outros contratos do ciclo seguem normalmente.'
+              : 'O cancelamento congela o ciclo e impede novas coletas ou importações.'}
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 py-2 text-xs">
           {/* Bloqueio por Fechado */}
-          {isCicloFechado && (
+          {isFechado && (
             <Alert variant="destructive">
               <AlertOctagon className="h-4 w-4" />
               <AlertTitle className="font-semibold text-xs">Ação Não Permitida</AlertTitle>
               <AlertDescription className="text-xs mt-1">
-                Ciclo fechado não pode ser cancelado (o caminho é o ciclo seguinte).
+                {isContratoScope
+                  ? 'Contrato já fechado neste ciclo não pode ser cancelado (o caminho é o ciclo seguinte).'
+                  : 'Ciclo fechado não pode ser cancelado (o caminho é o ciclo seguinte).'}
               </AlertDescription>
             </Alert>
           )}
 
           {/* Bloqueio por Atestos Emitidos */}
-          {!isCicloFechado && isBloqueadoPorAtestos && (
+          {!isFechado && isBloqueadoPorAtestos && (
             <Alert variant="destructive">
               <ShieldAlert className="h-4 w-4" />
               <AlertTitle className="font-semibold text-xs">Cancelamento Bloqueado</AlertTitle>
               <AlertDescription className="text-xs mt-1 leading-relaxed">
-                Este ciclo possui atestos emitidos — já houve entrega formalizada. O caminho é
-                FECHAR o ciclo, não cancelá-lo.
+                {isContratoScope
+                  ? 'Este contrato possui atestos emitidos neste ciclo — já houve entrega formalizada. O caminho é FECHAR, não cancelá-lo.'
+                  : 'Este ciclo possui atestos emitidos — já houve entrega formalizada. O caminho é FECHAR o ciclo, não cancelá-lo.'}
               </AlertDescription>
             </Alert>
           )}
 
           {/* Fluxo Permitido */}
-          {!isCicloFechado && !isBloqueadoPorAtestos && (
+          {!isFechado && !isBloqueadoPorAtestos && (
             <>
               {hasPedidos && (
                 <Alert className="border-amber-400 bg-amber-50 text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
                   <AlertTriangle className="h-4 w-4 text-amber-600" />
-                  <AlertTitle className="font-semibold text-xs">
-                    Pedidos vinculados ao ciclo
-                  </AlertTitle>
+                  <AlertTitle className="font-semibold text-xs">Pedidos vinculados</AlertTitle>
                   <AlertDescription className="text-xs mt-1">
-                    Este ciclo tem {pedidosNaoCancelados.length} pedidos. Cancelar também os pedidos
-                    (com o mesmo motivo)?
+                    Existem {pedidosNaoCancelados.length} pedidos afetados em aberto. Cancelar
+                    também os pedidos (com o mesmo motivo)?
                   </AlertDescription>
                 </Alert>
               )}
@@ -163,10 +205,10 @@ export function CancelarCicloDialog({
             disabled={isSubmitting}
             onClick={() => onOpenChange(false)}
           >
-            {isCicloFechado || isBloqueadoPorAtestos ? 'Fechar' : 'Abortar'}
+            {isFechado || isBloqueadoPorAtestos ? 'Fechar' : 'Abortar'}
           </Button>
 
-          {!isCicloFechado && !isBloqueadoPorAtestos && (
+          {!isFechado && !isBloqueadoPorAtestos && (
             <>
               {hasPedidos ? (
                 <Button
@@ -180,6 +222,8 @@ export function CancelarCicloDialog({
                     <>
                       <Loader2 className="h-4 w-4 animate-spin" /> Cancelando...
                     </>
+                  ) : isContratoScope ? (
+                    'Cancelar Contrato e Pedidos'
                   ) : (
                     'Cancelar Ciclo e Pedidos'
                   )}

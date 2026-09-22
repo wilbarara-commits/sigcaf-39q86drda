@@ -68,6 +68,7 @@ import {
   MoreVertical,
   Truck,
   XCircle,
+  Edit,
   Play,
   UserCheck,
   Check,
@@ -82,15 +83,21 @@ export default function Orders() {
     contracts,
     rotasLogisticas,
     ciclos,
+    cicloContratos,
+    contractSchools,
     activeCiclo,
     addOrder,
     updateOrderStatus,
+    updateOrderItemsAndDate,
     confirmarEntregaPedido,
     cancelarPedido,
     marcarNaoEntreguePedido,
     isLoading,
   } = useApp()
   const { user } = useAuth()
+
+  const isAdmin =
+    user?.role === 'admin' || user?.perfil === 'administrador' || user?.email?.includes('admin')
 
   const [open, setOpen] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -114,6 +121,13 @@ export default function Orders() {
   // Detalhes do pedido selecionado
   const [viewingOrder, setViewingOrder] = useState<Order | null>(null)
   const [detailsOpen, setDetailsOpen] = useState(false)
+
+  // Diálogo de Edição de Pedido Pós-Coleta (Administrador, apenas antes do despacho)
+  const [editDialogOpen, setEditDialogOpen] = useState(false)
+  const [orderToEdit, setOrderToEdit] = useState<Order | null>(null)
+  const [editDate, setEditDate] = useState('')
+  const [editItems, setEditItems] = useState<Array<{ productId: string; quantity: number }>>([])
+  const [isSavingEdit, setIsSavingEdit] = useState(false)
 
   // Diálogo de cancelamento (livre para Pendente / logístico para Em Rota)
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false)
@@ -179,24 +193,46 @@ export default function Orders() {
   const handleCreateOrder = async (e: React.FormEvent) => {
     e.preventDefault()
 
-    // TRAVA DE FASE: Coleta de pedidos só com ciclo alvo em Coletando ou Correção.
+    if (!selectedSchool) {
+      toast.error('Selecione a escola solicitante.')
+      return
+    }
+
+    // Identificar contrato da escola selecionada
+    const linkEscola = contractSchools.find((cs) => cs.escola_id === selectedSchool)
+    const contratoIdDaEscola = selectedContractId || linkEscola?.contrato_id
+
+    // TRAVA DE FASE POR CONTRATO (MUDANÇA 3):
+    // Validada contra o vínculo ciclo_contratos do contrato no ciclo ativo
     if (!activeCiclo) {
       toast.error('Nenhum ciclo ativo cadastrado. Abra um ciclo antes de lançar pedidos.')
       return
     }
 
-    if (activeCiclo.status === 'fechado') {
-      toast.error('Ciclo fechado — abra o próximo ciclo')
+    let faseContrato = (activeCiclo.status || 'coletando').toLowerCase()
+    if (contratoIdDaEscola) {
+      const cc = cicloContratos.find(
+        (c) => c.ciclo_id === activeCiclo.id && c.contrato_id === contratoIdDaEscola,
+      )
+      if (cc) {
+        faseContrato = (cc.fase || 'coletando').toLowerCase()
+      }
+    }
+
+    if (faseContrato === 'coletado') {
+      toast.error(
+        'Coleta encerrada para este contrato — ciclo em fase Coletado. Pedidos novos bloqueados.',
+      )
       return
     }
 
-    if (activeCiclo.status === 'cancelado') {
-      toast.error('Ciclo cancelado')
+    if (faseContrato === 'fechado') {
+      toast.error('Ciclo fechado para este contrato — abra o próximo ciclo.')
       return
     }
 
-    if (!selectedSchool) {
-      toast.error('Selecione a escola solicitante.')
+    if (faseContrato === 'cancelado') {
+      toast.error('Ciclo cancelado para este contrato.')
       return
     }
 
@@ -370,6 +406,25 @@ export default function Orders() {
     }
   }
 
+  // Helpers para fase do contrato do pedido
+  const getFaseContratoDoPedido = (order: Order): string => {
+    const linkEscola = contractSchools.find((cs) => cs.escola_id === order.schoolId)
+    const cicloId = order.cicloId || activeCiclo?.id
+    if (cicloId && linkEscola) {
+      const cc = cicloContratos.find(
+        (c) => c.ciclo_id === cicloId && c.contrato_id === linkEscola.contrato_id,
+      )
+      if (cc) return (cc.fase || 'coletando').toLowerCase()
+    }
+    const pedidoCiclo = ciclos.find((c) => c.id === order.cicloId) || activeCiclo
+    return (pedidoCiclo?.status || 'coletando').toLowerCase()
+  }
+
+  const isDespachoLiberado = (order: Order): boolean => {
+    const fase = getFaseContratoDoPedido(order)
+    return fase === 'coletado' || fase === 'fechado'
+  }
+
   // Ações de evolução de status
   const handleAvancarParaEmRota = async (order: Order) => {
     if (order.status !== 'Pendente') {
@@ -377,15 +432,59 @@ export default function Orders() {
       return
     }
 
-    // Regra D: Despacho ("Colocar em Rota"): só habilitado quando o ciclo do pedido estiver FECHADO;
-    // caso contrário desabilitado com explicação "Despacho liberado após o fechamento do ciclo".
-    const pedidoCiclo = ciclos.find((c) => c.id === order.cicloId) || activeCiclo
-    if (!pedidoCiclo || pedidoCiclo.status !== 'fechado') {
-      toast.error('Despacho liberado após o fechamento do ciclo')
+    // MUDANÇA 2 & 3: Em Coletado ou Fechado: DESPACHO LIBERADO ✓ (não precisa esperar "Fechado")
+    if (!isDespachoLiberado(order)) {
+      toast.error('Despacho liberado apenas nas fases Coletado ou Fechado.')
       return
     }
 
     await updateOrderStatus(order.id, 'Em Rota')
+  }
+
+  // Abertura e submissão da Edição de Pedido Pós-Coleta (Admin)
+  const handleOpenEditOrder = (order: Order) => {
+    if (!isAdmin) {
+      toast.error('Apenas administradores podem editar pedidos após a coleta.')
+      return
+    }
+    if (order.status === 'Em Rota' || order.status === 'Entregue') {
+      toast.error('Pedido já colocado em rota ou entregue não pode ser editado (congelado).')
+      return
+    }
+    if (order.status === 'Cancelado') {
+      toast.error('Pedido cancelado não pode ser editado.')
+      return
+    }
+
+    setOrderToEdit(order)
+    setEditDate(order.date ? order.date.split('T')[0] : new Date().toISOString().split('T')[0])
+    setEditItems(
+      order.items.map((it) => ({
+        productId: it.productId,
+        quantity: it.quantity,
+      })),
+    )
+    setEditDialogOpen(true)
+  }
+
+  const handleSaveEditOrder = async () => {
+    if (!orderToEdit) return
+    const validItems = editItems.filter((i) => i.productId && Number(i.quantity) > 0)
+    if (validItems.length === 0) {
+      toast.error('O pedido precisa conter ao menos um item com quantidade positiva.')
+      return
+    }
+
+    setIsSavingEdit(true)
+    try {
+      const ok = await updateOrderItemsAndDate(orderToEdit.id, validItems, editDate)
+      if (ok) {
+        setEditDialogOpen(false)
+        setOrderToEdit(null)
+      }
+    } finally {
+      setIsSavingEdit(false)
+    }
   }
 
   const handleOpenConfirmDelivery = (order: Order) => {
@@ -417,18 +516,18 @@ export default function Orders() {
       return
     }
 
-    // Verificar status do ciclo do pedido:
-    // Ciclo Fechado não aceita nova coleta nem cancelamento de pedido — EXCETO cancelamento por motivo logístico (para pedidos já despachados / Em Rota).
-    const pedidoCiclo = ciclos.find((c) => c.id === order.cicloId) || activeCiclo
-    if (pedidoCiclo?.status === 'fechado' && order.status !== 'Em Rota') {
+    // Verificar status do ciclo/contrato do pedido:
+    // Fechado/Cancelado não aceita cancelamento de pedido pendente — EXCETO cancelamento por motivo logístico (para pedidos já despachados / Em Rota).
+    const faseContrato = getFaseContratoDoPedido(order)
+    if (faseContrato === 'fechado' && order.status !== 'Em Rota') {
       toast.error(
         'Ciclo fechado não aceita cancelamento de pedido pendente. Apenas cancelamento logístico para pedidos em rota é permitido.',
       )
       return
     }
 
-    if (pedidoCiclo?.status === 'cancelado') {
-      toast.error('O ciclo deste pedido já se encontra cancelado.')
+    if (faseContrato === 'cancelado') {
+      toast.error('O contrato/ciclo deste pedido já se encontra cancelado.')
       return
     }
 
@@ -986,40 +1085,49 @@ export default function Orders() {
                               </DropdownMenuLabel>
                               <DropdownMenuSeparator />
 
+                              {/* Ação de EDIÇÃO PÓS-COLETA por Administrador (antes do despacho) */}
+                              {isAdmin && order.status === 'Pendente' && (
+                                <DropdownMenuItem
+                                  className="gap-2 cursor-pointer text-blue-700 dark:text-blue-400 font-medium"
+                                  onClick={() => handleOpenEditOrder(order)}
+                                >
+                                  <Edit className="h-3.5 w-3.5" /> Editar Pedido (Admin)
+                                </DropdownMenuItem>
+                              )}
+
                               {/* Se Pendente: pode avançar para Em Rota, Entregue ou Cancelar */}
                               {order.status === 'Pendente' && (
                                 <>
                                   {(() => {
-                                    const pCiclo =
-                                      ciclos.find((c) => c.id === order.cicloId) || activeCiclo
-                                    const isCicloFechado = pCiclo?.status === 'fechado'
+                                    const liberado = isDespachoLiberado(order)
+                                    const fase = getFaseContratoDoPedido(order)
                                     return (
                                       <DropdownMenuItem
-                                        disabled={!isCicloFechado}
+                                        disabled={!liberado}
                                         className={`gap-2 ${
-                                          isCicloFechado
+                                          liberado
                                             ? 'cursor-pointer text-amber-700 dark:text-amber-400'
                                             : 'opacity-50 cursor-not-allowed'
                                         }`}
                                         onClick={() => {
-                                          if (isCicloFechado) {
+                                          if (liberado) {
                                             handleAvancarParaEmRota(order)
                                           } else {
                                             toast.error(
-                                              'Despacho liberado após o fechamento do ciclo',
+                                              'Despacho liberado nas fases Coletado ou Fechado.',
                                             )
                                           }
                                         }}
                                         title={
-                                          isCicloFechado
+                                          liberado
                                             ? 'Colocar em rota de entrega'
-                                            : 'Despacho liberado após o fechamento do ciclo'
+                                            : 'Despacho liberado nas fases Coletado ou Fechado'
                                         }
                                       >
-                                        <Truck className="h-3.5 w-3.5" /> Avançar para Em Rota
-                                        {!isCicloFechado && (
-                                          <span className="text-[10px] text-muted-foreground ml-auto">
-                                            (Ciclo não fechado)
+                                        <Truck className="h-3.5 w-3.5" /> Colocar em Rota
+                                        {!liberado && (
+                                          <span className="text-[10px] text-muted-foreground ml-auto capitalize">
+                                            ({fase})
                                           </span>
                                         )}
                                       </DropdownMenuItem>
@@ -1403,6 +1511,165 @@ export default function Orders() {
                 </>
               ) : (
                 'Confirmar Entrega'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal de Edição de Pedido Pós-Coleta (Admin, antes do despacho) */}
+      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+        <DialogContent className="sm:max-w-[550px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-primary">
+              <Edit className="h-5 w-5" /> Editar Pedido: {orderToEdit?.numero}
+            </DialogTitle>
+            <DialogDescription>
+              Edição permitida a administradores para pedidos não despachados (mesmo nas fases
+              Coletado ou Fechado).
+            </DialogDescription>
+          </DialogHeader>
+
+          {orderToEdit && (
+            <div className="space-y-4 py-2 text-xs">
+              <div className="p-3 rounded-lg bg-muted/40 border space-y-1">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Escola:</span>
+                  <span className="font-semibold text-foreground">{orderToEdit.schoolName}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Origem:</span>
+                  <span className="capitalize">{orderToEdit.origem}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Fase Operacional do Contrato:</span>
+                  <Badge variant="outline" className="capitalize">
+                    {getFaseContratoDoPedido(orderToEdit)}
+                  </Badge>
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="edit-date" className="text-xs font-semibold">
+                  Data Prevista do Pedido
+                </Label>
+                <Input
+                  id="edit-date"
+                  type="date"
+                  value={editDate}
+                  onChange={(e) => setEditDate(e.target.value)}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs font-semibold">Itens e Quantidades</Label>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="h-7 text-xs gap-1"
+                    onClick={() => {
+                      const nextP = products.find(
+                        (p) => !editItems.some((it) => it.productId === p.id),
+                      )
+                      setEditItems((prev) => [
+                        ...prev,
+                        { productId: nextP?.id || products[0]?.id || '', quantity: 1 },
+                      ])
+                    }}
+                  >
+                    <Plus className="h-3 w-3" /> Adicionar Item
+                  </Button>
+                </div>
+
+                <div className="border rounded-md divide-y max-h-[220px] overflow-y-auto">
+                  {editItems.map((item, index) => {
+                    const prod = products.find((p) => p.id === item.productId)
+                    return (
+                      <div key={index} className="p-2 flex items-center gap-2">
+                        <Select
+                          value={item.productId}
+                          onValueChange={(val) => {
+                            setEditItems((prev) =>
+                              prev.map((it, idx) =>
+                                idx === index ? { ...it, productId: val } : it,
+                              ),
+                            )
+                          }}
+                        >
+                          <SelectTrigger className="h-8 text-xs flex-1">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {products.map((p) => (
+                              <SelectItem key={p.id} value={p.id}>
+                                {p.name} ({p.unit})
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+
+                        <Input
+                          type="number"
+                          step="any"
+                          min="0"
+                          className="h-8 w-24 text-xs font-mono"
+                          value={item.quantity}
+                          onChange={(e) => {
+                            const val = parseFloat(e.target.value) || 0
+                            setEditItems((prev) =>
+                              prev.map((it, idx) =>
+                                idx === index ? { ...it, quantity: val } : it,
+                              ),
+                            )
+                          }}
+                        />
+
+                        <span className="text-[11px] text-muted-foreground w-12 text-right">
+                          {prod?.unit || 'un'}
+                        </span>
+
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 w-7 p-0 text-destructive hover:bg-destructive/10"
+                          onClick={() =>
+                            setEditItems((prev) => prev.filter((_, idx) => idx !== index))
+                          }
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              type="button"
+              variant="outline"
+              disabled={isSavingEdit}
+              onClick={() => setEditDialogOpen(false)}
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              disabled={isSavingEdit}
+              onClick={handleSaveEditOrder}
+              className="gap-1.5"
+            >
+              {isSavingEdit ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Salvando...
+                </>
+              ) : (
+                'Salvar Alterações'
               )}
             </Button>
           </DialogFooter>

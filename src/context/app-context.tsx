@@ -14,6 +14,7 @@ import type {
   Atesto,
   AtestoRecord,
   CicloRecord,
+  CicloContratoRecord,
   RotaRecord,
   RotaLogisticaRecord,
   ParadaRotaRecord,
@@ -30,6 +31,7 @@ import { contratosService } from '@/services/contratos'
 import { pedidosService } from '@/services/pedidos'
 import { atestosService } from '@/services/atestos'
 import { ciclosService } from '@/services/ciclos'
+import { cicloContratosService } from '@/services/ciclo-contratos'
 import { rotasService } from '@/services/rotas'
 import { rotasLogisticasService } from '@/services/rotas-logisticas'
 import { toast } from 'sonner'
@@ -58,6 +60,7 @@ interface AppState {
   orders: Order[]
   atestos: Atesto[]
   ciclos: CicloRecord[]
+  cicloContratos: CicloContratoRecord[]
   activeCiclo: CicloRecord | null
   rotas: RotaRecord[]
   rotasLogisticas: RotaLogisticaRecord[]
@@ -133,19 +136,36 @@ interface AppState {
   }) => Promise<boolean>
   updateCicloStatus: (
     cicloId: string,
-    status: 'coletando' | 'correcao' | 'fechado' | string,
+    status: 'coletando' | 'correcao' | 'coletado' | 'fechado' | string,
+  ) => Promise<boolean>
+  updateCicloContratoFase: (
+    cicloId: string,
+    contratoId: string,
+    fase: 'coletando' | 'correcao' | 'coletado' | 'fechado' | string,
   ) => Promise<boolean>
   createCiclo: (data: {
     nome: string
     data_inicio: string
     data_fim: string
-    status: 'coletando' | 'correcao' | 'fechado' | string
+    status?: 'coletando' | 'correcao' | 'coletado' | 'fechado' | string
     snapshot?: any
+    contratoIds?: string[]
   }) => Promise<CicloRecord | null>
+  cancelarCicloContrato: (
+    cicloId: string,
+    contratoId: string,
+    motivo: string,
+    cancelarPedidosJunto?: boolean,
+  ) => Promise<boolean>
   cancelarCiclo: (
     cicloId: string,
     motivo: string,
     cancelarPedidosJunto?: boolean,
+  ) => Promise<boolean>
+  updateOrderItemsAndDate: (
+    orderId: string,
+    items: Array<{ productId: string; quantity: number }>,
+    orderDate?: string,
   ) => Promise<boolean>
 }
 
@@ -160,6 +180,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [orders, setOrders] = useState<Order[]>([])
   const [atestos, setAtestos] = useState<Atesto[]>([])
   const [ciclos, setCiclos] = useState<CicloRecord[]>([])
+  const [cicloContratos, setCicloContratos] = useState<CicloContratoRecord[]>([])
   const [activeCiclo, setActiveCiclo] = useState<CicloRecord | null>(null)
   const [rotas, setRotas] = useState<RotaRecord[]>([])
   const [rotasLogisticas, setRotasLogisticas] = useState<RotaLogisticaRecord[]>([])
@@ -183,6 +204,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         rawPedidoItens,
         rawAtestos,
         rawCiclos,
+        rawCicloContratos,
         rawRotas,
         rawRotasLogisticas,
         rawParadasRota,
@@ -198,6 +220,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         pedidosService.getAllItems(),
         atestosService.getAll(),
         ciclosService.getAll(),
+        cicloContratosService.getAll(),
         rotasService.getAll(),
         rotasService.getAll(),
         rotasService.getParadas(),
@@ -238,12 +261,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
 
       setCiclos(rawCiclos)
-      // Ciclo ATIVO = mais recente não-terminal (máx. 1). Terminais: fechado, cancelado.
-      const naoTerminais = rawCiclos.filter(
-        (c) => c.status !== 'fechado' && c.status !== 'cancelado',
-      )
-      const currentActive = naoTerminais[0] || null
-      setActiveCiclo(currentActive)
+      setCicloContratos(rawCicloContratos)
+
+      // Ciclo ATIVO = o mais recente ciclo com PELO MENOS UM contrato em fase não-terminal (máx. 1)
+      const ordenadosCiclos = [...rawCiclos].sort((a, b) => {
+        const tA = new Date(a.created || a.data_inicio).getTime()
+        const tB = new Date(b.created || b.data_inicio).getTime()
+        return tB - tA
+      })
+
+      const cicloAtivoEncontrado = ordenadosCiclos.find((c) => {
+        const vinculados = rawCicloContratos.filter((cc) => cc.ciclo_id === c.id)
+        if (vinculados.length === 0) {
+          return c.status !== 'fechado' && c.status !== 'cancelado'
+        }
+        return vinculados.some((cc) => cc.fase !== 'fechado' && cc.fase !== 'cancelado')
+      })
+      setActiveCiclo(cicloAtivoEncontrado || null)
       setRotas(rawRotas)
       setRotasLogisticas(rawRotas)
       setParadasRota(rawParadasRota)
@@ -781,7 +815,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
           copy[existingIdx] = { ...copy[existingIdx], ...rec }
           updated = copy
         } else {
-          // Substituir se houver temporário com mesmo nome
           const tempIdx = prev.findIndex((c) => c.id.startsWith('temp-') && c.nome === rec.nome)
           if (tempIdx !== -1) {
             const copy = [...prev]
@@ -792,12 +825,72 @@ export function AppProvider({ children }: { children: ReactNode }) {
           }
         }
 
-        // Recalcular ciclo ativo sempre com base em todos os ciclos (mais recente não-terminal)
-        const naoTerminaisAtualizados = updated.filter(
-          (c) => c.status !== 'fechado' && c.status !== 'cancelado',
-        )
-        const novoAtivo = naoTerminaisAtualizados[0] || null
-        setActiveCiclo(novoAtivo)
+        // Recalcular ciclo ativo com base nos contratos
+        const ordenados = [...updated].sort((a, b) => {
+          const tA = new Date(a.created || a.data_inicio).getTime()
+          const tB = new Date(b.created || b.data_inicio).getTime()
+          return tB - tA
+        })
+        const cicloAtivo = ordenados.find((c) => {
+          const vinculados = cicloContratos.filter((cc) => cc.ciclo_id === c.id)
+          if (vinculados.length === 0) {
+            return c.status !== 'fechado' && c.status !== 'cancelado'
+          }
+          return vinculados.some((cc) => cc.fase !== 'fechado' && cc.fase !== 'cancelado')
+        })
+        setActiveCiclo(cicloAtivo || null)
+        return updated
+      })
+    }
+  })
+
+  useRealtime<any>('ciclo_contratos', (e) => {
+    if (e.action === 'delete') {
+      setCicloContratos((prev) => {
+        const updated = prev.filter((cc) => cc.id !== e.record.id)
+        // Recalcular ativo
+        const ordenados = [...ciclos].sort((a, b) => {
+          const tA = new Date(a.created || a.data_inicio).getTime()
+          const tB = new Date(b.created || b.data_inicio).getTime()
+          return tB - tA
+        })
+        const cicloAtivo = ordenados.find((c) => {
+          const vinculados = updated.filter((cc) => cc.ciclo_id === c.id)
+          if (vinculados.length === 0) {
+            return c.status !== 'fechado' && c.status !== 'cancelado'
+          }
+          return vinculados.some((cc) => cc.fase !== 'fechado' && cc.fase !== 'cancelado')
+        })
+        setActiveCiclo(cicloAtivo || null)
+        return updated
+      })
+    } else if (e.action === 'create' || e.action === 'update') {
+      const rec = e.record as CicloContratoRecord
+      setCicloContratos((prev) => {
+        const existingIdx = prev.findIndex((cc) => cc.id === rec.id)
+        let updated: CicloContratoRecord[]
+        if (existingIdx !== -1) {
+          const copy = [...prev]
+          copy[existingIdx] = { ...copy[existingIdx], ...rec }
+          updated = copy
+        } else {
+          updated = [rec, ...prev]
+        }
+
+        // Recalcular ativo
+        const ordenados = [...ciclos].sort((a, b) => {
+          const tA = new Date(a.created || a.data_inicio).getTime()
+          const tB = new Date(b.created || b.data_inicio).getTime()
+          return tB - tA
+        })
+        const cicloAtivo = ordenados.find((c) => {
+          const vinculados = updated.filter((cc) => cc.ciclo_id === c.id)
+          if (vinculados.length === 0) {
+            return c.status !== 'fechado' && c.status !== 'cancelado'
+          }
+          return vinculados.some((cc) => cc.fase !== 'fechado' && cc.fase !== 'cancelado')
+        })
+        setActiveCiclo(cicloAtivo || null)
         return updated
       })
     }
@@ -2115,18 +2208,99 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  const updateCicloStatus = async (
+  const updateCicloContratoFase = async (
     cicloId: string,
-    status: 'coletando' | 'correcao' | 'fechado' | string,
+    contratoId: string,
+    fase: 'coletando' | 'correcao' | 'coletado' | 'fechado' | string,
   ): Promise<boolean> => {
+    const existing = cicloContratos.find(
+      (cc) => cc.ciclo_id === cicloId && cc.contrato_id === contratoId,
+    )
+
+    const prevCicloContratos = [...cicloContratos]
     const prevCiclos = [...ciclos]
     const prevActive = activeCiclo
 
     // Optimistic update
+    let updatedCC: CicloContratoRecord[]
+    if (existing) {
+      updatedCC = prevCicloContratos.map((cc) => (cc.id === existing.id ? { ...cc, fase } : cc))
+    } else {
+      const tempCC: CicloContratoRecord = {
+        id: `temp-cc-${Date.now()}`,
+        ciclo_id: cicloId,
+        contrato_id: contratoId,
+        fase,
+      }
+      updatedCC = [tempCC, ...prevCicloContratos]
+    }
+    setCicloContratos(updatedCC)
+
+    // Recalcular ciclo ativo
+    const ordenados = [...ciclos].sort((a, b) => {
+      const tA = new Date(a.created || a.data_inicio).getTime()
+      const tB = new Date(b.created || b.data_inicio).getTime()
+      return tB - tA
+    })
+    const cicloAtivo = ordenados.find((c) => {
+      const vinculados = updatedCC.filter((cc) => cc.ciclo_id === c.id)
+      if (vinculados.length === 0) {
+        return c.status !== 'fechado' && c.status !== 'cancelado'
+      }
+      return vinculados.some((cc) => cc.fase !== 'fechado' && cc.fase !== 'cancelado')
+    })
+    setActiveCiclo(cicloAtivo || null)
+
+    try {
+      if (existing) {
+        await cicloContratosService.setFase(existing.id, fase)
+      } else {
+        const created = await cicloContratosService.create({
+          ciclo_id: cicloId,
+          contrato_id: contratoId,
+          fase,
+        })
+        setCicloContratos((prev) =>
+          prev.map((cc) =>
+            cc.ciclo_id === cicloId && cc.contrato_id === contratoId ? created : cc,
+          ),
+        )
+      }
+      toast.success(`Fase do contrato alterada para "${fase}" com sucesso!`)
+      return true
+    } catch (err: any) {
+      console.error('Erro ao alterar fase do contrato no ciclo:', err)
+      setCicloContratos(prevCicloContratos)
+      setCiclos(prevCiclos)
+      setActiveCiclo(prevActive)
+      toast.error('Erro ao atualizar fase do contrato.')
+      return false
+    }
+  }
+
+  const updateCicloStatus = async (
+    cicloId: string,
+    status: 'coletando' | 'correcao' | 'coletado' | 'fechado' | string,
+  ): Promise<boolean> => {
+    // Altera a fase em todos os contratos vinculados a este ciclo
+    const vinculados = cicloContratos.filter((cc) => cc.ciclo_id === cicloId)
+    if (vinculados.length > 0) {
+      try {
+        await Promise.all(
+          vinculados.map((cc) => updateCicloContratoFase(cicloId, cc.contrato_id, status)),
+        )
+        return true
+      } catch (e) {
+        return false
+      }
+    }
+
+    const prevCiclos = [...ciclos]
+    const prevActive = activeCiclo
+
     const updatedCiclos = prevCiclos.map((c) => (c.id === cicloId ? { ...c, status } : c))
     setCiclos(updatedCiclos)
 
-    // Recalcular ciclo ativo (mais recente não-terminal)
     const naoTerminais = updatedCiclos.filter(
       (c) => c.status !== 'fechado' && c.status !== 'cancelado',
     )
@@ -2145,57 +2319,158 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  const createCiclo = async (data: {
-    nome: string
-    data_inicio: string
-    data_fim: string
-    status: 'coletando' | 'correcao' | 'fechado' | string
-    snapshot?: any
-  }): Promise<CicloRecord | null> => {
-    const tempId = `temp-ciclo-${Date.now()}`
-    const tempCiclo: CicloRecord = {
-      id: tempId,
-      nome: data.nome,
-      data_inicio: data.data_inicio,
-      data_fim: data.data_fim,
-      status: data.status,
-      snapshot: data.snapshot,
-      created: new Date().toISOString(),
-      updated: new Date().toISOString(),
+  const cancelarCicloContrato = async (
+    cicloId: string,
+    contratoId: string,
+    motivo: string,
+    cancelarPedidosJunto = false,
+  ): Promise<boolean> => {
+    const existingCC = cicloContratos.find(
+      (cc) => cc.ciclo_id === cicloId && cc.contrato_id === contratoId,
+    )
+    const targetCiclo = ciclos.find((c) => c.id === cicloId)
+    const targetContrato = contracts.find((c) => c.id === contratoId)
+
+    if (existingCC?.fase === 'fechado') {
+      toast.error(
+        'Contrato em ciclo fechado não pode ser cancelado (o caminho é o ciclo seguinte).',
+      )
+      return false
     }
 
-    const prevCiclos = [...ciclos]
-    const newCiclos = [tempCiclo, ...prevCiclos]
-    setCiclos(newCiclos)
-
-    // Novo ciclo vira o ativo se for não-terminal
-    if (data.status !== 'fechado' && data.status !== 'cancelado') {
-      setActiveCiclo(tempCiclo)
+    if (existingCC?.fase === 'cancelado') {
+      toast.info('Este contrato já está cancelado neste ciclo.')
+      return true
     }
+
+    const cleanMotivo = motivo.trim()
+    if (!cleanMotivo) {
+      toast.error('Informe obrigatoriamente o motivo do cancelamento.')
+      return false
+    }
+
+    // Proteção: checar atestos emitidos vinculados às escolas deste contrato neste ciclo
+    const contratoEscolaIds = new Set(
+      contractSchools.filter((cs) => cs.contrato_id === contratoId).map((cs) => cs.escola_id),
+    )
+    const pedidosDoContratoNoCiclo = orders.filter(
+      (o) => o.cicloId === cicloId && contratoEscolaIds.has(o.schoolId),
+    )
+    const pedidoIds = new Set(pedidosDoContratoNoCiclo.map((o) => o.id))
+    const atestosEmitidos = atestos.filter((a) => pedidoIds.has(a.orderId))
+
+    if (atestosEmitidos.length > 0) {
+      toast.error(
+        'Este contrato possui atestos emitidos neste ciclo — já houve entrega formalizada. O caminho é FECHAR a fase do contrato, não cancelá-lo.',
+      )
+      return false
+    }
+
+    const nowIso = new Date().toISOString()
+    const prevCC = [...cicloContratos]
+    const prevOrders = [...orders]
+    const prevActive = activeCiclo
+
+    // Optimistic CC
+    let updatedCC: CicloContratoRecord[]
+    if (existingCC) {
+      updatedCC = prevCC.map((cc) =>
+        cc.id === existingCC.id
+          ? {
+              ...cc,
+              fase: 'cancelado',
+              motivo_cancelamento: cleanMotivo,
+              data_cancelamento: nowIso,
+            }
+          : cc,
+      )
+    } else {
+      updatedCC = [
+        {
+          id: `temp-cc-${Date.now()}`,
+          ciclo_id: cicloId,
+          contrato_id: contratoId,
+          fase: 'cancelado',
+          motivo_cancelamento: cleanMotivo,
+          data_cancelamento: nowIso,
+        },
+        ...prevCC,
+      ]
+    }
+    setCicloContratos(updatedCC)
+
+    // Cancelar pedidos do contrato se solicitado
+    if (cancelarPedidosJunto && pedidosDoContratoNoCiclo.length > 0) {
+      setOrders((prev) =>
+        prev.map((o) =>
+          o.cicloId === cicloId && contratoEscolaIds.has(o.schoolId) && o.status !== 'Cancelado'
+            ? {
+                ...o,
+                status: 'Cancelado',
+                motivo_cancelamento: cleanMotivo,
+                cancelado_em: nowIso,
+              }
+            : o,
+        ),
+      )
+    }
+
+    // Recalcular ciclo ativo
+    const ordenados = [...ciclos].sort((a, b) => {
+      const tA = new Date(a.created || a.data_inicio).getTime()
+      const tB = new Date(b.created || b.data_inicio).getTime()
+      return tB - tA
+    })
+    const cicloAtivo = ordenados.find((c) => {
+      const vinculados = updatedCC.filter((cc) => cc.ciclo_id === c.id)
+      if (vinculados.length === 0) {
+        return c.status !== 'fechado' && c.status !== 'cancelado'
+      }
+      return vinculados.some((cc) => cc.fase !== 'fechado' && cc.fase !== 'cancelado')
+    })
+    setActiveCiclo(cicloAtivo || null)
 
     try {
-      const created = await ciclosService.create(data)
-      setCiclos((prev) => {
-        const alreadyHasCreated = prev.some((c) => c.id === created.id)
-        if (alreadyHasCreated) {
-          return prev.filter((c) => c.id !== tempId)
-        }
-        return prev.map((c) => (c.id === tempId ? created : c))
-      })
-      if (created.status !== 'fechado' && created.status !== 'cancelado') {
-        setActiveCiclo(created)
+      if (existingCC) {
+        await cicloContratosService.cancelar(existingCC.id, cleanMotivo)
+      } else {
+        const created = await cicloContratosService.create({
+          ciclo_id: cicloId,
+          contrato_id: contratoId,
+          fase: 'cancelado',
+          motivo_cancelamento: cleanMotivo,
+          data_cancelamento: nowIso,
+        })
+        setCicloContratos((prev) =>
+          prev.map((cc) =>
+            cc.ciclo_id === cicloId && cc.contrato_id === contratoId ? created : cc,
+          ),
+        )
       }
-      toast.success(`Ciclo ${data.nome} criado com sucesso!`)
-      return created
+
+      if (cancelarPedidosJunto && pedidosDoContratoNoCiclo.length > 0) {
+        const pedidosNaoCancelados = pedidosDoContratoNoCiclo.filter(
+          (o) => o.status !== 'Cancelado',
+        )
+        await Promise.all(
+          pedidosNaoCancelados.map((p) =>
+            pedidosService.updateStatus(p.id, 'Cancelado', {
+              motivo_cancelamento: cleanMotivo,
+              cancelado_em: nowIso,
+            }),
+          ),
+        )
+      }
+
+      toast.success(`Contrato ${targetContrato?.numero || ''} cancelado no ciclo com sucesso.`)
+      return true
     } catch (err: any) {
-      console.error('Erro ao criar ciclo:', err)
-      setCiclos(prevCiclos)
-      const naoTerminais = prevCiclos.filter(
-        (c) => c.status !== 'fechado' && c.status !== 'cancelado',
-      )
-      setActiveCiclo(naoTerminais[0] || null)
-      toast.error('Falha ao criar novo ciclo.')
-      return null
+      console.error('Erro ao cancelar contrato no ciclo:', err)
+      setCicloContratos(prevCC)
+      setOrders(prevOrders)
+      setActiveCiclo(prevActive)
+      toast.error('Falha ao cancelar contrato no banco.')
+      return false
     }
   }
 
@@ -2208,6 +2483,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (!targetCiclo) {
       toast.error('Ciclo não encontrado.')
       return false
+    }
+
+    const vinculados = cicloContratos.filter((cc) => cc.ciclo_id === cicloId)
+    if (vinculados.length > 0) {
+      // Cancelar todos os contratos do ciclo
+      try {
+        for (const cc of vinculados) {
+          if (cc.fase !== 'cancelado') {
+            await cancelarCicloContrato(cicloId, cc.contrato_id, motivo, cancelarPedidosJunto)
+          }
+        }
+        await ciclosService.cancelar(cicloId, motivo)
+        toast.success(`Ciclo "${targetCiclo.nome}" cancelado com sucesso.`)
+        return true
+      } catch (err) {
+        return false
+      }
     }
 
     if (targetCiclo.status === 'fechado') {
@@ -2226,7 +2518,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return false
     }
 
-    // Proteção 1: checar atestos emitidos vinculados aos pedidos deste ciclo
     const pedidosDoCiclo = orders.filter((o) => o.cicloId === cicloId)
     const pedidoIdsCiclo = new Set(pedidosDoCiclo.map((o) => o.id))
     const atestosEmitidos = atestos.filter((a) => pedidoIdsCiclo.has(a.orderId))
@@ -2243,7 +2534,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const prevOrders = [...orders]
     const prevActive = activeCiclo
 
-    // Optimistic update do ciclo
     const updatedCiclos = prevCiclos.map((c) =>
       c.id === cicloId
         ? {
@@ -2256,7 +2546,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     )
     setCiclos(updatedCiclos)
 
-    // Se pedidos devem ser cancelados junto
     if (cancelarPedidosJunto && pedidosDoCiclo.length > 0) {
       setOrders((prev) =>
         prev.map((o) =>
@@ -2272,17 +2561,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
       )
     }
 
-    // Recalcular ativo
     const naoTerminais = updatedCiclos.filter(
       (c) => c.status !== 'fechado' && c.status !== 'cancelado',
     )
     setActiveCiclo(naoTerminais[0] || null)
 
     try {
-      // 1. Atualizar ciclo no PocketBase
       await ciclosService.cancelar(cicloId, cleanMotivo)
 
-      // 2. Se houver pedidos para cancelar junto, atualizar pedidos
       if (cancelarPedidosJunto && pedidosDoCiclo.length > 0) {
         const pedidosNaoCancelados = pedidosDoCiclo.filter((o) => o.status !== 'Cancelado')
         await Promise.all(
@@ -2303,6 +2589,184 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setOrders(prevOrders)
       setActiveCiclo(prevActive)
       toast.error('Falha ao cancelar ciclo no banco.')
+      return false
+    }
+  }
+
+  const createCiclo = async (data: {
+    nome: string
+    data_inicio: string
+    data_fim: string
+    status?: 'coletando' | 'correcao' | 'coletado' | 'fechado' | string
+    snapshot?: any
+    contratoIds?: string[]
+  }): Promise<CicloRecord | null> => {
+    const tempId = `temp-ciclo-${Date.now()}`
+    const initialStatus = data.status || 'coletando'
+    const tempCiclo: CicloRecord = {
+      id: tempId,
+      nome: data.nome,
+      data_inicio: data.data_inicio,
+      data_fim: data.data_fim,
+      status: initialStatus,
+      snapshot: data.snapshot,
+      created: new Date().toISOString(),
+      updated: new Date().toISOString(),
+    }
+
+    const prevCiclos = [...ciclos]
+    const prevCC = [...cicloContratos]
+    const newCiclos = [tempCiclo, ...prevCiclos]
+    setCiclos(newCiclos)
+
+    if (initialStatus !== 'fechado' && initialStatus !== 'cancelado') {
+      setActiveCiclo(tempCiclo)
+    }
+
+    try {
+      const created = await ciclosService.create({
+        nome: data.nome,
+        data_inicio: data.data_inicio,
+        data_fim: data.data_fim,
+        status: initialStatus,
+        snapshot: data.snapshot,
+      })
+
+      // Determinar quais contratos vincular: se passados data.contratoIds, usar eles;
+      // senão vincular todos os contratos Ativos
+      const idsParaVincular =
+        data.contratoIds && data.contratoIds.length > 0
+          ? data.contratoIds
+          : contracts.filter((c) => c.status === 'Ativo').map((c) => c.id)
+
+      const novosCC: CicloContratoRecord[] = []
+      for (const cId of idsParaVincular) {
+        try {
+          const cc = await cicloContratosService.create({
+            ciclo_id: created.id,
+            contrato_id: cId,
+            fase: initialStatus,
+          })
+          novosCC.push(cc)
+        } catch (ccErr) {
+          console.error(`Erro ao vincular contrato ${cId} ao ciclo:`, ccErr)
+        }
+      }
+
+      setCicloContratos((prev) => [...novosCC, ...prev])
+
+      setCiclos((prev) => {
+        const alreadyHasCreated = prev.some((c) => c.id === created.id)
+        if (alreadyHasCreated) {
+          return prev.filter((c) => c.id !== tempId)
+        }
+        return prev.map((c) => (c.id === tempId ? created : c))
+      })
+
+      if (initialStatus !== 'fechado' && initialStatus !== 'cancelado') {
+        setActiveCiclo(created)
+      }
+      toast.success(`Ciclo ${data.nome} criado com sucesso!`)
+      return created
+    } catch (err: any) {
+      console.error('Erro ao criar ciclo:', err)
+      setCiclos(prevCiclos)
+      setCicloContratos(prevCC)
+      const ordenados = [...prevCiclos].sort((a, b) => {
+        const tA = new Date(a.created || a.data_inicio).getTime()
+        const tB = new Date(b.created || b.data_inicio).getTime()
+        return tB - tA
+      })
+      const cicloAtivo = ordenados.find((c) => {
+        const vinculados = prevCC.filter((cc) => cc.ciclo_id === c.id)
+        if (vinculados.length === 0) {
+          return c.status !== 'fechado' && c.status !== 'cancelado'
+        }
+        return vinculados.some((cc) => cc.fase !== 'fechado' && cc.fase !== 'cancelado')
+      })
+      setActiveCiclo(cicloAtivo || null)
+      toast.error('Falha ao criar novo ciclo.')
+      return null
+    }
+  }
+
+  const updateOrderItemsAndDate = async (
+    orderId: string,
+    items: Array<{ productId: string; quantity: number }>,
+    orderDate?: string,
+  ): Promise<boolean> => {
+    const targetOrder = orders.find((o) => o.id === orderId)
+    if (!targetOrder) {
+      toast.error('Pedido não encontrado.')
+      return false
+    }
+
+    if (targetOrder.status === 'Em Rota' || targetOrder.status === 'Entregue') {
+      toast.error('Pedidos em rota ou entregues não podem ser alterados.')
+      return false
+    }
+
+    if (targetOrder.status === 'Cancelado') {
+      toast.error('Pedidos cancelados não podem ser editados.')
+      return false
+    }
+
+    const validItems = items.filter((it) => it.quantity > 0)
+    if (validItems.length === 0) {
+      toast.error('O pedido precisa conter ao menos um item com quantidade positiva.')
+      return false
+    }
+
+    const formattedPayloadItems = validItems.map((it) => {
+      const prod = products.find((p) => p.id === it.productId)
+      return {
+        produto_id: it.productId,
+        quantidade: it.quantity,
+        preco_unitario: prod?.price || 0,
+      }
+    })
+
+    const prevOrders = [...orders]
+
+    // Optimistic
+    let newTotal = 0
+    const newItems = validItems.map((it) => {
+      const prod = products.find((p) => p.id === it.productId)
+      const preco = prod?.price || 0
+      newTotal += preco * it.quantity
+      return {
+        id: `it-${it.productId}`,
+        productId: it.productId,
+        name: prod?.name || 'Produto',
+        quantity: it.quantity,
+        price: preco,
+      }
+    })
+
+    setOrders((prev) =>
+      prev.map((o) =>
+        o.id === orderId
+          ? {
+              ...o,
+              date: orderDate || o.date,
+              items: newItems,
+              total: Math.round(newTotal * 100) / 100,
+            }
+          : o,
+      ),
+    )
+
+    try {
+      await pedidosService.updateOrderAndItems(orderId, {
+        data_prevista: orderDate ? `${orderDate} 12:00:00.000Z` : undefined,
+        items: formattedPayloadItems,
+      })
+      toast.success('Pedido atualizado com sucesso!')
+      return true
+    } catch (err: any) {
+      console.error('Erro ao atualizar pedido:', err)
+      setOrders(prevOrders)
+      toast.error('Falha ao atualizar pedido.')
       return false
     }
   }
@@ -2431,7 +2895,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
         moverEscolaEntreRotas,
         updateCicloStatus,
         createCiclo,
+        cicloContratos,
+        updateCicloContratoFase,
+        cancelarCicloContrato,
         cancelarCiclo,
+        updateOrderItemsAndDate,
         generateAtesto,
         confirmAtesto,
       }}

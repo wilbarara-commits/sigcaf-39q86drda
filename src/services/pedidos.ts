@@ -242,6 +242,48 @@ export const pedidosService = {
     return await pb.collection('pedidos').update<PedidoRecord>(id, { validacao })
   },
 
+  async updateOrderAndItems(
+    pedidoId: string,
+    data: {
+      data_prevista?: string
+      items?: Array<{
+        produto_id: string
+        quantidade: number
+        preco_unitario: number
+      }>
+    },
+  ): Promise<PedidoRecord> {
+    const payload: Partial<PedidoRecord> = {}
+    if (data.data_prevista) {
+      payload.data_prevista = data.data_prevista
+    }
+    if (Object.keys(payload).length > 0) {
+      await pb.collection('pedidos').update(pedidoId, payload)
+    }
+
+    if (data.items && data.items.length > 0) {
+      // Remover itens existentes e recriar
+      const currentItems = await pb.collection('pedido_itens').getFullList<PedidoItemRecord>({
+        filter: `pedido_id = "${pedidoId}"`,
+      })
+      for (const it of currentItems) {
+        await pb.collection('pedido_itens').delete(it.id)
+      }
+      for (const it of data.items) {
+        await pb.collection('pedido_itens').create({
+          pedido_id: pedidoId,
+          produto_id: it.produto_id,
+          quantidade: it.quantidade,
+          preco_unitario: it.preco_unitario,
+        })
+      }
+    }
+
+    return await pb.collection('pedidos').getOne<PedidoRecord>(pedidoId, {
+      expand: 'escola_id,ciclo_id,rota_id,entregue_por',
+    })
+  },
+
   async delete(id: string): Promise<boolean> {
     const items = await pb.collection('pedido_itens').getFullList<PedidoItemRecord>({
       filter: `pedido_id = "${id}"`,

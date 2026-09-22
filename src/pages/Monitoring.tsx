@@ -27,26 +27,34 @@ import {
   ShieldAlert,
   CalendarPlus,
   Ban,
-  Package,
-  Layers,
-  School,
   Truck,
+  FileText,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import {
   formatIntervaloCiclo,
   formatDespachoAmigavel,
   getDespachoPrevistoCiclo,
-  isCicloTerminal,
   isCicloNaoTerminal,
   calcularDiasAtrasoFechamento,
+  formatFaseAmigavel,
+  gerarResumoFasesCiclo,
 } from '@/lib/cicloUtils'
 import { AbrirCicloDialog } from '@/components/AbrirCicloDialog'
 import { CancelarCicloDialog } from '@/components/CancelarCicloDialog'
 import type { CicloRecord } from '@/lib/types'
 
 export default function Monitoring() {
-  const { ciclos, activeCiclo, updateCicloStatus, schools, orders, products } = useApp()
+  const {
+    ciclos,
+    cicloContratos,
+    contracts,
+    contractSchools,
+    activeCiclo,
+    updateCicloContratoFase,
+    schools,
+    orders,
+  } = useApp()
 
   // Seletor de ciclos: mais recente primeiro, padrão = ciclo ativo (ou o mais recente de todos)
   const sortedCiclos = useMemo(() => {
@@ -58,9 +66,10 @@ export default function Monitoring() {
   }, [ciclos])
 
   const [selectedCicloId, setSelectedCicloId] = useState<string>('')
+  const [selectedContratoId, setSelectedContratoId] = useState<string>('todos')
   const [updating, setUpdating] = useState(false)
   const [abrirCicloOpen, setAbrirCicloOpen] = useState(false)
-  const [cancelarCicloOpen, setCancelarCicloOpen] = useState(false)
+  const [cancelarDialogOpen, setCancelarDialogOpen] = useState(false)
 
   // Atualizar seleção padrão quando o ativo mudar ou na carga inicial
   useEffect(() => {
@@ -71,7 +80,6 @@ export default function Monitoring() {
         setSelectedCicloId(sortedCiclos[0].id)
       }
     } else {
-      // Se o ciclo selecionado foi excluído
       const exists = ciclos.some((c) => c.id === selectedCicloId)
       if (!exists) {
         setSelectedCicloId(activeCiclo?.id || sortedCiclos[0]?.id || '')
@@ -83,22 +91,95 @@ export default function Monitoring() {
     return ciclos.find((c) => c.id === selectedCicloId) || activeCiclo || sortedCiclos[0] || null
   }, [ciclos, selectedCicloId, activeCiclo, sortedCiclos])
 
-  const currentStatus = selectedCiclo?.status || 'coletando'
+  // Contratos vinculados ao ciclo selecionado
+  const contratosVinculados = useMemo(() => {
+    if (!selectedCiclo) return []
+    const ccList = cicloContratos.filter((cc) => cc.ciclo_id === selectedCiclo.id)
+    if (ccList.length === 0) {
+      return contracts.filter((c) => c.status === 'Ativo')
+    }
+    return ccList
+      .map((cc) => {
+        const contrato = contracts.find((c) => c.id === cc.contrato_id)
+        return {
+          contratoId: cc.contrato_id,
+          numero: contrato?.numero || cc.expand?.contrato_id?.numero || 'Contrato',
+          fase: cc.fase,
+          motivo_cancelamento: cc.motivo_cancelamento,
+          data_cancelamento: cc.data_cancelamento,
+        }
+      })
+      .filter(Boolean)
+  }, [selectedCiclo, cicloContratos, contracts])
+
+  // Ajustar selectedContratoId se não existir mais na lista
+  useEffect(() => {
+    if (selectedContratoId !== 'todos') {
+      const exists = contratosVinculados.some((c) => c.contratoId === selectedContratoId)
+      if (!exists) {
+        if (contratosVinculados.length > 0) {
+          setSelectedContratoId(contratosVinculados[0].contratoId)
+        } else {
+          setSelectedContratoId('todos')
+        }
+      }
+    } else if (contratosVinculados.length === 1) {
+      setSelectedContratoId(contratosVinculados[0].contratoId)
+    }
+  }, [contratosVinculados, selectedContratoId])
+
+  // Vínculo do contrato selecionado atualmente
+  const currentCicloContrato = useMemo(() => {
+    if (!selectedCiclo || selectedContratoId === 'todos') return null
+    return (
+      cicloContratos.find(
+        (cc) => cc.ciclo_id === selectedCiclo.id && cc.contrato_id === selectedContratoId,
+      ) || null
+    )
+  }, [selectedCiclo, selectedContratoId, cicloContratos])
+
+  // Fase em vigor na tela: se tem contrato específico selecionado, usa a fase dele; senão usa resumo/predominante
+  const currentFase = useMemo(() => {
+    if (currentCicloContrato) {
+      return currentCicloContrato.fase || 'coletando'
+    }
+    if (contratosVinculados.length > 0) {
+      // Se todos estiverem na mesma fase
+      const fases = contratosVinculados.map((c) => c.fase)
+      if (fases.every((f) => f === fases[0])) return fases[0]
+      if (fases.some((f) => f === 'coletando')) return 'coletando'
+      if (fases.some((f) => f === 'correcao')) return 'correcao'
+      if (fases.some((f) => f === 'coletado')) return 'coletado'
+      if (fases.every((f) => f === 'fechado')) return 'fechado'
+      if (fases.every((f) => f === 'cancelado')) return 'cancelado'
+    }
+    return selectedCiclo?.status || 'coletando'
+  }, [currentCicloContrato, contratosVinculados, selectedCiclo])
+
   const isSelectedAtivo = activeCiclo?.id === selectedCiclo?.id
 
-  // Badge derivado de atraso:
-  // Ciclo não-terminal que NÃO é o mais recente não-terminal recebe:
-  // "Fechamento Pendente (atrasado X dias)" (X = dias desde a terça de fechamento prevista).
+  // Badge derivado de atraso
   const isFechamentoPendente = Boolean(
-    selectedCiclo && isCicloNaoTerminal(selectedCiclo.status) && !isSelectedAtivo,
+    selectedCiclo && isCicloNaoTerminal(currentFase) && !isSelectedAtivo,
   )
   const diasAtraso = selectedCiclo ? calcularDiasAtrasoFechamento(selectedCiclo.data_fim) : 0
 
-  // Dados do ciclo selecionado (pedidos, escolas, funil)
+  // Mapa de escolas associadas ao contrato selecionado (se filtrado)
+  const escolasFiltradasIds = useMemo(() => {
+    if (selectedContratoId === 'todos') return null
+    const links = contractSchools.filter((cs) => cs.contrato_id === selectedContratoId)
+    return new Set(links.map((cs) => cs.escola_id))
+  }, [selectedContratoId, contractSchools])
+
+  // Pedidos do ciclo selecionado + contrato selecionado
   const cicloOrders = useMemo(() => {
     if (!selectedCiclo) return []
-    return orders.filter((o) => o.cicloId === selectedCiclo.id && o.status !== 'Cancelado')
-  }, [orders, selectedCiclo])
+    let base = orders.filter((o) => o.cicloId === selectedCiclo.id && o.status !== 'Cancelado')
+    if (escolasFiltradasIds) {
+      base = base.filter((o) => escolasFiltradasIds.has(o.schoolId))
+    }
+    return base
+  }, [orders, selectedCiclo, escolasFiltradasIds])
 
   const schoolsWithOrders = useMemo(() => {
     return new Set(cicloOrders.map((o) => o.schoolId))
@@ -119,21 +200,28 @@ export default function Monitoring() {
     )
     const valorTotal = cicloOrders.reduce((acc, o) => acc + (Number(o.total) || 0), 0)
 
+    const escolasBaseTotal = escolasFiltradasIds ? escolasFiltradasIds.size : schools.length
+
     return {
       totalPedidos,
       pedidosValidados,
       pedidosInconsistentes,
       escolasAtendidas: schoolsWithOrders.size,
+      escolasTotal: escolasBaseTotal,
       volumeTotal,
       valorTotal,
     }
-  }, [cicloOrders, schoolsWithOrders])
+  }, [cicloOrders, schoolsWithOrders, escolasFiltradasIds, schools])
 
   // Escolas sem pedido lançado no ciclo selecionado
   const alertSchools = useMemo(() => {
-    if (!selectedCiclo || selectedCiclo.status === 'cancelado') return []
+    if (!selectedCiclo || currentFase === 'cancelado') return []
 
-    const list = schools.map((sch) => {
+    const pool = escolasFiltradasIds
+      ? schools.filter((s) => escolasFiltradasIds.has(s.id))
+      : schools
+
+    const list = pool.map((sch) => {
       const hasOrder = schoolsWithOrders.has(sch.id)
       const sOrders = cicloOrders.filter((o) => o.schoolId === sch.id)
       const invalidOrder = sOrders.find((o) => o.validacao?.status === 'invalido')
@@ -158,21 +246,32 @@ export default function Monitoring() {
     })
 
     return list.filter((p) => p.pendenciaTipo !== 'ok')
-  }, [schools, schoolsWithOrders, cicloOrders, selectedCiclo])
+  }, [schools, schoolsWithOrders, cicloOrders, selectedCiclo, currentFase, escolasFiltradasIds])
 
-  // Fases operam sobre o ciclo SELECIONADO independentemente
-  const handleSimulatePhase = async (newPhase: 'coletando' | 'correcao' | 'fechado') => {
+  // Mudança de fase: opera sobre o par ciclo + contrato selecionado
+  const handleChangeFase = async (newFase: 'coletando' | 'correcao' | 'coletado' | 'fechado') => {
     if (!selectedCiclo) {
       toast.error('Nenhum ciclo selecionado.')
       return
     }
-    if (selectedCiclo.status === 'cancelado') {
-      toast.error('Não é possível alterar a fase de um ciclo cancelado.')
+
+    if (currentFase === 'cancelado') {
+      toast.error('Não é possível alterar a fase de um contrato/ciclo cancelado.')
       return
     }
+
     setUpdating(true)
     try {
-      await updateCicloStatus(selectedCiclo.id, newPhase)
+      if (selectedContratoId && selectedContratoId !== 'todos') {
+        await updateCicloContratoFase(selectedCiclo.id, selectedContratoId, newFase)
+      } else {
+        // Se 'todos', aplica a todos os contratos vinculados ao ciclo
+        for (const c of contratosVinculados) {
+          if (c.fase !== 'cancelado') {
+            await updateCicloContratoFase(selectedCiclo.id, c.contratoId, newFase)
+          }
+        }
+      }
     } finally {
       setUpdating(false)
     }
@@ -193,20 +292,32 @@ export default function Monitoring() {
     toast.success(`Abrindo WhatsApp para contato com ${schoolName}`)
   }
 
+  const resumoFasesTexto = useMemo(() => {
+    if (!selectedCiclo) return ''
+    const contratosMap = new Map(contracts.map((c) => [c.id, { numero: c.numero }]))
+    return gerarResumoFasesCiclo(selectedCiclo.id, cicloContratos, contratosMap)
+  }, [selectedCiclo, cicloContratos, contracts])
+
+  const selectedContratoNumero = useMemo(() => {
+    if (selectedContratoId === 'todos') return 'Todos os contratos'
+    const found = contracts.find((c) => c.id === selectedContratoId)
+    return found?.numero || 'Contrato Selecionado'
+  }, [selectedContratoId, contracts])
+
   return (
     <div className="space-y-6">
-      {/* Cabeçalho com Seletor e Botões de Ação */}
+      {/* Cabeçalho com Seletores (Ciclo e Contrato) e Botões de Ação */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Monitoramento do Ciclo</h1>
           <p className="text-muted-foreground">
-            Acompanhe o funil de pedidos, evolução de fases e contate escolas com pendências.
+            Acompanhe a evolução de fases por contrato, funil de pedidos e travas operacionais.
           </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
           {/* Seletor de Ciclos */}
-          <div className="w-[230px]">
+          <div className="w-[200px]">
             <Select
               value={selectedCiclo?.id || ''}
               onValueChange={(val) => setSelectedCicloId(val)}
@@ -219,10 +330,34 @@ export default function Monitoring() {
                   const isAct = c.id === activeCiclo?.id
                   return (
                     <SelectItem key={c.id} value={c.id}>
-                      {c.nome} {isAct ? '(Ativo)' : `(${c.status})`}
+                      {c.nome} {isAct ? '(Ativo)' : ''}
                     </SelectItem>
                   )
                 })}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Seletor de Contrato (NOVO) */}
+          <div className="w-[220px]">
+            <Select value={selectedContratoId} onValueChange={(val) => setSelectedContratoId(val)}>
+              <SelectTrigger className="h-9 font-medium">
+                <div className="flex items-center gap-1.5 truncate">
+                  <FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                  <SelectValue placeholder="Contrato" />
+                </div>
+              </SelectTrigger>
+              <SelectContent>
+                {contratosVinculados.length > 1 && (
+                  <SelectItem value="todos">
+                    Todos os contratos ({contratosVinculados.length})
+                  </SelectItem>
+                )}
+                {contratosVinculados.map((c) => (
+                  <SelectItem key={c.contratoId} value={c.contratoId}>
+                    {c.numero} — {formatFaseAmigavel(c.fase)}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
@@ -232,30 +367,54 @@ export default function Monitoring() {
             <CalendarPlus className="h-4 w-4" /> Abrir Ciclo
           </Button>
 
-          {/* Botão Cancelar Ciclo */}
-          {selectedCiclo &&
-            selectedCiclo.status !== 'fechado' &&
-            selectedCiclo.status !== 'cancelado' && (
-              <Button
-                variant="outline"
-                onClick={() => setCancelarCicloOpen(true)}
-                className="gap-2 h-9 text-destructive border-destructive/30 hover:bg-destructive/10"
-              >
-                <Ban className="h-4 w-4" /> Cancelar Ciclo
-              </Button>
-            )}
+          {/* Botão Cancelar (do contrato ou ciclo) */}
+          {selectedCiclo && currentFase !== 'fechado' && currentFase !== 'cancelado' && (
+            <Button
+              variant="outline"
+              onClick={() => setCancelarDialogOpen(true)}
+              className="gap-2 h-9 text-destructive border-destructive/30 hover:bg-destructive/10"
+            >
+              <Ban className="h-4 w-4" />
+              {selectedContratoId !== 'todos' ? 'Cancelar Contrato' : 'Cancelar Ciclo'}
+            </Button>
+          )}
         </div>
       </div>
 
-      {/* Simulador de Fases do Ciclo Selecionado */}
+      {/* Painel de Resumo das Fases dos Contratos */}
+      {selectedCiclo && (
+        <div className="bg-muted/40 border rounded-lg p-3 flex flex-wrap items-center justify-between gap-2 text-xs">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="font-semibold text-foreground">
+              Resumo do Ciclo {selectedCiclo.nome}:
+            </span>
+            <span className="text-muted-foreground">{resumoFasesTexto}</span>
+          </div>
+          <div className="flex items-center gap-2 flex-wrap">
+            {contratosVinculados.map((c) => (
+              <Badge
+                key={c.contratoId}
+                variant={selectedContratoId === c.contratoId ? 'default' : 'outline'}
+                className="cursor-pointer text-[11px]"
+                onClick={() => setSelectedContratoId(c.contratoId)}
+              >
+                {c.numero}: {formatFaseAmigavel(c.fase)}
+              </Badge>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Painel de Fases (Fluxo: Coletando → Correção → Coletado → Fechado) */}
       <Card className="border-t-4 border-t-primary">
         <CardHeader>
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
             <div>
               <div className="flex items-center gap-2 flex-wrap">
                 <CardTitle className="text-lg flex items-center gap-2">
-                  <Activity className="h-5 w-5 text-primary" /> Painel de Fases:{' '}
-                  {selectedCiclo?.nome || 'Nenhum ciclo selecionado'}
+                  <Activity className="h-5 w-5 text-primary" /> Fases:{' '}
+                  {selectedCiclo?.nome || 'Nenhum ciclo'} —{' '}
+                  <span className="text-primary font-normal">{selectedContratoNumero}</span>
                 </CardTitle>
                 {isSelectedAtivo && (
                   <Badge
@@ -270,12 +429,14 @@ export default function Monitoring() {
                     Fechamento Pendente (atrasado {diasAtraso} dias)
                   </Badge>
                 )}
-                {selectedCiclo?.status === 'cancelado' && (
+                {currentFase === 'cancelado' && (
                   <Badge variant="destructive" className="text-xs">
                     Cancelado{' '}
-                    {selectedCiclo.motivo_cancelamento
-                      ? `— ${selectedCiclo.motivo_cancelamento}`
-                      : ''}
+                    {currentCicloContrato?.motivo_cancelamento
+                      ? `— ${currentCicloContrato.motivo_cancelamento}`
+                      : selectedCiclo?.motivo_cancelamento
+                        ? `— ${selectedCiclo.motivo_cancelamento}`
+                        : ''}
                   </Badge>
                 )}
               </div>
@@ -293,7 +454,7 @@ export default function Monitoring() {
                         true,
                       )}
                     </span>{' '}
-                    • Fluxo Operacional: <em>Coletando → Correção → Fechado</em>
+                    • Fluxo Operacional: <em>Coletando → Correção → Coletado → Fechado</em>
                   </>
                 )}
               </CardDescription>
@@ -301,25 +462,27 @@ export default function Monitoring() {
 
             <Badge
               className={`text-sm px-3 py-1 font-semibold capitalize ${
-                currentStatus === 'coletando'
+                currentFase === 'coletando'
                   ? 'bg-blue-600'
-                  : currentStatus === 'correcao'
+                  : currentFase === 'correcao'
                     ? 'bg-amber-600'
-                    : currentStatus === 'fechado'
-                      ? 'bg-emerald-700'
-                      : 'bg-destructive'
+                    : currentFase === 'coletado'
+                      ? 'bg-purple-600'
+                      : currentFase === 'fechado'
+                        ? 'bg-emerald-700'
+                        : 'bg-destructive'
               }`}
             >
-              Fase Atual: {currentStatus}
+              Fase Atual: {formatFaseAmigavel(currentFase)}
             </Badge>
           </div>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             {/* Fase 1: Coletando */}
             <div
               className={`p-4 rounded-lg border-2 transition-all ${
-                currentStatus === 'coletando'
+                currentFase === 'coletando'
                   ? 'border-blue-600 bg-blue-50/50 dark:bg-blue-950/20'
                   : 'border-muted hover:border-muted-foreground/30'
               }`}
@@ -331,27 +494,24 @@ export default function Monitoring() {
                 <Clock className="h-4 w-4 text-blue-600" />
               </div>
               <h3 className="font-semibold text-base mb-1">Coletando</h3>
-              <p className="text-xs text-muted-foreground mb-4">
-                Recebimento inicial dos pedidos via WhatsApp, Planilha Centralizada ou Lançamento
-                Manual.
+              <p className="text-xs text-muted-foreground mb-3">
+                Importa ✓ · Pedido manual/WhatsApp ✓ · Despacho ✗
               </p>
               <Button
                 size="sm"
-                variant={currentStatus === 'coletando' ? 'default' : 'outline'}
+                variant={currentFase === 'coletando' ? 'default' : 'outline'}
                 className="w-full text-xs"
-                disabled={
-                  updating || currentStatus === 'coletando' || currentStatus === 'cancelado'
-                }
-                onClick={() => handleSimulatePhase('coletando')}
+                disabled={updating || currentFase === 'coletando' || currentFase === 'cancelado'}
+                onClick={() => handleChangeFase('coletando')}
               >
-                {currentStatus === 'coletando' ? 'Fase Ativa' : 'Mudar para Coletando'}
+                {currentFase === 'coletando' ? 'Fase Ativa' : 'Mudar para Coletando'}
               </Button>
             </div>
 
             {/* Fase 2: Correção */}
             <div
               className={`p-4 rounded-lg border-2 transition-all ${
-                currentStatus === 'correcao'
+                currentFase === 'correcao'
                   ? 'border-amber-600 bg-amber-50/50 dark:bg-amber-950/20'
                   : 'border-muted hover:border-muted-foreground/30'
               }`}
@@ -363,67 +523,97 @@ export default function Monitoring() {
                 <AlertTriangle className="h-4 w-4 text-amber-600" />
               </div>
               <h3 className="font-semibold text-base mb-1">Correção</h3>
-              <p className="text-xs text-muted-foreground mb-4">
-                Compensação de itens em escassez por abundância e resolução de inconformidades com
-                secretarias.
+              <p className="text-xs text-muted-foreground mb-3">
+                Importa ✓ · Pedido manual/WhatsApp ✓ · Despacho ✗
               </p>
               <Button
                 size="sm"
-                variant={currentStatus === 'correcao' ? 'default' : 'outline'}
+                variant={currentFase === 'correcao' ? 'default' : 'outline'}
                 className="w-full text-xs"
-                disabled={updating || currentStatus === 'correcao' || currentStatus === 'cancelado'}
-                onClick={() => handleSimulatePhase('correcao')}
+                disabled={updating || currentFase === 'correcao' || currentFase === 'cancelado'}
+                onClick={() => handleChangeFase('correcao')}
               >
-                {currentStatus === 'correcao' ? 'Fase Ativa' : 'Mudar para Correção'}
+                {currentFase === 'correcao' ? 'Fase Ativa' : 'Mudar para Correção'}
               </Button>
             </div>
 
-            {/* Fase 3: Fechado */}
+            {/* Fase 3: Coletado (NOVA FASE) */}
             <div
               className={`p-4 rounded-lg border-2 transition-all ${
-                currentStatus === 'fechado'
+                currentFase === 'coletado'
+                  ? 'border-purple-600 bg-purple-50/50 dark:bg-purple-950/20'
+                  : 'border-muted hover:border-muted-foreground/30'
+              }`}
+            >
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-bold uppercase tracking-wider text-purple-600">
+                  Fase 3
+                </span>
+                <Truck className="h-4 w-4 text-purple-600" />
+              </div>
+              <h3 className="font-semibold text-base mb-1">Coletado</h3>
+              <p className="text-xs text-muted-foreground mb-3">
+                Importação ✗ · Entrada ✗ ·{' '}
+                <strong className="text-emerald-600">Despacho LIBERADO ✓</strong>
+              </p>
+              <Button
+                size="sm"
+                variant={currentFase === 'coletado' ? 'default' : 'outline'}
+                className="w-full text-xs"
+                disabled={updating || currentFase === 'coletado' || currentFase === 'cancelado'}
+                onClick={() => handleChangeFase('coletado')}
+              >
+                {currentFase === 'coletado' ? 'Fase Ativa' : 'Marcar Coletado'}
+              </Button>
+            </div>
+
+            {/* Fase 4: Fechado */}
+            <div
+              className={`p-4 rounded-lg border-2 transition-all ${
+                currentFase === 'fechado'
                   ? 'border-emerald-600 bg-emerald-50/50 dark:bg-emerald-950/20'
                   : 'border-muted hover:border-muted-foreground/30'
               }`}
             >
               <div className="flex items-center justify-between mb-2">
                 <span className="text-xs font-bold uppercase tracking-wider text-emerald-600">
-                  Fase 3
+                  Fase 4
                 </span>
                 <CheckCircle2 className="h-4 w-4 text-emerald-600" />
               </div>
               <h3 className="font-semibold text-base mb-1">Fechado</h3>
-              <p className="text-xs text-muted-foreground mb-4">
-                Ciclo congelado e consolidado para colheita dos produtores cooperados e
-                roteirização.
+              <p className="text-xs text-muted-foreground mb-3">
+                Importação ✗ · Entrada ✗ · Despacho ✓ · Cancelamento ✗
               </p>
               <Button
                 size="sm"
-                variant={currentStatus === 'fechado' ? 'default' : 'outline'}
+                variant={currentFase === 'fechado' ? 'default' : 'outline'}
                 className="w-full text-xs"
-                disabled={updating || currentStatus === 'fechado' || currentStatus === 'cancelado'}
-                onClick={() => handleSimulatePhase('fechado')}
+                disabled={updating || currentFase === 'fechado' || currentFase === 'cancelado'}
+                onClick={() => handleChangeFase('fechado')}
               >
-                {currentStatus === 'fechado' ? 'Fase Ativa' : 'Fechar Ciclo'}
+                {currentFase === 'fechado' ? 'Fase Ativa' : 'Fechar'}
               </Button>
             </div>
           </div>
         </CardContent>
       </Card>
 
-      {/* Resumo do Funil do Ciclo Selecionado */}
+      {/* Resumo do Funil do Ciclo e Contrato Selecionado */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <Card className="bg-card">
           <CardContent className="p-3 text-center">
             <p className="text-xs text-muted-foreground">Escolas Atendidas</p>
             <p className="text-xl font-bold text-primary">{funilMetrics.escolasAtendidas}</p>
-            <p className="text-[10px] text-muted-foreground">de {schools.length} cadastradas</p>
+            <p className="text-[10px] text-muted-foreground">
+              de {funilMetrics.escolasTotal} cadastradas
+            </p>
           </CardContent>
         </Card>
 
         <Card className="bg-card">
           <CardContent className="p-3 text-center">
-            <p className="text-xs text-muted-foreground">Pedidos do Ciclo</p>
+            <p className="text-xs text-muted-foreground">Pedidos Filtrados</p>
             <p className="text-xl font-bold text-foreground">{funilMetrics.totalPedidos}</p>
             <p className="text-[10px] text-muted-foreground">
               {funilMetrics.pedidosValidados} validados • {funilMetrics.pedidosInconsistentes}{' '}
@@ -452,7 +642,7 @@ export default function Monitoring() {
                 maximumFractionDigits: 2,
               })}
             </p>
-            <p className="text-[10px] text-muted-foreground">no ciclo selecionado</p>
+            <p className="text-[10px] text-muted-foreground">no filtro atual</p>
           </CardContent>
         </Card>
       </div>
@@ -467,7 +657,7 @@ export default function Monitoring() {
               </CardTitle>
               <CardDescription>
                 Identificação precoce de escolas sem envio de pedidos ou com inconsistências no
-                ciclo selecionado.
+                ciclo ({selectedContratoNumero}).
               </CardDescription>
             </div>
             <Badge variant="outline" className="text-xs font-medium">
@@ -496,7 +686,7 @@ export default function Monitoring() {
                     >
                       <div className="flex items-center justify-center gap-2">
                         <CheckCircle2 className="h-5 w-5" /> Todas as escolas estão em dia neste
-                        ciclo!
+                        contrato/ciclo!
                       </div>
                     </TableCell>
                   </TableRow>
@@ -555,7 +745,7 @@ export default function Monitoring() {
         </CardContent>
       </Card>
 
-      {/* Modais de Abrir e Cancelar Ciclo */}
+      {/* Modais de Abrir e Cancelar Ciclo / Contrato */}
       <AbrirCicloDialog
         open={abrirCicloOpen}
         onOpenChange={setAbrirCicloOpen}
@@ -568,8 +758,9 @@ export default function Monitoring() {
 
       <CancelarCicloDialog
         ciclo={selectedCiclo}
-        open={cancelarCicloOpen}
-        onOpenChange={setCancelarCicloOpen}
+        contratoId={selectedContratoId !== 'todos' ? selectedContratoId : undefined}
+        open={cancelarDialogOpen}
+        onOpenChange={setCancelarDialogOpen}
       />
     </div>
   )
