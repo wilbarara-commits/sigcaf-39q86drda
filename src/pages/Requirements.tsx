@@ -301,7 +301,7 @@ const DATA_MODEL = [
   'paradas_rota (id, rota_logistica_id → rotas_logisticas, escola_id → escolas, ordem) [Sequenciamento Drag-and-Drop]',
   'despachos (id, contrato_id → contratos, ciclo_id → ciclos, rota_logistica_id → rotas_logisticas, data_despacho, usuario_id → users, status [Em Rota/Entregue/Cancelado])',
   'contrato_itens (id, contrato_id → contratos, produto_id → produtos, preco, quantidade_contratada [numérico opcional], nome_contrato [texto opcional], apelidos [texto opcional])',
-  'pedidos (id, numero, escola_id → escolas, ciclo_id → ciclos, origem [excel/whatsapp/manual], rota_id → rotas, rota_logistica_id → rotas_logisticas, validacao [json], data_prevista, status [Pendente/Em Rota/Entregue/Cancelado], entregue_em, entregue_por → users, cancelamento_motivo, motivo_cancelamento, cancelado_em)',
+  'pedidos (id, numero, escola_id → escolas, ciclo_id → ciclos, origem [excel/whatsapp/manual], rota_id → rotas, rota_logistica_id → rotas_logisticas, validacao [json], data_prevista, status [Pendente/Em Rota/Entregue/Cancelado], entregue_em, entregue_por → users, motivo_cancelamento, cancelado_em)',
   'pedido_itens (id, pedido_id → pedidos, produto_id → produtos, quantidade, preco_unitario)',
   'envios_whatsapp (id, ciclo_id → ciclos, escola_id → escolas, status [pendente/enviado/falha], enviado_em)',
   'importacoes (id, ciclo_id → ciclos, contrato_id → contratos, arquivo, data, usuario_id, linhas_total, linhas_ok, linhas_erro, erros [json])',

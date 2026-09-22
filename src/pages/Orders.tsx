@@ -889,14 +889,9 @@ export default function Orders() {
                       <TableCell>{getValidacaoBadge(order.validacao)}</TableCell>
                       <TableCell className="text-xs">
                         {order.status === 'Cancelado' ? (
-                          <div
-                            className="max-w-[190px]"
-                            title={order.motivo_cancelamento || order.cancelamento_motivo || ''}
-                          >
+                          <div className="max-w-[190px]" title={order.motivo_cancelamento || ''}>
                             <span className="text-xs font-semibold text-destructive line-clamp-2">
-                              {order.motivo_cancelamento ||
-                                order.cancelamento_motivo ||
-                                'Sem motivo registrado'}
+                              {order.motivo_cancelamento || 'Sem motivo registrado'}
                             </span>
                             {order.cancelado_em && (
                               <span className="text-[9px] text-muted-foreground block">
@@ -1090,9 +1085,7 @@ export default function Orders() {
                   </div>
                   <p className="text-[11px] text-foreground">
                     <strong>Motivo:</strong>{' '}
-                    {viewingOrder.motivo_cancelamento ||
-                      viewingOrder.cancelamento_motivo ||
-                      'Motivo não informado.'}
+                    {viewingOrder.motivo_cancelamento || 'Motivo não informado.'}
                   </p>
                   {viewingOrder.cancelado_em && (
                     <p className="text-[10px] text-muted-foreground">

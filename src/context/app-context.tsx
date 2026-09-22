@@ -79,7 +79,6 @@ interface AppState {
     id: string,
     status: Order['status'],
     options?: {
-      cancelamento_motivo?: string
       motivo_cancelamento?: string
       entregue_em?: string
       entregue_por?: string
@@ -322,7 +321,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           ped.expand?.entregue_por?.email ||
           ''
 
-        const motivoCancel = ped.motivo_cancelamento || ped.cancelamento_motivo
+        const motivoCancel = ped.motivo_cancelamento
 
         return {
           id: ped.id,
@@ -345,7 +344,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
           entregue_em: ped.entregue_em,
           entregue_por: ped.entregue_por,
           entreguePorNome,
-          cancelamento_motivo: motivoCancel,
           motivo_cancelamento: motivoCancel,
           cancelado_em: ped.cancelado_em,
           total: Math.round(total * 100) / 100,
@@ -489,10 +487,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
             status: rec.status || existing.status,
             entregue_em: rec.entregue_em ?? existing.entregue_em,
             entregue_por: rec.entregue_por ?? existing.entregue_por,
-            cancelamento_motivo:
-              rec.motivo_cancelamento || rec.cancelamento_motivo || existing.cancelamento_motivo,
-            motivo_cancelamento:
-              rec.motivo_cancelamento || rec.cancelamento_motivo || existing.motivo_cancelamento,
+            motivo_cancelamento: rec.motivo_cancelamento || existing.motivo_cancelamento,
             cancelado_em: rec.cancelado_em ?? existing.cancelado_em,
             validacao: rec.validacao || existing.validacao,
           }
@@ -534,8 +529,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           entregue_em: rec.entregue_em,
           entregue_por: rec.entregue_por,
           entreguePorNome: '',
-          cancelamento_motivo: rec.motivo_cancelamento || rec.cancelamento_motivo,
-          motivo_cancelamento: rec.motivo_cancelamento || rec.cancelamento_motivo,
+          motivo_cancelamento: rec.motivo_cancelamento,
           cancelado_em: rec.cancelado_em,
           total: tempIdx !== -1 ? prev[tempIdx].total : 0,
           items: tempIdx !== -1 ? prev[tempIdx].items : [],
@@ -1048,7 +1042,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     id: string,
     status: Order['status'],
     options?: {
-      cancelamento_motivo?: string
       motivo_cancelamento?: string
       entregue_em?: string
       entregue_por?: string
@@ -1075,7 +1068,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     // Se a transição for para Cancelado, motivo é obrigatório
     if (status === 'Cancelado') {
-      const motivo = (options?.motivo_cancelamento || options?.cancelamento_motivo)?.trim()
+      const motivo = options?.motivo_cancelamento?.trim()
       if (!motivo) {
         toast.error('Motivo do cancelamento é obrigatório.')
         return false
@@ -1094,7 +1087,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
               status,
               entregue_em: options?.entregue_em ?? o.entregue_em,
               entregue_por: options?.entregue_por ?? o.entregue_por,
-              cancelamento_motivo: options?.cancelamento_motivo ?? o.cancelamento_motivo,
               motivo_cancelamento: options?.motivo_cancelamento ?? o.motivo_cancelamento,
               cancelado_em: options?.cancelado_em ?? o.cancelado_em,
               rotaLogisticaId: options?.rota_logistica_id ?? o.rotaLogisticaId,
@@ -1114,8 +1106,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
                 status: updated.status,
                 entregue_em: updated.entregue_em,
                 entregue_por: updated.entregue_por,
-                cancelamento_motivo: updated.cancelamento_motivo || updated.motivo_cancelamento,
-                motivo_cancelamento: updated.motivo_cancelamento || updated.cancelamento_motivo,
+                motivo_cancelamento: updated.motivo_cancelamento,
                 cancelado_em: updated.cancelado_em,
               }
             : o,
@@ -1216,7 +1207,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
           ? {
               ...o,
               status: 'Cancelado',
-              cancelamento_motivo: cleanMotivo,
               motivo_cancelamento: cleanMotivo,
               cancelado_em: nowIso,
             }
@@ -1227,7 +1217,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     try {
       await pedidosService.updateStatus(id, 'Cancelado', {
         motivo_cancelamento: cleanMotivo,
-        cancelamento_motivo: cleanMotivo,
         cancelado_em: nowIso,
       })
 
@@ -1431,7 +1420,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
               ...o,
               status: 'Cancelado',
               motivo_cancelamento: cleanMotivo,
-              cancelamento_motivo: cleanMotivo,
               cancelado_em: nowIso,
               entregue_por: userId,
             }
@@ -1442,7 +1430,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     try {
       await pedidosService.updateStatus(pedidoId, 'Cancelado', {
         motivo_cancelamento: cleanMotivo,
-        cancelamento_motivo: cleanMotivo,
         cancelado_em: nowIso,
         entregue_por: userId,
       })

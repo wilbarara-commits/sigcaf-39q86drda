@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-21T09:56:38.518Z",
+  "generatedAt": "2026-09-22T02:22:32.050Z",
   "collections": [
     {
       "name": "users",
@@ -433,12 +433,6 @@
           "required": false,
           "system": false,
           "collectionRef": "users"
-        },
-        {
-          "name": "cancelamento_motivo",
-          "type": "text",
-          "required": false,
-          "system": false
         },
         {
           "name": "rota_logistica_id",

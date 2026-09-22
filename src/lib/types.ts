@@ -166,7 +166,6 @@ export interface PedidoRecord {
   status: 'Pendente' | 'Em Rota' | 'Entregue' | 'Cancelado'
   entregue_em?: string
   entregue_por?: string
-  cancelamento_motivo?: string
   motivo_cancelamento?: string
   cancelado_em?: string
   expand?: {
@@ -331,7 +330,6 @@ export interface Order {
   entregue_em?: string
   entregue_por?: string
   entreguePorNome?: string
-  cancelamento_motivo?: string
   motivo_cancelamento?: string
   cancelado_em?: string
   total: number

@@ -200,7 +200,6 @@ export const pedidosService = {
     options?: {
       entregue_em?: string
       entregue_por?: string
-      cancelamento_motivo?: string
       motivo_cancelamento?: string
       cancelado_em?: string
       rota_logistica_id?: string
@@ -213,13 +212,8 @@ export const pedidosService = {
     if (options?.entregue_por !== undefined) {
       payload.entregue_por = options.entregue_por
     }
-    if (options?.cancelamento_motivo !== undefined) {
-      payload.cancelamento_motivo = options.cancelamento_motivo
-      payload.motivo_cancelamento = options.cancelamento_motivo
-    }
     if (options?.motivo_cancelamento !== undefined) {
       payload.motivo_cancelamento = options.motivo_cancelamento
-      payload.cancelamento_motivo = options.motivo_cancelamento
     }
     if (options?.cancelado_em !== undefined) {
       payload.cancelado_em = options.cancelado_em
