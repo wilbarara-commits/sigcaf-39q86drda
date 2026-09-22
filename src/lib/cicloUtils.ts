@@ -240,14 +240,17 @@ export interface CicloContratoRef {
 }
 
 /**
- * Formata o nome amigável da fase (ex.: coletando -> Coletando, correcao -> Correção)
+ * Formata o nome amigável da fase (ex.: coletando -> Coletando, correcao -> Correção, coleta_encerrada -> Coleta Encerrada)
+ * Normaliza 'coleta_encerrada', 'coletado' e 'coleta encerrada' para exibir "Coleta Encerrada".
  */
 export function formatFaseAmigavel(fase?: string): string {
   if (!fase) return 'Coletando'
   const f = fase.trim().toLowerCase()
   if (f === 'coletando') return 'Coletando'
   if (f === 'correcao') return 'Correção'
-  if (f === 'coletado') return 'Coletado'
+  if (f === 'coletado' || f === 'coleta_encerrada' || f === 'coleta encerrada') {
+    return 'Coleta Encerrada'
+  }
   if (f === 'fechado') return 'Fechado'
   if (f === 'cancelado') return 'Cancelado'
   return fase.charAt(0).toUpperCase() + fase.slice(1)
@@ -258,7 +261,7 @@ export function formatFaseAmigavel(fase?: string): string {
  * - Se não houver vínculos: usa ciclo.status (fallback de compatibilidade) ou 'coletando'
  * - Se todos os contratos estiverem fechados: 'fechado'
  * - Se todos os contratos estiverem cancelados: 'cancelado'
- * - Se houver contratos em fases distintas ou não-terminais: retorna a fase predominante / resumo
+ * - Trata 'coleta_encerrada' e 'coletado' como a mesma fase consolidada não-terminal (retorna 'coleta_encerrada')
  */
 export function derivarStatusCiclo(
   cicloId: string,
@@ -267,7 +270,11 @@ export function derivarStatusCiclo(
 ): string {
   const vinculados = cicloContratos.filter((cc) => cc.ciclo_id === cicloId)
   if (vinculados.length === 0) {
-    return fallbackStatus || 'coletando'
+    const fb = (fallbackStatus || 'coletando').toLowerCase()
+    if (fb === 'coletado' || fb === 'coleta_encerrada' || fb === 'coleta encerrada') {
+      return 'coleta_encerrada'
+    }
+    return fb
   }
 
   const todasFases = vinculados.map((cc) => (cc.fase || 'coletando').toLowerCase())
@@ -281,12 +288,19 @@ export function derivarStatusCiclo(
   if (todasFases.some((f) => f === 'coletando')) return 'coletando'
   // Se houver algum em Correção
   if (todasFases.some((f) => f === 'correcao')) return 'correcao'
-  // Se houver algum em Coletado
-  if (todasFases.some((f) => f === 'coletado')) return 'coletado'
+  // Se houver algum em Coleta Encerrada (ou legado coletado)
+  if (
+    todasFases.some((f) => f === 'coleta_encerrada' || f === 'coletado' || f === 'coleta encerrada')
+  ) {
+    return 'coleta_encerrada'
+  }
 
-  return fallbackStatus || 'coletando'
+  const fb = (fallbackStatus || 'coletando').toLowerCase()
+  if (fb === 'coletado' || fb === 'coleta_encerrada' || fb === 'coleta encerrada') {
+    return 'coleta_encerrada'
+  }
+  return fb
 }
-
 /**
  * Gera um resumo textual derivado das fases dos contratos de um ciclo.
  * Exemplo: "3 contratos em Correção, 1 Coletado, 1 Cancelado" ou "Todos em Coletando"
@@ -384,7 +398,179 @@ export function calcularDiasAtrasoFechamento(
 }
 
 /**
- * Calcula os parâmetros padrão para abertura de um novo ciclo:
+ * Interface simples para ciclos existentes passados para cálculo do próximo ciclo.
+ */
+export interface CicloExistenteReferencia {
+  id?: string
+  nome: string
+  data_inicio?: string
+  data_fim?: string
+  created?: string
+}
+
+/**
+ * Extrai número do ciclo e ano de uma string de nome como "Ciclo 38/2026" ou "38/2026"
+ */
+export function parseNumeroEAnoCiclo(
+  nomeOuCodigo?: string,
+): { numero: number; ano: number } | null {
+  if (!nomeOuCodigo) return null
+  const match = nomeOuCodigo.match(/(\d{1,2})\/(\d{4})/)
+  if (match) {
+    return {
+      numero: parseInt(match[1], 10),
+      ano: parseInt(match[2], 10),
+    }
+  }
+  return null
+}
+
+/**
+ * Calcula a sugestão do PRÓXIMO ciclo para abertura:
+ * - Se houver ciclos existentes: sugere SEMPRE o próximo ciclo após o mais recente:
+ *   nº = nº do mais recente + 1
+ *   início = quarta seguinte à quarta de abertura do ciclo mais recente (+7 dias da quarta de início do mais recente)
+ *   fim = início + 6 dias (terça)
+ *   despacho previsto = início + 5 dias (segunda)
+ * - Exceção semanal corrente: se hoje for quarta-feira e NÃO existir ciclo aberto para a semana corrente,
+ *   pré-preenche a quarta de hoje.
+ * - Fallback se não houver ciclos existentes: calcula a partir da data de referência (hoje).
+ */
+export function sugerirProximoCiclo(
+  ciclosExistentes: CicloExistenteReferencia[] = [],
+  dataRef: Date = new Date(),
+): CicloSemanalInfo {
+  const dHoje = new Date(dataRef.getFullYear(), dataRef.getMonth(), dataRef.getDate(), 12, 0, 0, 0)
+  const isHojeQuarta = dHoje.getDay() === 3
+
+  // Ordenar ciclos existentes pelo mais recente
+  const ordenados = [...ciclosExistentes].sort((a, b) => {
+    // 1. Tentar ordenar por ano e número decrescente
+    const parsedA = parseNumeroEAnoCiclo(a.nome)
+    const parsedB = parseNumeroEAnoCiclo(b.nome)
+    if (parsedA && parsedB) {
+      if (parsedA.ano !== parsedB.ano) return parsedB.ano - parsedA.ano
+      if (parsedA.numero !== parsedB.numero) return parsedB.numero - parsedA.numero
+    }
+    const tA = new Date(a.data_inicio || a.created || 0).getTime()
+    const tB = new Date(b.data_inicio || b.created || 0).getTime()
+    return tB - tA
+  })
+
+  const maisRecente = ordenados[0]
+
+  // Se hoje for quarta e não existir ciclo aberto para a semana corrente, pré-preencher a quarta de hoje:
+  if (isHojeQuarta) {
+    const hojeIso = `${dHoje.getFullYear()}-${String(dHoje.getMonth() + 1).padStart(2, '0')}-${String(dHoje.getDate()).padStart(2, '0')}`
+    const existeCicloSemanaCorrente = ciclosExistentes.some((c) => {
+      if (!c.data_inicio) return false
+      const inicioData = c.data_inicio.split('T')[0]
+      return inicioData === hojeIso
+    })
+
+    if (!existeCicloSemanaCorrente) {
+      const cicloHoje = calcularCicloSemanal(dHoje)
+      // Ajustar número se o ciclo mais recente tiver número conhecido no mesmo ano
+      if (maisRecente) {
+        const parsed = parseNumeroEAnoCiclo(maisRecente.nome)
+        if (parsed && parsed.ano === cicloHoje.ano && parsed.numero >= cicloHoje.numeroSemana) {
+          const proxNum = parsed.numero + 1
+          const numFmt = String(proxNum).padStart(2, '0')
+          const cod = `${numFmt}/${cicloHoje.ano}`
+          return {
+            ...cicloHoje,
+            numeroSemana: proxNum,
+            codigoCiclo: cod,
+            nomeCicloPadrao: `Ciclo ${cod}`,
+          }
+        }
+      }
+      return cicloHoje
+    }
+  }
+
+  // Se houver ciclo mais recente:
+  if (maisRecente) {
+    const parsed = parseNumeroEAnoCiclo(maisRecente.nome)
+    let quartaBase: Date
+
+    if (maisRecente.data_inicio) {
+      const parsedData = parseDateSegura(maisRecente.data_inicio)
+      // Encontrar a quarta-feira daquela data
+      const diaSemana = parsedData.getDay()
+      const diasDesdeQuarta = (diaSemana - 3 + 7) % 7
+      quartaBase = new Date(
+        parsedData.getFullYear(),
+        parsedData.getMonth(),
+        parsedData.getDate() - diasDesdeQuarta,
+        0,
+        0,
+        0,
+        0,
+      )
+    } else {
+      quartaBase = getPrimeiraQuartaDoAno(parsed?.ano || dHoje.getFullYear())
+    }
+
+    // Quarta seguinte: +7 dias
+    const proxQuarta = new Date(
+      quartaBase.getFullYear(),
+      quartaBase.getMonth(),
+      quartaBase.getDate() + 7,
+      0,
+      0,
+      0,
+      0,
+    )
+
+    const anoProx = proxQuarta.getFullYear()
+    const proxNumero = parsed && parsed.ano === anoProx ? parsed.numero + 1 : 1
+    const numFmt = String(proxNumero).padStart(2, '0')
+    const codigoCiclo = `${numFmt}/${anoProx}`
+    const nomeCicloPadrao = `Ciclo ${codigoCiclo}`
+
+    // Fim = terça-feira seguinte (início + 6 dias às 23:59:59.999)
+    const tercaFim = new Date(
+      proxQuarta.getFullYear(),
+      proxQuarta.getMonth(),
+      proxQuarta.getDate() + 6,
+      23,
+      59,
+      59,
+      999,
+    )
+
+    // Despacho = segunda-feira seguinte (início + 5 dias às 12:00:00)
+    const segundaDespacho = new Date(
+      proxQuarta.getFullYear(),
+      proxQuarta.getMonth(),
+      proxQuarta.getDate() + 5,
+      12,
+      0,
+      0,
+      0,
+    )
+
+    return {
+      ano: anoProx,
+      numeroSemana: proxNumero,
+      codigoCiclo,
+      nomeCicloPadrao,
+      quartaInicio: proxQuarta,
+      tercaFim,
+      segundaDespacho,
+      dataInicioIso: proxQuarta.toISOString(),
+      dataFimIso: tercaFim.toISOString(),
+      dataDespachoIso: segundaDespacho.toISOString(),
+    }
+  }
+
+  // Fallback quando não há nenhum ciclo no banco:
+  return calcularProximoCicloParaAbertura(dataRef)
+}
+
+/**
+ * Mantido para retrocompatibilidade: calcula os parâmetros padrão com base em uma data.
  * Início = quarta-feira corrente se hoje for quarta-feira, senão a próxima quarta-feira.
  * Fim = terça-feira seguinte (+6 dias).
  * Despacho = segunda-feira seguinte (+5 dias).
@@ -404,7 +590,7 @@ export function calcularProximoCicloParaAbertura(dataRef: Date = new Date()): Ci
     d.getFullYear(),
     d.getMonth(),
     d.getDate() + diasAteQuarta,
-    12,
+    0,
     0,
     0,
     0,

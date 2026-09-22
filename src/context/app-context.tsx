@@ -136,18 +136,18 @@ interface AppState {
   }) => Promise<boolean>
   updateCicloStatus: (
     cicloId: string,
-    status: 'coletando' | 'correcao' | 'coletado' | 'fechado' | string,
+    status: 'coletando' | 'correcao' | 'coleta_encerrada' | 'coletado' | 'fechado' | string,
   ) => Promise<boolean>
   updateCicloContratoFase: (
     cicloId: string,
     contratoId: string,
-    fase: 'coletando' | 'correcao' | 'coletado' | 'fechado' | string,
+    fase: 'coletando' | 'correcao' | 'coleta_encerrada' | 'coletado' | 'fechado' | string,
   ) => Promise<boolean>
   createCiclo: (data: {
     nome: string
     data_inicio: string
     data_fim: string
-    status?: 'coletando' | 'correcao' | 'coletado' | 'fechado' | string
+    status?: 'coletando' | 'correcao' | 'coleta_encerrada' | 'coletado' | 'fechado' | string
     snapshot?: any
     contratoIds?: string[]
   }) => Promise<CicloRecord | null>
@@ -2211,7 +2211,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const updateCicloContratoFase = async (
     cicloId: string,
     contratoId: string,
-    fase: 'coletando' | 'correcao' | 'coletado' | 'fechado' | string,
+    fase: 'coletando' | 'correcao' | 'coleta_encerrada' | 'coletado' | 'fechado' | string,
   ): Promise<boolean> => {
     const existing = cicloContratos.find(
       (cc) => cc.ciclo_id === cicloId && cc.contrato_id === contratoId,
@@ -2280,7 +2280,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const updateCicloStatus = async (
     cicloId: string,
-    status: 'coletando' | 'correcao' | 'coletado' | 'fechado' | string,
+    status: 'coletando' | 'correcao' | 'coleta_encerrada' | 'coletado' | 'fechado' | string,
   ): Promise<boolean> => {
     // Altera a fase em todos os contratos vinculados a este ciclo
     const vinculados = cicloContratos.filter((cc) => cc.ciclo_id === cicloId)
@@ -2597,7 +2597,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     nome: string
     data_inicio: string
     data_fim: string
-    status?: 'coletando' | 'correcao' | 'coletado' | 'fechado' | string
+    status?: 'coletando' | 'correcao' | 'coleta_encerrada' | 'coletado' | 'fechado' | string
     snapshot?: any
     contratoIds?: string[]
   }): Promise<CicloRecord | null> => {

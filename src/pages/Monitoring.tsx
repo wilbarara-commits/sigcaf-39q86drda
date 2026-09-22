@@ -157,7 +157,11 @@ export default function Monitoring() {
       if (fases.every((f) => f === fases[0])) return fases[0]
       if (fases.some((f) => f === 'coletando')) return 'coletando'
       if (fases.some((f) => f === 'correcao')) return 'correcao'
-      if (fases.some((f) => f === 'coletado')) return 'coletado'
+      if (
+        fases.some((f) => f === 'coleta_encerrada' || f === 'coletado' || f === 'coleta encerrada')
+      ) {
+        return 'coleta_encerrada'
+      }
       if (fases.every((f) => f === 'fechado')) return 'fechado'
       if (fases.every((f) => f === 'cancelado')) return 'cancelado'
     }
@@ -257,7 +261,9 @@ export default function Monitoring() {
   }, [schools, schoolsWithOrders, cicloOrders, selectedCiclo, currentFase, escolasFiltradasIds])
 
   // Mudança de fase: opera sobre o par ciclo + contrato selecionado
-  const handleChangeFase = async (newFase: 'coletando' | 'correcao' | 'coletado' | 'fechado') => {
+  const handleChangeFase = async (
+    newFase: 'coletando' | 'correcao' | 'coleta_encerrada' | 'coletado' | 'fechado',
+  ) => {
     if (!selectedCiclo) {
       toast.error('Nenhum ciclo selecionado.')
       return
@@ -268,15 +274,18 @@ export default function Monitoring() {
       return
     }
 
+    // Normaliza para o token novo 'coleta_encerrada'
+    const tokenFase = newFase === 'coletado' ? 'coleta_encerrada' : newFase
+
     setUpdating(true)
     try {
       if (selectedContratoId && selectedContratoId !== 'todos') {
-        await updateCicloContratoFase(selectedCiclo.id, selectedContratoId, newFase)
+        await updateCicloContratoFase(selectedCiclo.id, selectedContratoId, tokenFase)
       } else {
         // Se 'todos', aplica a todos os contratos vinculados ao ciclo
         for (const c of contratosVinculados) {
           if (c.fase !== 'cancelado') {
-            await updateCicloContratoFase(selectedCiclo.id, c.contratoId, newFase)
+            await updateCicloContratoFase(selectedCiclo.id, c.contratoId, tokenFase)
           }
         }
       }
@@ -381,6 +390,7 @@ export default function Monitoring() {
               variant="outline"
               onClick={() => setCancelarDialogOpen(true)}
               className="gap-2 h-9 text-destructive border-destructive/30 hover:bg-destructive/10"
+              title={selectedContratoId !== 'todos' ? 'Cancelar Contrato' : 'Cancelar Ciclo'}
             >
               <Ban className="h-4 w-4" />
               {selectedContratoId !== 'todos' ? 'Cancelar Contrato' : 'Cancelar Ciclo'}
@@ -462,19 +472,21 @@ export default function Monitoring() {
                         true,
                       )}
                     </span>{' '}
-                    • Fluxo Operacional: <em>Coletando → Correção → Coletado → Fechado</em>
+                    • Fluxo Operacional: <em>Coletando → Correção → Coleta Encerrada → Fechado</em>
                   </>
                 )}
               </CardDescription>
             </div>
 
             <Badge
-              className={`text-sm px-3 py-1 font-semibold capitalize ${
+              className={`text-sm px-3 py-1 font-semibold ${
                 currentFase === 'coletando'
                   ? 'bg-blue-600'
                   : currentFase === 'correcao'
                     ? 'bg-amber-600'
-                    : currentFase === 'coletado'
+                    : currentFase === 'coleta_encerrada' ||
+                        currentFase === 'coletado' ||
+                        currentFase === 'coleta encerrada'
                       ? 'bg-purple-600'
                       : currentFase === 'fechado'
                         ? 'bg-emerald-700'
@@ -503,7 +515,7 @@ export default function Monitoring() {
               </div>
               <h3 className="font-semibold text-base mb-1">Coletando</h3>
               <p className="text-xs text-muted-foreground mb-3">
-                Importa ✓ · Pedido manual/WhatsApp ✓ · Despacho ✗
+                importa ✓ · pedido ✓ · despacho ✗
               </p>
               <Button
                 size="sm"
@@ -532,7 +544,7 @@ export default function Monitoring() {
               </div>
               <h3 className="font-semibold text-base mb-1">Correção</h3>
               <p className="text-xs text-muted-foreground mb-3">
-                Importa ✓ · Pedido manual/WhatsApp ✓ · Despacho ✗
+                importa ✓ · pedido ✓ · despacho ✗
               </p>
               <Button
                 size="sm"
@@ -545,35 +557,42 @@ export default function Monitoring() {
               </Button>
             </div>
 
-            {/* Fase 3: Coletado (NOVA FASE) */}
-            <div
-              className={`p-4 rounded-lg border-2 transition-all ${
-                currentFase === 'coletado'
-                  ? 'border-purple-600 bg-purple-50/50 dark:bg-purple-950/20'
-                  : 'border-muted hover:border-muted-foreground/30'
-              }`}
-            >
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-bold uppercase tracking-wider text-purple-600">
-                  Fase 3
-                </span>
-                <Truck className="h-4 w-4 text-purple-600" />
-              </div>
-              <h3 className="font-semibold text-base mb-1">Coletado</h3>
-              <p className="text-xs text-muted-foreground mb-3">
-                Importação ✗ · Entrada ✗ ·{' '}
-                <strong className="text-emerald-600">Despacho LIBERADO ✓</strong>
-              </p>
-              <Button
-                size="sm"
-                variant={currentFase === 'coletado' ? 'default' : 'outline'}
-                className="w-full text-xs"
-                disabled={updating || currentFase === 'coletado' || currentFase === 'cancelado'}
-                onClick={() => handleChangeFase('coletado')}
-              >
-                {currentFase === 'coletado' ? 'Fase Ativa' : 'Marcar Coletado'}
-              </Button>
-            </div>
+            {/* Fase 3: Coleta Encerrada */}
+            {(() => {
+              const isColetaEncerrada =
+                currentFase === 'coleta_encerrada' ||
+                currentFase === 'coletado' ||
+                currentFase === 'coleta encerrada'
+              return (
+                <div
+                  className={`p-4 rounded-lg border-2 transition-all ${
+                    isColetaEncerrada
+                      ? 'border-purple-600 bg-purple-50/50 dark:bg-purple-950/20'
+                      : 'border-muted hover:border-muted-foreground/30'
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-bold uppercase tracking-wider text-purple-600">
+                      Fase 3
+                    </span>
+                    <Truck className="h-4 w-4 text-purple-600" />
+                  </div>
+                  <h3 className="font-semibold text-base mb-1">Coleta Encerrada</h3>
+                  <p className="text-xs text-muted-foreground mb-3">
+                    importa ✗ · entrada ✗ · despacho ✓ · cancela ✗ (exceto logístico)
+                  </p>
+                  <Button
+                    size="sm"
+                    variant={isColetaEncerrada ? 'default' : 'outline'}
+                    className="w-full text-xs"
+                    disabled={updating || isColetaEncerrada || currentFase === 'cancelado'}
+                    onClick={() => handleChangeFase('coleta_encerrada')}
+                  >
+                    {isColetaEncerrada ? 'Fase Ativa' : 'Encerrar Coleta'}
+                  </Button>
+                </div>
+              )
+            })()}
 
             {/* Fase 4: Fechado */}
             <div
@@ -591,7 +610,7 @@ export default function Monitoring() {
               </div>
               <h3 className="font-semibold text-base mb-1">Fechado</h3>
               <p className="text-xs text-muted-foreground mb-3">
-                Importação ✗ · Entrada ✗ · Despacho ✓ · Cancelamento ✗
+                importa ✗ · entrada ✗ · despacho ✗ · cancela ✗ (exceto logístico)
               </p>
               <Button
                 size="sm"

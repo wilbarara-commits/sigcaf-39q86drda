@@ -23,6 +23,7 @@ import {
   formatDespachoAmigavel,
   getDespachoPrevistoCiclo,
   isCicloNaoTerminal,
+  formatFaseAmigavel,
 } from '@/lib/cicloUtils'
 
 export default function Index() {
@@ -332,9 +333,9 @@ export default function Index() {
                   {activeCiclo && (
                     <Badge
                       variant="outline"
-                      className="text-[11px] capitalize border-primary/30 text-primary bg-background"
+                      className="text-[11px] border-primary/30 text-primary bg-background"
                     >
-                      Fase: {activeCiclo.status}
+                      Fase: {formatFaseAmigavel(activeCiclo.status)}
                     </Badge>
                   )}
                   {ciclosPendentesFechamento.length > 0 && (

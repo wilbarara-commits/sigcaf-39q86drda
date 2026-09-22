@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useApp } from '@/context/app-context'
 import {
   Dialog,
@@ -14,10 +14,12 @@ import { Label } from '@/components/ui/label'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { AlertTriangle, CalendarPlus, Loader2 } from 'lucide-react'
 import {
-  calcularProximoCicloParaAbertura,
+  sugerirProximoCiclo,
   isCicloNaoTerminal,
   derivarStatusCiclo,
+  formatFaseAmigavel,
 } from '@/lib/cicloUtils'
+import { toast } from 'sonner'
 
 interface AbrirCicloDialogProps {
   open: boolean
@@ -41,29 +43,37 @@ export function AbrirCicloDialog({ open, onOpenChange, onSuccess }: AbrirCicloDi
     return isCicloNaoTerminal(status)
   })
 
-  const faseCapitalizada = (fase?: string) => {
-    if (!fase) return 'Coletando'
-    if (fase === 'coletando') return 'Coletando'
-    if (fase === 'correcao') return 'Correção'
-    if (fase === 'fechado') return 'Fechado'
-    if (fase === 'cancelado') return 'Cancelado'
-    return fase.charAt(0).toUpperCase() + fase.slice(1)
-  }
-
-  // Ao abrir o modal, pré-preencher com base na regra semanal
+  // Ao abrir o modal, pré-preencher com base no ciclo mais recente existente
   useEffect(() => {
     if (open) {
-      const info = calcularProximoCicloParaAbertura(new Date())
+      const info = sugerirProximoCiclo(ciclos, new Date())
       setNome(info.nomeCicloPadrao)
       setDataInicio(info.quartaInicio.toISOString().split('T')[0])
       setDataFim(info.tercaFim.toISOString().split('T')[0])
       setDataDespacho(info.segundaDespacho.toISOString().split('T')[0])
       setStep('form')
     }
-  }, [open])
+  }, [open, ciclos])
+
+  // Verificação de nome duplicado
+  const nomeDuplicado = useMemo(() => {
+    const trimmed = nome.trim().toLowerCase()
+    if (!trimmed) return false
+    return ciclos.some((c) => c.nome.trim().toLowerCase() === trimmed)
+  }, [nome, ciclos])
 
   const handleNextOrSubmit = async () => {
-    if (!nome.trim() || !dataInicio || !dataFim || !dataDespacho) {
+    const trimmedNome = nome.trim()
+    if (!trimmedNome || !dataInicio || !dataFim || !dataDespacho) {
+      toast.error('Preencha todos os campos obrigatórios.')
+      return
+    }
+
+    // TRAVA: se o nome já existir no banco, bloquear salvar com mensagem clara
+    if (nomeDuplicado) {
+      toast.error(
+        `Já existe um ciclo cadastrado com o nome "${trimmedNome}". Escolha um nome exclusivo.`,
+      )
       return
     }
 
@@ -77,6 +87,14 @@ export function AbrirCicloDialog({ open, onOpenChange, onSuccess }: AbrirCicloDi
   }
 
   const executeCreate = async () => {
+    const trimmedNome = nome.trim()
+    if (nomeDuplicado) {
+      toast.error(
+        `Já existe um ciclo cadastrado com o nome "${trimmedNome}". Escolha um nome exclusivo.`,
+      )
+      return
+    }
+
     setIsSubmitting(true)
     try {
       const inicioIso = `${dataInicio}T00:00:00.000Z`
@@ -84,7 +102,7 @@ export function AbrirCicloDialog({ open, onOpenChange, onSuccess }: AbrirCicloDi
       const despachoIso = `${dataDespacho}T12:00:00.000Z`
 
       const created = await createCiclo({
-        nome: nome.trim(),
+        nome: trimmedNome,
         data_inicio: inicioIso,
         data_fim: fimIso,
         status: 'coletando',
@@ -127,7 +145,18 @@ export function AbrirCicloDialog({ open, onOpenChange, onSuccess }: AbrirCicloDi
                 </AlertTitle>
                 <AlertDescription className="text-xs">
                   O {cicloNaoTerminalExistente.nome} ainda está na fase{' '}
-                  <strong>{faseCapitalizada(cicloNaoTerminalExistente.status)}</strong>.
+                  <strong>{formatFaseAmigavel(cicloNaoTerminalExistente.status)}</strong>.
+                </AlertDescription>
+              </Alert>
+            )}
+
+            {nomeDuplicado && (
+              <Alert variant="destructive">
+                <AlertTriangle className="h-4 w-4" />
+                <AlertTitle className="text-xs font-semibold">Nome duplicado</AlertTitle>
+                <AlertDescription className="text-xs">
+                  Já existe um ciclo cadastrado com o nome "{nome.trim()}". Não é permitido criar
+                  ciclos com nomes duplicados.
                 </AlertDescription>
               </Alert>
             )}
@@ -140,8 +169,14 @@ export function AbrirCicloDialog({ open, onOpenChange, onSuccess }: AbrirCicloDi
                 id="ciclo-nome"
                 value={nome}
                 onChange={(e) => setNome(e.target.value)}
-                placeholder="Ex: Ciclo 38/2026"
+                placeholder="Ex: Ciclo 39/2026"
+                className={nomeDuplicado ? 'border-destructive focus-visible:ring-destructive' : ''}
               />
+              {nomeDuplicado && (
+                <p className="text-[11px] text-destructive font-medium">
+                  Nome já em uso. Altere para avançar.
+                </p>
+              )}
             </div>
 
             <div className="grid grid-cols-2 gap-3">
@@ -196,7 +231,7 @@ export function AbrirCicloDialog({ open, onOpenChange, onSuccess }: AbrirCicloDi
               <AlertDescription className="text-xs text-amber-900 dark:text-amber-200 mt-2 space-y-2 leading-relaxed">
                 <p>
                   O {cicloNaoTerminalExistente?.nome} ainda está em{' '}
-                  {faseCapitalizada(cicloNaoTerminalExistente?.status)}. Abrir o {nome} deixa o{' '}
+                  {formatFaseAmigavel(cicloNaoTerminalExistente?.status)}. Abrir o {nome} deixa o{' '}
                   {cicloNaoTerminalExistente?.nome} como Fechamento Pendente (continua visível no
                   Histórico até ser fechado).
                 </p>
@@ -229,7 +264,14 @@ export function AbrirCicloDialog({ open, onOpenChange, onSuccess }: AbrirCicloDi
 
           <Button
             type="button"
-            disabled={isSubmitting || !nome.trim() || !dataInicio || !dataFim || !dataDespacho}
+            disabled={
+              isSubmitting ||
+              !nome.trim() ||
+              !dataInicio ||
+              !dataFim ||
+              !dataDespacho ||
+              nomeDuplicado
+            }
             onClick={handleNextOrSubmit}
           >
             {isSubmitting ? (

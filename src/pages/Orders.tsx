@@ -224,10 +224,12 @@ export default function Orders() {
       }
     }
 
-    if (faseContrato === 'coletado') {
-      toast.error(
-        'Coleta encerrada para este contrato — ciclo em fase Coletado. Pedidos novos bloqueados.',
-      )
+    if (
+      faseContrato === 'coleta_encerrada' ||
+      faseContrato === 'coletado' ||
+      faseContrato === 'coleta encerrada'
+    ) {
+      toast.error('Coleta encerrada para este contrato — pedidos bloqueados.')
       return
     }
 
@@ -430,7 +432,8 @@ export default function Orders() {
 
   const isDespachoLiberado = (order: Order): boolean => {
     const fase = getFaseContratoDoPedido(order)
-    return fase === 'coletado' || fase === 'fechado'
+    // Despacho só é liberado na fase Coleta Encerrada; no Fechado nada entra nem sai
+    return fase === 'coleta_encerrada' || fase === 'coletado' || fase === 'coleta encerrada'
   }
 
   // Ações de evolução de status
@@ -440,9 +443,9 @@ export default function Orders() {
       return
     }
 
-    // MUDANÇA 2 & 3: Em Coletado ou Fechado: DESPACHO LIBERADO ✓ (não precisa esperar "Fechado")
+    // Despacho só é liberado na fase Coleta Encerrada
     if (!isDespachoLiberado(order)) {
-      toast.error('Despacho liberado apenas nas fases Coletado ou Fechado.')
+      toast.error('Despacho liberado apenas na fase Coleta Encerrada.')
       return
     }
 
@@ -1129,14 +1132,14 @@ export default function Orders() {
                                             handleAvancarParaEmRota(order)
                                           } else {
                                             toast.error(
-                                              'Despacho liberado nas fases Coletado ou Fechado.',
+                                              'Despacho liberado apenas na fase Coleta Encerrada.',
                                             )
                                           }
                                         }}
                                         title={
                                           liberado
                                             ? 'Colocar em rota de entrega'
-                                            : 'Despacho liberado nas fases Coletado ou Fechado'
+                                            : 'Despacho liberado apenas na fase Coleta Encerrada'
                                         }
                                       >
                                         <Truck className="h-3.5 w-3.5" /> Colocar em Rota
@@ -1541,7 +1544,7 @@ export default function Orders() {
             </DialogTitle>
             <DialogDescription>
               Edição permitida a administradores para pedidos não despachados (mesmo nas fases
-              Coletado ou Fechado).
+              Coleta Encerrada ou Fechado).
             </DialogDescription>
           </DialogHeader>
 

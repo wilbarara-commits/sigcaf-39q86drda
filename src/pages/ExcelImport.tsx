@@ -77,6 +77,7 @@ import {
   formatDespachoAmigavel,
   getDespachoPrevistoCiclo,
   calcularProximoCicloParaAbertura,
+  formatFaseAmigavel,
 } from '@/lib/cicloUtils'
 
 export default function ExcelImport() {
@@ -587,10 +588,12 @@ export default function ExcelImport() {
       )
       const faseContrato = (ccContrato?.fase || cicloAlvo.status || 'coletando').toLowerCase()
 
-      if (faseContrato === 'coletado') {
-        toast.error(
-          'Coleta encerrada para este contrato — ciclo em fase Coletado. Importação bloqueada.',
-        )
+      if (
+        faseContrato === 'coleta_encerrada' ||
+        faseContrato === 'coletado' ||
+        faseContrato === 'coleta encerrada'
+      ) {
+        toast.error('Coleta encerrada para este contrato — importação bloqueada.')
         return
       }
       if (faseContrato === 'fechado') {
@@ -900,7 +903,7 @@ export default function ExcelImport() {
                             c.ciclo_id === activeCiclo.id && c.contrato_id === selectedContract.id,
                         )
                         const f = cc?.fase || activeCiclo.status || 'coletando'
-                        return `(Fase do contrato: ${f.charAt(0).toUpperCase() + f.slice(1)})`
+                        return `(Fase do contrato: ${formatFaseAmigavel(f)})`
                       })()}
                     </span>
                   </div>

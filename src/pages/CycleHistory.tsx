@@ -309,9 +309,15 @@ export default function CycleHistory() {
                       statusBadge = (
                         <Badge className="bg-amber-600 hover:bg-amber-700">Correção</Badge>
                       )
-                    } else if (statusDerivado === 'coletado') {
+                    } else if (
+                      statusDerivado === 'coleta_encerrada' ||
+                      statusDerivado === 'coletado' ||
+                      statusDerivado === 'coleta encerrada'
+                    ) {
                       statusBadge = (
-                        <Badge className="bg-purple-600 hover:bg-purple-700">Coletado</Badge>
+                        <Badge className="bg-purple-600 hover:bg-purple-700">
+                          Coleta Encerrada
+                        </Badge>
                       )
                     } else if (statusDerivado === 'fechado') {
                       statusBadge = <Badge variant="secondary">Fechado</Badge>
