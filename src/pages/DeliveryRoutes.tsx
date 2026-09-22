@@ -72,6 +72,8 @@ export default function DeliveryRoutes() {
     contracts,
     orders,
     schools,
+    ciclos,
+    activeCiclo,
     rotasLogisticas,
     paradasRota,
     despachos,
@@ -303,6 +305,33 @@ export default function DeliveryRoutes() {
   // Despacho: Executar colocação da rota inteira em rota
   const handleConfirmDispatch = async () => {
     if (!rotaToDispatch) return
+
+    // Regra D: Despacho ("Colocar em Rota"): só habilitado quando o ciclo do pedido estiver FECHADO;
+    // caso contrário desabilitado com explicação "Despacho liberado após o fechamento do ciclo".
+    // Identificar os pedidos pendentes desta rota
+    const paradasCadastradas = paradasRota.filter(
+      (p) => (p.rota_id || (p as any).rota_logistica_id) === rotaToDispatch.id,
+    )
+    const escolaIdsDaRota = new Set(paradasCadastradas.map((p) => p.escola_id))
+    const pedidosPendentesRota = orders.filter(
+      (o) =>
+        (escolaIdsDaRota.has(o.schoolId) ||
+          o.rotaLogisticaId === rotaToDispatch.id ||
+          o.rotaId === rotaToDispatch.id) &&
+        o.status === 'Pendente',
+    )
+
+    // Checar se algum pedido pendente pertence a ciclo que NÃO está fechado
+    const temPedidoComCicloNaoFechado = pedidosPendentesRota.some((ped) => {
+      const pedCiclo = ciclos.find((c) => c.id === ped.cicloId) || activeCiclo
+      return !pedCiclo || pedCiclo.status !== 'fechado'
+    })
+
+    if (temPedidoComCicloNaoFechado) {
+      toast.error('Despacho liberado após o fechamento do ciclo')
+      return
+    }
+
     setIsDispatching(true)
     try {
       await despacharRotaInteira(rotaToDispatch.id, rotaToDispatch.contrato_id, user?.id)
@@ -1021,16 +1050,28 @@ export default function DeliveryRoutes() {
 
                     <div className="flex items-center gap-1.5 shrink-0">
                       {/* Botão Colocar em Rota (Rota Inteira) */}
-                      {hasPendentes && (
-                        <Button
-                          size="sm"
-                          className="h-8 text-xs bg-amber-600 hover:bg-amber-700 text-white gap-1"
-                          onClick={() => handleOpenDispatch(item.rota)}
-                          title="Despacha a rota inteira: todos os pedidos passam de Pendente para Em Rota"
-                        >
-                          <Play className="h-3.5 w-3.5" /> Colocar em Rota
-                        </Button>
-                      )}
+                      {hasPendentes &&
+                        (() => {
+                          const cicloBloqueado = item.pedidosPendentes.some((ped) => {
+                            const pedCiclo = ciclos.find((c) => c.id === ped.cicloId) || activeCiclo
+                            return !pedCiclo || pedCiclo.status !== 'fechado'
+                          })
+                          return (
+                            <Button
+                              size="sm"
+                              disabled={cicloBloqueado}
+                              className="h-8 text-xs bg-amber-600 hover:bg-amber-700 text-white gap-1 disabled:opacity-50"
+                              onClick={() => handleOpenDispatch(item.rota)}
+                              title={
+                                cicloBloqueado
+                                  ? 'Despacho liberado após o fechamento do ciclo'
+                                  : 'Despacha a rota inteira: todos os pedidos passam de Pendente para Em Rota'
+                              }
+                            >
+                              <Play className="h-3.5 w-3.5" /> Colocar em Rota
+                            </Button>
+                          )
+                        })()}
 
                       {/* Botão Rota Entregue (Operação Offline da Rota Inteira) */}
                       {hasEmRota && (

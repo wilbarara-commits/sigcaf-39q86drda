@@ -133,15 +133,20 @@ interface AppState {
   }) => Promise<boolean>
   updateCicloStatus: (
     cicloId: string,
-    status: 'coletando' | 'correcao' | 'fechado',
+    status: 'coletando' | 'correcao' | 'fechado' | string,
   ) => Promise<boolean>
   createCiclo: (data: {
     nome: string
     data_inicio: string
     data_fim: string
-    status: 'coletando' | 'correcao' | 'fechado'
+    status: 'coletando' | 'correcao' | 'fechado' | string
     snapshot?: any
   }) => Promise<CicloRecord | null>
+  cancelarCiclo: (
+    cicloId: string,
+    motivo: string,
+    cancelarPedidosJunto?: boolean,
+  ) => Promise<boolean>
 }
 
 const AppContext = createContext<AppState | undefined>(undefined)
@@ -233,7 +238,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
 
       setCiclos(rawCiclos)
-      const currentActive = rawCiclos.find((c) => c.status !== 'fechado') || rawCiclos[0] || null
+      // Ciclo ATIVO = mais recente não-terminal (máx. 1). Terminais: fechado, cancelado.
+      const naoTerminais = rawCiclos.filter(
+        (c) => c.status !== 'fechado' && c.status !== 'cancelado',
+      )
+      const currentActive = naoTerminais[0] || null
       setActiveCiclo(currentActive)
       setRotas(rawRotas)
       setRotasLogisticas(rawRotas)
@@ -783,15 +792,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
           }
         }
 
-        setActiveCiclo((current) => {
-          if (
-            current?.id === rec.id ||
-            (current?.id.startsWith('temp-') && current?.nome === rec.nome)
-          ) {
-            return { ...current, ...rec }
-          }
-          return current
-        })
+        // Recalcular ciclo ativo sempre com base em todos os ciclos (mais recente não-terminal)
+        const naoTerminaisAtualizados = updated.filter(
+          (c) => c.status !== 'fechado' && c.status !== 'cancelado',
+        )
+        const novoAtivo = naoTerminaisAtualizados[0] || null
+        setActiveCiclo(novoAtivo)
         return updated
       })
     }
@@ -2111,16 +2117,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const updateCicloStatus = async (
     cicloId: string,
-    status: 'coletando' | 'correcao' | 'fechado',
+    status: 'coletando' | 'correcao' | 'fechado' | string,
   ): Promise<boolean> => {
     const prevCiclos = [...ciclos]
     const prevActive = activeCiclo
 
     // Optimistic update
-    setCiclos((prev) => prev.map((c) => (c.id === cicloId ? { ...c, status } : c)))
-    if (activeCiclo?.id === cicloId) {
-      setActiveCiclo({ ...activeCiclo, status })
-    }
+    const updatedCiclos = prevCiclos.map((c) => (c.id === cicloId ? { ...c, status } : c))
+    setCiclos(updatedCiclos)
+
+    // Recalcular ciclo ativo (mais recente não-terminal)
+    const naoTerminais = updatedCiclos.filter(
+      (c) => c.status !== 'fechado' && c.status !== 'cancelado',
+    )
+    setActiveCiclo(naoTerminais[0] || null)
 
     try {
       await ciclosService.setStatus(cicloId, status)
@@ -2139,7 +2149,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     nome: string
     data_inicio: string
     data_fim: string
-    status: 'coletando' | 'correcao' | 'fechado'
+    status: 'coletando' | 'correcao' | 'fechado' | string
     snapshot?: any
   }): Promise<CicloRecord | null> => {
     const tempId = `temp-ciclo-${Date.now()}`
@@ -2154,7 +2164,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
       updated: new Date().toISOString(),
     }
 
-    setCiclos((prev) => [...prev, tempCiclo])
+    const prevCiclos = [...ciclos]
+    const newCiclos = [tempCiclo, ...prevCiclos]
+    setCiclos(newCiclos)
+
+    // Novo ciclo vira o ativo se for não-terminal
+    if (data.status !== 'fechado' && data.status !== 'cancelado') {
+      setActiveCiclo(tempCiclo)
+    }
 
     try {
       const created = await ciclosService.create(data)
@@ -2165,13 +2182,128 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }
         return prev.map((c) => (c.id === tempId ? created : c))
       })
-      toast.success(`Ciclo "${data.nome}" criado com sucesso!`)
+      if (created.status !== 'fechado' && created.status !== 'cancelado') {
+        setActiveCiclo(created)
+      }
+      toast.success(`Ciclo ${data.nome} criado com sucesso!`)
       return created
     } catch (err: any) {
       console.error('Erro ao criar ciclo:', err)
-      setCiclos((prev) => prev.filter((c) => c.id !== tempId))
+      setCiclos(prevCiclos)
+      const naoTerminais = prevCiclos.filter(
+        (c) => c.status !== 'fechado' && c.status !== 'cancelado',
+      )
+      setActiveCiclo(naoTerminais[0] || null)
       toast.error('Falha ao criar novo ciclo.')
       return null
+    }
+  }
+
+  const cancelarCiclo = async (
+    cicloId: string,
+    motivo: string,
+    cancelarPedidosJunto = false,
+  ): Promise<boolean> => {
+    const targetCiclo = ciclos.find((c) => c.id === cicloId)
+    if (!targetCiclo) {
+      toast.error('Ciclo não encontrado.')
+      return false
+    }
+
+    if (targetCiclo.status === 'fechado') {
+      toast.error('Ciclo fechado não pode ser cancelado (o caminho é o ciclo seguinte).')
+      return false
+    }
+
+    if (targetCiclo.status === 'cancelado') {
+      toast.info('Este ciclo já está cancelado.')
+      return true
+    }
+
+    const cleanMotivo = motivo.trim()
+    if (!cleanMotivo) {
+      toast.error('Informe obrigatoriamente o motivo do cancelamento.')
+      return false
+    }
+
+    // Proteção 1: checar atestos emitidos vinculados aos pedidos deste ciclo
+    const pedidosDoCiclo = orders.filter((o) => o.cicloId === cicloId)
+    const pedidoIdsCiclo = new Set(pedidosDoCiclo.map((o) => o.id))
+    const atestosEmitidos = atestos.filter((a) => pedidoIdsCiclo.has(a.orderId))
+
+    if (atestosEmitidos.length > 0) {
+      toast.error(
+        'Este ciclo possui atestos emitidos — já houve entrega formalizada. O caminho é FECHAR o ciclo, não cancelá-lo.',
+      )
+      return false
+    }
+
+    const nowIso = new Date().toISOString()
+    const prevCiclos = [...ciclos]
+    const prevOrders = [...orders]
+    const prevActive = activeCiclo
+
+    // Optimistic update do ciclo
+    const updatedCiclos = prevCiclos.map((c) =>
+      c.id === cicloId
+        ? {
+            ...c,
+            status: 'cancelado',
+            motivo_cancelamento: cleanMotivo,
+            data_cancelamento: nowIso,
+          }
+        : c,
+    )
+    setCiclos(updatedCiclos)
+
+    // Se pedidos devem ser cancelados junto
+    if (cancelarPedidosJunto && pedidosDoCiclo.length > 0) {
+      setOrders((prev) =>
+        prev.map((o) =>
+          o.cicloId === cicloId && o.status !== 'Cancelado'
+            ? {
+                ...o,
+                status: 'Cancelado',
+                motivo_cancelamento: cleanMotivo,
+                cancelado_em: nowIso,
+              }
+            : o,
+        ),
+      )
+    }
+
+    // Recalcular ativo
+    const naoTerminais = updatedCiclos.filter(
+      (c) => c.status !== 'fechado' && c.status !== 'cancelado',
+    )
+    setActiveCiclo(naoTerminais[0] || null)
+
+    try {
+      // 1. Atualizar ciclo no PocketBase
+      await ciclosService.cancelar(cicloId, cleanMotivo)
+
+      // 2. Se houver pedidos para cancelar junto, atualizar pedidos
+      if (cancelarPedidosJunto && pedidosDoCiclo.length > 0) {
+        const pedidosNaoCancelados = pedidosDoCiclo.filter((o) => o.status !== 'Cancelado')
+        await Promise.all(
+          pedidosNaoCancelados.map((p) =>
+            pedidosService.updateStatus(p.id, 'Cancelado', {
+              motivo_cancelamento: cleanMotivo,
+              cancelado_em: nowIso,
+            }),
+          ),
+        )
+      }
+
+      toast.success(`Ciclo "${targetCiclo.nome}" cancelado com sucesso.`)
+      return true
+    } catch (err: any) {
+      console.error('Erro ao cancelar ciclo:', err)
+      setCiclos(prevCiclos)
+      setOrders(prevOrders)
+      setActiveCiclo(prevActive)
+      toast.error('Falha ao cancelar ciclo no banco.')
+      return false
     }
   }
 
@@ -2299,6 +2431,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         moverEscolaEntreRotas,
         updateCicloStatus,
         createCiclo,
+        cancelarCiclo,
         generateAtesto,
         confirmAtesto,
       }}

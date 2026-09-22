@@ -22,11 +22,20 @@ import {
   formatIntervaloCiclo,
   formatDespachoAmigavel,
   getDespachoPrevistoCiclo,
+  isCicloNaoTerminal,
 } from '@/lib/cicloUtils'
 
 export default function Index() {
-  const { orders, contracts, contractItems, contractSchools, atestos, activeCiclo, isLoading } =
-    useApp()
+  const {
+    orders,
+    contracts,
+    contractItems,
+    contractSchools,
+    atestos,
+    ciclos,
+    activeCiclo,
+    isLoading,
+  } = useApp()
 
   const pendingOrders = orders.filter((o) => o.status === 'Pendente').length
   const deliveriesToday = orders.filter((o) => o.status === 'Em Rota').length
@@ -304,62 +313,87 @@ export default function Index() {
         ))}
       </div>
 
-      {/* Faixa Informativa do Ciclo Operacional Ativo (Regra Semanal Quarta->Terça com Despacho na Segunda) */}
-      {activeCiclo && (
-        <Card className="border-l-4 border-l-primary bg-primary/5 dark:bg-primary/10">
-          <CardContent className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div className="space-y-1">
-              <div className="flex items-center gap-2">
-                <Calendar className="h-4 w-4 text-primary" />
-                <span className="font-semibold text-sm text-foreground">{activeCiclo.nome}</span>
-                <Badge
-                  variant="outline"
-                  className="text-[11px] capitalize border-primary/30 text-primary bg-background"
-                >
-                  Fase: {activeCiclo.status}
-                </Badge>
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Semana do ciclo:{' '}
-                <strong>
-                  quarta-feira (
-                  {
-                    formatIntervaloCiclo(activeCiclo.data_inicio, activeCiclo.data_fim).split(
-                      ' a ',
-                    )[0]
-                  }
-                  )
-                </strong>{' '}
-                a{' '}
-                <strong>
-                  terça-feira (
-                  {
-                    formatIntervaloCiclo(activeCiclo.data_inicio, activeCiclo.data_fim).split(
-                      ' a ',
-                    )[1]
-                  }
-                  )
-                </strong>
-              </p>
-            </div>
-            <div className="flex items-center gap-2 bg-background dark:bg-card px-3 py-1.5 rounded-md border text-xs shadow-sm">
-              <Truck className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
-              <div>
-                <span className="text-muted-foreground block text-[10px]">
-                  Previsão de Despacho em Rota
-                </span>
-                <strong className="text-emerald-700 dark:text-emerald-400 font-semibold">
-                  {formatDespachoAmigavel(
-                    activeCiclo.snapshot?.despacho_previsto_segunda ||
-                      getDespachoPrevistoCiclo(activeCiclo.data_inicio),
-                    true,
+      {/* Faixa Informativa do Ciclo Operacional Ativo e Pendentes de Fechamento */}
+      {(() => {
+        const ciclosNaoTerminais = ciclos.filter((c) => isCicloNaoTerminal(c.status))
+        const ciclosPendentesFechamento = activeCiclo
+          ? ciclosNaoTerminais.filter((c) => c.id !== activeCiclo.id)
+          : ciclosNaoTerminais
+
+        return (
+          <Card className="border-l-4 border-l-primary bg-primary/5 dark:bg-primary/10">
+            <CardContent className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <Calendar className="h-4 w-4 text-primary" />
+                  <span className="font-semibold text-sm text-foreground">
+                    {activeCiclo ? `Ciclo ativo: ${activeCiclo.nome}` : 'Nenhum ciclo ativo'}
+                  </span>
+                  {activeCiclo && (
+                    <Badge
+                      variant="outline"
+                      className="text-[11px] capitalize border-primary/30 text-primary bg-background"
+                    >
+                      Fase: {activeCiclo.status}
+                    </Badge>
                   )}
-                </strong>
+                  {ciclosPendentesFechamento.length > 0 && (
+                    <Badge className="bg-amber-600 hover:bg-amber-700 text-[11px]">
+                      {ciclosPendentesFechamento.length} ciclo(s) pendente(s) de fechamento
+                    </Badge>
+                  )}
+                </div>
+                {activeCiclo ? (
+                  <p className="text-xs text-muted-foreground">
+                    Semana do ciclo:{' '}
+                    <strong>
+                      quarta-feira (
+                      {
+                        formatIntervaloCiclo(activeCiclo.data_inicio, activeCiclo.data_fim).split(
+                          ' a ',
+                        )[0]
+                      }
+                      )
+                    </strong>{' '}
+                    a{' '}
+                    <strong>
+                      terça-feira (
+                      {
+                        formatIntervaloCiclo(activeCiclo.data_inicio, activeCiclo.data_fim).split(
+                          ' a ',
+                        )[1]
+                      }
+                      )
+                    </strong>
+                  </p>
+                ) : (
+                  <p className="text-xs text-muted-foreground">
+                    Abra um novo ciclo pelo Monitoramento ou Histórico para iniciar a coleta
+                    semanal.
+                  </p>
+                )}
               </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+              {activeCiclo && (
+                <div className="flex items-center gap-2 bg-background dark:bg-card px-3 py-1.5 rounded-md border text-xs shadow-sm">
+                  <Truck className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                  <div>
+                    <span className="text-muted-foreground block text-[10px]">
+                      Previsão de Despacho em Rota
+                    </span>
+                    <strong className="text-emerald-700 dark:text-emerald-400 font-semibold">
+                      {formatDespachoAmigavel(
+                        activeCiclo.snapshot?.despacho_previsto_segunda ||
+                          getDespachoPrevistoCiclo(activeCiclo.data_inicio),
+                        true,
+                      )}
+                    </strong>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )
+      })()}
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         <Card className="lg:col-span-2">

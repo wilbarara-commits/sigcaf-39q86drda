@@ -81,6 +81,7 @@ export default function Orders() {
     orders,
     contracts,
     rotasLogisticas,
+    ciclos,
     activeCiclo,
     addOrder,
     updateOrderStatus,
@@ -177,6 +178,22 @@ export default function Orders() {
 
   const handleCreateOrder = async (e: React.FormEvent) => {
     e.preventDefault()
+
+    // TRAVA DE FASE: Coleta de pedidos só com ciclo alvo em Coletando ou Correção.
+    if (!activeCiclo) {
+      toast.error('Nenhum ciclo ativo cadastrado. Abra um ciclo antes de lançar pedidos.')
+      return
+    }
+
+    if (activeCiclo.status === 'fechado') {
+      toast.error('Ciclo fechado — abra o próximo ciclo')
+      return
+    }
+
+    if (activeCiclo.status === 'cancelado') {
+      toast.error('Ciclo cancelado')
+      return
+    }
 
     if (!selectedSchool) {
       toast.error('Selecione a escola solicitante.')
@@ -359,6 +376,15 @@ export default function Orders() {
       toast.warning('Apenas pedidos Pendentes podem avançar para "Em Rota".')
       return
     }
+
+    // Regra D: Despacho ("Colocar em Rota"): só habilitado quando o ciclo do pedido estiver FECHADO;
+    // caso contrário desabilitado com explicação "Despacho liberado após o fechamento do ciclo".
+    const pedidoCiclo = ciclos.find((c) => c.id === order.cicloId) || activeCiclo
+    if (!pedidoCiclo || pedidoCiclo.status !== 'fechado') {
+      toast.error('Despacho liberado após o fechamento do ciclo')
+      return
+    }
+
     await updateOrderStatus(order.id, 'Em Rota')
   }
 
@@ -390,6 +416,22 @@ export default function Orders() {
       toast.error('Não é possível cancelar um pedido já entregue.')
       return
     }
+
+    // Verificar status do ciclo do pedido:
+    // Ciclo Fechado não aceita nova coleta nem cancelamento de pedido — EXCETO cancelamento por motivo logístico (para pedidos já despachados / Em Rota).
+    const pedidoCiclo = ciclos.find((c) => c.id === order.cicloId) || activeCiclo
+    if (pedidoCiclo?.status === 'fechado' && order.status !== 'Em Rota') {
+      toast.error(
+        'Ciclo fechado não aceita cancelamento de pedido pendente. Apenas cancelamento logístico para pedidos em rota é permitido.',
+      )
+      return
+    }
+
+    if (pedidoCiclo?.status === 'cancelado') {
+      toast.error('O ciclo deste pedido já se encontra cancelado.')
+      return
+    }
+
     setOrderToCancel(order)
     setCancelReason('')
     setSelectedMotivoLogistico(MOTIVOS_LOGISTICOS_CANCELAMENTO[0])
@@ -947,12 +989,42 @@ export default function Orders() {
                               {/* Se Pendente: pode avançar para Em Rota, Entregue ou Cancelar */}
                               {order.status === 'Pendente' && (
                                 <>
-                                  <DropdownMenuItem
-                                    className="gap-2 cursor-pointer text-amber-700 dark:text-amber-400"
-                                    onClick={() => handleAvancarParaEmRota(order)}
-                                  >
-                                    <Truck className="h-3.5 w-3.5" /> Avançar para Em Rota
-                                  </DropdownMenuItem>
+                                  {(() => {
+                                    const pCiclo =
+                                      ciclos.find((c) => c.id === order.cicloId) || activeCiclo
+                                    const isCicloFechado = pCiclo?.status === 'fechado'
+                                    return (
+                                      <DropdownMenuItem
+                                        disabled={!isCicloFechado}
+                                        className={`gap-2 ${
+                                          isCicloFechado
+                                            ? 'cursor-pointer text-amber-700 dark:text-amber-400'
+                                            : 'opacity-50 cursor-not-allowed'
+                                        }`}
+                                        onClick={() => {
+                                          if (isCicloFechado) {
+                                            handleAvancarParaEmRota(order)
+                                          } else {
+                                            toast.error(
+                                              'Despacho liberado após o fechamento do ciclo',
+                                            )
+                                          }
+                                        }}
+                                        title={
+                                          isCicloFechado
+                                            ? 'Colocar em rota de entrega'
+                                            : 'Despacho liberado após o fechamento do ciclo'
+                                        }
+                                      >
+                                        <Truck className="h-3.5 w-3.5" /> Avançar para Em Rota
+                                        {!isCicloFechado && (
+                                          <span className="text-[10px] text-muted-foreground ml-auto">
+                                            (Ciclo não fechado)
+                                          </span>
+                                        )}
+                                      </DropdownMenuItem>
+                                    )
+                                  })()}
                                   <DropdownMenuItem
                                     className="gap-2 cursor-pointer text-emerald-700 dark:text-emerald-400"
                                     onClick={() => handleOpenConfirmDelivery(order)}

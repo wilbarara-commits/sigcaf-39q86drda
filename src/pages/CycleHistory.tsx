@@ -33,6 +33,8 @@ import {
   Eye,
   BarChart2,
   Truck,
+  CalendarPlus,
+  Ban,
 } from 'lucide-react'
 import type { CicloRecord } from '@/lib/types'
 import {
@@ -40,10 +42,14 @@ import {
   formatIntervaloCiclo,
   calcularCicloSemanal,
   getDespachoPrevistoCiclo,
+  isCicloNaoTerminal,
+  calcularDiasAtrasoFechamento,
 } from '@/lib/cicloUtils'
+import { AbrirCicloDialog } from '@/components/AbrirCicloDialog'
+import { CancelarCicloDialog } from '@/components/CancelarCicloDialog'
 
 export default function CycleHistory() {
-  const { ciclos, orders, products, schools } = useApp()
+  const { ciclos, activeCiclo, orders, products, schools } = useApp()
 
   const [dataInicio, setDataInicio] = useState('')
   const [dataFim, setDataFim] = useState('')
@@ -52,6 +58,11 @@ export default function CycleHistory() {
   // Detalhes do ciclo selecionado
   const [selectedCiclo, setSelectedCiclo] = useState<CicloRecord | null>(null)
   const [detailsOpen, setDetailsOpen] = useState(false)
+
+  // Modais de Ação
+  const [abrirCicloOpen, setAbrirCicloOpen] = useState(false)
+  const [cancelarCiclo, setCancelarCiclo] = useState<CicloRecord | null>(null)
+  const [cancelarCicloOpen, setCancelarCicloOpen] = useState(false)
 
   // Comparação entre dois ciclos
   const [compareCicloAId, setCompareCicloAId] = useState<string>('')
@@ -163,19 +174,25 @@ export default function CycleHistory() {
           </p>
         </div>
 
-        {ciclos.length >= 2 && (
-          <Button
-            variant="outline"
-            className="gap-2"
-            onClick={() => {
-              setCompareCicloAId(ciclos[1]?.id || ciclos[0]?.id)
-              setCompareCicloBId(ciclos[0]?.id)
-              setCompareOpen(true)
-            }}
-          >
-            <BarChart2 className="h-4 w-4 text-primary" /> Comparar Ciclos
+        <div className="flex flex-wrap items-center gap-2">
+          {ciclos.length >= 2 && (
+            <Button
+              variant="outline"
+              className="gap-2"
+              onClick={() => {
+                setCompareCicloAId(ciclos[1]?.id || ciclos[0]?.id)
+                setCompareCicloBId(ciclos[0]?.id)
+                setCompareOpen(true)
+              }}
+            >
+              <BarChart2 className="h-4 w-4 text-primary" /> Comparar Ciclos
+            </Button>
+          )}
+
+          <Button onClick={() => setAbrirCicloOpen(true)} className="gap-2">
+            <CalendarPlus className="h-4 w-4" /> Abrir Ciclo
           </Button>
-        )}
+        </div>
       </div>
 
       {/* Filtros */}
@@ -258,14 +275,34 @@ export default function CycleHistory() {
                       valorTotal: 0,
                     }
 
-                    const statusBadge =
-                      c.status === 'coletando' ? (
+                    const isAtivo = activeCiclo?.id === c.id
+                    const isNaoTerminal = isCicloNaoTerminal(c.status)
+                    const isPendente = isNaoTerminal && !isAtivo
+                    const diasAtraso = calcularDiasAtrasoFechamento(c.data_fim)
+
+                    let statusBadge = (
+                      <Badge variant="secondary" className="capitalize">
+                        {c.status}
+                      </Badge>
+                    )
+
+                    if (c.status === 'coletando') {
+                      statusBadge = (
                         <Badge className="bg-blue-600 hover:bg-blue-700">Coletando</Badge>
-                      ) : c.status === 'correcao' ? (
-                        <Badge className="bg-amber-600 hover:bg-amber-700">Correção</Badge>
-                      ) : (
-                        <Badge variant="secondary">Fechado</Badge>
                       )
+                    } else if (c.status === 'correcao') {
+                      statusBadge = (
+                        <Badge className="bg-amber-600 hover:bg-amber-700">Correção</Badge>
+                      )
+                    } else if (c.status === 'fechado') {
+                      statusBadge = <Badge variant="secondary">Fechado</Badge>
+                    } else if (c.status === 'cancelado') {
+                      statusBadge = (
+                        <Badge variant="destructive" className="text-xs">
+                          Cancelado{c.motivo_cancelamento ? ` — ${c.motivo_cancelamento}` : ''}
+                        </Badge>
+                      )
+                    }
 
                     const despachoDate = c.snapshot?.despacho_previsto_segunda
                       ? new Date(c.snapshot.despacho_previsto_segunda)
@@ -283,7 +320,26 @@ export default function CycleHistory() {
                             {formatDespachoAmigavel(despachoDate)}
                           </span>
                         </TableCell>
-                        <TableCell>{statusBadge}</TableCell>
+                        <TableCell>
+                          <div className="flex flex-col gap-1 items-start">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              {statusBadge}
+                              {isAtivo && (
+                                <Badge
+                                  variant="outline"
+                                  className="text-[10px] bg-primary/10 text-primary border-primary/30"
+                                >
+                                  Ativo
+                                </Badge>
+                              )}
+                            </div>
+                            {isPendente && (
+                              <Badge className="bg-amber-600 hover:bg-amber-700 text-[10px]">
+                                Fechamento Pendente (atrasado {diasAtraso} dias)
+                              </Badge>
+                            )}
+                          </div>
+                        </TableCell>
                         <TableCell className="text-center font-medium">{st.escolasCount}</TableCell>
                         <TableCell className="text-center font-medium">{st.pedidosCount}</TableCell>
                         <TableCell className="text-right font-mono font-medium">
@@ -297,14 +353,30 @@ export default function CycleHistory() {
                           })}
                         </TableCell>
                         <TableCell className="text-right">
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => handleOpenDetails(c)}
-                            className="gap-1 text-xs"
-                          >
-                            <Eye className="h-3.5 w-3.5" /> Detalhes
-                          </Button>
+                          <div className="flex items-center justify-end gap-1">
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => handleOpenDetails(c)}
+                              className="gap-1 text-xs"
+                            >
+                              <Eye className="h-3.5 w-3.5" /> Detalhes
+                            </Button>
+                            {c.status !== 'fechado' && c.status !== 'cancelado' && (
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => {
+                                  setCancelarCiclo(c)
+                                  setCancelarCicloOpen(true)
+                                }}
+                                className="text-destructive hover:bg-destructive/10 text-xs px-2"
+                                title="Cancelar Ciclo"
+                              >
+                                <Ban className="h-3.5 w-3.5" />
+                              </Button>
+                            )}
+                          </div>
                         </TableCell>
                       </TableRow>
                     )
@@ -494,6 +566,15 @@ export default function CycleHistory() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Modais de Abrir e Cancelar Ciclo */}
+      <AbrirCicloDialog open={abrirCicloOpen} onOpenChange={setAbrirCicloOpen} />
+
+      <CancelarCicloDialog
+        ciclo={cancelarCiclo}
+        open={cancelarCicloOpen}
+        onOpenChange={setCancelarCicloOpen}
+      />
     </div>
   )
 }

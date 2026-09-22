@@ -81,6 +81,16 @@ Por favor, envie suas quantidades até o prazo da fase de coleta para garantir a
       return
     }
 
+    if (activeCiclo.status === 'fechado') {
+      toast.error('Ciclo fechado — abra o próximo ciclo')
+      return
+    }
+
+    if (activeCiclo.status === 'cancelado') {
+      toast.error('Ciclo cancelado')
+      return
+    }
+
     const cleanPhone = telefone.replace(/\D/g, '')
     const phoneToUse = cleanPhone.length >= 10 ? `55${cleanPhone}` : ''
     const encoded = encodeURIComponent(`*A/C: ${escolaNome}*\n\n` + customMsg)
@@ -106,6 +116,17 @@ Por favor, envie suas quantidades até o prazo da fase de coleta para garantir a
 
   const handleEnviarTodos = async () => {
     if (!activeCiclo) return
+
+    if (activeCiclo.status === 'fechado') {
+      toast.error('Ciclo fechado — abra o próximo ciclo')
+      return
+    }
+
+    if (activeCiclo.status === 'cancelado') {
+      toast.error('Ciclo cancelado')
+      return
+    }
+
     setSendingAll(true)
     try {
       let count = 0

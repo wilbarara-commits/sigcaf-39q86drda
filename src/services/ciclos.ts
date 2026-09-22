@@ -24,8 +24,10 @@ export const ciclosService = {
     nome: string
     data_inicio: string
     data_fim: string
-    status: 'coletando' | 'correcao' | 'fechado'
+    status: string
     snapshot?: any
+    motivo_cancelamento?: string
+    data_cancelamento?: string
   }): Promise<CicloRecord> {
     return await pb.collection('ciclos').create<CicloRecord>(data)
   },
@@ -34,8 +36,16 @@ export const ciclosService = {
     return await pb.collection('ciclos').update<CicloRecord>(id, data)
   },
 
-  async setStatus(id: string, status: 'coletando' | 'correcao' | 'fechado'): Promise<CicloRecord> {
+  async setStatus(id: string, status: string): Promise<CicloRecord> {
     return await pb.collection('ciclos').update<CicloRecord>(id, { status })
+  },
+
+  async cancelar(id: string, motivo: string): Promise<CicloRecord> {
+    return await pb.collection('ciclos').update<CicloRecord>(id, {
+      status: 'cancelado',
+      motivo_cancelamento: motivo,
+      data_cancelamento: new Date().toISOString(),
+    })
   },
 
   async delete(id: string): Promise<boolean> {

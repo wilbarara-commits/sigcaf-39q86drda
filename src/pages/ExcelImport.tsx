@@ -76,6 +76,7 @@ import {
   formatIntervaloCiclo,
   formatDespachoAmigavel,
   getDespachoPrevistoCiclo,
+  calcularProximoCicloParaAbertura,
 } from '@/lib/cicloUtils'
 
 export default function ExcelImport() {
@@ -84,10 +85,12 @@ export default function ExcelImport() {
     schools,
     products,
     contractItems,
+    ciclos,
     activeCiclo,
     rotas,
     paradasRota,
     refreshData,
+    createCiclo,
   } = useApp()
   const { user } = useAuth()
 
@@ -570,6 +573,42 @@ export default function ExcelImport() {
   const handleConfirmImport = async () => {
     if (!parsedData || !selectedContract) return
 
+    // Obter ou criar ciclo para importação:
+    // Se NÃO existir ciclo ativo, cria automaticamente com a fórmula atual.
+    // Se existir, usa o ativo.
+    // Validação de fase do ciclo alvo: Coletando ou Correção.
+    let cicloAlvo = activeCiclo
+
+    if (cicloAlvo) {
+      if (cicloAlvo.status === 'fechado') {
+        toast.error('Ciclo fechado — abra o próximo ciclo')
+        return
+      }
+      if (cicloAlvo.status === 'cancelado') {
+        toast.error('Ciclo cancelado')
+        return
+      }
+    } else {
+      // Criar automaticamente com a fórmula padrão semanal
+      const infoCiclo = calcularProximoCicloParaAbertura(new Date())
+      const novo = await createCiclo({
+        nome: infoCiclo.nomeCicloPadrao,
+        data_inicio: infoCiclo.quartaInicio.toISOString(),
+        data_fim: infoCiclo.tercaFim.toISOString(),
+        status: 'coletando',
+        snapshot: {
+          regra_semanal: 'quarta_a_terca',
+          despacho_previsto_segunda: infoCiclo.segundaDespacho.toISOString(),
+        },
+      })
+
+      if (!novo) {
+        toast.error('Não foi possível inicializar automaticamente o ciclo ativo.')
+        return
+      }
+      cicloAlvo = novo
+    }
+
     // Validar se existem pedidos prontos sem pendências impeditivas:
     // Critério: escola identificada (schoolId), vinculada ao contrato (isLinkedToContract === true)
     // e pelo menos 1 item com productId identificado e quantidade > 0.
@@ -649,7 +688,7 @@ export default function ExcelImport() {
         return {
           numero: orderNum,
           escola_id: o.schoolId!,
-          ciclo_id: activeCiclo?.id,
+          ciclo_id: cicloAlvo?.id,
           origem: 'excel' as const,
           rota_id: rotaId || rotaLogisticaHerdadaId,
           validacao: {
@@ -705,7 +744,7 @@ export default function ExcelImport() {
       }
 
       await importacoesService.create({
-        ciclo_id: activeCiclo?.id || '',
+        ciclo_id: cicloAlvo?.id || '',
         contrato_id: selectedContract.id,
         arquivo: fileName || 'planilha_secretaria.xlsx',
         data: now,

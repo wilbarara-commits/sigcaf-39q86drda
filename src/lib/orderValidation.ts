@@ -3,7 +3,7 @@ import type { Product, OrderItem, PedidoValidacao } from '@/lib/types'
 export interface OrderValidationInput {
   items: OrderItem[]
   allProducts: Product[]
-  cicloStatus: 'coletando' | 'correcao' | 'fechado'
+  cicloStatus: string
   itensEmFaltaOriginal?: string[]
 }
 

@@ -27,13 +27,17 @@ export interface EscolaRecord {
   updated?: string
 }
 
+export type CicloStatus = 'coletando' | 'correcao' | 'fechado' | 'cancelado' | string
+
 export interface CicloRecord {
   id: string
   nome: string
   data_inicio: string
   data_fim: string
-  status: 'coletando' | 'correcao' | 'fechado'
+  status: CicloStatus
   snapshot?: any
+  motivo_cancelamento?: string
+  data_cancelamento?: string
   created?: string
   updated?: string
 }

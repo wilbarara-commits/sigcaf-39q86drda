@@ -212,3 +212,87 @@ export function formatIntervaloCiclo(dataInicio: Date | string, dataFim: Date | 
 
   return `${dIni}/${mIni} a ${dFim}/${mFim}/${aFim}`
 }
+
+/**
+ * Fases terminais de um ciclo: "fechado" e "cancelado".
+ * Qualquer outro texto é considerado não-terminal.
+ */
+export function isCicloTerminal(status?: string): boolean {
+  if (!status) return false
+  const s = status.trim().toLowerCase()
+  return s === 'fechado' || s === 'cancelado'
+}
+
+/**
+ * Retorna se o ciclo é não-terminal (ativo, coletando, correcao ou qualquer status futuro)
+ */
+export function isCicloNaoTerminal(status?: string): boolean {
+  return !isCicloTerminal(status)
+}
+
+/**
+ * Identifica o ciclo ativo entre uma lista de ciclos:
+ * Ciclo ATIVO = o mais recente não-terminal (ordenado por created ou data_inicio desc).
+ */
+export function getCicloAtivo(
+  ciclos: Array<{ status?: string; created?: string; data_inicio?: string }>,
+): any | null {
+  const naoTerminais = ciclos.filter((c) => isCicloNaoTerminal(c.status))
+  if (naoTerminais.length === 0) return null
+
+  // Ordenar mais recente primeiro (prioriza created desc, depois data_inicio desc)
+  const ordenados = [...naoTerminais].sort((a, b) => {
+    const tA = new Date(a.created || a.data_inicio || 0).getTime()
+    const tB = new Date(b.created || b.data_inicio || 0).getTime()
+    return tB - tA
+  })
+
+  return ordenados[0] || null
+}
+
+/**
+ * Calcula os dias de atraso de fechamento previsto para um ciclo não-terminal.
+ * A data prevista de fechamento é a terça-feira de fim (às 23:59:59).
+ * Se hoje > terça-feira de fechamento, retorna a diferença em dias (número inteiro >= 0).
+ */
+export function calcularDiasAtrasoFechamento(
+  dataFim: Date | string,
+  dataRef: Date = new Date(),
+): number {
+  const fim = parseDateSegura(dataFim)
+  fim.setHours(23, 59, 59, 999)
+
+  const diffMs = dataRef.getTime() - fim.getTime()
+  if (diffMs <= 0) return 0
+
+  return Math.floor(diffMs / (1000 * 60 * 60 * 24))
+}
+
+/**
+ * Calcula os parâmetros padrão para abertura de um novo ciclo:
+ * Início = quarta-feira corrente se hoje for quarta-feira, senão a próxima quarta-feira.
+ * Fim = terça-feira seguinte (+6 dias).
+ * Despacho = segunda-feira seguinte (+5 dias).
+ */
+export function calcularProximoCicloParaAbertura(dataRef: Date = new Date()): CicloSemanalInfo {
+  const d = new Date(dataRef.getFullYear(), dataRef.getMonth(), dataRef.getDate(), 12, 0, 0, 0)
+  const diaSemana = d.getDay() // 0=Dom, 1=Seg, 2=Ter, 3=Qua, 4=Qui, 5=Sex, 6=Sab
+
+  let diasAteQuarta = 0
+  if (diaSemana === 3) {
+    diasAteQuarta = 0
+  } else {
+    diasAteQuarta = (3 - diaSemana + 7) % 7
+  }
+
+  const dataAlvoQuarta = new Date(
+    d.getFullYear(),
+    d.getMonth(),
+    d.getDate() + diasAteQuarta,
+    12,
+    0,
+    0,
+    0,
+  )
+  return calcularCicloSemanal(dataAlvoQuarta)
+}
