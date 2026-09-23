@@ -97,19 +97,22 @@ export interface CsvParseResult {
 }
 
 /**
- * Normaliza o tipo vindo do CSV para os 4 tipos exatos da planilha da secretaria:
- * 'CMEI' | 'CRECHE' | 'INTEGRAL' | 'FUNDAMENTAL' (ou '' se vazio/não informado)
+ * Normaliza o tipo vindo do CSV para os tipos exatos aceitos:
+ * 'CMEI' | 'CRECHE' | 'INTEGRAL' | 'FUNDAMENTAL' | 'Médio' | 'Técnico' (ou '' se vazio/não informado)
  *
  * O valor da coluna "tipo" do arquivo deve ser gravado exatamente como vem, sem agrupar categorias.
  */
 export function normalizeEscolaTipo(rawTipo: string): EscolaTipo | '' {
   if (!rawTipo) return ''
-  const trimmed = rawTipo.trim().toUpperCase()
+  const trimmed = rawTipo.trim()
+  const upper = trimmed.toUpperCase()
 
-  if (trimmed === 'CMEI') return 'CMEI'
-  if (trimmed === 'CRECHE') return 'CRECHE'
-  if (trimmed === 'INTEGRAL') return 'INTEGRAL'
-  if (trimmed === 'FUNDAMENTAL') return 'FUNDAMENTAL'
+  if (upper === 'CMEI') return 'CMEI'
+  if (upper === 'CRECHE') return 'CRECHE'
+  if (upper === 'INTEGRAL') return 'INTEGRAL'
+  if (upper === 'FUNDAMENTAL') return 'FUNDAMENTAL'
+  if (upper === 'MEDIO' || upper === 'MÉDIO') return 'Médio'
+  if (upper === 'TECNICO' || upper === 'TÉCNICO') return 'Técnico'
 
   const norm = normalizeName(rawTipo).toUpperCase()
   if (!norm) return ''
@@ -125,6 +128,12 @@ export function normalizeEscolaTipo(rawTipo: string): EscolaTipo | '' {
   }
   if (norm === 'FUNDAMENTAL' || norm.includes('FUNDAMENTAL')) {
     return 'FUNDAMENTAL'
+  }
+  if (norm === 'MEDIO' || norm.includes('MEDIO')) {
+    return 'Médio'
+  }
+  if (norm === 'TECNICO' || norm.includes('TECNICO')) {
+    return 'Técnico'
   }
 
   return ''
@@ -596,7 +605,7 @@ export async function parseSchoolsInput(options: ParseSchoolsOptions): Promise<C
     const mappedTipo = normalizeEscolaTipo(rawTipo)
     if (rawTipo && !mappedTipo) {
       warnings.push(
-        `Tipo "${rawTipo}" não reconhecido como CMEI, CRECHE, INTEGRAL ou FUNDAMENTAL. Campo ficará vazio.`,
+        `Tipo "${rawTipo}" não reconhecido como CMEI, CRECHE, INTEGRAL, FUNDAMENTAL, Médio ou Técnico. Campo ficará vazio.`,
       )
     }
 

@@ -12,7 +12,7 @@ export interface ProdutoRecord {
   updated?: string
 }
 
-export type EscolaTipo = 'CMEI' | 'CRECHE' | 'INTEGRAL' | 'FUNDAMENTAL'
+export type EscolaTipo = 'CMEI' | 'CRECHE' | 'INTEGRAL' | 'FUNDAMENTAL' | 'Médio' | 'Técnico'
 
 export interface EscolaRecord {
   id: string

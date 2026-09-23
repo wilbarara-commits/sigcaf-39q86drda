@@ -483,7 +483,7 @@ export async function parseContractSchoolsMatrix(
     const mappedTipo = normalizeEscolaTipo(rawTipo)
     if (rawTipo && !mappedTipo) {
       warnings.push(
-        `Tipo "${rawTipo}" não reconhecido (esperado CMEI, CRECHE, INTEGRAL ou FUNDAMENTAL).`,
+        `Tipo "${rawTipo}" não reconhecido (esperado CMEI, CRECHE, INTEGRAL, FUNDAMENTAL, Médio ou Técnico).`,
       )
     }
 

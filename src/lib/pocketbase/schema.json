@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-23T14:32:10.754Z",
+  "generatedAt": "2026-09-23T14:49:29.809Z",
   "collections": [
     {
       "name": "users",
@@ -182,7 +182,7 @@
           "type": "select",
           "required": false,
           "system": false,
-          "selectValues": ["CMEI", "CRECHE", "INTEGRAL", "FUNDAMENTAL"]
+          "selectValues": ["CMEI", "CRECHE", "INTEGRAL", "FUNDAMENTAL", "Médio", "Técnico"]
         },
         {
           "name": "alunos",

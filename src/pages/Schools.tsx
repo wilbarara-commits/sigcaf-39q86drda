@@ -64,7 +64,7 @@ import { escolasService } from '@/services/escolas'
 import { SchoolImportDialog } from '@/components/SchoolImportDialog'
 import type { School, EscolaTipo } from '@/lib/types'
 
-const ESCOLA_TIPOS: EscolaTipo[] = ['CMEI', 'CRECHE', 'INTEGRAL', 'FUNDAMENTAL']
+const ESCOLA_TIPOS: EscolaTipo[] = ['CMEI', 'CRECHE', 'INTEGRAL', 'FUNDAMENTAL', 'Médio', 'Técnico']
 
 export default function Schools() {
   const { schools, isLoading, refreshData } = useApp()
