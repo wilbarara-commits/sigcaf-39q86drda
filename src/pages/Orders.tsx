@@ -62,6 +62,7 @@ import {
   Filter,
   MessageSquare,
   FileSpreadsheet,
+  FileText,
   Layers,
   Sparkles,
   Info,

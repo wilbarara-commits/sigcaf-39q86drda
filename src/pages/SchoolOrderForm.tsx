@@ -218,7 +218,7 @@ export default function SchoolOrderForm() {
   // Despacho previsto (segunda-feira da entrega)
   const dataDespachoFormatada = useMemo(() => {
     if (!cicloInfo) return 'Próxima segunda-feira'
-    return formatDespachoAmigavel(cicloInfo.dataDespacho)
+    return formatDespachoAmigavel(cicloInfo.segundaDespacho)
   }, [cicloInfo])
 
   // Status da fase do contrato no ciclo
@@ -340,7 +340,8 @@ export default function SchoolOrderForm() {
       }
 
       // 3. Gerar número de protocolo citável (ex: FOR-38-0014)
-      const cicloNum = cicloInfo?.numero || parseInt(ciclo.codigo.replace(/\D/g, ''), 10) || 1
+      const cicloNum =
+        cicloInfo?.numeroSemana || parseInt((ciclo.nome || '').replace(/\D/g, ''), 10) || 1
       // Contar pedidos já existentes no ciclo para sequencial limpo
       const totalPedidosCiclo = await pb.collection('pedidos').getList(1, 1, {
         filter: `ciclo_id = "${ciclo.id}"`,
@@ -356,7 +357,7 @@ export default function SchoolOrderForm() {
       const rotaId = contractSchool?.rota_id || ''
 
       const dataPrevistaIso = cicloInfo
-        ? cicloInfo.dataDespacho.toISOString()
+        ? cicloInfo.segundaDespacho.toISOString()
         : new Date(ciclo.data_fim).toISOString()
 
       // 5. Criar novo pedido com origem = 'formulario'
