@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-23T03:03:32.370Z",
+  "generatedAt": "2026-09-23T08:34:09.683Z",
   "collections": [
     {
       "name": "users",
@@ -239,7 +239,7 @@
           "type": "select",
           "required": true,
           "system": false,
-          "selectValues": ["Ativo", "Encerrado", "Pendente"]
+          "selectValues": ["Ativo", "Encerrado", "Cancelado", "Pendente"]
         },
         {
           "name": "created",
@@ -283,6 +283,18 @@
         },
         {
           "name": "abas_planilha",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "encerrado_em",
+          "type": "date",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "motivo_cancelamento",
           "type": "text",
           "required": false,
           "system": false
@@ -763,6 +775,18 @@
           "required": false,
           "system": false,
           "autodateTriggers": ["onCreate", "onUpdate"]
+        },
+        {
+          "name": "coleta_por",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "encerrado_em",
+          "type": "date",
+          "required": false,
+          "system": false
         }
       ],
       "indexes": [

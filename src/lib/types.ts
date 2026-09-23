@@ -132,7 +132,9 @@ export interface ContratoRecord {
   abas_planilha?: string
   num_rotas_logisticas?: number
   valor_total: number
-  status: 'Ativo' | 'Encerrado' | 'Pendente'
+  status: 'Ativo' | 'Encerrado' | 'Cancelado' | 'Pendente'
+  encerrado_em?: string
+  motivo_cancelamento?: string
   created?: string
   updated?: string
 }
@@ -142,6 +144,8 @@ export interface ContratoEscolaRecord {
   contrato_id: string
   escola_id: string
   rota_id?: string
+  coleta_por?: 'padrao' | 'formulario' | 'planilha' | string
+  encerrado_em?: string
   expand?: {
     escola_id?: EscolaRecord
     rota_id?: RotaRecord
@@ -293,6 +297,8 @@ export interface ContractSchoolLink {
   escolaId: string
   rotaId?: string
   rotaNome?: string
+  coleta_por?: 'padrao' | 'formulario' | 'planilha' | string
+  encerrado_em?: string
   // Campos de compatibilidade para transição suave
   rotaPlanilha?: string
   rotaLogisticaId?: string
@@ -318,7 +324,9 @@ export interface Contract {
   num_rotas_logisticas?: number
   totalValue: number
   balance: number
-  status: 'Ativo' | 'Encerrado' | 'Pendente'
+  status: 'Ativo' | 'Encerrado' | 'Cancelado' | 'Pendente'
+  encerrado_em?: string
+  motivo_cancelamento?: string
   escolas: ContractSchoolLink[]
 }
 

@@ -42,7 +42,9 @@ export const contratosService = {
     abas_planilha?: string
     num_rotas_logisticas?: number
     valor_total: number
-    status?: 'Ativo' | 'Encerrado' | 'Pendente'
+    status?: 'Ativo' | 'Encerrado' | 'Cancelado' | 'Pendente'
+    encerrado_em?: string
+    motivo_cancelamento?: string
   }): Promise<ContratoRecord> {
     return await pb.collection('contratos').create<ContratoRecord>({
       ...data,
@@ -158,6 +160,7 @@ export const contratosService = {
     rota_id?: string
     rota?: string
     rota_logistica_id?: string
+    coleta_por?: 'padrao' | 'formulario' | 'planilha' | string
   }): Promise<ContratoEscolaRecord> {
     const effectiveRotaId = data.rota_id || data.rota_logistica_id || ''
     // Check if link already exists
@@ -165,22 +168,73 @@ export const contratosService = {
       filter: `contrato_id = "${data.contrato_id}" && escola_id = "${data.escola_id}"`,
     })
     if (existing.length > 0) {
+      const updates: Record<string, any> = {}
       if (effectiveRotaId && existing[0].rota_id !== effectiveRotaId) {
-        return await pb.collection('contrato_escolas').update(existing[0].id, {
-          rota_id: effectiveRotaId,
-        })
+        updates.rota_id = effectiveRotaId
+      }
+      if (data.coleta_por && existing[0].coleta_por !== data.coleta_por) {
+        updates.coleta_por = data.coleta_por
+      }
+      if (Object.keys(updates).length > 0) {
+        return await pb.collection('contrato_escolas').update(existing[0].id, updates)
       }
       return existing[0]
     }
     return await pb.collection('contrato_escolas').create<ContratoEscolaRecord>({
       contrato_id: data.contrato_id,
       escola_id: data.escola_id,
+      coleta_por: data.coleta_por || 'padrao',
       ...(effectiveRotaId ? { rota_id: effectiveRotaId } : {}),
     })
   },
 
   async unlinkEscola(contratoEscolaId: string): Promise<boolean> {
     return await pb.collection('contrato_escolas').delete(contratoEscolaId)
+  },
+
+  async encerrarContrato(contratoId: string): Promise<ContratoRecord> {
+    const agora = new Date().toISOString()
+    // Atualizar todos os vínculos de contrato_escolas para registrar encerrado_em
+    const ceList = await pb.collection('contrato_escolas').getFullList<ContratoEscolaRecord>({
+      filter: `contrato_id = "${contratoId}"`,
+    })
+    for (const ce of ceList) {
+      try {
+        await pb.collection('contrato_escolas').update(ce.id, {
+          encerrado_em: agora,
+        })
+      } catch (err) {
+        console.error(`Erro ao atualizar encerrado_em do vínculo ${ce.id}:`, err)
+      }
+    }
+    return await pb.collection('contratos').update<ContratoRecord>(contratoId, {
+      status: 'Encerrado',
+      encerrado_em: agora,
+    })
+  },
+
+  async cancelarContrato(contratoId: string, motivo: string): Promise<ContratoRecord> {
+    if (!motivo || !motivo.trim()) {
+      throw new Error('Motivo do cancelamento é obrigatório.')
+    }
+    const agora = new Date().toISOString()
+    const ceList = await pb.collection('contrato_escolas').getFullList<ContratoEscolaRecord>({
+      filter: `contrato_id = "${contratoId}"`,
+    })
+    for (const ce of ceList) {
+      try {
+        await pb.collection('contrato_escolas').update(ce.id, {
+          encerrado_em: agora,
+        })
+      } catch (err) {
+        console.error(`Erro ao atualizar encerrado_em do vínculo ${ce.id}:`, err)
+      }
+    }
+    return await pb.collection('contratos').update<ContratoRecord>(contratoId, {
+      status: 'Cancelado',
+      encerrado_em: agora,
+      motivo_cancelamento: motivo.trim(),
+    })
   },
 
   async updateEscolaRota(

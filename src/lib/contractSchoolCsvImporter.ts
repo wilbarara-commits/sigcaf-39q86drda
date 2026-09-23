@@ -307,10 +307,12 @@ export async function parseContractSchoolsMatrix(
     }
   }
 
-  // Mapa de qual escola está vinculada a qual contrato
+  // Mapa de qual escola está vinculada a qual contrato ATIVO
+  // Vínculos com contratos Encerrados ou Cancelados não contam
   // escolaId -> { contratoId: string; contratoNumero: string }
   const schoolContractMap = new Map<string, { contratoId: string; contratoNumero: string }>()
   for (const c of allContracts) {
+    if (c.status !== 'Ativo') continue
     for (const esc of c.escolas) {
       if (esc.escolaId) {
         schoolContractMap.set(esc.escolaId, {
