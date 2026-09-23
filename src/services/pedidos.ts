@@ -26,7 +26,7 @@ export const pedidosService = {
     numero: string
     escola_id: string
     ciclo_id?: string
-    origem?: 'excel' | 'whatsapp' | 'manual'
+    origem?: 'excel' | 'whatsapp' | 'manual' | 'formulario'
     rota_id?: string
     rota_logistica_id?: string
     validacao?: PedidoValidacao
@@ -122,7 +122,7 @@ export const pedidosService = {
       numero: string
       escola_id: string
       ciclo_id?: string
-      origem?: 'excel' | 'whatsapp' | 'manual'
+      origem?: 'excel' | 'whatsapp' | 'manual' | 'formulario'
       rota_id?: string
       rota_logistica_id?: string
       validacao?: PedidoValidacao

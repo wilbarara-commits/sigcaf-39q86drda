@@ -3,7 +3,7 @@ import { parseCsvTextToMatrix } from '@/lib/schoolCsvImporter'
 import type { Product } from '@/lib/types'
 import * as XLSX from 'xlsx'
 
-export type ProdutoDisponibilidade = 'normal' | 'escassez' | 'abundancia'
+export type ProdutoDisponibilidade = 'normal' | 'abundante' | 'escassez' | 'indisponivel'
 
 export const DEFAULT_PRODUCT_UNIT = 'kg'
 export const DEFAULT_PRODUCT_CATEGORY = 'Geral'
@@ -130,16 +130,24 @@ export function normalizeDisponibilidade(val: string): {
     return { disponibilidade: 'normal', isSpecified: false }
   }
   const norm = normalizeName(trimmed)
+  if (
+    norm.includes('indisponivel') ||
+    norm.includes('indisponível') ||
+    norm.includes('bloqueado')
+  ) {
+    return { disponibilidade: 'indisponivel', isSpecified: true }
+  }
   if (norm.includes('escassez') || norm.includes('falta') || norm.includes('baixo')) {
     return { disponibilidade: 'escassez', isSpecified: true }
   }
   if (
+    norm.includes('abundante') ||
     norm.includes('abundancia') ||
-    norm.includes('alta') ||
-    norm.includes('excesso') ||
-    norm.includes('safra')
+    norm.includes('abundância') ||
+    norm.includes('alto') ||
+    norm.includes('sobra')
   ) {
-    return { disponibilidade: 'abundancia', isSpecified: true }
+    return { disponibilidade: 'abundante', isSpecified: true }
   }
   return { disponibilidade: 'normal', isSpecified: true }
 }

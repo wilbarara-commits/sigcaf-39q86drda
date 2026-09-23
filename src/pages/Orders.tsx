@@ -351,6 +351,15 @@ export default function Orders() {
 
   const getOrigemBadge = (origem: Order['origem']) => {
     switch (origem) {
+      case 'formulario':
+        return (
+          <Badge
+            variant="outline"
+            className="text-purple-700 bg-purple-50 border-purple-300 gap-1 text-[11px] font-medium"
+          >
+            <FileText className="h-3 w-3" /> Formulário
+          </Badge>
+        )
       case 'excel':
         return (
           <Badge
@@ -838,6 +847,7 @@ export default function Orders() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="todos">Todas as Origens</SelectItem>
+                  <SelectItem value="formulario">Formulário (Escola R24)</SelectItem>
                   <SelectItem value="excel">Excel (Centralizado)</SelectItem>
                   <SelectItem value="whatsapp">WhatsApp (Individual)</SelectItem>
                   <SelectItem value="manual">Manual</SelectItem>

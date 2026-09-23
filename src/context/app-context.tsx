@@ -43,7 +43,7 @@ export interface CreateOrderData {
   schoolId: string
   date: string
   cicloId?: string
-  origem?: 'excel' | 'whatsapp' | 'manual'
+  origem?: 'excel' | 'whatsapp' | 'manual' | 'formulario'
   rotaId?: string
   rotaLogisticaId?: string
   items: Array<{
@@ -292,6 +292,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         name: p.nome,
         unit: p.unidade,
         category: p.categoria || '',
+        disponibilidade: (p.disponibilidade as any) || 'normal',
         stock: p.estoque !== undefined ? Number(p.estoque) : undefined,
         price: p.preco_unitario !== undefined ? Number(p.preco_unitario) : undefined,
       }))

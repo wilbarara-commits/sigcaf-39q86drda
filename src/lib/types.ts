@@ -1,8 +1,10 @@
+export type DisponibilidadeProduto = 'normal' | 'abundante' | 'escassez' | 'indisponivel'
+
 export interface ProdutoRecord {
   id: string
   nome: string
   unidade: string
-  disponibilidade?: 'normal' | 'escassez' | 'abundancia'
+  disponibilidade?: DisponibilidadeProduto | 'abundancia'
   categoria?: string
   estoque?: number
   preco_unitario?: number
@@ -175,7 +177,7 @@ export interface PedidoRecord {
   numero: string
   escola_id: string
   ciclo_id?: string
-  origem?: 'excel' | 'whatsapp' | 'manual'
+  origem?: 'excel' | 'whatsapp' | 'manual' | 'formulario'
   rota_id?: string
   validacao?: PedidoValidacao
   data_prevista: string
@@ -266,7 +268,7 @@ export interface Product {
   id: string
   name: string
   unit: string
-  disponibilidade?: 'normal' | 'escassez' | 'abundancia'
+  disponibilidade?: DisponibilidadeProduto | 'abundancia'
   category?: string
   stock?: number
   price?: number
@@ -335,7 +337,7 @@ export interface Order {
   schoolName: string
   schoolAlunos?: number
   cicloId?: string
-  origem: 'excel' | 'whatsapp' | 'manual'
+  origem: 'excel' | 'whatsapp' | 'manual' | 'formulario'
   rotaId?: string
   rotaNome?: string
   rotaLogisticaId?: string
@@ -376,6 +378,24 @@ export interface UserRecord {
   avatar?: string
   perfil: UserPerfil
   ativo?: boolean
+  created?: string
+  updated?: string
+}
+
+export interface TokenFormularioRecord {
+  id: string
+  escola_id: string
+  contrato_id: string
+  ciclo_id: string
+  token: string
+  ativo: boolean
+  criado_em?: string
+  expira_em?: string
+  expand?: {
+    escola_id?: EscolaRecord
+    contrato_id?: ContratoRecord
+    ciclo_id?: CicloRecord
+  }
   created?: string
   updated?: string
 }

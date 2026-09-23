@@ -26,6 +26,7 @@ import ExcelImport from './pages/ExcelImport'
 import Profile from './pages/Profile'
 import UsersPage from './pages/Users'
 import SettingsPage from './pages/Settings'
+import SchoolOrderForm from './pages/SchoolOrderForm'
 
 const App = () => (
   <AuthProvider>
@@ -37,6 +38,9 @@ const App = () => (
           <Routes>
             {/* Rota pública de login */}
             <Route path="/login" element={<Login />} />
+
+            {/* Rota pública do formulário de pedidos da escola (sem login) */}
+            <Route path="/formulario/:token" element={<SchoolOrderForm />} />
 
             {/* Rotas protegidas dentro do Layout */}
             <Route

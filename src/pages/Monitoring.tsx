@@ -43,7 +43,8 @@ import {
 } from '@/lib/cicloUtils'
 import { AbrirCicloDialog } from '@/components/AbrirCicloDialog'
 import { CancelarCicloDialog } from '@/components/CancelarCicloDialog'
-import type { CicloRecord } from '@/lib/types'
+import pb from '@/lib/pocketbase/client'
+import type { CicloRecord, EnvioWhatsappRecord } from '@/lib/types'
 
 export default function Monitoring() {
   const {
@@ -71,6 +72,7 @@ export default function Monitoring() {
   const [updating, setUpdating] = useState(false)
   const [abrirCicloOpen, setAbrirCicloOpen] = useState(false)
   const [cancelarCicloInteiroOpen, setCancelarCicloInteiroOpen] = useState(false)
+  const [enviosWhatsapp, setEnviosWhatsapp] = useState<EnvioWhatsappRecord[]>([])
 
   // Atualizar seleção padrão quando o ativo mudar ou na carga inicial
   useEffect(() => {
@@ -91,6 +93,20 @@ export default function Monitoring() {
   const selectedCiclo: CicloRecord | null = useMemo(() => {
     return ciclos.find((c) => c.id === selectedCicloId) || activeCiclo || sortedCiclos[0] || null
   }, [ciclos, selectedCicloId, activeCiclo, sortedCiclos])
+
+  // Carregar envios de WhatsApp do ciclo selecionado para rastrear quem já recebeu o link
+  useEffect(() => {
+    if (!selectedCiclo) return
+    pb.collection('envios_whatsapp')
+      .getFullList<EnvioWhatsappRecord>({
+        filter: `ciclo_id = "${selectedCiclo.id}" && status = "enviado"`,
+      })
+      .then((records) => setEnviosWhatsapp(records))
+      .catch((err) => {
+        console.warn('Erro ao carregar envios_whatsapp no monitoramento:', err)
+        setEnviosWhatsapp([])
+      })
+  }, [selectedCiclo])
 
   // Contratos vinculados ao ciclo selecionado
   const contratosVinculados = useMemo(() => {
@@ -234,17 +250,31 @@ export default function Monitoring() {
       ? schools.filter((s) => escolasFiltradasIds.has(s.id))
       : schools
 
+    const poolEnviosEscolaIds = new Set(enviosWhatsapp.map((e) => e.escola_id))
+
     const list = pool.map((sch) => {
       const hasOrder = schoolsWithOrders.has(sch.id)
       const sOrders = cicloOrders.filter((o) => o.schoolId === sch.id)
       const invalidOrder = sOrders.find((o) => o.validacao?.status === 'invalido')
+      const orderFormulario = sOrders.find((o) => o.origem === 'formulario')
+      const recebeuLink = poolEnviosEscolaIds.has(sch.id)
 
-      let pendenciaTipo: 'sem_pedido' | 'pedido_invalido' | 'ok' = 'ok'
+      let pendenciaTipo:
+        | 'sem_pedido'
+        | 'sem_pedido_link_enviado'
+        | 'pedido_formulario_preenchido'
+        | 'pedido_invalido'
+        | 'ok' = 'ok'
       let pendenciaDesc = 'Pedido validado e regular'
 
       if (!hasOrder) {
-        pendenciaTipo = 'sem_pedido'
-        pendenciaDesc = 'Nenhum pedido enviado para este ciclo'
+        if (recebeuLink) {
+          pendenciaTipo = 'sem_pedido_link_enviado'
+          pendenciaDesc = 'Link enviado via WhatsApp — formulário ainda não preenchido'
+        } else {
+          pendenciaTipo = 'sem_pedido'
+          pendenciaDesc = 'Nenhum pedido enviado para este ciclo (link não disparado)'
+        }
       } else if (invalidOrder) {
         pendenciaTipo = 'pedido_invalido'
         pendenciaDesc = invalidOrder.validacao?.motivo || 'Pedido com pendência de validação'
@@ -254,12 +284,22 @@ export default function Monitoring() {
         school: sch,
         pendenciaTipo,
         pendenciaDesc,
+        recebeuLink,
+        preencheuFormulario: !!orderFormulario,
         order: invalidOrder || sOrders[0],
       }
     })
 
     return list.filter((p) => p.pendenciaTipo !== 'ok')
-  }, [schools, schoolsWithOrders, cicloOrders, selectedCiclo, currentFase, escolasFiltradasIds])
+  }, [
+    schools,
+    schoolsWithOrders,
+    cicloOrders,
+    selectedCiclo,
+    currentFase,
+    escolasFiltradasIds,
+    enviosWhatsapp,
+  ])
 
   // Mudança de fase: opera sobre o par ciclo + contrato selecionado
   const handleChangeFase = async (
@@ -734,7 +774,10 @@ export default function Monitoring() {
                   </TableRow>
                 ) : (
                   alertSchools.map((item) => {
-                    const isSemPedido = item.pendenciaTipo === 'sem_pedido'
+                    const isSemPedido =
+                      item.pendenciaTipo === 'sem_pedido' ||
+                      item.pendenciaTipo === 'sem_pedido_link_enviado'
+
                     return (
                       <TableRow key={item.school.id}>
                         <TableCell className="font-semibold text-primary">
@@ -747,8 +790,12 @@ export default function Monitoring() {
                           {item.school.contact || 'Sem telefone'}
                         </TableCell>
                         <TableCell>
-                          <div className="flex items-start gap-2 max-w-[340px]">
-                            {isSemPedido ? (
+                          <div className="flex items-start gap-2 max-w-[380px]">
+                            {item.pendenciaTipo === 'sem_pedido_link_enviado' ? (
+                              <Badge className="bg-blue-600 hover:bg-blue-700 text-white text-[10px] shrink-0 mt-0.5">
+                                Link Enviado
+                              </Badge>
+                            ) : isSemPedido ? (
                               <Badge variant="destructive" className="text-[10px] shrink-0 mt-0.5">
                                 Sem Pedido
                               </Badge>

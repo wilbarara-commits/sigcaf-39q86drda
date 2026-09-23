@@ -13,8 +13,7 @@ export const produtosService = {
   },
 
   async create(data: Partial<ProdutoRecord>): Promise<ProdutoRecord> {
-    const { disponibilidade: _disp, ...payload } = data
-    return await pb.collection('produtos').create<ProdutoRecord>(payload)
+    return await pb.collection('produtos').create<ProdutoRecord>(data)
   },
 
   async createBatch(
@@ -27,9 +26,8 @@ export const produtosService = {
     for (let i = 0; i < items.length; i++) {
       const item = items[i]
       const nomeStr = item.nome || `Item ${i + 1}`
-      const { disponibilidade: _disp, ...payload } = item
       try {
-        await pb.collection('produtos').create<ProdutoRecord>(payload)
+        await pb.collection('produtos').create<ProdutoRecord>(item)
         created++
       } catch (err: any) {
         console.error(`Erro ao salvar produto [${nomeStr}]:`, err)
@@ -66,17 +64,16 @@ export const produtosService = {
     for (let i = 0; i < items.length; i++) {
       const item = items[i]
       const nomeStr = item.nome || `Item ${i + 1}`
-      const { disponibilidade: _disp, ...cleanData } = item.data
       try {
         if (item.status === 'create') {
           await pb.collection('produtos').create<ProdutoRecord>({
-            ...cleanData,
+            ...item.data,
             nome: item.nome,
           })
           created++
         } else if (item.status === 'update' && item.id) {
           // Atualização seletiva: envia apenas os campos fornecidos
-          await pb.collection('produtos').update<ProdutoRecord>(item.id, cleanData)
+          await pb.collection('produtos').update<ProdutoRecord>(item.id, item.data)
           updated++
         }
       } catch (err: any) {
@@ -112,8 +109,7 @@ export const produtosService = {
   },
 
   async update(id: string, data: Partial<ProdutoRecord>): Promise<ProdutoRecord> {
-    const { disponibilidade: _disp, ...payload } = data
-    return await pb.collection('produtos').update<ProdutoRecord>(id, payload)
+    return await pb.collection('produtos').update<ProdutoRecord>(id, data)
   },
 
   async decrementarEstoque(_produtoId: string, _quantidade: number): Promise<void> {

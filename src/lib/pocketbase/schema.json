@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-22T23:53:23.922Z",
+  "generatedAt": "2026-09-23T00:38:21.090Z",
   "collections": [
     {
       "name": "users",
@@ -117,6 +117,13 @@
           "type": "text",
           "required": false,
           "system": false
+        },
+        {
+          "name": "disponibilidade",
+          "type": "select",
+          "required": false,
+          "system": false,
+          "selectValues": ["normal", "abundante", "escassez", "indisponivel"]
         }
       ],
       "indexes": ["CREATE INDEX idx_produtos_nome ON produtos (nome)"]
@@ -412,7 +419,7 @@
           "type": "select",
           "required": false,
           "system": false,
-          "selectValues": ["excel", "whatsapp", "manual"]
+          "selectValues": ["excel", "whatsapp", "manual", "formulario"]
         },
         {
           "name": "rota_id",
@@ -1178,6 +1185,83 @@
         "CREATE UNIQUE INDEX idx_ciclo_contratos_unique ON ciclo_contratos (ciclo_id, contrato_id)",
         "CREATE INDEX idx_ciclo_contratos_ciclo ON ciclo_contratos (ciclo_id)",
         "CREATE INDEX idx_ciclo_contratos_contrato ON ciclo_contratos (contrato_id)"
+      ]
+    },
+    {
+      "name": "tokens_formulario",
+      "type": "base",
+      "apiRules": {
+        "list": "",
+        "view": "",
+        "create": "",
+        "update": "",
+        "delete": ""
+      },
+      "fields": [
+        {
+          "name": "escola_id",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "escolas"
+        },
+        {
+          "name": "contrato_id",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "contratos"
+        },
+        {
+          "name": "ciclo_id",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "ciclos"
+        },
+        {
+          "name": "token",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "ativo",
+          "type": "bool",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "criado_em",
+          "type": "date",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "expira_em",
+          "type": "date",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": [
+        "CREATE UNIQUE INDEX idx_tokens_form_token ON tokens_formulario (token)",
+        "CREATE INDEX idx_tokens_form_escola_ciclo ON tokens_formulario (escola_id, ciclo_id)",
+        "CREATE INDEX idx_tokens_form_ciclo ON tokens_formulario (ciclo_id)"
       ]
     }
   ]

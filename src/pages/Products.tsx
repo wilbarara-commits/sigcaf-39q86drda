@@ -26,38 +26,91 @@ import { Label } from '@/components/ui/label'
 import { produtosService } from '@/services/produtos'
 import { DEFAULT_PRODUCT_UNIT } from '@/lib/productCsvImporter'
 import { ProductImportDialog } from '@/components/ProductImportDialog'
+import { Badge } from '@/components/ui/badge'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import type { DisponibilidadeProduto } from '@/lib/types'
 
 export default function Products() {
   const { products, isLoading, refreshData } = useApp()
   const { isAdmin } = useAuth()
   const [search, setSearch] = useState('')
+  const [filterDisponibilidade, setFilterDisponibilidade] = useState<string>('todos')
   const [importDialogOpen, setImportDialogOpen] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
-  // Estados de edição de produto (unidade)
+  // Estados de edição de produto (unidade e disponibilidade)
   const [editDialogOpen, setEditDialogOpen] = useState(false)
   const [editingProduct, setEditingProduct] = useState<any>(null)
   const [editUnidade, setEditUnidade] = useState(DEFAULT_PRODUCT_UNIT)
+  const [editDisponibilidade, setEditDisponibilidade] = useState<DisponibilidadeProduto>('normal')
 
   // Estado de criação de novo produto
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
   const [newNome, setNewNome] = useState('')
   const [newUnidade, setNewUnidade] = useState(DEFAULT_PRODUCT_UNIT)
+  const [newDisponibilidade, setNewDisponibilidade] = useState<DisponibilidadeProduto>('normal')
 
   const filteredProducts = products.filter((p) => {
     const term = search.toLowerCase()
-    return !term || p.name.toLowerCase().includes(term)
+    const matchesSearch = !term || p.name.toLowerCase().includes(term)
+    const matchesDisp =
+      filterDisponibilidade === 'todos' || (p.disponibilidade || 'normal') === filterDisponibilidade
+    return matchesSearch && matchesDisp
   })
+
+  const getDisponibilidadeBadge = (disp?: string) => {
+    const valor = disp || 'normal'
+    switch (valor) {
+      case 'abundante':
+      case 'abundancia':
+        return (
+          <Badge className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold">
+            Abundante
+          </Badge>
+        )
+      case 'escassez':
+        return (
+          <Badge className="bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold">
+            Escassez
+          </Badge>
+        )
+      case 'indisponivel':
+        return (
+          <Badge variant="destructive" className="text-xs font-semibold">
+            Indisponível
+          </Badge>
+        )
+      case 'normal':
+      default:
+        return (
+          <Badge
+            variant="outline"
+            className="text-foreground text-xs font-medium border-muted-foreground/30"
+          >
+            Normal
+          </Badge>
+        )
+    }
+  }
 
   const handleOpenEdit = (p: any) => {
     setEditingProduct(p)
     setEditUnidade(p.unit || DEFAULT_PRODUCT_UNIT)
+    const rawDisp = p.disponibilidade === 'abundancia' ? 'abundante' : p.disponibilidade || 'normal'
+    setEditDisponibilidade(rawDisp as DisponibilidadeProduto)
     setEditDialogOpen(true)
   }
 
   const handleOpenCreate = () => {
     setNewNome('')
     setNewUnidade(DEFAULT_PRODUCT_UNIT)
+    setNewDisponibilidade('normal')
     setCreateDialogOpen(true)
   }
 
@@ -70,6 +123,7 @@ export default function Products() {
     try {
       await produtosService.update(editingProduct.id, {
         unidade: trimmedUnidade,
+        disponibilidade: editDisponibilidade,
       })
       toast.success(`Produto "${editingProduct.name}" atualizado com sucesso!`)
       setEditDialogOpen(false)
@@ -94,6 +148,7 @@ export default function Products() {
       await produtosService.create({
         nome: trimmedNome,
         unidade: newUnidade.trim() || DEFAULT_PRODUCT_UNIT,
+        disponibilidade: newDisponibilidade,
       })
       toast.success(`Produto "${trimmedNome}" cadastrado com sucesso!`)
       setCreateDialogOpen(false)
@@ -142,6 +197,20 @@ export default function Products() {
                   onChange={(e) => setSearch(e.target.value)}
                 />
               </div>
+              <div className="w-44">
+                <Select value={filterDisponibilidade} onValueChange={setFilterDisponibilidade}>
+                  <SelectTrigger className="h-9 text-xs">
+                    <SelectValue placeholder="Disponibilidade" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="todos">Todas disponibilidades</SelectItem>
+                    <SelectItem value="normal">Normal</SelectItem>
+                    <SelectItem value="abundante">Abundante</SelectItem>
+                    <SelectItem value="escassez">Escassez</SelectItem>
+                    <SelectItem value="indisponivel">Indisponível</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
           </div>
         </CardHeader>
@@ -152,13 +221,14 @@ export default function Products() {
                 <TableRow>
                   <TableHead>Produto</TableHead>
                   <TableHead>Unidade</TableHead>
+                  <TableHead>Disponibilidade</TableHead>
                   {isAdmin && <TableHead className="text-right">Ação</TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {isLoading ? (
                   <TableRow>
-                    <TableCell colSpan={3} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
                       <div className="flex items-center justify-center gap-2">
                         <Loader2 className="h-4 w-4 animate-spin" />
                         Carregando produtos do banco...
@@ -167,7 +237,7 @@ export default function Products() {
                   </TableRow>
                 ) : filteredProducts.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={3} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
                       Nenhum produto encontrado.
                     </TableCell>
                   </TableRow>
@@ -178,6 +248,7 @@ export default function Products() {
                         <span>{product.name}</span>
                       </TableCell>
                       <TableCell>{product.unit}</TableCell>
+                      <TableCell>{getDisponibilidadeBadge(product.disponibilidade)}</TableCell>
                       {isAdmin && (
                         <TableCell className="text-right">
                           <Button
@@ -220,6 +291,33 @@ export default function Products() {
                 placeholder="Ex: kg, Dúzia, dz, Maço..."
                 className="w-full h-9"
               />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="edit-disp" className="text-sm font-semibold">
+                Disponibilidade do Produto
+              </Label>
+              <Select
+                value={editDisponibilidade}
+                onValueChange={(val) => setEditDisponibilidade(val as DisponibilidadeProduto)}
+              >
+                <SelectTrigger id="edit-disp" className="w-full h-9">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="normal">Normal (pode ser pedido)</SelectItem>
+                  <SelectItem value="abundante">Abundante (em safra / destaque)</SelectItem>
+                  <SelectItem value="escassez">
+                    Escassez (tem pouco — bloqueado no formulário)
+                  </SelectItem>
+                  <SelectItem value="indisponivel">
+                    Indisponível (não tem — bloqueado no formulário)
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-[11px] text-muted-foreground">
+                Escassez e Indisponível bloqueiam o pedido da escola no formulário.
+              </p>
             </div>
           </div>
 
@@ -282,6 +380,26 @@ export default function Products() {
                 placeholder="Ex: kg, Dúzia..."
                 className="w-full h-9"
               />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="new-disp" className="text-sm font-semibold">
+                Disponibilidade Inicial
+              </Label>
+              <Select
+                value={newDisponibilidade}
+                onValueChange={(val) => setNewDisponibilidade(val as DisponibilidadeProduto)}
+              >
+                <SelectTrigger id="new-disp" className="w-full h-9">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="normal">Normal</SelectItem>
+                  <SelectItem value="abundante">Abundante</SelectItem>
+                  <SelectItem value="escassez">Escassez</SelectItem>
+                  <SelectItem value="indisponivel">Indisponível</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </div>
 
