@@ -157,21 +157,46 @@ export default function SchoolOrderForm() {
         const produtosList = await pb.collection('produtos').getFullList<ProdutoRecord>()
         const produtosMap = new Map(produtosList.map((p) => [p.id, p]))
 
-        // Verificar pedido anterior da escola no ciclo
-        const pastOrders = await pb.collection('pedidos').getList<PedidoRecord>(1, 5, {
-          filter: `escola_id = "${tokenRec.escola_id}" && ciclo_id = "${tokenRec.ciclo_id}" && status != "Cancelado"`,
+        // Verificar pedido anterior da escola no ciclo com origem 'formulario' (R24)
+        const pastOrders = await pb.collection('pedidos').getList<PedidoRecord>(1, 10, {
+          filter: `escola_id = "${tokenRec.escola_id}" && ciclo_id = "${tokenRec.ciclo_id}" && origem = "formulario" && status != "Cancelado"`,
           sort: '-created',
         })
         const lastOrder = pastOrders.items[0] || null
         setExistingOrder(lastOrder)
 
-        // Montar os itens com indicação de disponibilidade e bloqueio
+        // Carregar itens do último pedido válido para pré-preenchimento (se houver reenvio)
+        const pastItemsMap = new Map<string, number>()
+        if (lastOrder) {
+          try {
+            const lastOrderItems = await pedidosService.getItemsByPedidoId(lastOrder.id)
+            for (const pi of lastOrderItems) {
+              if (pi.produto_id && typeof pi.quantidade === 'number' && pi.quantidade > 0) {
+                pastItemsMap.set(pi.produto_id, pi.quantidade)
+              }
+            }
+          } catch (itemsLoadErr) {
+            console.warn(
+              'Não foi possível carregar itens do pedido anterior para pré-preenchimento:',
+              itemsLoadErr,
+            )
+          }
+        }
+
+        // Montar os itens com indicação de disponibilidade, bloqueio e pré-preenchimento
         const items: FormItem[] = contratoItens.map((ci) => {
           const prod =
             produtosMap.get(ci.produto_id) || (ci.expand?.produto_id as ProdutoRecord | undefined)
           const rawDisp = (prod?.disponibilidade as any) || 'normal'
           const dispNorm: DisponibilidadeProduto = rawDisp === 'abundancia' ? 'abundante' : rawDisp
           const bloqueado = dispNorm === 'escassez' || dispNorm === 'indisponivel'
+
+          // Pré-preencher com a quantidade do último pedido caso exista e não esteja bloqueado
+          const prevQtd = pastItemsMap.get(ci.produto_id)
+          const initialQtd =
+            !bloqueado && prevQtd !== undefined && prevQtd > 0
+              ? String(prevQtd).replace('.', ',')
+              : ''
 
           return {
             contratoItemId: ci.id,
@@ -182,7 +207,7 @@ export default function SchoolOrderForm() {
             unidade: prod?.unidade || 'kg',
             precoUnitario: ci.preco || prod?.preco_unitario || 0,
             disponibilidade: dispNorm,
-            quantidade: '',
+            quantidade: initialQtd,
             bloqueado,
           }
         })
@@ -224,14 +249,33 @@ export default function SchoolOrderForm() {
   // Status da fase do contrato no ciclo
   // Cadeia: coletando -> correcao -> coleta_encerrada -> fechado (+ cancelado)
   const faseAtual = cicloContrato?.fase || ciclo?.status || 'coletando'
+  const faseNorm = (faseAtual || '').trim().toLowerCase()
 
-  // Regra 4 & 5:
-  // - Envio inicial: permitido em coletando ou correcao.
-  // - Reenvio (já possui pedido anterior): permitido em coletando, correcao OU coleta_encerrada (até o fechamento da coleta).
-  // - Em fechado ou cancelado: bloqueado totalmente.
-  const isFechadoOuCancelado = faseAtual === 'fechado' || faseAtual === 'cancelado'
-  const isColetaEncerrada = faseAtual === 'coleta_encerrada'
-  const canSend = !isFechadoOuCancelado && (!isColetaEncerrada || !!existingOrder)
+  // NOVA REGRA DE JANELAS DE ENVIO (Decisão do Bill):
+  // - PRIMEIRO envio do pedido da escola no ciclo (escola ainda NÃO tem pedido com origem=formulario no ciclo):
+  //   aceito SOMENTE com a fase do contrato = "coletando".
+  // - REENVIOS (submissões seguintes da mesma escola no ciclo, quando ela JÁ tem pedido com origem=formulario no ciclo):
+  //   aceitos a partir da fase "correcao" e até o fechamento da coleta — ou seja, em "coletando", "correcao" e "coleta_encerrada".
+  // - FORA dessas janelas (fase "fechado" ou "cancelado"): bloqueia envio com o aviso obrigatório.
+  const isFechadoOuCancelado = faseNorm === 'fechado' || faseNorm === 'cancelado'
+  const isColetaEncerrada =
+    faseNorm === 'coleta_encerrada' || faseNorm === 'coletado' || faseNorm === 'coleta encerrada'
+  const isCorrecao = faseNorm === 'correcao'
+  const isColetando = faseNorm === 'coletando'
+
+  // Tem pedido com origem 'formulario' no ciclo?
+  const hasExistingFormOrder = !!existingOrder
+
+  // Permissão de envio:
+  // Se tem pedido anterior (reenvio): permitido em coletando, correcao e coleta_encerrada.
+  // Se não tem pedido anterior (primeiro envio): permitido SOMENTE em coletando.
+  const canSend =
+    !isFechadoOuCancelado &&
+    (hasExistingFormOrder ? isColetando || isCorrecao || isColetaEncerrada : isColetando)
+
+  // Escola sem pedido que acessou fora de 'coletando' (em correcao ou coleta_encerrada)
+  const isPrazoPrimeiroEnvioExpirado =
+    !hasExistingFormOrder && !isFechadoOuCancelado && (isCorrecao || isColetaEncerrada)
 
   // Caso extremo: todos os produtos em escassez ou indisponíveis
   const todosBloqueados = useMemo(() => {
@@ -624,44 +668,50 @@ export default function SchoolOrderForm() {
             <AlertTriangle className="h-4 w-4" />
             <AlertTitle className="text-sm font-bold">Coleta Encerrada</AlertTitle>
             <AlertDescription className="text-xs">
-              Coleta encerrada para este ciclo — aguarde o próximo aviso da cooperativa. Não é mais
-              possível enviar ou alterar pedidos.
+              Coleta encerrada para este ciclo — aguarde o próximo aviso da cooperativa
             </AlertDescription>
           </Alert>
         )}
 
-        {isColetaEncerrada && !existingOrder && (
+        {/* Caso 1: Escola SEM pedido no ciclo acessando em Correção ou Coleta Encerrada */}
+        {isPrazoPrimeiroEnvioExpirado && (
           <Alert variant="destructive">
             <AlertTriangle className="h-4 w-4" />
-            <AlertTitle className="text-sm font-bold">Prazo de Coleta Expirado</AlertTitle>
+            <AlertTitle className="text-sm font-bold">Prazo de Primeiro Envio Encerrado</AlertTitle>
             <AlertDescription className="text-xs">
-              A coleta deste ciclo já foi encerrada e sua escola não enviou pedido a tempo. Entre em
-              contato diretamente com a cooperativa.
+              O prazo para o primeiro envio de pedidos deste ciclo foi encerrado (fase atual:{' '}
+              <strong>{isCorrecao ? 'Correção' : 'Coleta Encerrada'}</strong>). Novos pedidos são
+              aceitos exclusivamente na fase Coletando. Entre em contato diretamente com a
+              cooperativa caso precise de auxílio.
             </AlertDescription>
           </Alert>
         )}
 
-        {isColetaEncerrada && existingOrder && (
-          <Alert className="bg-amber-50 border-amber-300 text-amber-900">
-            <AlertTriangle className="h-4 w-4 text-amber-700" />
+        {/* Caso 2: Escola que JÁ enviou pedido no ciclo (Reenvio habilitado) */}
+        {hasExistingFormOrder && !isFechadoOuCancelado && (
+          <Alert
+            className={
+              isColetaEncerrada
+                ? 'bg-amber-50 border-amber-300 text-amber-900'
+                : 'bg-blue-50 border-blue-200 text-blue-900'
+            }
+          >
+            {isColetaEncerrada ? (
+              <AlertTriangle className="h-4 w-4 text-amber-700" />
+            ) : (
+              <FileSpreadsheet className="h-4 w-4 text-blue-700" />
+            )}
             <AlertTitle className="text-sm font-bold">
-              Fase de Coleta Encerrada — Reenvio Autorizado
+              {isColetaEncerrada
+                ? 'Coleta Encerrada — Reenvio / Correção Autorizado'
+                : isCorrecao
+                  ? 'Fase de Correção — Reenvio / Ajuste Autorizado'
+                  : 'Pedido Anterior Registrado — Reenvio Habilitado'}
             </AlertTitle>
             <AlertDescription className="text-xs">
-              Sua instituição já possui o pedido <strong>{existingOrder.numero}</strong> registrado.
-              Você pode reenviar/corrigir até o fechamento definitivo da coleta.
-            </AlertDescription>
-          </Alert>
-        )}
-
-        {existingOrder && !isColetaEncerrada && !isFechadoOuCancelado && (
-          <Alert className="bg-blue-50 border-blue-200 text-blue-900">
-            <FileSpreadsheet className="h-4 w-4 text-blue-700" />
-            <AlertTitle className="text-sm font-bold">Pedido Anterior Registrado</AlertTitle>
-            <AlertDescription className="text-xs">
-              Sua escola já enviou o pedido <strong>{existingOrder.numero}</strong> neste ciclo.
-              Você pode reenviar este formulário para atualizar as quantidades — o novo pedido
-              substituirá o anterior.
+              Sua instituição já possui o pedido <strong>{existingOrder.numero}</strong> registrado
+              neste ciclo (os itens foram pré-preenchidos abaixo). Você pode reenviar e ajustar as
+              quantidades até o fechamento da coleta — o novo envio substituirá o pedido anterior.
             </AlertDescription>
           </Alert>
         )}
