@@ -107,6 +107,7 @@ export default function Contracts() {
     rotas,
     rotasLogisticas,
     paradasRota,
+    contractSchools,
     isLoading,
     refreshData,
   } = useApp()
@@ -136,7 +137,7 @@ export default function Contracts() {
   const [abasPlanilhaTexto, setAbasPlanilhaTexto] = useState('')
   const [numRotasLogisticas, setNumRotasLogisticas] = useState<string>('')
   const [valorTotal, setValorTotal] = useState('')
-  const [status, setStatus] = useState<'Ativo' | 'Encerrado' | 'Pendente'>('Ativo')
+  const [status, setStatus] = useState<'Ativo' | 'Encerrado' | 'Cancelado' | 'Pendente'>('Ativo')
 
   // Vínculos N:N Escolas e Rotas da Planilha no diálogo
   const [contractSchoolsForm, setContractSchoolsForm] = useState<ContractSchoolForm[]>([])
@@ -439,6 +440,32 @@ export default function Contracts() {
     }
   }
 
+  // Helper para verificar se a escola já está vinculada a outro contrato ativo
+  const checkEscolaConflitoAtivo = (schoolId: string) => {
+    const currentContractId = editingContract?.id
+    const linkConflito = contractSchools.find(
+      (cs) =>
+        cs.escola_id === schoolId &&
+        (!currentContractId || cs.contrato_id !== currentContractId) &&
+        !cs.encerrado_em,
+    )
+
+    if (!linkConflito) {
+      return { conflito: false, contratoNome: '', contratoObj: null }
+    }
+
+    const contratoObj = contracts.find(
+      (c) => c.id === linkConflito.contrato_id && c.status === 'Ativo',
+    )
+
+    if (!contratoObj) {
+      return { conflito: false, contratoNome: '', contratoObj: null }
+    }
+
+    const contratoNome = contratoObj.numero || 'Ativo'
+    return { conflito: true, contratoNome, contratoObj }
+  }
+
   // Adicionar e remover escolas do contrato (sem preenchimento automático de rota — operador escolhe explicitamente)
   const handleToggleSchool = (schoolId: string) => {
     setContractSchoolsForm((prev) => {
@@ -446,6 +473,21 @@ export default function Contracts() {
       if (exists) {
         return prev.filter((s) => s.escolaId !== schoolId)
       } else {
+        const conflitoInfo = checkEscolaConflitoAtivo(schoolId)
+        if (conflitoInfo.conflito) {
+          toast.error(
+            `Escola já vinculada ao contrato ${conflitoInfo.contratoNome} — desvincule-a lá antes de vincular aqui`,
+            conflitoInfo.contratoObj
+              ? {
+                  action: {
+                    label: 'Abrir contrato',
+                    onClick: () => handleOpenEdit(conflitoInfo.contratoObj!),
+                  },
+                }
+              : undefined,
+          )
+          return prev
+        }
         return [...prev, { escolaId: schoolId, rotaId: '' }]
       }
     })
@@ -456,6 +498,23 @@ export default function Contracts() {
       toast.info('Esta escola já está vinculada ao contrato.')
       return
     }
+
+    const conflitoInfo = checkEscolaConflitoAtivo(schoolId)
+    if (conflitoInfo.conflito) {
+      toast.error(
+        `Escola já vinculada ao contrato ${conflitoInfo.contratoNome} — desvincule-a lá antes de vincular aqui`,
+        conflitoInfo.contratoObj
+          ? {
+              action: {
+                label: 'Abrir contrato',
+                onClick: () => handleOpenEdit(conflitoInfo.contratoObj!),
+              },
+            }
+          : undefined,
+      )
+      return
+    }
+
     setContractSchoolsForm((prev) => [...prev, { escolaId: schoolId, rotaId: '' }])
     toast.success('Escola vinculada ao contrato!')
   }
@@ -490,6 +549,24 @@ export default function Contracts() {
       if (existing) {
         // REUTILIZAR a escola existente
         targetSchoolId = existing.id
+
+        // Verificar conflito de contrato ativo antes de vincular escola existente
+        const conflitoInfo = checkEscolaConflitoAtivo(targetSchoolId)
+        if (conflitoInfo.conflito) {
+          toast.error(
+            `Escola já vinculada ao contrato ${conflitoInfo.contratoNome} — desvincule-a lá antes de vincular aqui`,
+            conflitoInfo.contratoObj
+              ? {
+                  action: {
+                    label: 'Abrir contrato',
+                    onClick: () => handleOpenEdit(conflitoInfo.contratoObj!),
+                  },
+                }
+              : undefined,
+          )
+          return
+        }
+
         toast.info(
           `A escola "${existing.name}" já existia no cadastro mestre e foi reutilizada (sem duplicar).`,
         )
@@ -1187,7 +1264,9 @@ export default function Contracts() {
                     <Label htmlFor="c-status">Status</Label>
                     <Select
                       value={status}
-                      onValueChange={(v) => setStatus(v as 'Ativo' | 'Encerrado' | 'Pendente')}
+                      onValueChange={(v) =>
+                        setStatus(v as 'Ativo' | 'Encerrado' | 'Cancelado' | 'Pendente')
+                      }
                     >
                       <SelectTrigger id="c-status">
                         <SelectValue />
