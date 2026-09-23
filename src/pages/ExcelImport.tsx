@@ -96,9 +96,9 @@ export default function ExcelImport() {
   } = useApp()
   const { user } = useAuth()
 
-  // Filtrar contratos com modalidade centralizada
+  // Filtrar contratos ATIVOS com modalidade centralizada
   const centralContracts = useMemo(
-    () => contracts.filter((c) => c.modalidade_pedido === 'centralizado'),
+    () => contracts.filter((c) => c.status === 'Ativo' && c.modalidade_pedido === 'centralizado'),
     [contracts],
   )
 

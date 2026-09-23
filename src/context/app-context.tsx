@@ -459,6 +459,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
           totalValue,
           balance,
           status: c.status,
+          encerrado_em: c.encerrado_em,
+          motivo_cancelamento: c.motivo_cancelamento,
           escolas: linkedSchools,
         }
       })
@@ -975,6 +977,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
             totalValue,
             balance,
             status: c.status,
+            encerrado_em: c.encerrado_em,
+            motivo_cancelamento: c.motivo_cancelamento,
             escolas: linkedSchools,
           }
         })
