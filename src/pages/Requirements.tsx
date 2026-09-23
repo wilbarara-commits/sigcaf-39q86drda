@@ -101,6 +101,8 @@ const MODULES: ModuleSpec[] = [
     route: '/importacao',
     goal: 'Carga de pedidos em contratos centralizados via planilha .xlsx da Secretaria de Educação.',
     details: [
+      'Regra de Provisionamento e Integridade dos Vínculos: O importador de pedidos NUNCA cria vínculo em contrato_escolas de forma automática. O vínculo nasce exclusivamente no modal de contrato pela cadeia oficial de provisionamento: importador de escolas → cadastro mestre global → modal de contrato → importador de pedidos.',
+      'Tratamento de Escolas Fora do Vínculo como Pendências: Escolas presentes na planilha que não possuem vínculo ativo com o contrato selecionado não são importadas automaticamente; viram pendências que exigem ação e confirmação humana ("Vincular ao contrato" pré-preenchida confirmada no modal de contrato, ou "Cadastrar escola").',
       'Matching de Produtos em Cascata (Dois Níveis): A identificação do produto na planilha da secretaria prioriza em 1º lugar os itens vinculados ao contrato (nome_contrato e apelidos/AKAs do contrato, tolerante a ruídos, pontuação e sufixos); em 2º lugar recorre ao catálogo mestre global (apenas pelo nome oficial do produto). Se não houver correspondência em nenhum dos níveis, o item é tratado como pendência bloqueante no preview da importação.',
       'Matching contra o Cadastro Mestre Global de Escolas: A identificação das colunas é feita contra o diretório global de escolas (e não somente contra os vínculos prévios do contrato).',
       'Fluxo de Pendências Inteligente: Se a escola existe no cadastro mestre mas não está vinculada ao contrato atual, exibe a pendência "Vincular ao contrato" com rota e vínculo pré-preenchidos para confirmação com 1 clique. Se não existe no cadastro mestre, exibe a pendência "Cadastrar escola" (o importador continua sem criar registros automaticamente na surdina).',
@@ -171,12 +173,14 @@ const MODULES: ModuleSpec[] = [
     id: '3.11',
     title: 'Formulário de Pedido da Escola (R24)',
     route: '/formulario/:token',
-    goal: 'Canal público e autônomo (sem login) para que as escolas enviem seus pedidos semanais diretamente pelo celular ou computador.',
+    goal: 'Canal público e seguro para escolas enviarem suas quantidades diretamente à cooperativa sem login.',
     details: [
-      'Link único por escola/ciclo via token (sem login): Gerado no Hub de Comunicação e embutido no template do WhatsApp (com substituição automática do placeholder "[Link do Formulário]"). O token único reside na collection tokens_formulario, atuando como credencial segura que renova a cada ciclo semanal e expira após o ciclo (token inativo ou expirado bloqueia o acesso com aviso claro).',
-      'Cabeçalho Contextualizado: Exibe nome oficial da escola, número do contrato, ciclo ativo (nº e período de quarta a terça) e data de previsão de entrega (segunda-feira do despacho).',
-      'Formulário com produtos do contrato: Lista os produtos cadastrados no contrato da escola (contrato_itens), com destaque para nome_contrato/apelidos reconhecidos pela instituição e nome mestre do catálogo atenuado quando diferente.',
-      'Indicação de disponibilidade por produto (4 níveis): Badges visuais de Normal, Abundante, Escassez e Indisponível em cada item do formulário.',
+      'Canal Exclusivo para Contratos Individualizados: O formulário é o canal de pedidos dos contratos INDIVIDUALIZADOS. O token do formulário é gerado SEMPRE sobre um vínculo da escola com contrato individualizado. NUNCA é gerado token de formulário para contratos centralizados (pedidos centralizados chegam exclusivamente pela importação da planilha da secretaria).',
+      'Escolas em Múltiplos Contratos Individualizados: Se a escola participar de mais de um contrato individualizado no mesmo ciclo, o sistema gera UM token por escola × contrato individualizado × ciclo. No Hub de Comunicação, os links são listados e gerados por contrato, identificando o contrato na mensagem do WhatsApp.',
+      'Formulário com o Contrato e Produtos Certos: A página pública /formulario/:token exibe com precisão o nome/número do contrato do token e SOMENTE os produtos (contrato_itens) DELE — nunca de outro contrato em que a escola participe.',
+      'Link único por escola × contrato × ciclo via token (sem login): Gerado no Hub de Comunicação e embutido no template do WhatsApp (com substituição automática do placeholder "[Link do Formulário]"). O token único reside na collection tokens_formulario, atuando como credencial segura que renova a cada ciclo semanal e expira após o ciclo (token inativo ou expirado bloqueia o acesso com aviso claro).',
+      'Acesso seguro por token público: Validação automática do token ao carregar a página; tokens inválidos exibem mensagem explicativa e impedem submissão.',
+      'Formulário com produtos do contrato: Lista os produtos cadastrados no contrato da escola (contrato_itens), com destaque para nome_contrato/apelidos reconhecidos pela instituição e nome mestre do catálogo atenuado quando diferente.',      'Indicação de disponibilidade por produto (4 níveis): Badges visuais de Normal, Abundante, Escassez e Indisponível em cada item do formulário.',
       'Bloqueio de pedido de produto em escassez ou indisponível: Campos de quantidade estritamente desabilitados/bloqueados para produtos com disponibilidade em escassez ou indisponível; esses itens não podem ser pedidos e não contam na validação.',
       'Caso extremo protegido: Se todos os produtos do contrato estiverem bloqueados por escassez ou indisponibilidade, a página exibe aviso de indisponibilidade geral ("Nenhum produto disponível para pedido neste ciclo — entre em contato com a cooperativa") e o envio fica completamente bloqueado.',
       'Validação ao vivo: O formulário é inválido apenas se vazio (ou com todas as quantidades zeradas). Sem regra de compensação de escassez (a correção é negociada diretamente com a cooperativa fora do formulário). Campos aceitam decimais com vírgula para produtos pesados.',
@@ -268,6 +272,8 @@ const MODULES: ModuleSpec[] = [
     route: '/formulario/:token',
     goal: 'Regras de negócio aprofundadas do formulário de pedidos da escola (R24), detalhamento das janelas de submissão por fase e protocolo oficial.',
     details: [
+      'Exclusividade de Modalidade Individualizada: O token do formulário é gerado estritamente para contratos com modalidade individualizada. Pedidos centralizados são recebidos por planilha.',
+      'Token por Escola × Contrato Individualizado × Ciclo: Uma escola em múltiplos contratos individualizados recebe um link e token específico para cada contrato ativo no ciclo.',
       'Identificador R24 no DRS: Mapeamento da especificação R24 para a página pública /formulario/:token com credencial segura via tokens_formulario (sem login).',
       'Janela do Primeiro Envio: Para escolas que ainda não registraram pedido com origem "formulario" no ciclo selecionado, o envio é aceito estritamente na fase "Coletando". Em "Correção" ou "Coleta Encerrada", o formulário apresenta alerta de prazo encerrado e não permite primeiro envio forçado.',
       'Janela de Reenvios: Escolas com submissão prévia no ciclo têm autorização para reenviar pedidos em "Coletando", "Correção" e "Coleta Encerrada" (até o fechamento da coleta). O formulário realiza o pré-carregamento dos itens do último pedido válido para facilitar ajustes.',
@@ -590,10 +596,884 @@ function Table({ headers, rows }: { headers?: string[]; rows: string[][] }) {
   )
 }
 
+export function Requirements() {
+=======
+    <div ref={topRef} className="max-w-4xl mx-auto space-y-8 pb-16">
+=======
+export function Requirements() {
+=======
+  return (
+    <div ref={topRef} className="max-w-4xl mx-auto space-y-8 pb-16">
+=======
+    <div ref={topRef} className="max-w-4xl mx-auto space-y-8 pb-16">
+=======
+export function Requirements() {
+=======
+    <div ref={topRef} className="max-w-4xl mx-auto space-y-8 pb-16">
+=======
+export function Requirements() {
+  const topRef = useRef<HTMLDivElement>(null)
+
+  return (
+    <div ref={topRef} className="max-w-4xl mx-auto space-y-8 pb-16">
+=======
+export function Requirements() {
+=======
+    <div ref={topRef} className="max-w-4xl mx-auto space-y-8 pb-16">
+=======
 /* ----------------------------------------------------------------------------
  * Page
  * ------------------------------------------------------------------------- */
 
+export function Requirements() {
+  const topRef = useRef<HTMLDivElement>(null)
+
+  return (
+    <div ref={topRef} className="max-w-4xl mx-auto space-y-8 pb-16">
+=======
+export function Requirements() {
+=======
+export function Requirements() {
+  const topRef = useRef<HTMLDivElement>(null)
+=======
+export function Requirements() {
+=======
+    <div ref={topRef} className="max-w-4xl mx-auto space-y-8 pb-16">
+=======
+export function Requirements() {
+=======
+  return (
+    <div ref={topRef} className="max-w-4xl mx-auto space-y-8 pb-16">
+=======
+    <div ref={topRef} className="max-w-4xl mx-auto space-y-8 pb-16">
+=======
+export function Requirements() {
+=======
+    <div ref={topRef} className="max-w-4xl mx-auto space-y-8 pb-16">
+=======
+export function Requirements() {
+  const topRef = useRef<HTMLDivElement>(null)
+
+  return (
+    <div ref={topRef} className="max-w-4xl mx-auto space-y-8 pb-16">
+=======
+export function Requirements() {
+=======
+export function Requirements() {
+=======
+export function Requirements() {
+  const topRef = useRef<HTMLDivElement>(null)
+=======
+export function Requirements() {
+=======
+    <div ref={topRef} className="max-w-4xl mx-auto space-y-8 pb-16">
+=======
+export function Requirements() {
+=======
+  return (
+    <div ref={topRef} className="max-w-4xl mx-auto space-y-8 pb-16">
+=======
+    <div ref={topRef} className="max-w-4xl mx-auto space-y-8 pb-16">
+=======
+export function Requirements() {
+=======
+export function Requirements() {
+  const topRef = useRef<HTMLDivElement>(null)
+=======
+export function Requirements() {
+=======
+export function Requirements() {
+=======
+export function Requirements() {
+=======
+export function Requirements() {
+  const topRef = useRef<HTMLDivElement>(null)
+=======
+export function Requirements() {
+=======
+export function Requirements() {
+=======
+export function Requirements() {
+  const topRef = useRef<HTMLDivElement>(null)
+=======
+export function Requirements() {
+=======
+export function Requirements() {
+=======
+export function Requirements() {
+const topRef = useRef<HTMLDivElement>(null)
+=======
+ * Page
+ * ------------------------------------------------------------------------- */
+
+export function Requirements() {
+const topRef = useRef<HTMLDivElement>(null)=======
+export function Requirements() {
+=======
+export default function Requirements() {
+=======
+export function Requirements() {
+=======
+export default function Requirements() {
+  const topRef = useRef<HTMLDivElement>(null)
+=======
+/* ----------------------------------------------------------------------------
+ * Page
+ * ------------------------------------------------------------------------- */
+
+export function Requirements() {
+  const topRef = useRef<HTMLDivElement>(null)
+=======
+export default function Requirements() {
+const topRef = useRef<HTMLDivElement>(null)
+=======
+export function Requirements() {
+=======
+export default function Requirements() {
+  const topRef = useRef<HTMLDivElement>(null)
+=======
+ * Page
+ * ------------------------------------------------------------------------- */
+
+export function Requirements() {
+  const topRef = useRef<HTMLDivElement>(null)
+=======
+/* ----------------------------------------------------------------------------
+ * Page
+ * ------------------------------------------------------------------------- */
+
+export function Requirements() {
+  const topRef = useRef<HTMLDivElement>(null)
+=======
+export function Requirements() {
+const topRef = useRef<HTMLDivElement>(null)
+=======
+export default function Requirements() {
+=======
+export function Requirements() {
+=======
+export default function Requirements() {
+const topRef = useRef<HTMLDivElement>(null)
+=======
+ * Page
+ * ------------------------------------------------------------------------- */
+
+export function Requirements() {
+const topRef = useRef<HTMLDivElement>(null)=======
+export function Requirements() {
+=======
+export default function Requirements() {
+=======
+export function Requirements() {
+=======
+export default function Requirements() {
+  const topRef = useRef<HTMLDivElement>(null)
+=======
+/* ----------------------------------------------------------------------------
+ * Page
+ * ------------------------------------------------------------------------- */
+
+export function Requirements() {
+  const topRef = useRef<HTMLDivElement>(null)
+=======
+export default function Requirements() {
+const topRef = useRef<HTMLDivElement>(null)
+=======
+export function Requirements() {
+const topRef = useRef<HTMLDivElement>(null)
+=======
+export default function Requirements() {
+=======
+export function Requirements() {
+=======
+export default function Requirements() {
+const topRef = useRef<HTMLDivElement>(null)
+=======
+ * Page
+ * ------------------------------------------------------------------------- */
+
+export function Requirements() {
+const topRef = useRef<HTMLDivElement>(null)=======
+export function Requirements() {
+=======
+export default function Requirements() {
+  const topRef = useRef<HTMLDivElement>(null)
+=======
+export function Requirements() {
+  const topRef = useRef<HTMLDivElement>(null)
+=======
+export default function Requirements() {
+=======
+export function Requirements() {
+=======
+export function Requirements() {
+=======
+export default function Requirements() {
+  const topRef = useRef<HTMLDivElement>(null)
+=======
+export function Requirements() {
+  const topRef = useRef<HTMLDivElement>(null)
+=======
+export function Requirements() {
+  const topRef = useRef<HTMLDivElement>(null)
+=======
+export function Requirements() {
+=======
+    <div ref={topRef} className="max-w-4xl mx-auto space-y-8 pb-16">
+=======
+export function Requirements() {
+=======
+  return (
+    <div ref={topRef} className="max-w-4xl mx-auto space-y-8 pb-16">
+=======
+    <div ref={topRef} className="max-w-4xl mx-auto space-y-8 pb-16">
+=======
+export function Requirements() {
+=======
+    <div ref={topRef} className="max-w-4xl mx-auto space-y-8 pb-16">
+=======
+export function Requirements() {
+  const topRef = useRef<HTMLDivElement>(null)
+
+  return (
+    <div ref={topRef} className="max-w-4xl mx-auto space-y-8 pb-16">
+=======
+export function Requirements() {
+=======
+    <div ref={topRef} className="max-w-4xl mx-auto space-y-8 pb-16">
+=======
+/* ----------------------------------------------------------------------------
+ * Page
+ * ------------------------------------------------------------------------- */
+
+export function Requirements() {
+  const topRef = useRef<HTMLDivElement>(null)
+
+  return (
+    <div ref={topRef} className="max-w-4xl mx-auto space-y-8 pb-16">
+=======
+export function Requirements() {
+=======
+export function Requirements() {
+  const topRef = useRef<HTMLDivElement>(null)
+=======
+export function Requirements() {
+=======
+    <div ref={topRef} className="max-w-4xl mx-auto space-y-8 pb-16">
+=======
+export function Requirements() {
+=======
+  return (
+    <div ref={topRef} className="max-w-4xl mx-auto space-y-8 pb-16">
+=======
+    <div ref={topRef} className="max-w-4xl mx-auto space-y-8 pb-16">
+=======
+export function Requirements() {
+=======
+    <div ref={topRef} className="max-w-4xl mx-auto space-y-8 pb-16">
+=======
+export function Requirements() {
+  const topRef = useRef<HTMLDivElement>(null)
+
+  return (
+    <div ref={topRef} className="max-w-4xl mx-auto space-y-8 pb-16">
+=======
+export function Requirements() {
+=======
+export function Requirements() {
+=======
+export function Requirements() {
+  const topRef = useRef<HTMLDivElement>(null)
+=======
+export function Requirements() {
+=======
+    <div ref={topRef} className="max-w-4xl mx-auto space-y-8 pb-16">
+=======
+export function Requirements() {
+=======
+  return (
+    <div ref={topRef} className="max-w-4xl mx-auto space-y-8 pb-16">
+=======
+    <div ref={topRef} className="max-w-4xl mx-auto space-y-8 pb-16">
+=======
+export function Requirements() {
+=======
+export function Requirements() {
+  const topRef = useRef<HTMLDivElement>(null)
+=======
+export function Requirements() {
+=======
+export function Requirements() {
+=======
+export function Requirements() {
+=======
+export function Requirements() {
+  const topRef = useRef<HTMLDivElement>(null)
+=======
+export function Requirements() {
+=======
+export function Requirements() {
+=======
+export function Requirements() {
+  const topRef = useRef<HTMLDivElement>(null)
+=======
+export function Requirements() {
+=======
+export function Requirements() {
+=======
+export function Requirements() {
+const topRef = useRef<HTMLDivElement>(null)
+=======
+ * Page
+ * ------------------------------------------------------------------------- */
+
+export function Requirements() {
+const topRef = useRef<HTMLDivElement>(null)=======
+export function Requirements() {
+=======
+export default function Requirements() {
+=======
+export function Requirements() {
+=======
+export default function Requirements() {
+  const topRef = useRef<HTMLDivElement>(null)
+=======
+/* ----------------------------------------------------------------------------
+ * Page
+ * ------------------------------------------------------------------------- */
+
+export function Requirements() {
+  const topRef = useRef<HTMLDivElement>(null)
+=======
+export default function Requirements() {
+const topRef = useRef<HTMLDivElement>(null)
+=======
+export function Requirements() {
+=======
+export default function Requirements() {
+  const topRef = useRef<HTMLDivElement>(null)
+=======
+ * Page
+ * ------------------------------------------------------------------------- */
+
+export function Requirements() {
+  const topRef = useRef<HTMLDivElement>(null)
+=======
+/* ----------------------------------------------------------------------------
+ * Page
+ * ------------------------------------------------------------------------- */
+
+export function Requirements() {
+  const topRef = useRef<HTMLDivElement>(null)
+=======
+export function Requirements() {
+const topRef = useRef<HTMLDivElement>(null)
+=======
+export default function Requirements() {
+=======
+export function Requirements() {
+=======
+export default function Requirements() {
+const topRef = useRef<HTMLDivElement>(null)
+=======
+ * Page
+ * ------------------------------------------------------------------------- */
+
+export function Requirements() {
+const topRef = useRef<HTMLDivElement>(null)=======
+export function Requirements() {
+=======
+export default function Requirements() {
+=======
+export function Requirements() {
+=======
+export default function Requirements() {
+  const topRef = useRef<HTMLDivElement>(null)
+=======
+/* ----------------------------------------------------------------------------
+ * Page
+ * ------------------------------------------------------------------------- */
+
+export function Requirements() {
+  const topRef = useRef<HTMLDivElement>(null)
+=======
+export default function Requirements() {
+const topRef = useRef<HTMLDivElement>(null)
+=======
+export function Requirements() {
+const topRef = useRef<HTMLDivElement>(null)
+=======
+export default function Requirements() {
+=======
+export function Requirements() {
+=======
+export default function Requirements() {
+const topRef = useRef<HTMLDivElement>(null)
+=======
+ * Page
+ * ------------------------------------------------------------------------- */
+
+export function Requirements() {
+const topRef = useRef<HTMLDivElement>(null)=======
+export function Requirements() {
+=======
+export default function Requirements() {
+  const topRef = useRef<HTMLDivElement>(null)
+=======
+export function Requirements() {
+  const topRef = useRef<HTMLDivElement>(null)
+=======
+export default function Requirements() {
+=======
+export function Requirements() {
+=======
+export function Requirements() {
+=======
+export default function Requirements() {
+  const topRef = useRef<HTMLDivElement>(null)
+
+  return (
+    <div ref={topRef} className="mx-auto max-w-4xl">
+=======
+export function Requirements() {
+  const topRef = useRef<HTMLDivElement>(null)
+
+  return (
+    <div ref={topRef} className="mx-auto max-w-4xl">
+=======
+export function Requirements() {
+=======
+    <div ref={topRef} className="max-w-4xl mx-auto space-y-8 pb-16">
+=======
+export function Requirements() {
+=======
+  return (
+    <div ref={topRef} className="max-w-4xl mx-auto space-y-8 pb-16">
+=======
+    <div ref={topRef} className="max-w-4xl mx-auto space-y-8 pb-16">
+=======
+export function Requirements() {
+=======
+    <div ref={topRef} className="max-w-4xl mx-auto space-y-8 pb-16">
+=======
+export function Requirements() {
+  const topRef = useRef<HTMLDivElement>(null)
+
+  return (
+    <div ref={topRef} className="max-w-4xl mx-auto space-y-8 pb-16">
+=======
+export function Requirements() {
+=======
+    <div ref={topRef} className="max-w-4xl mx-auto space-y-8 pb-16">
+=======
+/* ----------------------------------------------------------------------------
+ * Page
+ * ------------------------------------------------------------------------- */
+
+export function Requirements() {
+  const topRef = useRef<HTMLDivElement>(null)
+
+  return (
+    <div ref={topRef} className="max-w-4xl mx-auto space-y-8 pb-16">
+=======
+export function Requirements() {
+=======
+export function Requirements() {
+  const topRef = useRef<HTMLDivElement>(null)
+=======
+export function Requirements() {
+=======
+    <div ref={topRef} className="max-w-4xl mx-auto space-y-8 pb-16">
+=======
+export function Requirements() {
+=======
+  return (
+    <div ref={topRef} className="max-w-4xl mx-auto space-y-8 pb-16">
+=======
+    <div ref={topRef} className="max-w-4xl mx-auto space-y-8 pb-16">
+=======
+export function Requirements() {
+=======
+    <div ref={topRef} className="max-w-4xl mx-auto space-y-8 pb-16">
+=======
+export function Requirements() {
+  const topRef = useRef<HTMLDivElement>(null)
+
+  return (
+    <div ref={topRef} className="max-w-4xl mx-auto space-y-8 pb-16">
+=======
+export function Requirements() {
+=======
+export function Requirements() {
+=======
+export function Requirements() {
+  const topRef = useRef<HTMLDivElement>(null)
+=======
+export function Requirements() {
+=======
+    <div ref={topRef} className="max-w-4xl mx-auto space-y-8 pb-16">
+=======
+export function Requirements() {
+=======
+  return (
+    <div ref={topRef} className="max-w-4xl mx-auto space-y-8 pb-16">
+=======
+    <div ref={topRef} className="max-w-4xl mx-auto space-y-8 pb-16">
+=======
+export function Requirements() {
+=======
+export function Requirements() {
+  const topRef = useRef<HTMLDivElement>(null)
+=======
+export function Requirements() {
+=======
+export function Requirements() {
+=======
+export function Requirements() {
+=======
+export function Requirements() {
+  const topRef = useRef<HTMLDivElement>(null)
+=======
+export function Requirements() {
+=======
+export function Requirements() {
+=======
+export function Requirements() {
+  const topRef = useRef<HTMLDivElement>(null)
+=======
+export function Requirements() {
+=======
+export function Requirements() {
+=======
+export function Requirements() {
+const topRef = useRef<HTMLDivElement>(null)
+=======
+ * Page
+ * ------------------------------------------------------------------------- */
+
+export function Requirements() {
+const topRef = useRef<HTMLDivElement>(null)=======
+export function Requirements() {
+=======
+export default function Requirements() {
+=======
+export function Requirements() {
+=======
+export default function Requirements() {
+  const topRef = useRef<HTMLDivElement>(null)
+=======
+/* ----------------------------------------------------------------------------
+ * Page
+ * ------------------------------------------------------------------------- */
+
+export function Requirements() {
+  const topRef = useRef<HTMLDivElement>(null)
+=======
+export default function Requirements() {
+const topRef = useRef<HTMLDivElement>(null)
+=======
+export function Requirements() {
+=======
+export default function Requirements() {
+  const topRef = useRef<HTMLDivElement>(null)
+=======
+ * Page
+ * ------------------------------------------------------------------------- */
+
+export function Requirements() {
+  const topRef = useRef<HTMLDivElement>(null)
+=======
+/* ----------------------------------------------------------------------------
+ * Page
+ * ------------------------------------------------------------------------- */
+
+export function Requirements() {
+  const topRef = useRef<HTMLDivElement>(null)
+=======
+export function Requirements() {
+const topRef = useRef<HTMLDivElement>(null)
+=======
+export default function Requirements() {
+=======
+export function Requirements() {
+=======
+export default function Requirements() {
+const topRef = useRef<HTMLDivElement>(null)
+=======
+ * Page
+ * ------------------------------------------------------------------------- */
+
+export function Requirements() {
+const topRef = useRef<HTMLDivElement>(null)=======
+export function Requirements() {
+=======
+export default function Requirements() {
+=======
+export function Requirements() {
+=======
+export default function Requirements() {
+  const topRef = useRef<HTMLDivElement>(null)
+=======
+/* ----------------------------------------------------------------------------
+ * Page
+ * ------------------------------------------------------------------------- */
+
+export function Requirements() {
+  const topRef = useRef<HTMLDivElement>(null)
+=======
+export default function Requirements() {
+const topRef = useRef<HTMLDivElement>(null)
+=======
+export function Requirements() {
+const topRef = useRef<HTMLDivElement>(null)
+=======
+export default function Requirements() {
+=======
+export function Requirements() {
+=======
+export default function Requirements() {
+const topRef = useRef<HTMLDivElement>(null)
+=======
+ * Page
+ * ------------------------------------------------------------------------- */
+
+export function Requirements() {
+const topRef = useRef<HTMLDivElement>(null)=======
+export function Requirements() {
+=======
+export default function Requirements() {
+  const topRef = useRef<HTMLDivElement>(null)
+=======
+export function Requirements() {
+  const topRef = useRef<HTMLDivElement>(null)
+=======
+export default function Requirements() {
+=======
+export function Requirements() {
+=======
+export function Requirements() {
+=======
+export default function Requirements() {
+  const topRef = useRef<HTMLDivElement>(null)
+=======
+export function Requirements() {
+  const topRef = useRef<HTMLDivElement>(null)
+=======
+export function Requirements() {
+  const topRef = useRef<HTMLDivElement>(null)
+=======
+export function Requirements() {
+=======
+    <div ref={topRef} className="max-w-4xl mx-auto space-y-8 pb-16">
+=======
+export function Requirements() {
+=======
+  return (
+    <div ref={topRef} className="max-w-4xl mx-auto space-y-8 pb-16">
+=======
+    <div ref={topRef} className="max-w-4xl mx-auto space-y-8 pb-16">
+=======
+export function Requirements() {
+=======
+    <div ref={topRef} className="max-w-4xl mx-auto space-y-8 pb-16">
+=======
+export function Requirements() {
+  const topRef = useRef<HTMLDivElement>(null)
+
+  return (
+    <div ref={topRef} className="max-w-4xl mx-auto space-y-8 pb-16">
+=======
+export function Requirements() {
+=======
+    <div ref={topRef} className="max-w-4xl mx-auto space-y-8 pb-16">
+=======
+/* ----------------------------------------------------------------------------
+ * Page
+ * ------------------------------------------------------------------------- */
+
+export function Requirements() {
+  const topRef = useRef<HTMLDivElement>(null)
+
+  return (
+    <div ref={topRef} className="max-w-4xl mx-auto space-y-8 pb-16">
+=======
+export function Requirements() {
+=======
+export function Requirements() {
+  const topRef = useRef<HTMLDivElement>(null)
+=======
+export function Requirements() {
+=======
+    <div ref={topRef} className="max-w-4xl mx-auto space-y-8 pb-16">
+=======
+export function Requirements() {
+=======
+  return (
+    <div ref={topRef} className="max-w-4xl mx-auto space-y-8 pb-16">
+=======
+    <div ref={topRef} className="max-w-4xl mx-auto space-y-8 pb-16">
+=======
+export function Requirements() {
+=======
+    <div ref={topRef} className="max-w-4xl mx-auto space-y-8 pb-16">
+=======
+export function Requirements() {
+  const topRef = useRef<HTMLDivElement>(null)
+
+  return (
+    <div ref={topRef} className="max-w-4xl mx-auto space-y-8 pb-16">
+=======
+export function Requirements() {
+=======
+export function Requirements() {
+=======
+export function Requirements() {
+  const topRef = useRef<HTMLDivElement>(null)
+=======
+export function Requirements() {
+=======
+    <div ref={topRef} className="max-w-4xl mx-auto space-y-8 pb-16">
+=======
+export function Requirements() {
+=======
+  return (
+    <div ref={topRef} className="max-w-4xl mx-auto space-y-8 pb-16">
+=======
+    <div ref={topRef} className="max-w-4xl mx-auto space-y-8 pb-16">
+=======
+export function Requirements() {
+=======
+export function Requirements() {
+  const topRef = useRef<HTMLDivElement>(null)
+=======
+export function Requirements() {
+=======
+export function Requirements() {
+=======
+export function Requirements() {
+=======
+export function Requirements() {
+  const topRef = useRef<HTMLDivElement>(null)
+=======
+export function Requirements() {
+=======
+export function Requirements() {
+=======
+export function Requirements() {
+  const topRef = useRef<HTMLDivElement>(null)
+=======
+export function Requirements() {
+=======
+export function Requirements() {
+=======
+export function Requirements() {
+const topRef = useRef<HTMLDivElement>(null)
+=======
+ * Page
+ * ------------------------------------------------------------------------- */
+
+export function Requirements() {
+const topRef = useRef<HTMLDivElement>(null)=======
+export function Requirements() {
+=======
+export default function Requirements() {
+=======
+export function Requirements() {
+=======
+export default function Requirements() {
+  const topRef = useRef<HTMLDivElement>(null)
+=======
+/* ----------------------------------------------------------------------------
+ * Page
+ * ------------------------------------------------------------------------- */
+
+export function Requirements() {
+  const topRef = useRef<HTMLDivElement>(null)
+=======
+export default function Requirements() {
+const topRef = useRef<HTMLDivElement>(null)
+=======
+export function Requirements() {
+=======
+export default function Requirements() {
+  const topRef = useRef<HTMLDivElement>(null)
+=======
+ * Page
+ * ------------------------------------------------------------------------- */
+
+export function Requirements() {
+  const topRef = useRef<HTMLDivElement>(null)
+=======
+/* ----------------------------------------------------------------------------
+ * Page
+ * ------------------------------------------------------------------------- */
+
+export function Requirements() {
+  const topRef = useRef<HTMLDivElement>(null)
+=======
+export function Requirements() {
+const topRef = useRef<HTMLDivElement>(null)
+=======
+export default function Requirements() {
+=======
+export function Requirements() {
+=======
+export default function Requirements() {
+const topRef = useRef<HTMLDivElement>(null)
+=======
+ * Page
+ * ------------------------------------------------------------------------- */
+
+export function Requirements() {
+const topRef = useRef<HTMLDivElement>(null)=======
+export function Requirements() {
+=======
+export default function Requirements() {
+=======
+export function Requirements() {
+=======
+export default function Requirements() {
+  const topRef = useRef<HTMLDivElement>(null)
+=======
+/* ----------------------------------------------------------------------------
+ * Page
+ * ------------------------------------------------------------------------- */
+
+export function Requirements() {
+  const topRef = useRef<HTMLDivElement>(null)
+=======
+export default function Requirements() {
+const topRef = useRef<HTMLDivElement>(null)
+=======
+export function Requirements() {
+const topRef = useRef<HTMLDivElement>(null)
+=======
+export default function Requirements() {
+=======
+export function Requirements() {
+=======
+export default function Requirements() {
+const topRef = useRef<HTMLDivElement>(null)
+=======
+ * Page
+ * ------------------------------------------------------------------------- */
+
+export function Requirements() {
+const topRef = useRef<HTMLDivElement>(null)=======
+export function Requirements() {
+=======
+export default function Requirements() {
+  const topRef = useRef<HTMLDivElement>(null)
+=======
+export function Requirements() {
+  const topRef = useRef<HTMLDivElement>(null)
+=======
+export default function Requirements() {
+=======
+export function Requirements() {
+=======
+export function Requirements() {
+=======
 export default function Requirements() {
   const topRef = useRef<HTMLDivElement>(null)
 

@@ -393,11 +393,19 @@ export default function SchoolOrderForm() {
       const seq = String(totalPedidosCiclo.totalItems + 1).padStart(4, '0')
       const protocoloCitavel = `FOR-${cicloNum}-${seq}`
 
-      // 4. Buscar rota da escola para vínculo correto
+      // 4. Buscar rota da escola para vínculo correto DO CONTRATO DESTE TOKEN
       const contractSchool = await pb
         .collection('contrato_escolas')
-        .getFirstListItem(`escola_id = "${escola.id}"`)
-        .catch(() => null)
+        .getFirstListItem(
+          `escola_id = "${escola.id}" && contrato_id = "${tokenRecord.contrato_id}"`,
+        )
+        .catch(async () => {
+          // Fallback para qualquer rota da escola se não encontrar específica do contrato
+          return await pb
+            .collection('contrato_escolas')
+            .getFirstListItem(`escola_id = "${escola.id}"`)
+            .catch(() => null)
+        })
       const rotaId = contractSchool?.rota_id || ''
 
       const dataPrevistaIso = cicloInfo

@@ -257,6 +257,7 @@ export default function Monitoring() {
       const sOrders = cicloOrders.filter((o) => o.schoolId === sch.id)
       const invalidOrder = sOrders.find((o) => o.validacao?.status === 'invalido')
       const orderFormulario = sOrders.find((o) => o.origem === 'formulario')
+      const preencheuFormulario = !!orderFormulario
       const recebeuLink = poolEnviosEscolaIds.has(sch.id)
 
       let pendenciaTipo:
@@ -270,10 +271,11 @@ export default function Monitoring() {
       if (!hasOrder) {
         if (recebeuLink) {
           pendenciaTipo = 'sem_pedido_link_enviado'
-          pendenciaDesc = 'Link enviado via WhatsApp — formulário ainda não preenchido'
+          pendenciaDesc = 'Link do formulário enviado via WhatsApp — escola ainda não preencheu'
         } else {
           pendenciaTipo = 'sem_pedido'
-          pendenciaDesc = 'Nenhum pedido enviado para este ciclo (link não disparado)'
+          pendenciaDesc =
+            'Nenhum pedido enviado para este ciclo (link ainda não enviado via WhatsApp)'
         }
       } else if (invalidOrder) {
         pendenciaTipo = 'pedido_invalido'
@@ -285,7 +287,8 @@ export default function Monitoring() {
         pendenciaTipo,
         pendenciaDesc,
         recebeuLink,
-        preencheuFormulario: !!orderFormulario,
+        preencheuFormulario,
+        origemUltimoPedido: sOrders[0]?.origem,
         order: invalidOrder || sOrders[0],
       }
     })
@@ -739,12 +742,19 @@ export default function Monitoring() {
               </CardTitle>
               <CardDescription>
                 Identificação precoce de escolas sem envio de pedidos ou com inconsistências no
-                ciclo ({selectedContratoNumero}).
+                ciclo ({selectedContratoNumero}). Distingue escolas que já receberam o link daquelas
+                que já preencheram o formulário.
               </CardDescription>
             </div>
-            <Badge variant="outline" className="text-xs font-medium">
-              {alertSchools.length} pendência(s) detectada(s)
-            </Badge>
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="text-xs font-medium">
+                {alertSchools.filter((a) => a.pendenciaTipo === 'sem_pedido_link_enviado').length}{' '}
+                link enviado / pendente preenchimento
+              </Badge>
+              <Badge variant="outline" className="text-xs font-medium">
+                {alertSchools.length} pendência(s) detectada(s)
+              </Badge>
+            </div>{' '}
           </div>
         </CardHeader>
         <CardContent>
@@ -755,7 +765,7 @@ export default function Monitoring() {
                   <TableHead>Escola</TableHead>
                   <TableHead>Rota</TableHead>
                   <TableHead>Telefone / Contato</TableHead>
-                  <TableHead>Situação / Pendência</TableHead>
+                  <TableHead>Status Comunicação / Pedido</TableHead>
                   <TableHead className="text-right">Ação Direta</TableHead>
                 </TableRow>
               </TableHeader>
@@ -791,22 +801,34 @@ export default function Monitoring() {
                         </TableCell>
                         <TableCell>
                           <div className="flex items-start gap-2 max-w-[380px]">
-                            {item.pendenciaTipo === 'sem_pedido_link_enviado' ? (
-                              <Badge className="bg-blue-600 hover:bg-blue-700 text-white text-[10px] shrink-0 mt-0.5">
-                                Link Enviado
-                              </Badge>
-                            ) : isSemPedido ? (
-                              <Badge variant="destructive" className="text-[10px] shrink-0 mt-0.5">
-                                Sem Pedido
-                              </Badge>
-                            ) : (
-                              <Badge className="bg-amber-600 text-[10px] shrink-0 mt-0.5">
-                                Inconsistente
-                              </Badge>
-                            )}
-                            <span className="text-xs text-foreground/80 leading-tight">
-                              {item.pendenciaDesc}
-                            </span>
+                            <div className="flex flex-col gap-1">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                {item.pendenciaTipo === 'sem_pedido_link_enviado' ? (
+                                  <Badge className="bg-blue-600 hover:bg-blue-700 text-white text-[10px]">
+                                    Link Enviado (Pendente Preenchimento)
+                                  </Badge>
+                                ) : isSemPedido ? (
+                                  <Badge variant="destructive" className="text-[10px]">
+                                    Link Não Disparado (Sem Pedido)
+                                  </Badge>
+                                ) : (
+                                  <Badge className="bg-amber-600 text-[10px]">
+                                    Pedido Inconsistente
+                                  </Badge>
+                                )}
+                                {item.preencheuFormulario && (
+                                  <Badge
+                                    variant="outline"
+                                    className="text-[10px] bg-emerald-50 text-emerald-700 border-emerald-300"
+                                  >
+                                    Preencheu Formulário
+                                  </Badge>
+                                )}
+                              </div>
+                              <span className="text-xs text-foreground/80 leading-tight">
+                                {item.pendenciaDesc}
+                              </span>
+                            </div>
                           </div>
                         </TableCell>
                         <TableCell className="text-right">

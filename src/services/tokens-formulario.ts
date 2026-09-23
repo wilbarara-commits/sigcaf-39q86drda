@@ -3,12 +3,38 @@ import type { TokenFormularioRecord } from '@/lib/types'
 
 export const tokensFormularioService = {
   /**
-   * Busca token ativo por escola e ciclo
+   * Busca token ativo por escola, contrato e ciclo
+   */
+  async getByEscolaContratoECiclo(
+    escolaId: string,
+    contratoId: string,
+    cicloId: string,
+  ): Promise<TokenFormularioRecord | null> {
+    try {
+      const records = await pb
+        .collection('tokens_formulario')
+        .getList<TokenFormularioRecord>(1, 1, {
+          filter: `escola_id = "${escolaId}" && contrato_id = "${contratoId}" && ciclo_id = "${cicloId}"`,
+          sort: '-created',
+        })
+      return records.items[0] || null
+    } catch (err) {
+      console.error('Erro ao buscar token_formulario por escola, contrato e ciclo:', err)
+      return null
+    }
+  },
+
+  /**
+   * Busca token ativo por escola e ciclo (mantido por retrocompatibilidade)
    */
   async getByEscolaECiclo(
     escolaId: string,
     cicloId: string,
+    contratoId?: string,
   ): Promise<TokenFormularioRecord | null> {
+    if (contratoId) {
+      return this.getByEscolaContratoECiclo(escolaId, contratoId, cicloId)
+    }
     try {
       const records = await pb
         .collection('tokens_formulario')
@@ -41,8 +67,9 @@ export const tokensFormularioService = {
   },
 
   /**
-   * Gera ou retorna o token único da escola para o ciclo informado.
+   * Gera ou retorna o token único da escola para o contrato individualizado e ciclo informado.
    * Expira no fim do ciclo (data_fim).
+   * REGRA OBRIGATÓRIA: o token só deve ser gerado para contratos individualizados.
    */
   async getOrCreateToken(
     escolaId: string,
@@ -50,7 +77,7 @@ export const tokensFormularioService = {
     cicloId: string,
     expiraEm?: string,
   ): Promise<TokenFormularioRecord> {
-    const existing = await this.getByEscolaECiclo(escolaId, cicloId)
+    const existing = await this.getByEscolaContratoECiclo(escolaId, contratoId, cicloId)
     if (existing) {
       return existing
     }
