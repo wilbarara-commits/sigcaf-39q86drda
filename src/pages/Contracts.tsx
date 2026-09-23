@@ -814,7 +814,7 @@ export default function Contracts() {
         }
 
         // 3. Sincronizar itens, preços, quantidades contratadas, nome_contrato e apelidos acordados
-        const validItems = contractItems.filter((i) => i.productId && i.price > 0)
+        const validItems = contractItems.filter((i) => i.productId && Number(i.price) >= 0)
         await contratosService.syncItems(
           contractId,
           validItems.map((it) => ({

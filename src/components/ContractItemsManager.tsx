@@ -130,6 +130,7 @@ export function ContractItemsManager({
   const [newProductName, setNewProductName] = useState('')
   const [newProductUnit, setNewProductUnit] = useState(DEFAULT_PRODUCT_UNIT)
   const [newProductDisp, setNewProductDisp] = useState<DisponibilidadeProduto>('normal')
+  const [newProductInitialPrice, setNewProductInitialPrice] = useState<number | string>('')
 
   // Confirmação de exclusão individual
   const [itemToDeleteIndex, setItemToDeleteIndex] = useState<number | null>(null)
@@ -496,7 +497,7 @@ export function ContractItemsManager({
 
     setIsParsingFile(true)
     try {
-      const res = await parseContractItemsFile(file, catalogProducts)
+      const res = await parseContractItemsFile(file, catalogProducts, items)
       setFileParseResult(res)
     } catch (err: any) {
       console.error('Erro ao processar arquivo:', err)
@@ -520,6 +521,7 @@ export function ContractItemsManager({
     setNewProductName(row.rawProduct || '')
     setNewProductUnit(row.rawUnidade || DEFAULT_PRODUCT_UNIT)
     setNewProductDisp('normal')
+    setNewProductInitialPrice(row.price !== undefined && row.price !== null ? row.price : '')
     setResolveModalOpen(true)
   }
 
@@ -610,7 +612,13 @@ export function ContractItemsManager({
       }
 
       // Atualiza a linha no resultado da planilha
-      const finalPrice = resolvingRow.price > 0 ? resolvingRow.price : linkedProduct.price || 0
+      // Garante price definido, usando o preço da planilha quando existir, senão catálogo, senão 0
+      const finalPrice =
+        resolvingRow.price !== undefined &&
+        resolvingRow.price !== null &&
+        !isNaN(resolvingRow.price)
+          ? resolvingRow.price
+          : linkedProduct.price || 0
       const subtotal = finalPrice * resolvingRow.quantity
 
       const updatedAllRows = fileParseResult.allRows.map((r) => {
@@ -665,10 +673,16 @@ export function ContractItemsManager({
 
       setIsSubmittingImport(true)
       try {
+        const parsedInitialPrice =
+          typeof newProductInitialPrice === 'number'
+            ? newProductInitialPrice
+            : parseBRLNumber(newProductInitialPrice).value || 0
+
         const createdRecord = await produtosService.create({
           nome: trimmedNome,
           unidade: newProductUnit.trim() || DEFAULT_PRODUCT_UNIT,
           disponibilidade: newProductDisp,
+          preco_unitario: parsedInitialPrice >= 0 ? parsedInitialPrice : 0,
         })
 
         // Converte para Product do UI model
@@ -682,7 +696,16 @@ export function ContractItemsManager({
         }
 
         // Atualiza a linha com o novo produto criado
-        const finalPrice = resolvingRow.price
+        // Garante que o item fique com price definido (usar o preço da planilha quando existir)
+        const finalPrice =
+          resolvingRow.price !== undefined &&
+          resolvingRow.price !== null &&
+          !isNaN(resolvingRow.price) &&
+          resolvingRow.price > 0
+            ? resolvingRow.price
+            : parsedInitialPrice >= 0
+              ? parsedInitialPrice
+              : 0
         const subtotal = finalPrice * resolvingRow.quantity
 
         const updatedAllRows = fileParseResult.allRows.map((r) => {
@@ -2028,7 +2051,7 @@ export function ContractItemsManager({
                     />
                   </div>
 
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                     <div className="space-y-1.5">
                       <Label htmlFor="new-product-unit" className="text-xs font-semibold">
                         Unidade de Medida
@@ -2043,7 +2066,23 @@ export function ContractItemsManager({
                     </div>
 
                     <div className="space-y-1.5">
-                      <Label className="text-xs font-semibold">Disponibilidade Padrão</Label>
+                      <Label htmlFor="new-product-price" className="text-xs font-semibold">
+                        Preço Unitário Inicial (R$)
+                      </Label>
+                      <Input
+                        id="new-product-price"
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={newProductInitialPrice}
+                        onChange={(e) => setNewProductInitialPrice(e.target.value)}
+                        placeholder="0.00"
+                        className="h-8 text-xs font-mono"
+                      />
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-semibold">Disponibilidade</Label>
                       <select
                         value={newProductDisp}
                         onChange={(e) =>

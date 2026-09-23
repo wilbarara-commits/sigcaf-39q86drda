@@ -3,6 +3,12 @@ import type { Product } from '@/lib/types'
 import { normalizeName } from '@/lib/excelImporter'
 import { parseCsvTextToMatrix } from '@/lib/schoolCsvImporter'
 
+export interface ExistingContractItemRef {
+  productId: string
+  nomeContrato?: string
+  apelidos?: string
+}
+
 export interface ParsedContractItemRow {
   index: number
   rawProduct: string
@@ -175,6 +181,7 @@ function findContractItemColumnIndexes(headerRow: string[]): {
 export async function parseContractItemsFile(
   file: File,
   catalogProducts: Product[],
+  existingContractItems?: ExistingContractItemRef[],
 ): Promise<ContractItemsFileParseResult> {
   let rawMatrix: string[][] = []
 
@@ -292,33 +299,86 @@ export async function parseContractItemsFile(
       }
     }
 
-    const matchDetail = matchCatalogProductDetailed(rawProduct, catalogProducts)
-    const matchedProduct = matchDetail.product
+    const normRaw = normalizeName(rawProduct)
 
+    // PASSO 0: se o nome bruto da linha coincidir com nomeContrato ou algum apelido
+    // (lista separada por vírgula) de um item existente do contrato, associe diretamente ao produto desse item
+    let matchedProduct: Product | undefined
+    let matchedViaAlias: string | undefined
+    let matchedNomeContrato: string | undefined
+    let matchedApelidos: string | undefined
+
+    if (existingContractItems && existingContractItems.length > 0 && normRaw) {
+      for (const itemRef of existingContractItems) {
+        if (!itemRef.productId) continue
+        const prod = catalogProducts.find((p) => p.id === itemRef.productId)
+        if (!prod) continue
+
+        // Testa nomeContrato
+        if (itemRef.nomeContrato) {
+          const normNomeContrato = normalizeName(itemRef.nomeContrato)
+          if (normNomeContrato && normNomeContrato === normRaw) {
+            matchedProduct = prod
+            matchedViaAlias = itemRef.nomeContrato
+            matchedNomeContrato = itemRef.nomeContrato
+            matchedApelidos = itemRef.apelidos
+            break
+          }
+        }
+
+        // Testa apelidos (lista separada por vírgula)
+        if (itemRef.apelidos) {
+          const aliases = itemRef.apelidos
+            .split(',')
+            .map((a) => a.trim())
+            .filter(Boolean)
+          let foundAliasMatch = false
+          for (const alias of aliases) {
+            if (normalizeName(alias) === normRaw) {
+              matchedProduct = prod
+              matchedViaAlias = alias
+              matchedNomeContrato = itemRef.nomeContrato || rawProduct
+              matchedApelidos = itemRef.apelidos
+              foundAliasMatch = true
+              break
+            }
+          }
+          if (foundAliasMatch) break
+        }
+      }
+    }
+
+    // Só se não casar em nenhum item do contrato, siga para o matching atual contra o catálogo mestre
     if (!matchedProduct) {
-      status = 'warning'
-      statusReason = matchDetail.isAmbiguous
-        ? `Nome ambíguo: "${rawProduct}" coincide com o apelido de ${matchDetail.candidateCount} produtos diferentes`
-        : `Produto sem correspondência na tabela de produtos cadastrados`
-      unmatchedCount++
-      const subtotal = parsedPriceVal * parsedQuantityVal
-      allRows.push({
-        index: (hasHeader ? 2 : 1) + rowIdx,
-        rawProduct,
-        rawPrice,
-        rawQuantity,
-        rawUnidade,
-        nomeContrato: rawProduct,
-        apelidos: rawProduct,
-        price: parsedPriceVal,
-        quantity: parsedQuantityVal,
-        subtotal,
-        status,
-        statusReason,
-        warnings,
-        isUnmatched: true,
-      })
-      return
+      const matchDetail = matchCatalogProductDetailed(rawProduct, catalogProducts)
+      matchedProduct = matchDetail.product
+      matchedViaAlias = matchDetail.matchedViaAlias
+
+      if (!matchedProduct) {
+        status = 'warning'
+        statusReason = matchDetail.isAmbiguous
+          ? `Nome ambíguo: "${rawProduct}" coincide com o apelido de ${matchDetail.candidateCount} produtos diferentes`
+          : `Produto sem correspondência na tabela de produtos cadastrados`
+        unmatchedCount++
+        const subtotal = parsedPriceVal * parsedQuantityVal
+        allRows.push({
+          index: (hasHeader ? 2 : 1) + rowIdx,
+          rawProduct,
+          rawPrice,
+          rawQuantity,
+          rawUnidade,
+          nomeContrato: rawProduct,
+          apelidos: rawProduct,
+          price: parsedPriceVal,
+          quantity: parsedQuantityVal,
+          subtotal,
+          status,
+          statusReason,
+          warnings,
+          isUnmatched: true,
+        })
+        return
+      }
     }
 
     // Preço
@@ -343,10 +403,10 @@ export async function parseContractItemsFile(
       rawPrice,
       rawQuantity,
       rawUnidade,
-      nomeContrato: rawProduct,
-      apelidos: rawProduct !== matchedProduct.name ? rawProduct : '',
+      nomeContrato: matchedNomeContrato || rawProduct,
+      apelidos: matchedApelidos || (rawProduct !== matchedProduct.name ? rawProduct : ''),
       product: matchedProduct,
-      matchedViaAlias: matchDetail.matchedViaAlias,
+      matchedViaAlias,
       price: finalPrice,
       quantity: parsedQuantityVal,
       subtotal,
