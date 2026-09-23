@@ -1,5 +1,5 @@
 import { useState, useMemo, useRef } from 'react'
-import type { Product } from '@/lib/types'
+import type { Product, DisponibilidadeProduto } from '@/lib/types'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
@@ -31,6 +31,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { Textarea } from '@/components/ui/textarea'
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import {
   Search,
   Plus,
@@ -47,6 +48,11 @@ import {
   Download,
   AlertTriangle,
   Info,
+  Link as LinkIcon,
+  PlusCircle,
+  EyeOff,
+  CheckCircle2,
+  Loader2,
 } from 'lucide-react'
 import { normalizeName } from '@/lib/excelImporter'
 import {
@@ -57,6 +63,9 @@ import {
   type ContractItemsFileParseResult,
   type ParsedContractItemRow,
 } from '@/lib/contractItemsImporter'
+import { produtosService } from '@/services/produtos'
+import { DEFAULT_PRODUCT_UNIT } from '@/lib/productCsvImporter'
+import { useApp } from '@/context/app-context'
 import { toast } from 'sonner'
 import * as XLSX from 'xlsx'
 
@@ -102,14 +111,41 @@ export function ContractItemsManager({
     unmatched: string[]
   } | null>(null)
 
+  const { refreshData } = useApp()
+
   // Modal de Importação de Arquivo (CSV / XLSX)
   const [fileModalOpen, setFileModalOpen] = useState(false)
   const [fileParseResult, setFileParseResult] = useState<ContractItemsFileParseResult | null>(null)
   const [isParsingFile, setIsParsingFile] = useState(false)
+  const [isSubmittingImport, setIsSubmittingImport] = useState(false)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
+
+  // Modal de Resolução de Linha Sem Correspondência (Definir AKA)
+  const [resolveModalOpen, setResolveModalOpen] = useState(false)
+  const [resolvingRow, setResolvingRow] = useState<ParsedContractItemRow | null>(null)
+  const [resolutionMode, setResolutionMode] = useState<'link' | 'create'>('link')
+  const [selectedLinkProductId, setSelectedLinkProductId] = useState<string>('')
+  const [linkSearchTerm, setLinkSearchTerm] = useState('')
+  const [akaValue, setAkaValue] = useState('')
+  const [newProductName, setNewProductName] = useState('')
+  const [newProductUnit, setNewProductUnit] = useState(DEFAULT_PRODUCT_UNIT)
+  const [newProductDisp, setNewProductDisp] = useState<DisponibilidadeProduto>('normal')
 
   // Confirmação de exclusão individual
   const [itemToDeleteIndex, setItemToDeleteIndex] = useState<number | null>(null)
+
+  // Lista filtrada para o modal de resolução (busca de produto para vincular)
+  const filteredLinkProducts = useMemo(() => {
+    if (!catalogProducts) return []
+    const term = normalizeName(linkSearchTerm.trim())
+    if (!term) return catalogProducts.slice(0, 50)
+    return catalogProducts
+      .filter((p) => {
+        const norm = normalizeName(p.name)
+        return norm.includes(term)
+      })
+      .slice(0, 50)
+  }, [catalogProducts, linkSearchTerm])
 
   // Map rápido de produtos do catálogo por ID
   const productById = useMemo(() => {
@@ -474,8 +510,248 @@ export function ContractItemsManager({
     }
   }
 
+  // Abertura do Modal de Resolução de AKA para uma linha sem correspondência
+  const handleOpenResolveAka = (row: ParsedContractItemRow) => {
+    setResolvingRow(row)
+    setResolutionMode('link')
+    setSelectedLinkProductId('')
+    setLinkSearchTerm('')
+    setAkaValue(row.rawProduct || '')
+    setNewProductName(row.rawProduct || '')
+    setNewProductUnit(row.rawUnidade || DEFAULT_PRODUCT_UNIT)
+    setNewProductDisp('normal')
+    setResolveModalOpen(true)
+  }
+
+  // Ação de ignorar linha explicitamente
+  const handleIgnoreRow = (rowIndex: number) => {
+    if (!fileParseResult) return
+
+    const updatedAllRows = fileParseResult.allRows.map((r) => {
+      if (r.index !== rowIndex) return r
+      return {
+        ...r,
+        status: 'ignored' as const,
+        statusReason: 'Linha ignorada pelo usuário',
+      }
+    })
+
+    const validRows = updatedAllRows.filter((r) => r.status === 'valid' || r.status === 'warning')
+    const totalCalculado = validRows.reduce((acc, r) => acc + r.subtotal, 0)
+    const remainingUnmatched = updatedAllRows.filter(
+      (r) => r.isUnmatched && r.status !== 'valid' && r.status !== 'ignored',
+    ).length
+    const remainingErrors = updatedAllRows.filter(
+      (r) =>
+        (r.status === 'error' || (r.isUnmatched && r.status !== 'valid')) && r.status !== 'ignored',
+    ).length
+
+    setFileParseResult({
+      ...fileParseResult,
+      allRows: updatedAllRows,
+      validRows,
+      totalCalculado,
+      unmatchedCount: remainingUnmatched,
+      errorCount: remainingErrors,
+    })
+
+    toast.info('Linha ignorada da importação.')
+  }
+
+  // Restaurar linha ignorada
+  const handleRestoreRow = (rowIndex: number) => {
+    if (!fileParseResult) return
+
+    const updatedAllRows = fileParseResult.allRows.map((r) => {
+      if (r.index !== rowIndex) return r
+      return {
+        ...r,
+        status: 'warning' as const,
+        statusReason: 'Produto sem correspondência na tabela de produtos cadastrados',
+      }
+    })
+
+    const validRows = updatedAllRows.filter((r) => r.status === 'valid' || r.status === 'warning')
+    const totalCalculado = validRows.reduce((acc, r) => acc + r.subtotal, 0)
+    const remainingUnmatched = updatedAllRows.filter(
+      (r) => r.isUnmatched && r.status !== 'valid' && r.status !== 'ignored',
+    ).length
+    const remainingErrors = updatedAllRows.filter(
+      (r) =>
+        (r.status === 'error' || (r.isUnmatched && r.status !== 'valid')) && r.status !== 'ignored',
+    ).length
+
+    setFileParseResult({
+      ...fileParseResult,
+      allRows: updatedAllRows,
+      validRows,
+      totalCalculado,
+      unmatchedCount: remainingUnmatched,
+      errorCount: remainingErrors,
+    })
+  }
+
+  // Confirmar Resolução de AKA (Opção A: Vincular existente / Opção B: Criar mestre)
+  const handleConfirmResolution = async () => {
+    if (!resolvingRow || !fileParseResult) return
+
+    const trimmedAka = akaValue.trim() || resolvingRow.rawProduct
+
+    if (resolutionMode === 'link') {
+      if (!selectedLinkProductId) {
+        toast.error('Selecione o produto mestre para vincular.')
+        return
+      }
+
+      const linkedProduct = productById.get(selectedLinkProductId)
+      if (!linkedProduct) {
+        toast.error('Produto selecionado não encontrado no catálogo.')
+        return
+      }
+
+      // Atualiza a linha no resultado da planilha
+      const finalPrice = resolvingRow.price > 0 ? resolvingRow.price : linkedProduct.price || 0
+      const subtotal = finalPrice * resolvingRow.quantity
+
+      const updatedAllRows = fileParseResult.allRows.map((r) => {
+        if (r.index !== resolvingRow.index) return r
+        return {
+          ...r,
+          product: linkedProduct,
+          nomeContrato: resolvingRow.rawProduct,
+          apelidos: trimmedAka,
+          price: finalPrice,
+          subtotal,
+          status: 'valid' as const,
+          statusReason: `Vinculado a "${linkedProduct.name}" com AKA "${trimmedAka}"`,
+          isUnmatched: false,
+          resolutionType: 'linked' as const,
+          warnings: [],
+        }
+      })
+
+      const validRows = updatedAllRows.filter((r) => r.status === 'valid' || r.status === 'warning')
+      const totalCalculado = validRows.reduce((acc, r) => acc + r.subtotal, 0)
+      const remainingUnmatched = updatedAllRows.filter(
+        (r) => r.isUnmatched && r.status !== 'valid' && r.status !== 'ignored',
+      ).length
+      const remainingErrors = updatedAllRows.filter(
+        (r) =>
+          (r.status === 'error' || (r.isUnmatched && r.status !== 'valid')) &&
+          r.status !== 'ignored',
+      ).length
+
+      setFileParseResult({
+        ...fileParseResult,
+        allRows: updatedAllRows,
+        validRows,
+        totalCalculado,
+        unmatchedCount: remainingUnmatched,
+        errorCount: remainingErrors,
+      })
+
+      toast.success(
+        `Item "${resolvingRow.rawProduct}" vinculado a "${linkedProduct.name}" com AKA registrado!`,
+      )
+      setResolveModalOpen(false)
+      setResolvingRow(null)
+    } else {
+      // Criação de novo produto no catálogo mestre
+      const trimmedNome = newProductName.trim()
+      if (!trimmedNome) {
+        toast.error('Informe o nome do novo produto mestre.')
+        return
+      }
+
+      setIsSubmittingImport(true)
+      try {
+        const createdRecord = await produtosService.create({
+          nome: trimmedNome,
+          unidade: newProductUnit.trim() || DEFAULT_PRODUCT_UNIT,
+          disponibilidade: newProductDisp,
+        })
+
+        // Converte para Product do UI model
+        const newProductUi: Product = {
+          id: createdRecord.id,
+          name: createdRecord.nome,
+          unit: createdRecord.unidade,
+          disponibilidade: createdRecord.disponibilidade,
+          category: createdRecord.categoria,
+          price: createdRecord.preco_unitario || 0,
+        }
+
+        // Atualiza a linha com o novo produto criado
+        const finalPrice = resolvingRow.price
+        const subtotal = finalPrice * resolvingRow.quantity
+
+        const updatedAllRows = fileParseResult.allRows.map((r) => {
+          if (r.index !== resolvingRow.index) return r
+          return {
+            ...r,
+            product: newProductUi,
+            nomeContrato: resolvingRow.rawProduct,
+            apelidos: trimmedAka,
+            price: finalPrice,
+            subtotal,
+            status: 'valid' as const,
+            statusReason: `Novo produto mestre criado: "${newProductUi.name}"`,
+            isUnmatched: false,
+            resolutionType: 'created' as const,
+            warnings: [],
+          }
+        })
+
+        const validRows = updatedAllRows.filter(
+          (r) => r.status === 'valid' || r.status === 'warning',
+        )
+        const totalCalculado = validRows.reduce((acc, r) => acc + r.subtotal, 0)
+        const remainingUnmatched = updatedAllRows.filter(
+          (r) => r.isUnmatched && r.status !== 'valid' && r.status !== 'ignored',
+        ).length
+        const remainingErrors = updatedAllRows.filter(
+          (r) =>
+            (r.status === 'error' || (r.isUnmatched && r.status !== 'valid')) &&
+            r.status !== 'ignored',
+        ).length
+
+        setFileParseResult({
+          ...fileParseResult,
+          allRows: updatedAllRows,
+          validRows,
+          totalCalculado,
+          unmatchedCount: remainingUnmatched,
+          errorCount: remainingErrors,
+        })
+
+        toast.success(
+          `Produto mestre "${newProductUi.name}" criado e associado à linha da planilha!`,
+        )
+        await refreshData()
+        setResolveModalOpen(false)
+        setResolvingRow(null)
+      } catch (err: any) {
+        console.error('Erro ao criar produto mestre:', err)
+        toast.error(err?.message || 'Falha ao criar novo produto na tabela mestre.')
+      } finally {
+        setIsSubmittingImport(false)
+      }
+    }
+  }
+
   const handleApplyFileItems = () => {
-    if (!fileParseResult || fileParseResult.validRows.length === 0) return
+    if (!fileParseResult) return
+
+    // Verifica se ainda existem pendências bloqueantes (linhas sem correspondência não resolvidas nem ignoradas)
+    const pendingUnmatched = fileParseResult.allRows.filter(
+      (r) => r.isUnmatched && r.status !== 'valid' && r.status !== 'ignored',
+    )
+    if (pendingUnmatched.length > 0) {
+      toast.warning(
+        `Existem ${pendingUnmatched.length} linha(s) sem correspondência na tabela de produtos. Defina o AKA (vincular/criar) ou opte por ignorar a linha antes de prosseguir.`,
+      )
+      return
+    }
 
     const currentMap = new Map<string, ContractItemForm>()
     for (const it of items) {
@@ -486,14 +762,25 @@ export function ContractItemsManager({
     let updatedCount = 0
 
     for (const row of fileParseResult.validRows) {
-      if (!row.product) continue
+      if (!row.product || row.status === 'ignored') continue
       const importedNomeContrato = row.nomeContrato || row.rawProduct || row.product.name
+      const importedApelido =
+        row.apelidos || (row.rawProduct !== row.product.name ? row.rawProduct : '')
+
       if (currentMap.has(row.product.id)) {
         const existing = currentMap.get(row.product.id)!
         existing.price = row.price
         existing.quantity = row.quantity
         if (importedNomeContrato) {
           existing.nomeContrato = importedNomeContrato
+        }
+        if (importedApelido) {
+          // Acrescenta ou define apelido
+          if (!existing.apelidos) {
+            existing.apelidos = importedApelido
+          } else if (!existing.apelidos.toLowerCase().includes(importedApelido.toLowerCase())) {
+            existing.apelidos = `${existing.apelidos}, ${importedApelido}`
+          }
         }
         updatedCount++
       } else {
@@ -502,7 +789,7 @@ export function ContractItemsManager({
           price: row.price,
           quantity: row.quantity,
           nomeContrato: importedNomeContrato,
-          apelidos: '',
+          apelidos: importedApelido,
         })
         addedCount++
       }
@@ -1289,82 +1576,234 @@ export function ContractItemsManager({
                   <Table className="border-collapse">
                     <TableHeader className="bg-muted sticky top-0 z-20 text-xs shadow-xs">
                       <TableRow>
-                        <TableHead className="w-[8%] bg-muted font-semibold">Linha</TableHead>
-                        <TableHead className="w-[36%] bg-muted font-semibold">
-                          Produto Identificado
+                        <TableHead className="w-[6%] bg-muted font-semibold">Linha</TableHead>
+                        <TableHead className="w-[30%] bg-muted font-semibold">
+                          Produto da Planilha & Correspondência
                         </TableHead>
-                        <TableHead className="w-[18%] text-right bg-muted font-semibold">
+                        <TableHead className="w-[18%] bg-muted font-semibold">
+                          Status & AKA no Contrato
+                        </TableHead>
+                        <TableHead className="w-[12%] text-right bg-muted font-semibold">
                           Preço
                         </TableHead>
-                        <TableHead className="w-[18%] text-right bg-muted font-semibold">
+                        <TableHead className="w-[12%] text-right bg-muted font-semibold">
                           Qtd. Contratada
                         </TableHead>
-                        <TableHead className="w-[20%] text-right bg-muted font-semibold">
+                        <TableHead className="w-[12%] text-right bg-muted font-semibold">
                           Subtotal
+                        </TableHead>
+                        <TableHead className="w-[10%] text-right bg-muted font-semibold">
+                          Ações
                         </TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {fileParseResult.allRows.map((r) => (
-                        <TableRow key={r.index} className="text-xs">
-                          <TableCell className="font-mono text-muted-foreground">
-                            {r.index}
-                          </TableCell>
-                          <TableCell>
-                            {r.product ? (
-                              <div className="flex flex-col">
-                                <span className="font-semibold text-foreground">
-                                  {r.rawProduct !== r.product.name ? (
-                                    <>
-                                      {r.rawProduct} →{' '}
-                                      <span className="text-primary">{r.product.name}</span>
-                                    </>
-                                  ) : (
-                                    r.product.name
+                      {fileParseResult.allRows.map((r) => {
+                        const isIgnored = r.status === 'ignored'
+                        const isResolved =
+                          (r.resolutionType === 'linked' || r.resolutionType === 'created') &&
+                          r.status === 'valid'
+                        const isPendingUnmatched = Boolean(
+                          r.isUnmatched && r.status !== 'valid' && !isIgnored,
+                        )
+
+                        return (
+                          <TableRow
+                            key={r.index}
+                            className={`text-xs ${
+                              isPendingUnmatched
+                                ? 'bg-amber-500/10 hover:bg-amber-500/15 border-amber-300/40'
+                                : isIgnored
+                                  ? 'opacity-50 bg-muted/20'
+                                  : isResolved
+                                    ? 'bg-emerald-500/5 hover:bg-emerald-500/10'
+                                    : 'hover:bg-muted/10'
+                            }`}
+                          >
+                            <TableCell className="font-mono text-muted-foreground">
+                              {r.index}
+                            </TableCell>
+
+                            {/* Produto da Planilha */}
+                            <TableCell>
+                              {r.product ? (
+                                <div className="flex flex-col">
+                                  <span className="font-semibold text-foreground">
+                                    {r.rawProduct !== r.product.name ? (
+                                      <>
+                                        {r.rawProduct} →{' '}
+                                        <span className="text-primary font-bold">
+                                          {r.product.name}
+                                        </span>
+                                      </>
+                                    ) : (
+                                      r.product.name
+                                    )}
+                                  </span>
+
+                                  {r.matchedViaAlias && (
+                                    <span className="text-[10px] text-primary/90 font-medium">
+                                      ✓ Casado via apelido "{r.matchedViaAlias}"
+                                    </span>
                                   )}
+
+                                  {isResolved && (
+                                    <span className="text-[10px] text-emerald-700 font-medium flex items-center gap-1 mt-0.5">
+                                      <CheckCircle2 className="h-3 w-3" />
+                                      {r.resolutionType === 'linked'
+                                        ? `Resolvido: vinculado a ${r.product.name}`
+                                        : `Resolvido: novo produto mestre criado`}
+                                    </span>
+                                  )}
+
+                                  {r.warnings.length > 0 && !isResolved && (
+                                    <span className="text-[10px] text-amber-600">
+                                      {r.warnings[0]}
+                                    </span>
+                                  )}
+                                </div>
+                              ) : (
+                                <div className="flex flex-col">
+                                  <span className="font-semibold text-foreground">
+                                    {r.rawProduct || '—'}
+                                  </span>
+                                  <span className="text-[11px] text-amber-700 dark:text-amber-400 font-medium flex items-center gap-1 mt-0.5">
+                                    <AlertTriangle className="h-3 w-3 shrink-0" />
+                                    {r.statusReason || 'Sem correspondência na tabela de produtos'}
+                                  </span>
+                                </div>
+                              )}
+                            </TableCell>
+
+                            {/* Status & AKA no Contrato */}
+                            <TableCell>
+                              {isIgnored ? (
+                                <Badge
+                                  variant="outline"
+                                  className="text-[10px] text-muted-foreground border-dashed"
+                                >
+                                  Ignorado
+                                </Badge>
+                              ) : isPendingUnmatched ? (
+                                <div className="space-y-1">
+                                  <Badge
+                                    variant="outline"
+                                    className="text-[10px] bg-amber-500/15 text-amber-800 border-amber-300 font-medium"
+                                  >
+                                    Pendente de AKA
+                                  </Badge>
+                                  <span className="text-[10px] text-muted-foreground block">
+                                    Nome planilha: <em>{r.rawProduct}</em>
+                                  </span>
+                                </div>
+                              ) : (
+                                <div className="space-y-0.5">
+                                  <Badge
+                                    variant="outline"
+                                    className="text-[10px] bg-emerald-500/10 text-emerald-700 border-emerald-300"
+                                  >
+                                    Pronto para importar
+                                  </Badge>
+                                  {r.apelidos && (
+                                    <span
+                                      className="text-[10px] text-muted-foreground block truncate max-w-[170px]"
+                                      title={`AKA: ${r.apelidos}`}
+                                    >
+                                      AKA: <strong>{r.apelidos}</strong>
+                                    </span>
+                                  )}
+                                </div>
+                              )}
+                            </TableCell>
+
+                            {/* Preço */}
+                            <TableCell className="text-right font-mono">
+                              R$ {r.price.toFixed(2)}
+                            </TableCell>
+
+                            {/* Quantidade */}
+                            <TableCell className="text-right font-mono font-semibold text-primary">
+                              {r.quantity} {r.product?.unit || r.rawUnidade || ''}
+                            </TableCell>
+
+                            {/* Subtotal */}
+                            <TableCell className="text-right font-mono font-bold">
+                              R$ {r.subtotal.toFixed(2)}
+                            </TableCell>
+
+                            {/* Ações por linha */}
+                            <TableCell className="text-right">
+                              {isIgnored ? (
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-7 text-[11px] px-2 text-muted-foreground hover:text-foreground"
+                                  onClick={() => handleRestoreRow(r.index)}
+                                  title="Restaurar esta linha para a lista de importação"
+                                >
+                                  Restaurar
+                                </Button>
+                              ) : isPendingUnmatched ? (
+                                <div className="flex items-center justify-end gap-1">
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    className="h-7 text-[11px] px-2 gap-1 bg-amber-600 hover:bg-amber-700 text-white font-medium shadow-xs"
+                                    onClick={() => handleOpenResolveAka(r)}
+                                    title="Definir AKA: associar a produto mestre existente ou criar novo"
+                                  >
+                                    <Sparkles className="h-3 w-3" />
+                                    Definir AKA
+                                  </Button>
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-7 text-[11px] px-1.5 text-muted-foreground hover:text-destructive"
+                                    onClick={() => handleIgnoreRow(r.index)}
+                                    title="Ignorar esta linha e não importar"
+                                  >
+                                    <EyeOff className="h-3.5 w-3.5" />
+                                  </Button>
+                                </div>
+                              ) : isResolved ? (
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  className="h-7 text-[11px] px-2 gap-1 text-emerald-800 border-emerald-300 hover:bg-emerald-50"
+                                  onClick={() => handleOpenResolveAka(r)}
+                                  title="Alterar definição de AKA desta linha"
+                                >
+                                  Editar AKA
+                                </Button>
+                              ) : (
+                                <span className="text-[11px] text-muted-foreground font-mono">
+                                  ✓
                                 </span>
-                                {r.matchedViaAlias && (
-                                  <span className="text-[10px] text-primary/90 font-medium">
-                                    ✓ Casado via apelido "{r.matchedViaAlias}"
-                                  </span>
-                                )}
-                                {r.warnings.length > 0 && (
-                                  <span className="text-[10px] text-amber-600">
-                                    {r.warnings[0]}
-                                  </span>
-                                )}
-                              </div>
-                            ) : (
-                              <div className="flex flex-col text-destructive">
-                                <span className="font-semibold line-through">{r.rawProduct}</span>
-                                <span className="text-[10px]">{r.statusReason}</span>
-                              </div>
-                            )}
-                          </TableCell>
-                          <TableCell className="text-right font-mono">
-                            R$ {r.price.toFixed(2)}
-                          </TableCell>
-                          <TableCell className="text-right font-mono font-semibold text-primary">
-                            {r.quantity} {r.product?.unit || ''}
-                          </TableCell>
-                          <TableCell className="text-right font-mono font-bold">
-                            R$ {r.subtotal.toFixed(2)}
-                          </TableCell>
-                        </TableRow>
-                      ))}
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        )
+                      })}
                     </TableBody>
                   </Table>
                 </div>
 
                 {fileParseResult.unmatchedCount > 0 && (
-                  <div className="shrink-0 flex items-start gap-2 p-2.5 rounded bg-amber-500/10 border border-amber-300 text-amber-800 text-xs">
-                    <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
-                    <div>
-                      <p className="font-semibold">Atenção para produtos não cadastrados</p>
-                      <p className="text-[11px] text-amber-700">
-                        {fileParseResult.unmatchedCount} produto(s) não foram localizados no
-                        catálogo mestre de produtos. Apenas os produtos já cadastrados serão
-                        importados.
+                  <div className="shrink-0 flex items-start gap-2.5 p-3 rounded-lg bg-amber-500/10 border border-amber-300 text-amber-900 text-xs">
+                    <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5 text-amber-700" />
+                    <div className="space-y-1">
+                      <p className="font-semibold text-amber-950">
+                        {fileParseResult.unmatchedCount} linha(s) sem correspondência na tabela de
+                        produtos
+                      </p>
+                      <p className="text-[11px] text-amber-800">
+                        Para cada produto não encontrado, clique em <strong>"Definir AKA"</strong>{' '}
+                        para associá-lo a um item existente do catálogo mestre ou cadastrá-lo como
+                        um novo produto na hora. Se preferir não incluir a linha, clique no ícone
+                        para ignorar.
                       </p>
                     </div>
                   </div>
@@ -1373,27 +1812,288 @@ export function ContractItemsManager({
             )}
           </div>
 
-          <DialogFooter className="shrink-0 pt-3 border-t mt-auto">
+          <DialogFooter className="shrink-0 pt-3 border-t mt-auto flex items-center justify-between">
+            <div className="text-xs text-muted-foreground">
+              {fileParseResult && fileParseResult.unmatchedCount > 0 && (
+                <span className="text-amber-700 font-medium">
+                  {fileParseResult.unmatchedCount} pendência(s) precisam ser resolvidas ou ignoradas
+                  para importar.
+                </span>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setFileModalOpen(false)
+                  setFileParseResult(null)
+                }}
+              >
+                Cancelar
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                onClick={handleApplyFileItems}
+                disabled={
+                  !fileParseResult ||
+                  fileParseResult.validRows.length === 0 ||
+                  fileParseResult.unmatchedCount > 0
+                }
+                className="gap-1.5"
+              >
+                <Check className="h-3.5 w-3.5" />
+                Confirmar Importação de {fileParseResult?.validRows.length || 0} produto(s)
+              </Button>
+            </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* MODAL DE RESOLUÇÃO DE AKA PARA LINHAS SEM CORRESPONDÊNCIA */}
+      <Dialog
+        open={resolveModalOpen}
+        onOpenChange={(open) => {
+          if (!open && !isSubmittingImport) {
+            setResolveModalOpen(false)
+            setResolvingRow(null)
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-[560px] max-h-[90vh] flex flex-col p-6">
+          <DialogHeader className="shrink-0 space-y-1">
+            <DialogTitle className="flex items-center gap-2 text-base">
+              <Sparkles className="h-5 w-5 text-amber-600" />
+              Definir AKA no Contrato para o Produto
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              Resolva a linha da planilha associando-a a um produto mestre existente ou criando o
+              produto no cadastro.
+            </DialogDescription>
+          </DialogHeader>
+
+          {resolvingRow && (
+            <div className="space-y-4 py-2 flex-1 overflow-y-auto">
+              {/* Resumo da linha vinda da planilha */}
+              <div className="p-3 rounded-lg bg-muted/40 border text-xs space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground uppercase text-[10px] font-semibold">
+                    Linha #{resolvingRow.index} da Planilha
+                  </span>
+                  <Badge variant="outline" className="text-[10px]">
+                    Qtd: {resolvingRow.quantity} {resolvingRow.rawUnidade || 'un'} • Preço: R${' '}
+                    {resolvingRow.price.toFixed(2)}
+                  </Badge>
+                </div>
+                <div className="font-semibold text-sm text-foreground">
+                  {resolvingRow.rawProduct}
+                </div>
+              </div>
+
+              {/* Campo do AKA (Apelido no Contrato) */}
+              <div className="space-y-1.5">
+                <Label
+                  htmlFor="aka-input"
+                  className="text-xs font-semibold flex items-center justify-between"
+                >
+                  <span>Apelido no Contrato (AKA)</span>
+                  <span className="text-[10px] text-muted-foreground font-normal">
+                    Fica salvo no item do contrato
+                  </span>
+                </Label>
+                <Input
+                  id="aka-input"
+                  value={akaValue}
+                  onChange={(e) => setAkaValue(e.target.value)}
+                  placeholder="Nome vindo da planilha"
+                  className="h-8 text-xs font-mono"
+                />
+                <p className="text-[11px] text-muted-foreground">
+                  Sugerido como o próprio nome da planilha. Será usado para reconhecer este produto
+                  em importações de pedidos/atestos para este contrato.
+                </p>
+              </div>
+
+              {/* Seleção do modo de resolução */}
+              <div className="space-y-2 pt-1 border-t">
+                <Label className="text-xs font-semibold">Como deseja resolver este produto?</Label>
+                <RadioGroup
+                  value={resolutionMode}
+                  onValueChange={(val) => setResolutionMode(val as 'link' | 'create')}
+                  className="grid grid-cols-2 gap-2"
+                >
+                  <label
+                    htmlFor="mode-link"
+                    className={`flex flex-col p-3 rounded-lg border cursor-pointer transition-colors ${
+                      resolutionMode === 'link'
+                        ? 'border-primary bg-primary/5 shadow-xs'
+                        : 'border-muted hover:bg-muted/30'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-1">
+                      <div className="flex items-center gap-1.5 font-medium text-xs">
+                        <LinkIcon className="h-3.5 w-3.5 text-primary" />
+                        Vincular a Existente
+                      </div>
+                      <RadioGroupItem value="link" id="mode-link" />
+                    </div>
+                    <span className="text-[11px] text-muted-foreground">
+                      Associa a um produto já cadastrado no catálogo mestre.
+                    </span>
+                  </label>
+
+                  <label
+                    htmlFor="mode-create"
+                    className={`flex flex-col p-3 rounded-lg border cursor-pointer transition-colors ${
+                      resolutionMode === 'create'
+                        ? 'border-primary bg-primary/5 shadow-xs'
+                        : 'border-muted hover:bg-muted/30'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-1">
+                      <div className="flex items-center gap-1.5 font-medium text-xs">
+                        <PlusCircle className="h-3.5 w-3.5 text-primary" />
+                        Criar Novo Produto
+                      </div>
+                      <RadioGroupItem value="create" id="mode-create" />
+                    </div>
+                    <span className="text-[11px] text-muted-foreground">
+                      Cadastra o produto na tabela mestre na hora.
+                    </span>
+                  </label>
+                </RadioGroup>
+              </div>
+
+              {/* Opção A: Vincular a Produto Existente */}
+              {resolutionMode === 'link' && (
+                <div className="space-y-2 p-3 rounded-lg border bg-muted/20">
+                  <Label className="text-xs font-semibold">Buscar Produto Mestre do Catálogo</Label>
+                  <div className="relative">
+                    <Search className="h-3.5 w-3.5 text-muted-foreground absolute left-2.5 top-2.5" />
+                    <Input
+                      placeholder="Filtrar por nome do produto..."
+                      value={linkSearchTerm}
+                      onChange={(e) => setLinkSearchTerm(e.target.value)}
+                      className="h-8 pl-8 text-xs"
+                    />
+                  </div>
+
+                  <div className="max-h-[160px] overflow-y-auto border rounded bg-card divide-y text-xs mt-2">
+                    {filteredLinkProducts.length === 0 ? (
+                      <div className="p-3 text-center text-muted-foreground text-xs">
+                        Nenhum produto cadastrado encontrado com esse termo.
+                      </div>
+                    ) : (
+                      filteredLinkProducts.map((p) => {
+                        const isSelected = selectedLinkProductId === p.id
+                        return (
+                          <div
+                            key={p.id}
+                            onClick={() => setSelectedLinkProductId(p.id)}
+                            className={`p-2 cursor-pointer flex items-center justify-between hover:bg-muted/50 transition-colors ${
+                              isSelected ? 'bg-primary/10 font-semibold' : ''
+                            }`}
+                          >
+                            <div className="flex flex-col">
+                              <span className="text-foreground">{p.name}</span>
+                              <span className="text-[10px] text-muted-foreground">
+                                Unidade: {p.unit || 'Kg'} • Preço padrão: R${' '}
+                                {(p.price || 0).toFixed(2)}
+                              </span>
+                            </div>
+                            {isSelected && <Check className="h-4 w-4 text-primary shrink-0" />}
+                          </div>
+                        )
+                      })
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Opção B: Criar Novo Produto na Tabela Mestre */}
+              {resolutionMode === 'create' && (
+                <div className="space-y-3 p-3 rounded-lg border bg-muted/20">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="new-product-name" className="text-xs font-semibold">
+                      Nome Oficial do Produto Mestre
+                    </Label>
+                    <Input
+                      id="new-product-name"
+                      value={newProductName}
+                      onChange={(e) => setNewProductName(e.target.value)}
+                      placeholder="Ex: Arroz Integral"
+                      className="h-8 text-xs"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="new-product-unit" className="text-xs font-semibold">
+                        Unidade de Medida
+                      </Label>
+                      <Input
+                        id="new-product-unit"
+                        value={newProductUnit}
+                        onChange={(e) => setNewProductUnit(e.target.value)}
+                        placeholder="Kg, Un, Maco, etc."
+                        className="h-8 text-xs font-mono"
+                      />
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-semibold">Disponibilidade Padrão</Label>
+                      <select
+                        value={newProductDisp}
+                        onChange={(e) =>
+                          setNewProductDisp(e.target.value as DisponibilidadeProduto)
+                        }
+                        className="h-8 w-full rounded-md border border-input bg-background px-2 py-1 text-xs shadow-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                      >
+                        <option value="normal">Normal</option>
+                        <option value="abundante">Abundante</option>
+                        <option value="escassez">Escassez</option>
+                        <option value="indisponivel">Indisponível</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          <DialogFooter className="shrink-0 pt-3 border-t mt-auto flex items-center justify-between">
             <Button
               type="button"
               variant="outline"
               size="sm"
               onClick={() => {
-                setFileModalOpen(false)
-                setFileParseResult(null)
+                setResolveModalOpen(false)
+                setResolvingRow(null)
               }}
+              disabled={isSubmittingImport}
             >
               Cancelar
             </Button>
             <Button
               type="button"
               size="sm"
-              onClick={handleApplyFileItems}
-              disabled={!fileParseResult || fileParseResult.validRows.length === 0}
-              className="gap-1.5"
+              onClick={handleConfirmResolution}
+              disabled={isSubmittingImport}
+              className="gap-1.5 bg-primary"
             >
-              <Check className="h-3.5 w-3.5" />
-              Confirmar Importação de {fileParseResult?.validRows.length || 0} produto(s)
+              {isSubmittingImport ? (
+                <>
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  Salvando...
+                </>
+              ) : (
+                <>
+                  <Check className="h-3.5 w-3.5" />
+                  Salvar Resolução
+                </>
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>
