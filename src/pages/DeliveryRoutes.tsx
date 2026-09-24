@@ -67,9 +67,27 @@ import {
   type RotaLogisticaRecord,
 } from '@/lib/types'
 
+/**
+ * Verifica se a fase do contrato no ciclo é elegível para despacho de rota.
+ * Janela correta: 'coleta_encerrada', 'coletado' ou 'coleta encerrada'.
+ * Normalização tolerante a espaços, underscores e acentos.
+ */
+export function isFaseElegivelParaDespacho(fase?: string): boolean {
+  if (!fase) return false
+  const norm = fase
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[\s-]+/g, '_')
+  return norm === 'coleta_encerrada' || norm === 'coletado'
+}
+
 export default function DeliveryRoutes() {
   const {
     contracts,
+    contractSchools,
+    cicloContratos,
     orders,
     schools,
     ciclos,
@@ -321,14 +339,55 @@ export default function DeliveryRoutes() {
         o.status === 'Pendente',
     )
 
-    // Checar se algum pedido pendente pertence a ciclo que NÃO está fechado
-    const temPedidoComCicloNaoFechado = pedidosPendentesRota.some((ped) => {
+    // Validação de despacho baseada na FASE DO CONTRATO no ciclo:
+    // O despacho só é liberado na fase "Coleta Encerrada" do contrato no ciclo.
+    const pedidoBloqueado = pedidosPendentesRota.find((ped) => {
       const pedCiclo = ciclos.find((c) => c.id === ped.cicloId) || activeCiclo
-      return !pedCiclo || pedCiclo.status !== 'fechado'
+      if (!pedCiclo || pedCiclo.status === 'fechado' || pedCiclo.status === 'cancelado') {
+        return true
+      }
+
+      const linkEscola = contractSchools.find((cs) => cs.escola_id === ped.schoolId)
+      const contratoId =
+        linkEscola?.contrato_id ||
+        rotaToDispatch.contrato_id ||
+        contracts.find((cnt) => cnt.escolas.some((e) => e.escolaId === ped.schoolId))?.id
+
+      if (!contratoId) {
+        return true
+      }
+
+      const cc = cicloContratos.find(
+        (c) => c.ciclo_id === pedCiclo.id && c.contrato_id === contratoId,
+      )
+      const fase = cc?.fase || pedCiclo.status
+      return !isFaseElegivelParaDespacho(fase)
     })
 
-    if (temPedidoComCicloNaoFechado) {
-      toast.error('Despacho liberado após o fechamento do ciclo')
+    if (pedidoBloqueado) {
+      const pedCiclo = ciclos.find((c) => c.id === pedidoBloqueado.cicloId) || activeCiclo
+      const linkEscola = contractSchools.find((cs) => cs.escola_id === pedidoBloqueado.schoolId)
+      const contratoId =
+        linkEscola?.contrato_id ||
+        rotaToDispatch.contrato_id ||
+        contracts.find((cnt) => cnt.escolas.some((e) => e.escolaId === pedidoBloqueado.schoolId))
+          ?.id
+
+      const cc =
+        pedCiclo && contratoId
+          ? cicloContratos.find((c) => c.ciclo_id === pedCiclo.id && c.contrato_id === contratoId)
+          : null
+      const faseAtual = cc?.fase || pedCiclo?.status || 'desconhecida'
+
+      if (pedCiclo?.status === 'fechado' || faseAtual.toLowerCase() === 'fechado') {
+        toast.error('Ciclo já se encontra fechado para este contrato.')
+      } else if (pedCiclo?.status === 'cancelado' || faseAtual.toLowerCase() === 'cancelado') {
+        toast.error('Ciclo/contrato cancelado. Despacho não permitido.')
+      } else {
+        toast.error(
+          `Despacho liberado apenas após a Coleta Encerrada (fase atual: "${faseAtual}").`,
+        )
+      }
       return
     }
 
@@ -1052,21 +1111,63 @@ export default function DeliveryRoutes() {
                       {/* Botão Colocar em Rota (Rota Inteira) */}
                       {hasPendentes &&
                         (() => {
-                          const cicloBloqueado = item.pedidosPendentes.some((ped) => {
+                          let faseMotivoBloqueio = ''
+                          const despachoBloqueado = item.pedidosPendentes.some((ped) => {
                             const pedCiclo = ciclos.find((c) => c.id === ped.cicloId) || activeCiclo
-                            return !pedCiclo || pedCiclo.status !== 'fechado'
+                            if (
+                              !pedCiclo ||
+                              pedCiclo.status === 'fechado' ||
+                              pedCiclo.status === 'cancelado'
+                            ) {
+                              faseMotivoBloqueio = pedCiclo?.status || 'fechado'
+                              return true
+                            }
+
+                            const linkEscola = contractSchools.find(
+                              (cs) => cs.escola_id === ped.schoolId,
+                            )
+                            const contratoId =
+                              linkEscola?.contrato_id ||
+                              item.rota.contrato_id ||
+                              contracts.find((cnt) =>
+                                cnt.escolas.some((e) => e.escolaId === ped.schoolId),
+                              )?.id
+
+                            if (!contratoId) {
+                              faseMotivoBloqueio = 'sem_contrato'
+                              return true
+                            }
+
+                            const cc = cicloContratos.find(
+                              (c) => c.ciclo_id === pedCiclo.id && c.contrato_id === contratoId,
+                            )
+                            const fase = cc?.fase || pedCiclo.status
+                            const elegivel = isFaseElegivelParaDespacho(fase)
+                            if (!elegivel) {
+                              faseMotivoBloqueio = fase || 'coletando'
+                            }
+                            return !elegivel
                           })
+
+                          let tooltipTitle =
+                            'Despacha a rota inteira: todos os pedidos passam de Pendente para Em Rota'
+                          if (despachoBloqueado) {
+                            if (faseMotivoBloqueio === 'fechado') {
+                              tooltipTitle = 'Ciclo já fechado para este contrato'
+                            } else if (faseMotivoBloqueio === 'cancelado') {
+                              tooltipTitle = 'Ciclo/contrato cancelado'
+                            } else {
+                              tooltipTitle = `Despacho liberado na Coleta Encerrada (fase atual: "${faseMotivoBloqueio}")`
+                            }
+                          }
+
                           return (
                             <Button
                               size="sm"
-                              disabled={cicloBloqueado}
+                              disabled={despachoBloqueado}
                               className="h-8 text-xs bg-amber-600 hover:bg-amber-700 text-white gap-1 disabled:opacity-50"
                               onClick={() => handleOpenDispatch(item.rota)}
-                              title={
-                                cicloBloqueado
-                                  ? 'Despacho liberado após o fechamento do ciclo'
-                                  : 'Despacha a rota inteira: todos os pedidos passam de Pendente para Em Rota'
-                              }
+                              title={tooltipTitle}
                             >
                               <Play className="h-3.5 w-3.5" /> Colocar em Rota
                             </Button>

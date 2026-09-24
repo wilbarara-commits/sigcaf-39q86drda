@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useApp } from '@/context/app-context'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -47,6 +48,7 @@ import pb from '@/lib/pocketbase/client'
 import type { CicloRecord, EnvioWhatsappRecord } from '@/lib/types'
 
 export default function Monitoring() {
+  const navigate = useNavigate()
   const {
     ciclos,
     cicloContratos,
@@ -656,15 +658,27 @@ export default function Monitoring() {
                   <p className="text-xs text-muted-foreground mb-3">
                     importa ✗ · entrada ✗ · despacho ✓ · cancela ✗ (exceto logístico)
                   </p>
-                  <Button
-                    size="sm"
-                    variant={isColetaEncerrada ? 'default' : 'outline'}
-                    className="w-full text-xs"
-                    disabled={updating || isColetaEncerrada || currentFase === 'cancelado'}
-                    onClick={() => handleChangeFase('coleta_encerrada')}
-                  >
-                    {isColetaEncerrada ? 'Fase Ativa' : 'Encerrar Coleta'}
-                  </Button>
+                  <div className="space-y-1.5">
+                    <Button
+                      size="sm"
+                      variant={isColetaEncerrada ? 'default' : 'outline'}
+                      className="w-full text-xs"
+                      disabled={updating || isColetaEncerrada || currentFase === 'cancelado'}
+                      onClick={() => handleChangeFase('coleta_encerrada')}
+                    >
+                      {isColetaEncerrada ? 'Fase Ativa' : 'Encerrar Coleta'}
+                    </Button>
+                    {isColetaEncerrada && (
+                      <Button
+                        size="sm"
+                        className="w-full text-xs bg-amber-600 hover:bg-amber-700 text-white gap-1"
+                        onClick={() => navigate('/rotas')}
+                        title="Ir para tela de rotas logísticas e despacho"
+                      >
+                        <Truck className="h-3.5 w-3.5" /> Colocar em Rota
+                      </Button>
+                    )}
+                  </div>
                 </div>
               )
             })()}
