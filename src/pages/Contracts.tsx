@@ -88,6 +88,7 @@ import {
 } from '@/components/ContractRouteSchoolEditorDialog'
 import { EncerrarContratoDialog } from '@/components/EncerrarContratoDialog'
 import { CancelarContratoDialog } from '@/components/CancelarContratoDialog'
+import { DesvincularEscolaDialog } from '@/components/DesvincularEscolaDialog'
 
 interface ContractSchoolForm {
   escolaId: string
@@ -124,6 +125,17 @@ export default function Contracts() {
   const [reportDialogOpen, setReportDialogOpen] = useState(false)
   const [encerrarDialogOpen, setEncerrarDialogOpen] = useState(false)
   const [cancelarDialogOpen, setCancelarDialogOpen] = useState(false)
+  const [desvincularEscolaDialogState, setDesvincularEscolaDialogState] = useState<{
+    open: boolean
+    escolaId: string
+    escolaNome: string
+    contratoEscolaId?: string | null
+  }>({
+    open: false,
+    escolaId: '',
+    escolaNome: '',
+    contratoEscolaId: null,
+  })
 
   // Estados de edição / criação
   const [editingContract, setEditingContract] = useState<Contract | null>(null)
@@ -2019,7 +2031,28 @@ export default function Contracts() {
                             <input
                               type="checkbox"
                               checked={isSelected}
-                              onChange={() => handleToggleSchool(sch.id)}
+                              onChange={() => {
+                                if (isSelected) {
+                                  // Se já estava selecionada, desmarcar é desvincular -> abre o diálogo
+                                  const existingCe = editingContract
+                                    ? contractSchools.find(
+                                        (cs) =>
+                                          cs.contrato_id === editingContract.id &&
+                                          cs.escola_id === sch.id &&
+                                          !cs.encerrado_em,
+                                      )
+                                    : null
+
+                                  setDesvincularEscolaDialogState({
+                                    open: true,
+                                    escolaId: sch.id,
+                                    escolaNome: sch.name,
+                                    contratoEscolaId: existingCe?.id || null,
+                                  })
+                                } else {
+                                  handleToggleSchool(sch.id)
+                                }
+                              }}
                               className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary shrink-0"
                             />
                             <div className="min-w-0 flex-1">
@@ -2071,7 +2104,24 @@ export default function Contracts() {
                                 size="icon"
                                 className="h-7 w-7 text-muted-foreground hover:text-destructive shrink-0 mt-3"
                                 title="Desvincular"
-                                onClick={() => handleRemoveSchoolLink(sch.id)}
+                                onClick={() => {
+                                  // Localiza o vínculo persistido caso seja edição de contrato existente
+                                  const existingCe = editingContract
+                                    ? contractSchools.find(
+                                        (cs) =>
+                                          cs.contrato_id === editingContract.id &&
+                                          cs.escola_id === sch.id &&
+                                          !cs.encerrado_em,
+                                      )
+                                    : null
+
+                                  setDesvincularEscolaDialogState({
+                                    open: true,
+                                    escolaId: sch.id,
+                                    escolaNome: sch.name,
+                                    contratoEscolaId: existingCe?.id || null,
+                                  })
+                                }}
                               >
                                 <Trash2 className="h-3.5 w-3.5" />
                               </Button>
@@ -2400,6 +2450,26 @@ export default function Contracts() {
         onOpenChange={setCancelarDialogOpen}
         contract={contractToCancelar}
         onSuccess={() => setContractToCancelar(null)}
+      />
+
+      {/* DIALOG DE DESVINCULAÇÃO DE ESCOLA */}
+      <DesvincularEscolaDialog
+        open={desvincularEscolaDialogState.open}
+        onOpenChange={(open) => setDesvincularEscolaDialogState((prev) => ({ ...prev, open }))}
+        contractId={editingContract?.id || null}
+        contratoEscolaId={desvincularEscolaDialogState.contratoEscolaId}
+        escolaId={desvincularEscolaDialogState.escolaId}
+        escolaNome={desvincularEscolaDialogState.escolaNome}
+        onRemoveDraft={() => {
+          handleRemoveSchoolLink(desvincularEscolaDialogState.escolaId)
+        }}
+        onSuccess={async () => {
+          // Remove do estado local do formulário para atualizar a UI imediatamente
+          setContractSchoolsForm((prev) =>
+            prev.filter((s) => s.escolaId !== desvincularEscolaDialogState.escolaId),
+          )
+          await refreshData()
+        }}
       />
 
       {/* DIALOG DE EXCLUSÃO */}

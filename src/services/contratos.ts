@@ -189,7 +189,10 @@ export const contratosService = {
   },
 
   async unlinkEscola(contratoEscolaId: string): Promise<boolean> {
-    return await pb.collection('contrato_escolas').delete(contratoEscolaId)
+    await pb.collection('contrato_escolas').update(contratoEscolaId, {
+      encerrado_em: new Date().toISOString(),
+    })
+    return true
   },
 
   async encerrarContrato(contratoId: string): Promise<ContratoRecord> {
