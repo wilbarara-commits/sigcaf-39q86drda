@@ -119,6 +119,7 @@ export function ContractItemsManager({
   const [isParsingFile, setIsParsingFile] = useState(false)
   const [isSubmittingImport, setIsSubmittingImport] = useState(false)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
+  const [localAddedProducts, setLocalAddedProducts] = useState<Product[]>([])
 
   // Modal de Resolução de Linha Sem Correspondência (Definir AKA)
   const [resolveModalOpen, setResolveModalOpen] = useState(false)
@@ -135,27 +136,38 @@ export function ContractItemsManager({
   // Confirmação de exclusão individual
   const [itemToDeleteIndex, setItemToDeleteIndex] = useState<number | null>(null)
 
+  // Catálogo combinado: produtos do app-context + produtos recém-criados localmente
+  const allAvailableProducts = useMemo(() => {
+    const combined = [...(catalogProducts || [])]
+    for (const lp of localAddedProducts) {
+      if (!combined.some((p) => p.id === lp.id)) {
+        combined.push(lp)
+      }
+    }
+    return combined
+  }, [catalogProducts, localAddedProducts])
+
   // Lista filtrada para o modal de resolução (busca de produto para vincular)
   const filteredLinkProducts = useMemo(() => {
-    if (!catalogProducts) return []
+    if (!allAvailableProducts) return []
     const term = normalizeName(linkSearchTerm.trim())
-    if (!term) return catalogProducts.slice(0, 50)
-    return catalogProducts
+    if (!term) return allAvailableProducts.slice(0, 50)
+    return allAvailableProducts
       .filter((p) => {
         const norm = normalizeName(p.name)
         return norm.includes(term)
       })
       .slice(0, 50)
-  }, [catalogProducts, linkSearchTerm])
+  }, [allAvailableProducts, linkSearchTerm])
 
   // Map rápido de produtos do catálogo por ID
   const productById = useMemo(() => {
     const map = new Map<string, Product>()
-    for (const p of catalogProducts) {
+    for (const p of allAvailableProducts) {
       map.set(p.id, p)
     }
     return map
-  }, [catalogProducts])
+  }, [allAvailableProducts])
 
   // IDs já inclusos no contrato
   const includedProductIds = useMemo(() => {
@@ -192,11 +204,11 @@ export function ContractItemsManager({
   // Produtos disponíveis para seleção em lote (com filtro de busca)
   const filteredCatalogForBatch = useMemo(() => {
     const q = batchSearchQuery.trim().toLowerCase()
-    return catalogProducts.filter((p) => {
+    return allAvailableProducts.filter((p) => {
       if (!q) return true
       return p.name.toLowerCase().includes(q) || (p.unit && p.unit.toLowerCase().includes(q))
     })
-  }, [catalogProducts, batchSearchQuery])
+  }, [allAvailableProducts, batchSearchQuery])
 
   // Abertura do modal de lote
   const handleOpenBatchModal = () => {
@@ -407,7 +419,7 @@ export function ContractItemsManager({
       }
 
       // Normaliza e faz matching contra o catálogo
-      const matchDetail = matchCatalogProductDetailed(namePart, catalogProducts)
+      const matchDetail = matchCatalogProductDetailed(namePart, allAvailableProducts)
       const found = matchDetail.product
 
       if (!found) {
@@ -497,7 +509,7 @@ export function ContractItemsManager({
 
     setIsParsingFile(true)
     try {
-      const res = await parseContractItemsFile(file, catalogProducts, items)
+      const res = await parseContractItemsFile(file, allAvailableProducts, items)
       setFileParseResult(res)
     } catch (err: any) {
       console.error('Erro ao processar arquivo:', err)
@@ -695,13 +707,18 @@ export function ContractItemsManager({
           price: createdRecord.preco_unitario || 0,
         }
 
+        // Sincroniza o produto novo localmente na lista sem disparar refreshData()
+        setLocalAddedProducts((prev) => {
+          if (prev.some((p) => p.id === newProductUi.id)) return prev
+          return [...prev, newProductUi]
+        })
+
         // Atualiza a linha com o novo produto criado
         // Garante que o item fique com price definido (usar o preço da planilha quando existir)
         const finalPrice =
           resolvingRow.price !== undefined &&
           resolvingRow.price !== null &&
-          !isNaN(resolvingRow.price) &&
-          resolvingRow.price > 0
+          !isNaN(resolvingRow.price)
             ? resolvingRow.price
             : parsedInitialPrice >= 0
               ? parsedInitialPrice
@@ -750,7 +767,6 @@ export function ContractItemsManager({
         toast.success(
           `Produto mestre "${newProductUi.name}" criado e associado à linha da planilha!`,
         )
-        await refreshData()
         setResolveModalOpen(false)
         setResolvingRow(null)
       } catch (err: any) {
@@ -762,7 +778,7 @@ export function ContractItemsManager({
     }
   }
 
-  const handleApplyFileItems = () => {
+  const handleApplyFileItems = async () => {
     if (!fileParseResult) return
 
     // Verifica se ainda existem pendências bloqueantes (linhas sem correspondência não resolvidas nem ignoradas)
@@ -822,6 +838,11 @@ export function ContractItemsManager({
     toast.success(
       `Planilha importada com sucesso: ${addedCount} produto(s) adicionado(s), ${updatedCount} atualizado(s)!`,
     )
+    // Sincronização global acontece na confirmação da importação se produtos foram criados
+    if (localAddedProducts.length > 0) {
+      refreshData().catch(() => {})
+      setLocalAddedProducts([])
+    }
     setFileModalOpen(false)
     setFileParseResult(null)
   }
@@ -878,7 +899,6 @@ export function ContractItemsManager({
             size="sm"
             className="h-8 text-xs gap-1.5"
             onClick={() => {
-              setFileParseResult(null)
               setFileModalOpen(true)
             }}
           >
@@ -967,7 +987,6 @@ export function ContractItemsManager({
               size="sm"
               className="h-8 text-xs gap-1.5"
               onClick={() => {
-                setFileParseResult(null)
                 setFileModalOpen(true)
               }}
             >
@@ -1495,8 +1514,26 @@ export function ContractItemsManager({
       </Dialog>
 
       {/* MODAL 3: IMPORTAÇÃO EM MASSA VIA PLANILHA / CSV */}
-      <Dialog open={fileModalOpen} onOpenChange={setFileModalOpen}>
-        <DialogContent className="sm:max-w-[700px] max-h-[85vh] flex flex-col overflow-hidden">
+      <Dialog
+        open={fileModalOpen}
+        onOpenChange={(open) => {
+          // Ignorar fechamento enquanto o modal de resolução de AKA estiver aberto
+          if (!open && resolveModalOpen) return
+          setFileModalOpen(open)
+          if (!open) {
+            // Sincroniza se produtos foram criados durante a sessão ao fechar o modal
+            if (localAddedProducts.length > 0) {
+              refreshData().catch(() => {})
+              setLocalAddedProducts([])
+            }
+          }
+        }}
+      >
+        <DialogContent
+          className="sm:max-w-[700px] max-h-[85vh] flex flex-col overflow-hidden"
+          onInteractOutside={(e) => e.preventDefault()}
+          onPointerDownOutside={(e) => e.preventDefault()}
+        >
           <DialogHeader className="shrink-0">
             <DialogTitle className="flex items-center gap-2">
               <FileSpreadsheet className="h-5 w-5 text-primary" />
@@ -1852,6 +1889,10 @@ export function ContractItemsManager({
                 onClick={() => {
                   setFileModalOpen(false)
                   setFileParseResult(null)
+                  if (localAddedProducts.length > 0) {
+                    refreshData().catch(() => {})
+                    setLocalAddedProducts([])
+                  }
                 }}
               >
                 Cancelar
