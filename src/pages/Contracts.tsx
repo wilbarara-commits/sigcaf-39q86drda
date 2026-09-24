@@ -69,6 +69,7 @@ import {
   FileSpreadsheet,
   Calculator,
   XCircle,
+  Ban,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { contratosService } from '@/services/contratos'
@@ -86,6 +87,7 @@ import {
   type ContractRouteInfo,
 } from '@/components/ContractRouteSchoolEditorDialog'
 import { EncerrarContratoDialog } from '@/components/EncerrarContratoDialog'
+import { CancelarContratoDialog } from '@/components/CancelarContratoDialog'
 
 interface ContractSchoolForm {
   escolaId: string
@@ -121,11 +123,13 @@ export default function Contracts() {
   const [detailsDialogOpen, setDetailsDialogOpen] = useState(false)
   const [reportDialogOpen, setReportDialogOpen] = useState(false)
   const [encerrarDialogOpen, setEncerrarDialogOpen] = useState(false)
+  const [cancelarDialogOpen, setCancelarDialogOpen] = useState(false)
 
   // Estados de edição / criação
   const [editingContract, setEditingContract] = useState<Contract | null>(null)
   const [contractToDelete, setContractToDelete] = useState<Contract | null>(null)
   const [contractToEncerrar, setContractToEncerrar] = useState<Contract | null>(null)
+  const [contractToCancelar, setContractToCancelar] = useState<Contract | null>(null)
   const [viewingContract, setViewingContract] = useState<Contract | null>(null)
   const [reportContract, setReportContract] = useState<Contract | null>(null)
 
@@ -858,6 +862,11 @@ export default function Contracts() {
     setEncerrarDialogOpen(true)
   }
 
+  const handleOpenCancelar = (contract: Contract) => {
+    setContractToCancelar(contract)
+    setCancelarDialogOpen(true)
+  }
+
   const handleConfirmDelete = async () => {
     if (!contractToDelete) return
     setIsDeleting(true)
@@ -1075,7 +1084,9 @@ export default function Contracts() {
                                 ? 'bg-emerald-600 text-white hover:bg-emerald-700'
                                 : contract.status === 'Encerrado'
                                   ? 'bg-slate-600 text-slate-100 dark:bg-slate-700 hover:bg-slate-600 border border-slate-500/40'
-                                  : 'bg-amber-600 text-white hover:bg-amber-700'
+                                  : contract.status === 'Cancelado'
+                                    ? 'bg-amber-600 text-white hover:bg-amber-700'
+                                    : 'bg-muted text-muted-foreground border'
                             }
                           >
                             {contract.status}
@@ -1131,15 +1142,26 @@ export default function Contracts() {
                                   <Pencil className="h-4 w-4" />
                                 </Button>
                                 {contract.status === 'Ativo' && (
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-8 w-8 text-amber-600 hover:bg-amber-500/10 hover:text-amber-700 dark:text-amber-500 dark:hover:text-amber-400"
-                                    title="Encerrar contrato"
-                                    onClick={() => handleOpenEncerrar(contract)}
-                                  >
-                                    <XCircle className="h-4 w-4" />
-                                  </Button>
+                                  <>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-8 w-8 text-amber-600 hover:bg-amber-500/10 hover:text-amber-700 dark:text-amber-500 dark:hover:text-amber-400"
+                                      title="Encerrar contrato"
+                                      onClick={() => handleOpenEncerrar(contract)}
+                                    >
+                                      <XCircle className="h-4 w-4" />
+                                    </Button>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-8 w-8 text-amber-700 hover:bg-amber-500/10 hover:text-amber-800 dark:text-amber-400 dark:hover:text-amber-300"
+                                      title="Cancelar contrato"
+                                      onClick={() => handleOpenCancelar(contract)}
+                                    >
+                                      <Ban className="h-4 w-4" />
+                                    </Button>
+                                  </>
                                 )}
                                 <Button
                                   variant="ghost"
@@ -1300,6 +1322,7 @@ export default function Contracts() {
                         <SelectItem value="Ativo">Ativo</SelectItem>
                         <SelectItem value="Pendente">Pendente</SelectItem>
                         <SelectItem value="Encerrado">Encerrado</SelectItem>
+                        <SelectItem value="Cancelado">Cancelado</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -2371,6 +2394,14 @@ export default function Contracts() {
         onSuccess={() => setContractToEncerrar(null)}
       />
 
+      {/* DIALOG DE CANCELAMENTO DE CONTRATO */}
+      <CancelarContratoDialog
+        open={cancelarDialogOpen}
+        onOpenChange={setCancelarDialogOpen}
+        contract={contractToCancelar}
+        onSuccess={() => setContractToCancelar(null)}
+      />
+
       {/* DIALOG DE EXCLUSÃO */}
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent>
@@ -2436,6 +2467,52 @@ export default function Contracts() {
                   </p>
                 </div>
               </div>
+
+              {/* Informações sobre Status Encerrado / Cancelado */}
+              {viewingContract.status === 'Cancelado' && (
+                <div className="p-3 rounded-lg border border-amber-400 bg-amber-50 text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200 space-y-1">
+                  <div className="flex items-center gap-1.5 font-semibold">
+                    <Ban className="h-4 w-4 text-amber-600" />
+                    <span>Contrato Cancelado</span>
+                  </div>
+                  {viewingContract.motivo_cancelamento && (
+                    <p className="text-[11px] leading-relaxed pt-0.5">
+                      <strong>Motivo:</strong> {viewingContract.motivo_cancelamento}
+                    </p>
+                  )}
+                  {viewingContract.encerrado_em && (
+                    <p className="text-[10px] text-muted-foreground dark:text-amber-300/70">
+                      Cancelado em:{' '}
+                      {new Date(viewingContract.encerrado_em).toLocaleDateString('pt-BR', {
+                        day: '2-digit',
+                        month: '2-digit',
+                        year: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })}
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {viewingContract.status === 'Encerrado' && viewingContract.encerrado_em && (
+                <div className="p-3 rounded-lg border border-slate-300 bg-slate-50 text-slate-800 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 space-y-1">
+                  <div className="flex items-center gap-1.5 font-semibold">
+                    <XCircle className="h-4 w-4 text-slate-600" />
+                    <span>Contrato Encerrado</span>
+                  </div>
+                  <p className="text-[10px] text-muted-foreground">
+                    Encerrado em:{' '}
+                    {new Date(viewingContract.encerrado_em).toLocaleDateString('pt-BR', {
+                      day: '2-digit',
+                      month: '2-digit',
+                      year: 'numeric',
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })}
+                  </p>
+                </div>
+              )}
 
               {/* Seção: Configuração da Importação (se modalidade centralizada) */}
               {viewingContract.modalidade_pedido === 'centralizado' && (
