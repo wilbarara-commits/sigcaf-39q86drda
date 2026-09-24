@@ -447,6 +447,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
             escolaTipo: ce.expand?.escola_id?.tipo || sch?.tipo || '',
             escolaAlunos: ce.expand?.escola_id?.alunos ?? sch?.alunos,
             rotaNome: rotaPlanilhaNome,
+            coleta_por: ce.coleta_por || 'padrao',
+            encerrado_em: ce.encerrado_em,
           }
         })
 
@@ -975,6 +977,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
               escolaTipo: ce.expand?.escola_id?.tipo || sch?.tipo || '',
               escolaAlunos: ce.expand?.escola_id?.alunos ?? sch?.alunos,
               rotaNome: rotaPlanilhaNome,
+              coleta_por: ce.coleta_por || 'padrao',
+              encerrado_em: ce.encerrado_em,
             }
           })
 

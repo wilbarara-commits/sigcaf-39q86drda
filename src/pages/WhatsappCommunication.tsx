@@ -37,6 +37,7 @@ import { toast } from 'sonner'
 import { whatsappService } from '@/services/whatsapp-import'
 import { tokensFormularioService } from '@/services/tokens-formulario'
 import { isPreviewEnvironment, safeOpenWhatsApp } from '@/lib/whatsapp'
+import { isVinculoElegivelParaTokenFormulario, getColetaPorEfetivo } from '@/lib/coletaPor'
 import type { EnvioWhatsappRecord, TokenFormularioRecord } from '@/lib/types'
 
 export default function WhatsappCommunication() {
@@ -85,17 +86,40 @@ Por favor, envie as quantidades da sua instituição pelo link acima durante o p
     setCustomMsg(tpl)
   }, [activeCiclo, products])
 
-  // Contratos com modalidade INDIVIDUALIZADA (o formulário existe EXCLUSIVAMENTE para eles)
-  const contratosIndividualizados = useMemo(() => {
-    return contracts.filter(
-      (c) =>
-        c.status === 'Ativo' &&
-        (c.modalidade_pedido === 'individualizado' || (c as any).modalidade === 'individualizado'),
-    )
-  }, [contracts])
+  // Contratos com status 'Ativo' que possuem escolas com coleta_por EFETIVO = 'formulario'
+  // (Generalização R25: não restringe mais fixamente por modalidade no filtro do topo)
+  const contratosElegiveisParaFormulario = useMemo(() => {
+    return contracts.filter((c) => {
+      if (c.status !== 'Ativo' || (c.encerrado_em && c.encerrado_em.trim() !== '')) {
+        return false
+      }
+      // Verificar se possui vínculos em contractSchools elegíveis para formulário
+      const links = contractSchools.filter((cs) => cs.contrato_id === c.id)
+      if (links.length > 0) {
+        return links.some((cs) =>
+          isVinculoElegivelParaTokenFormulario({
+            vinculo: cs,
+            contrato: c,
+          }),
+        )
+      }
+      // Fallback: se ainda não houver contractSchools sincronizados, verifica modalidade ou vínculo em c.escolas
+      if (c.escolas && c.escolas.length > 0) {
+        return c.escolas.some((ce) =>
+          isVinculoElegivelParaTokenFormulario({
+            vinculo: ce,
+            contrato: c,
+          }),
+        )
+      }
+      // Se não tem escolas vinculadas, verifica se modalidade padrão geraria 'formulario'
+      return getColetaPorEfetivo(null, c.modalidade_pedido) === 'formulario'
+    })
+  }, [contracts, contractSchools])
 
-  // Lista de itens escola x contrato individualizado
-  // Se a escola estiver em mais de um contrato individualizado, gera uma linha para cada
+  // Lista de itens escola x contrato com coleta_por EFETIVO = "formulario"
+  // Unicidade R25: cada escola tem no máx. 1 contrato ativo (logo no máx. 1 token por ciclo).
+  // Vínculos encerrados ou contratos inativos NUNCA entram aqui.
   interface EscolaContratoLinha {
     key: string
     escolaId: string
@@ -104,19 +128,34 @@ Por favor, envie as quantidades da sua instituição pelo link acima durante o p
     rotaNome: string
     contratoId: string
     contratoNumero: string
+    coletaPorEfetivo: string
+    vinculoId?: string
   }
 
   const escolasContratosList = useMemo<EscolaContratoLinha[]>(() => {
     const linhas: EscolaContratoLinha[] = []
     const targetContratos =
       selectedContratoFilter === 'todos'
-        ? contratosIndividualizados
-        : contratosIndividualizados.filter((c) => c.id === selectedContratoFilter)
+        ? contratosElegiveisParaFormulario
+        : contratosElegiveisParaFormulario.filter((c) => c.id === selectedContratoFilter)
 
     for (const contr of targetContratos) {
       // Obter vínculos deste contrato
       const links = contractSchools.filter((cs) => cs.contrato_id === contr.id)
       for (const link of links) {
+        // Valida se o vínculo é elegível:
+        // 1. Contrato Ativo
+        // 2. Vínculo sem encerrado_em
+        // 3. coleta_por EFETIVO === 'formulario' (NUNCA 'planilha')
+        if (
+          !isVinculoElegivelParaTokenFormulario({
+            vinculo: link,
+            contrato: contr,
+          })
+        ) {
+          continue
+        }
+
         const sch = schools.find((s) => s.id === link.escola_id)
         if (sch) {
           linhas.push({
@@ -127,17 +166,28 @@ Por favor, envie as quantidades da sua instituição pelo link acima durante o p
             rotaNome: sch.route || 'Sem rota',
             contratoId: contr.id,
             contratoNumero: contr.numero,
+            coletaPorEfetivo: getColetaPorEfetivo(link, contr.modalidade_pedido),
+            vinculoId: link.id,
           })
         }
       }
     }
 
-    // Se nenhum contrato individualizado tiver vínculos cadastrados ainda,
-    // fazer fallback pelas escolas cadastradas nos contratos individualizados em c.escolas
+    // Se nenhum contrato tiver vínculos cadastrados em contractSchools ainda,
+    // fazer fallback pelas escolas cadastradas nos contratos em c.escolas
     if (linhas.length === 0 && targetContratos.length > 0) {
       for (const contr of targetContratos) {
         if (contr.escolas && contr.escolas.length > 0) {
           for (const ce of contr.escolas) {
+            if (
+              !isVinculoElegivelParaTokenFormulario({
+                vinculo: ce,
+                contrato: contr,
+              })
+            ) {
+              continue
+            }
+
             const sch = schools.find((s) => s.id === ce.escolaId)
             if (sch && !linhas.some((l) => l.key === `${sch.id}_${contr.id}`)) {
               linhas.push({
@@ -148,6 +198,8 @@ Por favor, envie as quantidades da sua instituição pelo link acima durante o p
                 rotaNome: ce.rotaNome || sch.route || 'Sem rota',
                 contratoId: contr.id,
                 contratoNumero: contr.numero,
+                coletaPorEfetivo: getColetaPorEfetivo(ce, contr.modalidade_pedido),
+                vinculoId: ce.id,
               })
             }
           }
@@ -156,7 +208,8 @@ Por favor, envie as quantidades da sua instituição pelo link acima durante o p
     }
 
     return linhas
-  }, [contratosIndividualizados, selectedContratoFilter, contractSchools, schools])
+  }, [contratosElegiveisParaFormulario, selectedContratoFilter, contractSchools, schools])
+
   const loadEnvios = useCallback(async () => {
     if (!activeCiclo) return
     setLoadingEnvios(true)
@@ -196,8 +249,9 @@ Por favor, envie as quantidades da sua instituição pelo link acima durante o p
   }, [loadEnvios, loadTokens])
 
   /**
-   * Helper para obter a URL completa do formulário de uma escola para um contrato individualizado específico.
-   * REGRA: Formulário é EXCLUSIVO para contratos individualizados.
+   * Helper para obter a URL completa do formulário de uma escola para um contrato elegível específico.
+   * REGRA R25: O link só é gerado se o coleta_por EFETIVO do vínculo for 'formulario'
+   * e o contrato for 'Ativo' sem encerramento. NUNCA para 'planilha'.
    */
   const getOrGenerateSchoolUrl = async (
     escolaId: string,
@@ -205,38 +259,58 @@ Por favor, envie as quantidades da sua instituição pelo link acima durante o p
   ): Promise<string> => {
     if (!activeCiclo) return window.location.origin + '/formulario/demo'
 
-    // Determinar o contrato individualizado da escola
+    // Determinar o contrato elegível da escola
     let resolvedContratoId = targetContratoId
+    let targetVinculo = contractSchools.find(
+      (cs) =>
+        cs.escola_id === escolaId && (!resolvedContratoId || cs.contrato_id === resolvedContratoId),
+    )
 
     if (!resolvedContratoId) {
-      // Buscar contratos vinculados à escola que sejam INDIVIDUALIZADOS
-      const indContracts = contracts.filter(
-        (c) =>
-          c.status === 'Ativo' &&
-          (c.modalidade_pedido === 'individualizado' ||
-            (c as any).modalidade === 'individualizado'),
-      )
+      // Buscar entre os vínculos ativos elegíveis para token
+      for (const cs of contractSchools) {
+        if (cs.escola_id !== escolaId) continue
+        const contr = contracts.find((c) => c.id === cs.contrato_id)
+        if (contr && isVinculoElegivelParaTokenFormulario({ vinculo: cs, contrato: contr })) {
+          resolvedContratoId = cs.contrato_id
+          targetVinculo = cs
+          break
+        }
+      }
 
-      const linkIndiv = contractSchools.find((cs) => {
-        if (cs.escola_id !== escolaId) return false
-        return indContracts.some((ic) => ic.id === cs.contrato_id)
-      })
-
-      resolvedContratoId =
-        linkIndiv?.contrato_id ||
-        indContracts.find((c) => c.escolas.some((e) => e.escolaId === escolaId))?.id ||
-        indContracts[0]?.id ||
-        ''
+      // Se ainda não achou, fallback em contratosElegiveisParaFormulario
+      if (!resolvedContratoId) {
+        const fallbackContr = contratosElegiveisParaFormulario.find((c) =>
+          c.escolas?.some((e) => e.escolaId === escolaId),
+        )
+        resolvedContratoId = fallbackContr?.id || contratosElegiveisParaFormulario[0]?.id || ''
+      }
     }
 
     if (!resolvedContratoId) {
       return `${window.location.origin}/formulario/demo`
     }
 
+    const targetContrato = contracts.find((c) => c.id === resolvedContratoId)
+
+    // Se encontramos vínculo e contrato, valida se de fato é elegível
+    if (targetContrato) {
+      const elegivel = isVinculoElegivelParaTokenFormulario({
+        vinculo: targetVinculo,
+        contrato: targetContrato,
+      })
+      if (!elegivel) {
+        console.warn(
+          `Vínculo da escola ${escolaId} no contrato ${resolvedContratoId} não é elegível para formulário (coleta_por efetivo !== "formulario" ou contrato/vínculo encerrado).`,
+        )
+        return `${window.location.origin}/formulario/demo`
+      }
+    }
+
     const key = `${escolaId}:::${resolvedContratoId}`
     let tokenRec = tokensMap.get(key) || tokensMap.get(escolaId)
 
-    // Se o token existente estiver com contrato diferente (ou centralizado), ignorar e criar o correto
+    // Se o token existente estiver com contrato diferente, ignorar e criar o correto
     if (tokenRec && tokenRec.contrato_id !== resolvedContratoId) {
       tokenRec = undefined
     }
@@ -248,6 +322,10 @@ Por favor, envie as quantidades da sua instituição pelo link acima durante o p
           resolvedContratoId,
           activeCiclo.id,
           activeCiclo.data_fim,
+          {
+            vinculo: targetVinculo,
+            contrato: targetContrato,
+          },
         )
         setTokensMap((prev) => {
           const next = new Map(prev)
@@ -256,7 +334,7 @@ Por favor, envie as quantidades da sua instituição pelo link acima durante o p
           return next
         })
       } catch (err) {
-        console.error('Erro ao gerar token para escola e contrato individualizado:', err)
+        console.error('Erro ao gerar token para escola e contrato:', err)
       }
     }
 
@@ -340,11 +418,11 @@ Por favor, envie as quantidades da sua instituição pelo link acima durante o p
       await loadEnvios()
       if (!preview) {
         toast.success(
-          `Disparo registrado para ${escolaNome} (${contratoNumero || 'Individualizado'}) com link do formulário!`,
+          `Disparo registrado para ${escolaNome} (${contratoNumero || 'Formulário'}) com link do formulário!`,
         )
       } else {
         toast.success(
-          `Envio simulado e registrado para ${escolaNome} (${contratoNumero || 'Individualizado'}).`,
+          `Envio simulado e registrado para ${escolaNome} (${contratoNumero || 'Formulário'}).`,
         )
       }
     } catch (err) {
@@ -369,8 +447,8 @@ Por favor, envie as quantidades da sua instituição pelo link acima durante o p
     try {
       let count = 0
       for (const item of escolasContratosList) {
-        // Assegurar token para cada escola e contrato individualizado
-        const schoolUrl = await getOrGenerateSchoolUrl(item.escolaId, item.contratoId)
+        // Assegurar token para cada escola e contrato com coleta_por efetivo formulario
+        await getOrGenerateSchoolUrl(item.escolaId, item.contratoId)
         await whatsappService.logEnvio({
           ciclo_id: activeCiclo.id,
           escola_id: item.escolaId,
@@ -420,7 +498,8 @@ Por favor, envie as quantidades da sua instituição pelo link acima durante o p
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Comunicação Semanal (WhatsApp)</h1>
           <p className="text-muted-foreground">
-            Dispare templates informativos sobre o ciclo e acompanhe envios por escola.
+            Dispare templates informativos sobre o ciclo e links únicos do formulário para as
+            escolas participantes.
           </p>
         </div>
 
@@ -497,17 +576,18 @@ Por favor, envie as quantidades da sua instituição pelo link acima durante o p
         </CardContent>
       </Card>
 
-      {/* Lista de Escolas por Contrato Individualizado e Status de Envio */}
+      {/* Lista de Escolas por Coleta via Formulário e Status de Envio */}
       <Card>
         <CardHeader>
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
               <CardTitle className="text-base flex items-center gap-2">
-                <Users className="h-5 w-5 text-primary" /> Disparos por Contrato Individualizado
+                <Users className="h-5 w-5 text-primary" /> Disparos por Coleta Formulário
               </CardTitle>
               <CardDescription>
-                O formulário é o canal de pedidos dos contratos <strong>individualizados</strong>.
-                Escolas em múltiplos contratos recebem um link único por contrato.
+                Links gerados para escolas cujo valor efetivo de <code>coleta_por</code> é{' '}
+                <strong>formulario</strong>. Escolas com coleta por planilha da secretaria não geram
+                formulário público.
               </CardDescription>
             </div>
             <div className="flex items-center gap-3">
@@ -518,8 +598,8 @@ Por favor, envie as quantidades da sua instituição pelo link acima durante o p
                     <SelectValue placeholder="Filtrar por Contrato" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="todos">Todos Contratos Indiv.</SelectItem>
-                    {contratosIndividualizados.map((c) => (
+                    <SelectItem value="todos">Todos Contratos</SelectItem>
+                    {contratosElegiveisParaFormulario.map((c) => (
                       <SelectItem key={c.id} value={c.id}>
                         {c.numero}
                       </SelectItem>
@@ -553,8 +633,8 @@ Por favor, envie as quantidades da sua instituição pelo link acima durante o p
                 {escolasContratosList.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
-                      Nenhum vínculo de escola encontrado para contratos individualizados.
-                      (Contratos centralizados são atendidos por importação de planilha da
+                      Nenhum vínculo ativo com coleta por formulário encontrado. (Contratos ou
+                      escolas com coleta por planilha são atendidos por importação de arquivo da
                       secretaria).
                     </TableCell>
                   </TableRow>
