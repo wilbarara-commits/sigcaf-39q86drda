@@ -68,6 +68,7 @@ import {
   Truck,
   FileSpreadsheet,
   Calculator,
+  XCircle,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { contratosService } from '@/services/contratos'
@@ -84,6 +85,7 @@ import {
   ContractRouteSchoolEditorDialog,
   type ContractRouteInfo,
 } from '@/components/ContractRouteSchoolEditorDialog'
+import { EncerrarContratoDialog } from '@/components/EncerrarContratoDialog'
 
 interface ContractSchoolForm {
   escolaId: string
@@ -118,10 +120,12 @@ export default function Contracts() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [detailsDialogOpen, setDetailsDialogOpen] = useState(false)
   const [reportDialogOpen, setReportDialogOpen] = useState(false)
+  const [encerrarDialogOpen, setEncerrarDialogOpen] = useState(false)
 
   // Estados de edição / criação
   const [editingContract, setEditingContract] = useState<Contract | null>(null)
   const [contractToDelete, setContractToDelete] = useState<Contract | null>(null)
+  const [contractToEncerrar, setContractToEncerrar] = useState<Contract | null>(null)
   const [viewingContract, setViewingContract] = useState<Contract | null>(null)
   const [reportContract, setReportContract] = useState<Contract | null>(null)
 
@@ -849,6 +853,11 @@ export default function Contracts() {
     setDeleteDialogOpen(true)
   }
 
+  const handleOpenEncerrar = (contract: Contract) => {
+    setContractToEncerrar(contract)
+    setEncerrarDialogOpen(true)
+  }
+
   const handleConfirmDelete = async () => {
     if (!contractToDelete) return
     setIsDeleting(true)
@@ -1063,10 +1072,10 @@ export default function Contracts() {
                           <Badge
                             className={
                               contract.status === 'Ativo'
-                                ? 'bg-primary'
+                                ? 'bg-emerald-600 text-white hover:bg-emerald-700'
                                 : contract.status === 'Encerrado'
-                                  ? 'bg-muted-foreground'
-                                  : 'bg-amber-600'
+                                  ? 'bg-slate-600 text-slate-100 dark:bg-slate-700 hover:bg-slate-600 border border-slate-500/40'
+                                  : 'bg-amber-600 text-white hover:bg-amber-700'
                             }
                           >
                             {contract.status}
@@ -1121,6 +1130,17 @@ export default function Contracts() {
                                 >
                                   <Pencil className="h-4 w-4" />
                                 </Button>
+                                {contract.status === 'Ativo' && (
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-8 w-8 text-amber-600 hover:bg-amber-500/10 hover:text-amber-700 dark:text-amber-500 dark:hover:text-amber-400"
+                                    title="Encerrar contrato"
+                                    onClick={() => handleOpenEncerrar(contract)}
+                                  >
+                                    <XCircle className="h-4 w-4" />
+                                  </Button>
+                                )}
                                 <Button
                                   variant="ghost"
                                   size="icon"
@@ -2342,6 +2362,14 @@ export default function Contracts() {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* DIALOG DE ENCERRAMENTO DE CONTRATO */}
+      <EncerrarContratoDialog
+        open={encerrarDialogOpen}
+        onOpenChange={setEncerrarDialogOpen}
+        contract={contractToEncerrar}
+        onSuccess={() => setContractToEncerrar(null)}
+      />
 
       {/* DIALOG DE EXCLUSÃO */}
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
