@@ -44,6 +44,7 @@ import {
 } from '@/lib/cicloUtils'
 import { AbrirCicloDialog } from '@/components/AbrirCicloDialog'
 import { CancelarCicloDialog } from '@/components/CancelarCicloDialog'
+import { safeOpenWhatsApp } from '@/lib/whatsapp'
 import pb from '@/lib/pocketbase/client'
 import type { CicloRecord, EnvioWhatsappRecord } from '@/lib/types'
 
@@ -357,19 +358,18 @@ export default function Monitoring() {
     }
   }
 
-  const handleOpenWhatsApp = (telefone: string, schoolName: string, motivo: string) => {
-    const cleanPhone = telefone.replace(/\D/g, '')
-    const phoneToUse = cleanPhone.length >= 10 ? `55${cleanPhone}` : ''
-    const msg = encodeURIComponent(
-      `Olá, equipe do(a) *${schoolName}*! Tudo bem? Aqui é da CooperGestão.\n\nNotamos a seguinte pendência referente ao ciclo *${selectedCiclo?.nome || 'ativo'}*:\n👉 ${motivo}\n\nPor favor, envie ou atualize a lista para que possamos organizar as rotas de entrega. Obrigado!`,
-    )
+  const handleOpenWhatsApp = async (telefone: string, schoolName: string, motivo: string) => {
+    const msg = `Olá, equipe do(a) *${schoolName}*! Tudo bem? Aqui é da CooperGestão.\n\nNotamos a seguinte pendência referente ao ciclo *${selectedCiclo?.nome || 'ativo'}*:\n👉 ${motivo}\n\nPor favor, envie ou atualize a lista para que possamos organizar as rotas de entrega. Obrigado!`
 
-    if (phoneToUse) {
-      window.open(`https://wa.me/${phoneToUse}?text=${msg}`, '_blank')
-    } else {
-      window.open(`https://api.whatsapp.com/send?text=${msg}`, '_blank')
+    const { preview } = await safeOpenWhatsApp({
+      phone: telefone,
+      text: msg,
+      recipientName: schoolName,
+    })
+
+    if (!preview) {
+      toast.success(`Abrindo WhatsApp para contato com ${schoolName}`)
     }
-    toast.success(`Abrindo WhatsApp para contato com ${schoolName}`)
   }
 
   const resumoFasesTexto = useMemo(() => {

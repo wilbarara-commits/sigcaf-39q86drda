@@ -31,10 +31,12 @@ import {
   Link as LinkIcon,
   Loader2,
   Filter,
+  Info,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { whatsappService } from '@/services/whatsapp-import'
 import { tokensFormularioService } from '@/services/tokens-formulario'
+import { isPreviewEnvironment, safeOpenWhatsApp } from '@/lib/whatsapp'
 import type { EnvioWhatsappRecord, TokenFormularioRecord } from '@/lib/types'
 
 export default function WhatsappCommunication() {
@@ -45,6 +47,7 @@ export default function WhatsappCommunication() {
   const [loadingEnvios, setLoadingEnvios] = useState(false)
   const [loadingTokens, setLoadingTokens] = useState(false)
   const [sendingAll, setSendingAll] = useState(false)
+  const isPreview = useMemo(() => isPreviewEnvironment(), [])
 
   // Mensagem padrão customizável com o placeholder oficial
   const [customMsg, setCustomMsg] = useState('')
@@ -322,15 +325,11 @@ Por favor, envie as quantidades da sua instituição pelo link acima durante o p
       contratoId,
       contratoNumero,
     )
-    const cleanPhone = telefone.replace(/\D/g, '')
-    const phoneToUse = cleanPhone.length >= 10 ? `55${cleanPhone}` : ''
-    const encoded = encodeURIComponent(fullMessage)
-
-    if (phoneToUse) {
-      window.open(`https://wa.me/${phoneToUse}?text=${encoded}`, '_blank')
-    } else {
-      window.open(`https://api.whatsapp.com/send?text=${encoded}`, '_blank')
-    }
+    const { preview } = await safeOpenWhatsApp({
+      phone: telefone,
+      text: fullMessage,
+      recipientName: escolaNome,
+    })
 
     try {
       await whatsappService.logEnvio({
@@ -339,9 +338,15 @@ Por favor, envie as quantidades da sua instituição pelo link acima durante o p
         status: 'enviado',
       })
       await loadEnvios()
-      toast.success(
-        `Disparo registrado para ${escolaNome} (${contratoNumero || 'Individualizado'}) com link do formulário!`,
-      )
+      if (!preview) {
+        toast.success(
+          `Disparo registrado para ${escolaNome} (${contratoNumero || 'Individualizado'}) com link do formulário!`,
+        )
+      } else {
+        toast.success(
+          `Envio simulado e registrado para ${escolaNome} (${contratoNumero || 'Individualizado'}).`,
+        )
+      }
     } catch (err) {
       console.error('Erro ao registrar envio:', err)
     }
@@ -365,7 +370,7 @@ Por favor, envie as quantidades da sua instituição pelo link acima durante o p
       let count = 0
       for (const item of escolasContratosList) {
         // Assegurar token para cada escola e contrato individualizado
-        await getOrGenerateSchoolUrl(item.escolaId, item.contratoId)
+        const schoolUrl = await getOrGenerateSchoolUrl(item.escolaId, item.contratoId)
         await whatsappService.logEnvio({
           ciclo_id: activeCiclo.id,
           escola_id: item.escolaId,
@@ -374,9 +379,18 @@ Por favor, envie as quantidades da sua instituição pelo link acima durante o p
         count++
       }
       await loadEnvios()
-      toast.success(
-        `Disparo registrado para todas as ${count} escolas/contratos com seus links únicos!`,
-      )
+
+      if (isPreview) {
+        // Em preview, o envio em massa registra os envios e avisa claramente sem abrir dezenas de popups bloqueados
+        toast.info(
+          `Envio em massa registrado para as ${count} escolas. No ambiente de demonstração, os disparos externos para o WhatsApp ficam bloqueados para evitar falha no navegador.`,
+          { duration: 6000 },
+        )
+      } else {
+        toast.success(
+          `Disparo registrado para todas as ${count} escolas/contratos com seus links únicos!`,
+        )
+      }
     } catch (err) {
       console.error('Erro ao registrar disparo em massa:', err)
       toast.error('Falha ao registrar disparo para todas as escolas.')
@@ -416,10 +430,32 @@ Por favor, envie as quantidades da sua instituição pelo link acima durante o p
             disabled={sendingAll || !activeCiclo || escolasContratosList.length === 0}
             className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2"
           >
-            <Send className="h-4 w-4" /> Enviar para Todos ({escolasContratosList.length})
+            {sendingAll ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Send className="h-4 w-4" />
+            )}
+            Enviar para Todos ({escolasContratosList.length})
           </Button>
         </div>
       </div>
+
+      {/* Banner informativo quando em ambiente de preview */}
+      {isPreview && (
+        <div className="bg-amber-500/10 border border-amber-500/30 text-amber-900 dark:text-amber-200 rounded-lg p-3 text-sm flex items-start gap-2.5">
+          <Info className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+          <div className="space-y-0.5">
+            <span className="font-semibold">Ambiente de Demonstração (Preview):</span>
+            <p className="text-xs text-muted-foreground dark:text-amber-300/80">
+              A abertura direta de links do WhatsApp (<code>api.whatsapp.com</code> /{' '}
+              <code>wa.me</code>) é bloqueada pelo navegador neste domínio. Ao clicar em enviar, o
+              sistema registra o envio operacional e copia o link completo para sua área de
+              transferência para que você possa testar o conteúdo sem erros. Em produção, os links
+              abrirão diretamente.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Editor do Template Semanal */}
       <Card className="border-t-4 border-t-emerald-600">
