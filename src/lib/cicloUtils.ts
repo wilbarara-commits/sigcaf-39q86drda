@@ -299,9 +299,18 @@ export function gerarResumoFasesCiclo(
   cicloContratos: CicloContratoRef[],
   contratosMap?: Map<string, { numero?: string }>,
 ): string {
-  const vinculados = cicloContratos.filter((cc) => cc.ciclo_id === cicloId)
-  if (vinculados.length === 0) {
+  const vinculadosRaw = cicloContratos.filter((cc) => cc.ciclo_id === cicloId)
+  if (vinculadosRaw.length === 0) {
     return 'Sem contratos vinculados'
+  }
+
+  // Deduplicar por contrato_id para garantir que cada contrato conte exatamente 1 vez
+  const seen = new Set<string>()
+  const vinculados: CicloContratoRef[] = []
+  for (const cc of vinculadosRaw) {
+    if (!cc.contrato_id || seen.has(cc.contrato_id)) continue
+    seen.add(cc.contrato_id)
+    vinculados.push(cc)
   }
 
   if (vinculados.length === 1) {

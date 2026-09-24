@@ -290,10 +290,14 @@ export default function CycleHistory() {
                     )
                     const resumoFases = gerarResumoFasesCiclo(c.id, cicloContratos, contratosMap)
 
-                    // Contratos cancelados deste ciclo
-                    const ccCancelados = cicloContratos.filter(
-                      (cc) => cc.ciclo_id === c.id && cc.fase === 'cancelado',
-                    )
+                    // Contratos cancelados deste ciclo (deduplicados por contrato_id)
+                    const seenCcCancelados = new Set<string>()
+                    const ccCancelados = cicloContratos.filter((cc) => {
+                      if (cc.ciclo_id !== c.id || cc.fase !== 'cancelado') return false
+                      if (seenCcCancelados.has(cc.contrato_id)) return false
+                      seenCcCancelados.add(cc.contrato_id)
+                      return true
+                    })
 
                     let statusBadge = (
                       <Badge variant="secondary" className="capitalize">

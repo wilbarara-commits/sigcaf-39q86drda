@@ -261,8 +261,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }
       }
 
+      // Deduplica contratos e cicloContratos para garantir unicidade em memória
+      const seenContratoIds = new Set<string>()
+      const dedupedContratos = rawContratos.filter((c) => {
+        if (seenContratoIds.has(c.id)) return false
+        seenContratoIds.add(c.id)
+        return true
+      })
+
+      const seenCicloContratoPairs = new Set<string>()
+      const dedupedCicloContratos = rawCicloContratos.filter((cc) => {
+        const key = `${cc.ciclo_id}:${cc.contrato_id}`
+        if (seenCicloContratoPairs.has(key)) return false
+        seenCicloContratoPairs.add(key)
+        return true
+      })
+
       setCiclos(rawCiclos)
-      setCicloContratos(rawCicloContratos)
+      setCicloContratos(dedupedCicloContratos)
 
       // Ciclo ATIVO = o mais recente ciclo com PELO MENOS UM contrato em fase não-terminal (máx. 1)
       const ordenadosCiclos = [...rawCiclos].sort((a, b) => {
@@ -398,7 +414,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setOrders(mappedOrders)
 
       // Map contratos with N:N escolas and balance calculation
-      const mappedContracts: Contract[] = rawContratos.map((c) => {
+      const mappedContracts: Contract[] = dedupedContratos.map((c) => {
         const links = rawContratoEscolas.filter((ce) => ce.contrato_id === c.id)
         const linkedSchools = links.map((ce) => {
           const sch = mappedSchools.find((s) => s.id === ce.escola_id)
@@ -871,7 +887,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
     } else if (e.action === 'create' || e.action === 'update') {
       const rec = e.record as CicloContratoRecord
       setCicloContratos((prev) => {
-        const existingIdx = prev.findIndex((cc) => cc.id === rec.id)
+        // Encontrar tanto por ID quanto por par (ciclo_id, contrato_id) para evitar duplicatas em transições ou optimistic updates
+        const existingIdx = prev.findIndex(
+          (cc) =>
+            cc.id === rec.id ||
+            (rec.ciclo_id &&
+              rec.contrato_id &&
+              cc.ciclo_id === rec.ciclo_id &&
+              cc.contrato_id === rec.contrato_id),
+        )
         let updated: CicloContratoRecord[]
         if (existingIdx !== -1) {
           const copy = [...prev]

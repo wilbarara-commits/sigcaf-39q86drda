@@ -108,33 +108,50 @@ export default function Monitoring() {
       })
   }, [selectedCiclo])
 
-  // Contratos vinculados ao ciclo selecionado
+  // Contratos vinculados ao ciclo selecionado (deduplicados estritamente por contratoId)
   const contratosVinculados = useMemo(() => {
     if (!selectedCiclo) return []
     const ccList = cicloContratos.filter((cc) => cc.ciclo_id === selectedCiclo.id)
+
+    // Deduplica ccList por contrato_id garantindo apenas 1 entrada por contrato
+    const seenContratos = new Set<string>()
+    const uniqueList: Array<{
+      contratoId: string
+      numero: string
+      fase: string
+      motivo_cancelamento?: string
+      data_cancelamento?: string
+    }> = []
+
     if (ccList.length === 0) {
-      return contracts
-        .filter((c) => c.status === 'Ativo')
-        .map((c) => ({
-          contratoId: c.id,
-          numero: c.numero,
-          fase: selectedCiclo.status || 'coletando',
-          motivo_cancelamento: undefined as string | undefined,
-          data_cancelamento: undefined as string | undefined,
-        }))
-    }
-    return ccList
-      .map((cc) => {
-        const contrato = contracts.find((c) => c.id === cc.contrato_id)
-        return {
-          contratoId: cc.contrato_id,
-          numero: contrato?.numero || cc.expand?.contrato_id?.numero || 'Contrato',
-          fase: cc.fase,
-          motivo_cancelamento: cc.motivo_cancelamento,
-          data_cancelamento: cc.data_cancelamento,
+      for (const c of contracts) {
+        if (c.status === 'Ativo' && !seenContratos.has(c.id)) {
+          seenContratos.add(c.id)
+          uniqueList.push({
+            contratoId: c.id,
+            numero: c.numero,
+            fase: selectedCiclo.status || 'coletando',
+            motivo_cancelamento: undefined,
+            data_cancelamento: undefined,
+          })
         }
+      }
+      return uniqueList
+    }
+
+    for (const cc of ccList) {
+      if (!cc.contrato_id || seenContratos.has(cc.contrato_id)) continue
+      seenContratos.add(cc.contrato_id)
+      const contrato = contracts.find((c) => c.id === cc.contrato_id)
+      uniqueList.push({
+        contratoId: cc.contrato_id,
+        numero: contrato?.numero || cc.expand?.contrato_id?.numero || 'Contrato',
+        fase: cc.fase,
+        motivo_cancelamento: cc.motivo_cancelamento,
+        data_cancelamento: cc.data_cancelamento,
       })
-      .filter(Boolean)
+    }
+    return uniqueList
   }, [selectedCiclo, cicloContratos, contracts])
 
   // Ajustar selectedContratoId se não existir mais na lista
