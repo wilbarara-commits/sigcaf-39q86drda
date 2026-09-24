@@ -620,9 +620,14 @@ export default function Contracts() {
       return
     }
 
-    const val = parseFloat(valorTotal.replace(',', '.'))
-    if (isNaN(val) || val <= 0) {
-      toast.error('Informe um valor total válido.')
+    const rawVal = parseFloat((valorTotal || '0').replace(',', '.'))
+    const val = isNaN(rawVal) ? 0 : Math.max(0, rawVal)
+
+    // Se não informou valor total e também não há itens acordados cadastrados/importados
+    if (val <= 0 && contractItems.length === 0) {
+      toast.error(
+        'Informe um valor total válido ou importe/adicione os itens acordados do contrato.',
+      )
       return
     }
 
@@ -2070,31 +2075,45 @@ export default function Contracts() {
                         setValorTotal(total.toFixed(2))
                       }
                     }}
+                    contractId={editingContract?.id}
                   />
                 )}
               </TabsContent>
             </Tabs>
 
-            <DialogFooter className="pt-4 border-t">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setDialogOpen(false)}
-                disabled={isSubmitting}
-              >
-                Cancelar
-              </Button>
-              <Button type="submit" disabled={isSubmitting}>
-                {isSubmitting ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Salvando...
-                  </>
-                ) : editingContract ? (
-                  'Salvar Alterações'
-                ) : (
-                  'Cadastrar Contrato'
+            <DialogFooter className="pt-4 border-t flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+              <div className="text-xs text-muted-foreground flex items-center gap-1.5">
+                {!editingContract && contractItems.length > 0 && (
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/20 font-medium">
+                    <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-amber-600 dark:text-amber-400" />
+                    <span>
+                      {contractItems.length} item(ns) importado(s) pendente(s) de confirmação.
+                      Clique em &quot;Cadastrar Contrato&quot; para gravar no banco.
+                    </span>
+                  </span>
                 )}
-              </Button>
+              </div>
+              <div className="flex items-center justify-end gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setDialogOpen(false)}
+                  disabled={isSubmitting}
+                >
+                  Cancelar
+                </Button>
+                <Button type="submit" disabled={isSubmitting}>
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Salvando...
+                    </>
+                  ) : editingContract ? (
+                    'Salvar Alterações'
+                  ) : (
+                    'Cadastrar Contrato'
+                  )}
+                </Button>
+              </div>
             </DialogFooter>
           </form>
         </DialogContent>

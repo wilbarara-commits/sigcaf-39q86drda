@@ -64,6 +64,7 @@ import {
   type ParsedContractItemRow,
 } from '@/lib/contractItemsImporter'
 import { produtosService } from '@/services/produtos'
+import { contratosService } from '@/services/contratos'
 import { DEFAULT_PRODUCT_UNIT } from '@/lib/productCsvImporter'
 import { useApp } from '@/context/app-context'
 import { toast } from 'sonner'
@@ -83,6 +84,7 @@ interface ContractItemsManagerProps {
   onChange: (items: ContractItemForm[]) => void
   catalogProducts: Product[]
   onTotalCalculadoChange?: (total: number, hasQuantities: boolean) => void
+  contractId?: string
 }
 
 export function ContractItemsManager({
@@ -90,6 +92,7 @@ export function ContractItemsManager({
   onChange,
   catalogProducts,
   onTotalCalculadoChange,
+  contractId,
 }: ContractItemsManagerProps) {
   // Modal de Seleção em Lote do Catálogo
   const [batchModalOpen, setBatchModalOpen] = useState(false)
@@ -460,7 +463,7 @@ export function ContractItemsManager({
     setPastePreview({ matched, unmatched })
   }
 
-  const handleApplyPastedItems = () => {
+  const handleApplyPastedItems = async () => {
     if (!pastePreview || pastePreview.matched.length === 0) return
 
     // Mesclar: se já existe o produto, atualiza o preço e quantidade; se não existe, adiciona
@@ -495,8 +498,38 @@ export function ContractItemsManager({
       }
     }
 
-    onChange(Array.from(currentMap.values()))
-    toast.success(`Itens aplicados: ${addedCount} adicionado(s), ${updatedCount} atualizado(s)!`)
+    const finalItemsList = Array.from(currentMap.values())
+    onChange(finalItemsList)
+
+    if (contractId) {
+      setIsSubmittingImport(true)
+      try {
+        const validItems = finalItemsList.filter((i) => i.productId && Number(i.price) >= 0)
+        await contratosService.syncItems(
+          contractId,
+          validItems.map((it) => ({
+            id: it.id,
+            produto_id: it.productId,
+            preco: it.price,
+            quantidade_contratada: it.quantity && it.quantity > 0 ? it.quantity : undefined,
+            nome_contrato: it.nomeContrato || undefined,
+            apelidos: it.apelidos || undefined,
+          })),
+        )
+        await refreshData()
+        toast.success(
+          `Itens colados e salvos no contrato com sucesso: ${addedCount} adicionado(s), ${updatedCount} atualizado(s)!`,
+        )
+      } catch (err: any) {
+        console.error('Erro ao salvar itens colados no contrato:', err)
+        toast.error('Falha ao gravar itens no banco de dados.')
+      } finally {
+        setIsSubmittingImport(false)
+      }
+    } else {
+      toast.success(`Itens aplicados: ${addedCount} adicionado(s), ${updatedCount} atualizado(s)!`)
+    }
+
     setPasteModalOpen(false)
     setPasteText('')
     setPastePreview(null)
@@ -834,10 +867,41 @@ export function ContractItemsManager({
       }
     }
 
-    onChange(Array.from(currentMap.values()))
-    toast.success(
-      `Planilha importada com sucesso: ${addedCount} produto(s) adicionado(s), ${updatedCount} atualizado(s)!`,
-    )
+    const finalItemsList = Array.from(currentMap.values())
+    onChange(finalItemsList)
+
+    // Se o contrato já existir (contractId fornecido), persiste diretamente em contrato_itens
+    if (contractId) {
+      setIsSubmittingImport(true)
+      try {
+        const validItems = finalItemsList.filter((i) => i.productId && Number(i.price) >= 0)
+        await contratosService.syncItems(
+          contractId,
+          validItems.map((it) => ({
+            id: it.id,
+            produto_id: it.productId,
+            preco: it.price,
+            quantidade_contratada: it.quantity && it.quantity > 0 ? it.quantity : undefined,
+            nome_contrato: it.nomeContrato || undefined,
+            apelidos: it.apelidos || undefined,
+          })),
+        )
+        await refreshData()
+        toast.success(
+          `Planilha importada e gravada no contrato com sucesso: ${addedCount} produto(s) adicionado(s), ${updatedCount} atualizado(s)!`,
+        )
+      } catch (err: any) {
+        console.error('Erro ao persistir itens do contrato importados:', err)
+        toast.error('Falha ao salvar itens importados no banco de dados.')
+      } finally {
+        setIsSubmittingImport(false)
+      }
+    } else {
+      toast.success(
+        `Planilha importada com sucesso: ${addedCount} produto(s) adicionado(s), ${updatedCount} atualizado(s)!`,
+      )
+    }
+
     // Sincronização global acontece na confirmação da importação se produtos foram criados
     if (localAddedProducts.length > 0) {
       refreshData().catch(() => {})
@@ -1503,11 +1567,20 @@ export function ContractItemsManager({
               type="button"
               size="sm"
               onClick={handleApplyPastedItems}
-              disabled={!pastePreview || pastePreview.matched.length === 0}
+              disabled={!pastePreview || pastePreview.matched.length === 0 || isSubmittingImport}
               className="gap-1.5"
             >
-              <Check className="h-3.5 w-3.5" />
-              Aplicar {pastePreview?.matched.length || 0} produto(s) ao Contrato
+              {isSubmittingImport ? (
+                <>
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  Salvando no Contrato...
+                </>
+              ) : (
+                <>
+                  <Check className="h-3.5 w-3.5" />
+                  Aplicar {pastePreview?.matched.length || 0} produto(s) ao Contrato
+                </>
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1904,12 +1977,22 @@ export function ContractItemsManager({
                 disabled={
                   !fileParseResult ||
                   fileParseResult.validRows.length === 0 ||
-                  fileParseResult.unmatchedCount > 0
+                  fileParseResult.unmatchedCount > 0 ||
+                  isSubmittingImport
                 }
                 className="gap-1.5"
               >
-                <Check className="h-3.5 w-3.5" />
-                Confirmar Importação de {fileParseResult?.validRows.length || 0} produto(s)
+                {isSubmittingImport ? (
+                  <>
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    Salvando no Contrato...
+                  </>
+                ) : (
+                  <>
+                    <Check className="h-3.5 w-3.5" />
+                    Confirmar Importação de {fileParseResult?.validRows.length || 0} produto(s)
+                  </>
+                )}
               </Button>
             </div>
           </DialogFooter>
