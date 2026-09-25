@@ -11,6 +11,40 @@ export function isPreviewEnvironment(): boolean {
   return hostname.includes('preview')
 }
 
+/**
+ * Normaliza número de telefone para WhatsApp:
+ * - Remove caracteres não numéricos
+ * - Garante DDI 55 do Brasil caso não esteja presente
+ * - Evita duplicar DDI quando já houver 55 no início
+ */
+export function normalizeWhatsAppPhone(phone?: string): string {
+  if (!phone) return ''
+  const clean = phone.replace(/\D/g, '')
+  if (!clean) return ''
+
+  // Se já tiver 12 ou 13 dígitos e começar com 55 (ex: 5521987654321 ou 552127421234), mantém
+  if ((clean.length === 12 || clean.length === 13) && clean.startsWith('55')) {
+    return clean
+  }
+
+  // Se tiver 10 ou 11 dígitos (DDD 2 dígitos + número de 8 ou 9 dígitos), adiciona DDI 55
+  if (clean.length === 10 || clean.length === 11) {
+    return `55${clean}`
+  }
+
+  // Se tiver 12 ou mais dígitos e já começar com 55, mantém
+  if (clean.length >= 12 && clean.startsWith('55')) {
+    return clean
+  }
+
+  // Se tiver pelo menos 10 dígitos sem 55, adiciona 55
+  if (clean.length >= 10) {
+    return `55${clean}`
+  }
+
+  return ''
+}
+
 export interface BuildWhatsAppUrlOptions {
   phone?: string
   text: string
@@ -20,14 +54,43 @@ export interface BuildWhatsAppUrlOptions {
  * Gera o link direto do WhatsApp (wa.me com telefone ou api.whatsapp.com/send com texto genérico).
  */
 export function buildWhatsAppUrl({ phone, text }: BuildWhatsAppUrlOptions): string {
-  const cleanPhone = (phone || '').replace(/\D/g, '')
-  const phoneToUse = cleanPhone.length >= 10 ? `55${cleanPhone}` : ''
+  const phoneToUse = normalizeWhatsAppPhone(phone)
   const encoded = encodeURIComponent(text)
 
   if (phoneToUse) {
     return `https://wa.me/${phoneToUse}?text=${encoded}`
   }
   return `https://api.whatsapp.com/send?text=${encoded}`
+}
+
+export interface ProtocoloWhatsAppMessageOptions {
+  schoolName: string
+  protocolo: string
+  cicloNome?: string
+  dataEntrega?: string
+}
+
+/**
+ * Gera a mensagem textual cordial para envio do protocolo do pedido à escola.
+ */
+export function buildProtocoloWhatsAppMessage({
+  schoolName,
+  protocolo,
+  cicloNome,
+  dataEntrega,
+}: ProtocoloWhatsAppMessageOptions): string {
+  const cicloRef = cicloNome ? ` referente ao *${cicloNome}*` : ''
+  const entregaRef = dataEntrega ? `\n📅 *Previsão de Entrega:* ${dataEntrega}` : ''
+
+  return `Olá, equipe da *${schoolName}*! Tudo bem? Aqui é da Cooperativa.
+
+Informamos que o pedido da sua instituição${cicloRef} foi registrado com sucesso em nosso sistema!
+
+📋 *Protocolo do Pedido:* *${protocolo}*${entregaRef}
+
+📌 *Lembrete:* Este protocolo é o comprovante do registro do seu pedido. Nossa equipe já está trabalhando na organização e roteirização da entrega.
+
+Qualquer dúvida, estamos à disposição!`
 }
 
 export interface SafeOpenWhatsAppOptions {

@@ -73,8 +73,13 @@ import {
   Play,
   UserCheck,
   Check,
+  Send,
+  PhoneOff,
 } from 'lucide-react'
 import { toast } from 'sonner'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import { safeOpenWhatsApp, buildProtocoloWhatsAppMessage } from '@/lib/whatsapp'
+import { whatsappService } from '@/services/whatsapp-import'
 
 export default function Orders() {
   const {
@@ -148,6 +153,9 @@ export default function Orders() {
   const [deliverDialogOpen, setDeliverDialogOpen] = useState(false)
   const [orderToDeliver, setOrderToDeliver] = useState<Order | null>(null)
   const [isDelivering, setIsDelivering] = useState(false)
+
+  // Envio de protocolo por WhatsApp
+  const [sendingWhatsAppId, setSendingWhatsAppId] = useState<string | null>(null)
 
   // Filtrar contratos com modalidade individualizada para lançamento via WhatsApp
   const individualContracts = useMemo(
@@ -512,6 +520,75 @@ export default function Orders() {
       }
     } finally {
       setIsSavingEdit(false)
+    }
+  }
+
+  // Mapa de telefone das escolas (para lookup rápido e desativação com tooltip)
+  const schoolPhonesMap = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const s of schools) {
+      if (s.contact && s.contact.trim()) {
+        map.set(s.id, s.contact.trim())
+      }
+    }
+    return map
+  }, [schools])
+
+  const handleSendProtocoloWhatsApp = async (order: Order) => {
+    const schoolPhone = schoolPhonesMap.get(order.schoolId)
+    if (!schoolPhone) {
+      toast.warning(`A escola ${order.schoolName} não possui telefone cadastrado.`)
+      return
+    }
+
+    if (!order.numero) {
+      toast.warning('Este pedido não possui número de protocolo.')
+      return
+    }
+
+    setSendingWhatsAppId(order.id)
+    try {
+      const cicloObj = order.cicloId
+        ? ciclos.find((c) => c.id === order.cicloId) || activeCiclo
+        : activeCiclo
+      const dataPrevistaFormatada = order.date
+        ? new Date(order.date).toLocaleDateString('pt-BR')
+        : undefined
+
+      const mensagem = buildProtocoloWhatsAppMessage({
+        schoolName: order.schoolName,
+        protocolo: order.numero,
+        cicloNome: cicloObj?.nome,
+        dataEntrega: dataPrevistaFormatada,
+      })
+
+      const { preview } = await safeOpenWhatsApp({
+        phone: schoolPhone,
+        text: mensagem,
+        recipientName: order.schoolName,
+      })
+
+      // Registrar disparo na collection envios_whatsapp (se houver cicloId)
+      if (order.cicloId || activeCiclo?.id) {
+        try {
+          await whatsappService.logEnvio({
+            ciclo_id: order.cicloId || activeCiclo!.id,
+            escola_id: order.schoolId,
+            status: 'enviado',
+          })
+        } catch (logErr) {
+          console.warn('Aviso: não foi possível registrar envio na collection:', logErr)
+        }
+      }
+
+      if (!preview) {
+        toast.success(`Protocolo ${order.numero} enviado via WhatsApp para ${order.schoolName}!`)
+      }
+    } catch (err: any) {
+      console.error('Erro ao enviar protocolo por WhatsApp:', err)
+      toast.error('Falha ao gerar link do WhatsApp para envio do protocolo.')
+    } finally {
+      setSendingWhatsAppId(null)
     }
   }
 
@@ -1083,6 +1160,45 @@ export default function Orders() {
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-1">
+                          {/* Botão Enviar protocolo por WhatsApp */}
+                          <TooltipProvider delayDuration={300}>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <span className="inline-flex">
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    className="h-7 w-7 p-0 text-green-700 hover:text-green-800 hover:bg-green-50 dark:text-green-400"
+                                    title={
+                                      schoolPhonesMap.get(order.schoolId)
+                                        ? 'Enviar protocolo por WhatsApp'
+                                        : undefined
+                                    }
+                                    disabled={
+                                      !order.numero ||
+                                      !schoolPhonesMap.get(order.schoolId) ||
+                                      sendingWhatsAppId === order.id
+                                    }
+                                    onClick={() => handleSendProtocoloWhatsApp(order)}
+                                  >
+                                    {sendingWhatsAppId === order.id ? (
+                                      <Loader2 className="h-4 w-4 animate-spin" />
+                                    ) : (
+                                      <Send className="h-4 w-4" />
+                                    )}
+                                  </Button>
+                                </span>
+                              </TooltipTrigger>
+                              <TooltipContent side="left" className="max-w-[220px] text-xs">
+                                {!order.numero
+                                  ? 'Este pedido não possui número de protocolo.'
+                                  : !schoolPhonesMap.get(order.schoolId)
+                                    ? `A escola ${order.schoolName} não possui telefone cadastrado. Cadastre em Escolas para habilitar o envio.`
+                                    : 'Enviar protocolo por WhatsApp'}
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+
                           <Button
                             size="sm"
                             variant="ghost"
@@ -1329,6 +1445,59 @@ export default function Orders() {
                   R$ {(viewingOrder.total || 0).toFixed(2)}
                 </span>
               </div>
+
+              {/* Envio do protocolo por WhatsApp */}
+              {(() => {
+                const phone = viewingOrder.schoolId
+                  ? schoolPhonesMap.get(viewingOrder.schoolId)
+                  : undefined
+                const canSend = Boolean(viewingOrder.numero && phone)
+                const tooltipText = !viewingOrder.numero
+                  ? 'Este pedido não possui número de protocolo.'
+                  : !phone
+                    ? `A escola ${viewingOrder.schoolName} não possui telefone cadastrado. Cadastre em Escolas para habilitar o envio.`
+                    : 'Enviar protocolo por WhatsApp'
+                return (
+                  <div className="pt-2 border-t">
+                    <TooltipProvider delayDuration={300}>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span className="inline-flex w-full">
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              className="w-full gap-2 text-green-700 border-green-300 hover:bg-green-50 hover:text-green-800 dark:text-green-400 dark:border-green-800 dark:hover:bg-green-950"
+                              disabled={!canSend || sendingWhatsAppId === viewingOrder.id}
+                              onClick={() => handleSendProtocoloWhatsApp(viewingOrder)}
+                            >
+                              {sendingWhatsAppId === viewingOrder.id ? (
+                                <>
+                                  <Loader2 className="h-4 w-4 animate-spin" /> Preparando link...
+                                </>
+                              ) : (
+                                <>
+                                  <Send className="h-4 w-4" /> Enviar protocolo por WhatsApp
+                                </>
+                              )}
+                            </Button>
+                          </span>
+                        </TooltipTrigger>
+                        {!canSend && (
+                          <TooltipContent className="max-w-[240px] text-xs">
+                            {tooltipText}
+                          </TooltipContent>
+                        )}
+                      </Tooltip>
+                    </TooltipProvider>
+                    {!canSend && phone === undefined && viewingOrder.numero && (
+                      <p className="mt-1.5 text-[10px] text-muted-foreground text-center">
+                        {tooltipText}
+                      </p>
+                    )}
+                  </div>
+                )
+              })()}
             </div>
           )}{' '}
         </DialogContent>
