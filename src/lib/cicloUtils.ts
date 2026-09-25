@@ -168,6 +168,39 @@ export function getDespachoPrevistoCiclo(dataInicio: Date | string): Date {
 }
 
 /**
+ * Retorna a data de despacho (segunda-feira) efetiva de um ciclo,
+ * respeitando com prioridade o snapshot gravado no banco ou calculando
+ * a partir das datas do ciclo.
+ */
+export function getDespachoEfetivoCiclo(
+  ciclo?: {
+    data_inicio?: string
+    data_fim?: string
+    snapshot?: { despacho_previsto_segunda?: string } | any
+  } | null,
+): Date {
+  if (!ciclo) return new Date()
+
+  // 1. Se houver snapshot com data de despacho gravada
+  if (ciclo.snapshot?.despacho_previsto_segunda) {
+    return parseDateSegura(ciclo.snapshot.despacho_previsto_segunda)
+  }
+
+  // 2. Se houver data de início
+  if (ciclo.data_inicio) {
+    return getDespachoPrevistoCiclo(ciclo.data_inicio)
+  }
+
+  // 3. Se houver data de fim (terça-feira -> segunda é véspera: -1 dia)
+  if (ciclo.data_fim) {
+    const fim = parseDateSegura(ciclo.data_fim)
+    return new Date(fim.getFullYear(), fim.getMonth(), fim.getDate() - 1, 12, 0, 0, 0)
+  }
+
+  return new Date()
+}
+
+/**
  * Formata a data de despacho para exibição amigável nas telas, ex.: "Seg, 21/09" ou "Segunda-feira, 21/09/2026"
  */
 export function formatDespachoAmigavel(

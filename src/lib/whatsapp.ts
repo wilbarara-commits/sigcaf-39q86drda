@@ -63,34 +63,119 @@ export function buildWhatsAppUrl({ phone, text }: BuildWhatsAppUrlOptions): stri
   return `https://api.whatsapp.com/send?text=${encoded}`
 }
 
+export interface ProtocoloItemMessage {
+  nome: string
+  quantidade: number | string
+  unidade?: string
+}
+
 export interface ProtocoloWhatsAppMessageOptions {
   schoolName: string
   protocolo: string
   cicloNome?: string
   dataEntrega?: string
+  itens?: ProtocoloItemMessage[]
+  totalValor?: number
 }
 
 /**
- * Gera a mensagem textual cordial para envio do protocolo do pedido à escola.
+ * Gera a mensagem textual cordial e completa para envio do protocolo do pedido à escola,
+ * incluindo previsão de entrega e a lista detalhada de itens com quantidades.
  */
 export function buildProtocoloWhatsAppMessage({
   schoolName,
   protocolo,
   cicloNome,
   dataEntrega,
+  itens,
+  totalValor,
 }: ProtocoloWhatsAppMessageOptions): string {
   const cicloRef = cicloNome ? ` referente ao *${cicloNome}*` : ''
   const entregaRef = dataEntrega ? `\n📅 *Previsão de Entrega:* ${dataEntrega}` : ''
+
+  let itensBloco = ''
+  if (itens && itens.length > 0) {
+    const linhasItens = itens.map((it) => {
+      const qtdFmt =
+        typeof it.quantidade === 'number'
+          ? it.quantidade.toLocaleString('pt-BR', {
+              minimumFractionDigits: Number.isInteger(it.quantidade) ? 0 : 1,
+              maximumFractionDigits: 2,
+            })
+          : String(it.quantidade).replace('.', ',')
+      const unStr = it.unidade ? ` ${it.unidade}` : ''
+      return `• ${it.nome}: *${qtdFmt}${unStr}*`
+    })
+
+    itensBloco = `\n\n📦 *Itens do Pedido (${itens.length}):*\n${linhasItens.join('\n')}`
+  }
+
+  const totalBloco =
+    typeof totalValor === 'number' && totalValor > 0
+      ? `\n💰 *Valor Total:* R$ ${totalValor.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+      : ''
 
   return `Olá, equipe da *${schoolName}*! Tudo bem? Aqui é da Cooperativa.
 
 Informamos que o pedido da sua instituição${cicloRef} foi registrado com sucesso em nosso sistema!
 
-📋 *Protocolo do Pedido:* *${protocolo}*${entregaRef}
+📋 *Protocolo do Pedido:* *${protocolo}*${entregaRef}${itensBloco}${totalBloco}
 
 📌 *Lembrete:* Este protocolo é o comprovante do registro do seu pedido. Nossa equipe já está trabalhando na organização e roteirização da entrega.
 
 Qualquer dúvida, estamos à disposição!`
+}
+
+/**
+ * Constrói o texto do protocolo no formato de imagem/comprovante textual completo
+ * para cópia direta para a área de transferência no formulário público.
+ */
+export function buildComprovanteProtocoloTexto({
+  schoolName,
+  protocolo,
+  cicloNome,
+  dataEntrega,
+  itens,
+}: {
+  schoolName: string
+  protocolo: string
+  cicloNome?: string
+  dataEntrega?: string
+  itens?: ProtocoloItemMessage[]
+}): string {
+  const linhas: string[] = []
+  linhas.push('═══════════════════════════════════════')
+  linhas.push('         COMPROVANTE DE PEDIDO         ')
+  linhas.push('═══════════════════════════════════════')
+  linhas.push(`📋 PROTOCOLO: ${protocolo}`)
+  linhas.push(`🏫 ESCOLA: ${schoolName}`)
+  if (cicloNome) {
+    linhas.push(`🔄 CICLO: ${cicloNome}`)
+  }
+  if (dataEntrega) {
+    linhas.push(`📅 PREVISÃO DE ENTREGA: ${dataEntrega}`)
+  }
+  linhas.push('───────────────────────────────────────')
+  linhas.push('ITENS SOLICITADOS:')
+  if (itens && itens.length > 0) {
+    itens.forEach((it) => {
+      const qtdFmt =
+        typeof it.quantidade === 'number'
+          ? it.quantidade.toLocaleString('pt-BR', {
+              minimumFractionDigits: Number.isInteger(it.quantidade) ? 0 : 1,
+              maximumFractionDigits: 2,
+            })
+          : String(it.quantidade).replace('.', ',')
+      const unStr = it.unidade ? ` ${it.unidade}` : ''
+      linhas.push(` • ${it.nome}: ${qtdFmt}${unStr}`)
+    })
+  } else {
+    linhas.push(' • Nenhum item listado')
+  }
+  linhas.push('═══════════════════════════════════════')
+  linhas.push('Guarde este comprovante para conferência.')
+
+  return linhas.join('\n')
 }
 
 export interface SafeOpenWhatsAppOptions {

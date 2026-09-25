@@ -18,7 +18,15 @@ import {
   calcularCicloSemanal,
   formatDespachoAmigavel,
   formatIntervaloCiclo,
+  getDespachoEfetivoCiclo,
 } from '@/lib/cicloUtils'
+import {
+  formatQuantityOneDecimal,
+  validateQuantityStepHalf,
+  normalizeDecimalTyping,
+  formatQuantityOnBlur,
+} from '@/lib/decimalUtils'
+import { buildComprovanteProtocoloTexto } from '@/lib/whatsapp'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -195,7 +203,7 @@ export default function SchoolOrderForm() {
           const prevQtd = pastItemsMap.get(ci.produto_id)
           const initialQtd =
             !bloqueado && prevQtd !== undefined && prevQtd > 0
-              ? String(prevQtd).replace('.', ',')
+              ? formatQuantityOneDecimal(prevQtd)
               : ''
 
           return {
@@ -237,14 +245,25 @@ export default function SchoolOrderForm() {
   // Informações de datas calculadas do ciclo
   const cicloInfo = useMemo(() => {
     if (!ciclo) return null
-    return calcularCicloSemanal(new Date(ciclo.data_inicio))
+    return calcularCicloSemanal(ciclo.data_inicio)
   }, [ciclo])
 
-  // Despacho previsto (segunda-feira da entrega)
+  // Despacho previsto (segunda-feira da entrega):
+  // Utiliza getDespachoEfetivoCiclo para priorizar o snapshot do ciclo ou calcular confiavelmente
+  const dataDespachoDate = useMemo(() => {
+    if (!ciclo) return null
+    return getDespachoEfetivoCiclo(ciclo)
+  }, [ciclo])
+
   const dataDespachoFormatada = useMemo(() => {
-    if (!cicloInfo) return 'Próxima segunda-feira'
-    return formatDespachoAmigavel(cicloInfo.segundaDespacho)
-  }, [cicloInfo])
+    if (dataDespachoDate) {
+      return formatDespachoAmigavel(dataDespachoDate, true)
+    }
+    if (cicloInfo) {
+      return formatDespachoAmigavel(cicloInfo.segundaDespacho, true)
+    }
+    return 'Próxima segunda-feira'
+  }, [dataDespachoDate, cicloInfo])
 
   // Status da fase do contrato no ciclo
   // Cadeia: coletando -> correcao -> coleta_encerrada -> fechado (+ cancelado)
@@ -283,21 +302,22 @@ export default function SchoolOrderForm() {
     return formItems.every((it) => it.bloqueado)
   }, [formItems])
 
-  // Validação ao vivo dos itens
+  // Validação ao vivo dos itens com regra de decimais (,0 e ,5)
   const validacao = useMemo(() => {
-    const preenchidos = formItems.filter((it) => {
-      if (it.bloqueado) return false
-      const val = parseFloat(it.quantidade.replace(',', '.'))
-      return !isNaN(val) && val > 0
-    })
-
+    const preenchidos: Array<{ item: FormItem; numVal: number }> = []
     const errosPorItem: Record<string, string> = {}
+
     formItems.forEach((it) => {
       if (it.bloqueado) return
-      if (!it.quantidade.trim()) return
-      const val = parseFloat(it.quantidade.replace(',', '.'))
-      if (isNaN(val) || val < 0) {
-        errosPorItem[it.contratoItemId] = 'Informe um número positivo válido'
+      const trimmed = it.quantidade.trim()
+      if (!trimmed) return
+
+      const res = validateQuantityStepHalf(trimmed)
+      if (!res.isValid) {
+        errosPorItem[it.contratoItemId] =
+          res.error || 'Valor inválido. Use múltiplos de 0,5 (ex: 2,0 ou 2,5)'
+      } else {
+        preenchidos.push({ item: it, numVal: res.numericValue })
       }
     })
 
@@ -309,17 +329,31 @@ export default function SchoolOrderForm() {
       errosPorItem,
       mensagemGeral:
         preenchidos.length === 0
-          ? 'Preencha a quantidade de pelo menos um produto disponível.'
+          ? 'Preencha a quantidade de pelo menos um produto disponível (em múltiplos de 0,5).'
           : Object.keys(errosPorItem).length > 0
-            ? 'Corrija os valores inválidos antes de enviar.'
+            ? 'Corrija os valores com partes decimais inválidas (apenas ,0 ou ,5).'
             : null,
     }
   }, [formItems])
 
-  // Atualizar quantidade de um item
-  const handleQuantityChange = (contratoItemId: string, val: string) => {
+  // Atualizar quantidade de um item digitando com normalização pt-BR
+  const handleQuantityChange = (contratoItemId: string, rawVal: string) => {
+    const normalized = normalizeDecimalTyping(rawVal)
     setFormItems((prev) =>
-      prev.map((it) => (it.contratoItemId === contratoItemId ? { ...it, quantidade: val } : it)),
+      prev.map((it) =>
+        it.contratoItemId === contratoItemId ? { ...it, quantidade: normalized } : it,
+      ),
+    )
+  }
+
+  // Ao perder o foco, formatar com 1 casa decimal (ex: "5" -> "5,0")
+  const handleQuantityBlur = (contratoItemId: string) => {
+    setFormItems((prev) =>
+      prev.map((it) => {
+        if (it.contratoItemId !== contratoItemId) return it
+        const formatted = formatQuantityOnBlur(it.quantidade)
+        return { ...it, quantidade: formatted }
+      }),
     )
   }
 
@@ -352,18 +386,20 @@ export default function SchoolOrderForm() {
     try {
       // 1. Filtrar itens válidos com quantidade > 0 e não bloqueados
       const itensParaEnviar = formItems
-        .filter((it) => {
-          if (it.bloqueado) return false
-          const val = parseFloat(it.quantidade.replace(',', '.'))
-          return !isNaN(val) && val > 0
+        .filter((it) => !it.bloqueado && it.quantidade.trim() !== '')
+        .map((it) => {
+          const res = validateQuantityStepHalf(it.quantidade)
+          if (!res.isValid) {
+            throw new Error(`Item ${it.nomeContrato} com quantidade inválida: ${res.error}`)
+          }
+          return {
+            produto_id: it.produtoId,
+            quantidade: res.numericValue,
+            preco_unitario: it.precoUnitario,
+            nome: it.nomeContrato,
+            unidade: it.unidade,
+          }
         })
-        .map((it) => ({
-          produto_id: it.produtoId,
-          quantidade: parseFloat(it.quantidade.replace(',', '.')),
-          preco_unitario: it.precoUnitario,
-          nome: it.nomeContrato,
-          unidade: it.unidade,
-        }))
 
       // 2. Se for reenvio (já existia pedido da escola neste ciclo):
       // o ÚLTIMO envio da escola no ciclo é o válido e os anteriores ficam marcados como substituídos
@@ -408,9 +444,11 @@ export default function SchoolOrderForm() {
         })
       const rotaId = contractSchool?.rota_id || ''
 
-      const dataPrevistaIso = cicloInfo
-        ? cicloInfo.segundaDespacho.toISOString()
-        : new Date(ciclo.data_fim).toISOString()
+      const dataPrevistaIso = dataDespachoDate
+        ? dataDespachoDate.toISOString()
+        : cicloInfo
+          ? cicloInfo.segundaDespacho.toISOString()
+          : new Date(ciclo.data_fim).toISOString()
 
       // 5. Criar novo pedido com origem = 'formulario'
       const createdOrder = await pedidosService.create({
@@ -592,10 +630,19 @@ export default function SchoolOrderForm() {
                   variant="outline"
                   className="flex-1 text-xs gap-1"
                   onClick={() => {
-                    navigator.clipboard.writeText(
-                      `Protocolo de Pedido: ${submittedOrder.protocolo}\nEscola: ${escola?.nome}\nEntrega: ${submittedOrder.dataDespacho}`,
-                    )
-                    toast.success('Protocolo copiado para a área de transferência!')
+                    const textoCompleto = buildComprovanteProtocoloTexto({
+                      schoolName: escola?.nome || 'Escola',
+                      protocolo: submittedOrder.protocolo,
+                      cicloNome: ciclo?.nome,
+                      dataEntrega: submittedOrder.dataDespacho,
+                      itens: submittedOrder.itens.map((it) => ({
+                        nome: it.nome,
+                        quantidade: formatQuantityOneDecimal(it.quantidade),
+                        unidade: it.unidade,
+                      })),
+                    })
+                    navigator.clipboard.writeText(textoCompleto)
+                    toast.success('Comprovante completo do protocolo copiado!')
                   }}
                 >
                   <Copy className="w-3.5 h-3.5" /> Copiar Protocolo
@@ -744,9 +791,9 @@ export default function SchoolOrderForm() {
                 Produtos do Contrato
               </CardTitle>
               <CardDescription className="text-xs text-muted-foreground">
-                Informe as quantidades desejadas de cada produto. Produtos em{' '}
-                <strong>escassez</strong> ou <strong>indisponíveis</strong> estão bloqueados pela
-                cooperativa neste ciclo.
+                Informe as quantidades desejadas de cada produto. Os valores devem ser expressos com{' '}
+                <strong>uma casa decimal (,0 ou ,5)</strong>, representando frações de meio
+                quilo/unidade.{' '}
               </CardDescription>
             </CardHeader>
 
@@ -806,16 +853,17 @@ export default function SchoolOrderForm() {
                               type="text"
                               inputMode="decimal"
                               disabled={item.bloqueado || !canSend || isSubmitting}
-                              placeholder={item.bloqueado ? 'Bloqueado' : '0,00'}
+                              placeholder={item.bloqueado ? 'Bloqueado' : '0,0'}
                               value={item.quantidade}
                               onChange={(e) =>
                                 handleQuantityChange(item.contratoItemId, e.target.value)
                               }
+                              onBlur={() => handleQuantityBlur(item.contratoItemId)}
                               className={`h-9 text-right font-mono text-xs ${
                                 item.bloqueado
                                   ? 'bg-slate-100 text-muted-foreground cursor-not-allowed border-dashed'
                                   : erro
-                                    ? 'border-red-500 focus-visible:ring-red-500'
+                                    ? 'border-red-500 focus-visible:ring-red-500 bg-red-50/20'
                                     : ''
                               }`}
                             />

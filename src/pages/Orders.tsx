@@ -79,6 +79,7 @@ import {
 import { toast } from 'sonner'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { safeOpenWhatsApp, buildProtocoloWhatsAppMessage } from '@/lib/whatsapp'
+import { formatQuantityOneDecimal } from '@/lib/decimalUtils'
 import { whatsappService } from '@/services/whatsapp-import'
 
 export default function Orders() {
@@ -551,15 +552,36 @@ export default function Orders() {
       const cicloObj = order.cicloId
         ? ciclos.find((c) => c.id === order.cicloId) || activeCiclo
         : activeCiclo
-      const dataPrevistaFormatada = order.date
-        ? new Date(order.date).toLocaleDateString('pt-BR')
-        : undefined
+
+      // Formatar data prevista sem distorção
+      let dataPrevistaFormatada: string | undefined
+      if (order.date) {
+        const dMatch = String(order.date).match(/^(\d{4})-(\d{2})-(\d{2})/)
+        if (dMatch) {
+          dataPrevistaFormatada = `${dMatch[3]}/${dMatch[2]}/${dMatch[1]}`
+        } else {
+          dataPrevistaFormatada = new Date(order.date).toLocaleDateString('pt-BR')
+        }
+      }
+
+      // Preparar itens com nomes e unidades correspondentes do catálogo de produtos
+      const produtosMap = new Map(products.map((p) => [p.id, p]))
+      const itensFormatados = (order.items || []).map((it) => {
+        const prod = produtosMap.get(it.productId)
+        return {
+          nome: it.name || prod?.name || 'Item',
+          quantidade: formatQuantityOneDecimal(it.quantity),
+          unidade: prod?.unit || 'un',
+        }
+      })
 
       const mensagem = buildProtocoloWhatsAppMessage({
         schoolName: order.schoolName,
         protocolo: order.numero,
         cicloNome: cicloObj?.nome,
         dataEntrega: dataPrevistaFormatada,
+        itens: itensFormatados,
+        totalValor: order.total,
       })
 
       const { preview } = await safeOpenWhatsApp({
@@ -1427,11 +1449,14 @@ export default function Orders() {
                   {viewingOrder.items.map((it, idx) => {
                     const itPreco = typeof it.price === 'number' && !isNaN(it.price) ? it.price : 0
                     const itSubtotal = (it.quantity || 0) * itPreco
+                    const prodObj = products.find((p) => p.id === it.productId)
+                    const unitStr = prodObj?.unit || 'un'
                     return (
                       <div key={idx} className="flex justify-between p-2">
                         <span>{it.name}</span>
                         <span className="font-mono">
-                          {it.quantity} un × R$ {itPreco.toFixed(2)} = R$ {itSubtotal.toFixed(2)}
+                          {formatQuantityOneDecimal(it.quantity)} {unitStr} × R${' '}
+                          {itPreco.toFixed(2)} = R$ {itSubtotal.toFixed(2)}
                         </span>
                       </div>
                     )
