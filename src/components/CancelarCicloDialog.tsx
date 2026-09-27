@@ -110,7 +110,7 @@ export function CancelarCicloDialog({
   }
 
   const tituloDialog = isContratoScope
-    ? `Cancelar Contrato ${contratoAlvo?.numero} no Ciclo: ${ciclo.nome}`
+    ? `Cancelar Operação ${contratoAlvo?.numero} no Ciclo: ${ciclo.nome}`
     : `Cancelar Ciclo: ${ciclo.nome}`
 
   return (
@@ -122,7 +122,7 @@ export function CancelarCicloDialog({
           </DialogTitle>
           <DialogDescription>
             {isContratoScope
-              ? 'O cancelamento afetará apenas este contrato neste ciclo. Os outros contratos do ciclo seguem normalmente.'
+              ? 'O cancelamento afetará apenas esta operação neste ciclo. As outras operações do ciclo seguem normalmente.'
               : 'O cancelamento congela o ciclo e impede novas coletas ou importações.'}
           </DialogDescription>
         </DialogHeader>
@@ -135,7 +135,7 @@ export function CancelarCicloDialog({
               <AlertTitle className="font-semibold text-xs">Ação Não Permitida</AlertTitle>
               <AlertDescription className="text-xs mt-1">
                 {isContratoScope
-                  ? 'Contrato já fechado neste ciclo não pode ser cancelado (o caminho é o ciclo seguinte).'
+                  ? 'Operação já fechada neste ciclo não pode ser cancelada (o caminho é o ciclo seguinte).'
                   : 'Ciclo já fechado não pode ser cancelado (o caminho é o ciclo seguinte).'}
               </AlertDescription>
             </Alert>
@@ -148,7 +148,7 @@ export function CancelarCicloDialog({
               <AlertTitle className="font-semibold text-xs">Ação Não Permitida</AlertTitle>
               <AlertDescription className="text-xs mt-1">
                 {isContratoScope
-                  ? 'Este contrato já está cancelado neste ciclo.'
+                  ? 'Esta operação já está cancelada neste ciclo.'
                   : 'Este ciclo já está cancelado.'}
               </AlertDescription>
             </Alert>
@@ -161,7 +161,7 @@ export function CancelarCicloDialog({
               <AlertTitle className="font-semibold text-xs">Cancelamento Bloqueado</AlertTitle>
               <AlertDescription className="text-xs mt-1 leading-relaxed">
                 {isContratoScope
-                  ? 'Este contrato possui atestos emitidos neste ciclo — já houve entrega formalizada. O caminho é FECHAR, não cancelá-lo.'
+                  ? 'Esta operação possui atestos emitidos neste ciclo — já houve entrega formalizada. O caminho é FECHAR, não cancelá-la.'
                   : 'Este ciclo possui atestos emitidos — já houve entrega formalizada. O caminho é FECHAR o ciclo, não cancelá-lo.'}
               </AlertDescription>
             </Alert>
@@ -239,7 +239,7 @@ export function CancelarCicloDialog({
                       <Loader2 className="h-4 w-4 animate-spin" /> Cancelando...
                     </>
                   ) : isContratoScope ? (
-                    'Cancelar Contrato e Pedidos'
+                    'Cancelar Operação e Pedidos'
                   ) : (
                     'Cancelar Ciclo e Pedidos'
                   )}

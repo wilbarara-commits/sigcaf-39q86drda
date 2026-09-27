@@ -362,7 +362,7 @@ Por favor, envie as quantidades da sua instituição pelo link acima durante o p
     }
 
     // Identificar o contrato na mensagem se informado
-    const headerContrato = contratoNumero ? `\n📌 *Contrato:* ${contratoNumero}` : ''
+    const headerContrato = contratoNumero ? `\n📌 *Operação:* ${contratoNumero}` : ''
     return `*A/C: ${escolaNome}*${headerContrato}\n\n${text}`
   }
 
@@ -595,10 +595,10 @@ Por favor, envie as quantidades da sua instituição pelo link acima durante o p
                 <Filter className="h-4 w-4 text-muted-foreground" />
                 <Select value={selectedContratoFilter} onValueChange={setSelectedContratoFilter}>
                   <SelectTrigger className="w-[180px] h-8 text-xs">
-                    <SelectValue placeholder="Filtrar por Contrato" />
+                    <SelectValue placeholder="Filtrar por Operação" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="todos">Todos Contratos</SelectItem>
+                    <SelectItem value="todos">Todas as Operações</SelectItem>
                     {contratosElegiveisParaFormulario.map((c) => (
                       <SelectItem key={c.id} value={c.id}>
                         {c.numero}
@@ -620,7 +620,7 @@ Por favor, envie as quantidades da sua instituição pelo link acima durante o p
               <TableHeader>
                 <TableRow>
                   <TableHead>Escola</TableHead>
-                  <TableHead>Contrato</TableHead>
+                  <TableHead>Operação</TableHead>
                   <TableHead>Rota</TableHead>
                   <TableHead>Contato (WhatsApp)</TableHead>
                   <TableHead>Link do Formulário</TableHead>
@@ -633,7 +633,7 @@ Por favor, envie as quantidades da sua instituição pelo link acima durante o p
                 {escolasContratosList.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
-                      Nenhum vínculo ativo com coleta por formulário encontrado. (Contratos ou
+                      Nenhum vínculo ativo com coleta por formulário encontrado. (Operações ou
                       escolas com coleta por planilha são atendidos por importação de arquivo da
                       secretaria).
                     </TableCell>
