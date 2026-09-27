@@ -326,6 +326,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         alunos: s.alunos !== undefined && s.alunos !== null ? Number(s.alunos) : undefined,
         bairro: s.bairro || '',
         contatoResponsavel: s.contato || '',
+        cep: s.cep || '',
+        latitude: s.latitude || '',
+        longitude: s.longitude || '',
       }))
       setSchools(mappedSchools)
 
@@ -446,6 +449,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
             escolaContato: ce.expand?.escola_id?.contato || sch?.contatoResponsavel || '',
             escolaTipo: ce.expand?.escola_id?.tipo || sch?.tipo || '',
             escolaAlunos: ce.expand?.escola_id?.alunos ?? sch?.alunos,
+            escolaCep: ce.expand?.escola_id?.cep || sch?.cep || '',
+            escolaLatitude: ce.expand?.escola_id?.latitude || sch?.latitude || '',
+            escolaLongitude: ce.expand?.escola_id?.longitude || sch?.longitude || '',
             rotaNome: rotaPlanilhaNome,
             coleta_por: ce.coleta_por || 'padrao',
             encerrado_em: ce.encerrado_em,
@@ -759,6 +765,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
               s.alunos !== undefined && s.alunos !== null
                 ? Number(s.alunos)
                 : copy[existingIdx].alunos,
+            bairro: s.bairro !== undefined ? s.bairro : copy[existingIdx].bairro,
+            contatoResponsavel:
+              s.contato !== undefined ? s.contato : copy[existingIdx].contatoResponsavel,
+            cep: s.cep !== undefined ? s.cep : copy[existingIdx].cep,
+            latitude: s.latitude !== undefined ? s.latitude : copy[existingIdx].latitude,
+            longitude: s.longitude !== undefined ? s.longitude : copy[existingIdx].longitude,
           }
           return copy
         }
@@ -774,6 +786,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
           alunos: s.alunos !== undefined && s.alunos !== null ? Number(s.alunos) : undefined,
           bairro: s.bairro || '',
           contatoResponsavel: s.contato || '',
+          cep: s.cep || '',
+          latitude: s.latitude || '',
+          longitude: s.longitude || '',
         }
         return [...prev, mapped]
       })
@@ -1010,6 +1025,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
               escolaContato: ce.expand?.escola_id?.contato || sch?.contatoResponsavel || '',
               escolaTipo: ce.expand?.escola_id?.tipo || sch?.tipo || '',
               escolaAlunos: ce.expand?.escola_id?.alunos ?? sch?.alunos,
+              escolaCep: ce.expand?.escola_id?.cep || sch?.cep || '',
+              escolaLatitude: ce.expand?.escola_id?.latitude || sch?.latitude || '',
+              escolaLongitude: ce.expand?.escola_id?.longitude || sch?.longitude || '',
               rotaNome: rotaPlanilhaNome,
               coleta_por: ce.coleta_por || 'padrao',
               encerrado_em: ce.encerrado_em,

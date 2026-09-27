@@ -70,7 +70,16 @@ import {
   Calculator,
   XCircle,
   Ban,
+  Download,
 } from 'lucide-react'
+import * as XLSX from 'xlsx'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { toast } from 'sonner'
 import { contratosService } from '@/services/contratos'
 import { rotasService } from '@/services/rotas'
@@ -541,6 +550,93 @@ export default function Contracts() {
 
   const handleRemoveSchoolLink = (schoolId: string) => {
     setContractSchoolsForm((prev) => prev.filter((s) => s.escolaId !== schoolId))
+  }
+
+  // Prepara as linhas de escolas para exportação (Cadastro Mestre Global de Escolas)
+  const getPreparedSchoolExportRows = () => {
+    return schools.map((sch) => {
+      const nome = sch.name || ''
+      const cep = sch.cep || ''
+      const latitude = sch.latitude || ''
+      const longitude = sch.longitude || ''
+      return {
+        nome,
+        cep,
+        latitude,
+        longitude,
+      }
+    })
+  }
+
+  // Exportação CSV do cadastro mestre de escolas com BOM UTF-8 e separador ';'
+  const handleExportSchoolsCSV = () => {
+    if (schools.length === 0) {
+      toast.warning('Nenhuma escola cadastrada para exportar.')
+      return
+    }
+
+    const preparedRows = getPreparedSchoolExportRows()
+    const headers = ['Nome da Escola', 'CEP', 'Latitude', 'Longitude']
+
+    const escapeCsvField = (field: string) => {
+      const str = String(field ?? '')
+      if (str.includes(';') || str.includes('"') || str.includes('\n') || str.includes('\r')) {
+        return `"${str.replace(/"/g, '""')}"`
+      }
+      return str
+    }
+
+    const lines: string[] = []
+    lines.push(headers.map(escapeCsvField).join(';'))
+
+    for (const r of preparedRows) {
+      lines.push([r.nome, r.cep, r.latitude, r.longitude].map(escapeCsvField).join(';'))
+    }
+
+    const csvContent = '\uFEFF' + lines.join('\r\n')
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = 'escolas-vinculo.csv'
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+
+    toast.success('Planilha de escolas exportada!')
+  }
+
+  // Exportação XLSX do cadastro mestre de escolas com colunas configuradas
+  const handleExportSchoolsXLSX = () => {
+    if (schools.length === 0) {
+      toast.warning('Nenhuma escola cadastrada para exportar.')
+      return
+    }
+
+    const preparedRows = getPreparedSchoolExportRows()
+    const wsData: any[][] = []
+
+    wsData.push(['Nome da Escola', 'CEP', 'Latitude', 'Longitude'])
+
+    for (const r of preparedRows) {
+      wsData.push([r.nome, r.cep, r.latitude, r.longitude])
+    }
+
+    const wb = XLSX.utils.book_new()
+    const ws = XLSX.utils.aoa_to_sheet(wsData)
+
+    ws['!cols'] = [
+      { wch: 40 }, // Nome da Escola
+      { wch: 14 }, // CEP
+      { wch: 16 }, // Latitude
+      { wch: 16 }, // Longitude
+    ]
+
+    XLSX.utils.book_append_sheet(wb, ws, 'Escolas')
+    XLSX.writeFile(wb, 'escolas-vinculo.xlsx')
+
+    toast.success('Planilha de escolas exportada!')
   }
 
   const handleSchoolRotaChange = (schoolId: string, rotaValue: string) => {
@@ -1789,7 +1885,45 @@ export default function Contracts() {
                       Planilha correspondente, ou cadastre uma nova escola sem duplicar.
                     </p>
                   </div>
-                  <div className="flex items-center gap-2 shrink-0">
+                  <div className="flex items-center gap-2 shrink-0 flex-wrap">
+                    <TooltipProvider delayDuration={200}>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <div>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  disabled={schools.length === 0}
+                                  className="h-8 text-xs gap-1.5 bg-background shadow-xs hover:border-primary/50 text-foreground"
+                                >
+                                  <Download className="h-3.5 w-3.5 text-primary" />
+                                  Exportar
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" className="text-xs">
+                                <DropdownMenuItem onClick={handleExportSchoolsCSV}>
+                                  CSV (.csv)
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={handleExportSchoolsXLSX}>
+                                  Excel (.xlsx)
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </div>
+                        </TooltipTrigger>
+                        {schools.length === 0 && (
+                          <TooltipContent>
+                            <p className="text-xs">
+                              Nenhuma escola cadastrada no momento para exportar
+                            </p>
+                          </TooltipContent>
+                        )}
+                      </Tooltip>
+                    </TooltipProvider>
+
                     <Button
                       type="button"
                       variant="outline"

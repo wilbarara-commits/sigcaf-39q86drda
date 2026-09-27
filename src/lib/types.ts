@@ -25,6 +25,9 @@ export interface EscolaRecord {
   alunos?: number
   bairro?: string
   contato?: string
+  cep?: string
+  latitude?: string
+  longitude?: string
   created?: string
   updated?: string
 }
@@ -289,6 +292,9 @@ export interface School {
   alunos?: number
   bairro?: string
   contatoResponsavel?: string
+  cep?: string
+  latitude?: string
+  longitude?: string
 }
 
 export interface ContractSchoolLink {
@@ -311,6 +317,9 @@ export interface ContractSchoolLink {
   escolaContato?: string
   escolaTipo?: string
   escolaAlunos?: number
+  escolaCep?: string
+  escolaLatitude?: string
+  escolaLongitude?: string
 }
 
 export interface Contract {

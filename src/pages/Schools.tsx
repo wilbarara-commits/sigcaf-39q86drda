@@ -56,8 +56,17 @@ import {
   ChevronLeft,
   ChevronRight,
   Info,
+  Download,
 } from 'lucide-react'
+import * as XLSX from 'xlsx'
 import { Badge } from '@/components/ui/badge'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { useState, useMemo } from 'react'
 import { toast } from 'sonner'
 import { escolasService } from '@/services/escolas'
@@ -92,6 +101,9 @@ export default function Schools() {
   const [contatoResponsavel, setContatoResponsavel] = useState('')
   const [tipo, setTipo] = useState<string>('')
   const [alunos, setAlunos] = useState<string>('')
+  const [cep, setCep] = useState('')
+  const [latitude, setLatitude] = useState('')
+  const [longitude, setLongitude] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   // Delete dialog state
@@ -160,6 +172,9 @@ export default function Schools() {
     setContatoResponsavel('')
     setTipo('')
     setAlunos('')
+    setCep('')
+    setLatitude('')
+    setLongitude('')
     setDialogOpen(true)
   }
 
@@ -173,7 +188,91 @@ export default function Schools() {
     setContatoResponsavel(school.contatoResponsavel || '')
     setTipo(school.tipo || '')
     setAlunos(school.alunos !== undefined ? String(school.alunos) : '')
+    setCep(school.cep || '')
+    setLatitude(school.latitude || '')
+    setLongitude(school.longitude || '')
     setDialogOpen(true)
+  }
+
+  // Prepara as linhas de escolas para exportação (Cadastro Mestre Global de Escolas)
+  const getPreparedSchoolExportRows = () => {
+    return schools.map((sch) => ({
+      nome: sch.name || '',
+      cep: sch.cep || '',
+      latitude: sch.latitude || '',
+      longitude: sch.longitude || '',
+    }))
+  }
+
+  // Exportação CSV do cadastro mestre de escolas com BOM UTF-8 e separador ';'
+  const handleExportSchoolsCSV = () => {
+    if (schools.length === 0) {
+      toast.warning('Nenhuma escola cadastrada para exportar.')
+      return
+    }
+
+    const preparedRows = getPreparedSchoolExportRows()
+    const headers = ['Nome da Escola', 'CEP', 'Latitude', 'Longitude']
+
+    const escapeCsvField = (field: string) => {
+      const str = String(field ?? '')
+      if (str.includes(';') || str.includes('"') || str.includes('\n') || str.includes('\r')) {
+        return `"${str.replace(/"/g, '""')}"`
+      }
+      return str
+    }
+
+    const lines: string[] = []
+    lines.push(headers.map(escapeCsvField).join(';'))
+
+    for (const r of preparedRows) {
+      lines.push([r.nome, r.cep, r.latitude, r.longitude].map(escapeCsvField).join(';'))
+    }
+
+    const csvContent = '\uFEFF' + lines.join('\r\n')
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = 'escolas-vinculo.csv'
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+
+    toast.success('Planilha de escolas exportada!')
+  }
+
+  // Exportação XLSX do cadastro mestre de escolas com colunas configuradas
+  const handleExportSchoolsXLSX = () => {
+    if (schools.length === 0) {
+      toast.warning('Nenhuma escola cadastrada para exportar.')
+      return
+    }
+
+    const preparedRows = getPreparedSchoolExportRows()
+    const wsData: any[][] = []
+
+    wsData.push(['Nome da Escola', 'CEP', 'Latitude', 'Longitude'])
+
+    for (const r of preparedRows) {
+      wsData.push([r.nome, r.cep, r.latitude, r.longitude])
+    }
+
+    const wb = XLSX.utils.book_new()
+    const ws = XLSX.utils.aoa_to_sheet(wsData)
+
+    ws['!cols'] = [
+      { wch: 40 }, // Nome da Escola
+      { wch: 14 }, // CEP
+      { wch: 16 }, // Latitude
+      { wch: 16 }, // Longitude
+    ]
+
+    XLSX.utils.book_append_sheet(wb, ws, 'Escolas')
+    XLSX.writeFile(wb, 'escolas-vinculo.xlsx')
+
+    toast.success('Planilha de escolas exportada!')
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -209,6 +308,9 @@ export default function Schools() {
           contato: contatoResponsavel.trim() || undefined,
           tipo: tipo || undefined,
           alunos: parsedAlunos,
+          cep: cep.trim() || undefined,
+          latitude: latitude.trim() || undefined,
+          longitude: longitude.trim() || undefined,
         })
         toast.success(`Escola "${trimmedName}" atualizada com sucesso!`)
       } else {
@@ -231,6 +333,9 @@ export default function Schools() {
           contato: contatoResponsavel.trim() || undefined,
           tipo: tipo || undefined,
           alunos: parsedAlunos,
+          cep: cep.trim() || undefined,
+          latitude: latitude.trim() || undefined,
+          longitude: longitude.trim() || undefined,
         })
         toast.success(`Escola "${trimmedName}" cadastrada no cadastro mestre global!`)
       }
@@ -298,17 +403,58 @@ export default function Schools() {
             reutilizada em múltiplos contratos PNAE/PAA.
           </p>
         </div>
-        {isAdmin && (
-          <div className="flex items-center gap-2 shrink-0">
-            <Button variant="outline" onClick={() => setImportDialogOpen(true)} className="gap-1.5">
-              <FileSpreadsheet className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-              Importar CSV
-            </Button>
-            <Button onClick={handleOpenCreate}>
-              <Plus className="mr-2 h-4 w-4" /> Nova Escola Mestre
-            </Button>
-          </div>
-        )}
+        <div className="flex items-center gap-2 shrink-0 flex-wrap">
+          <TooltipProvider delayDuration={200}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        disabled={schools.length === 0}
+                        className="gap-1.5"
+                      >
+                        <Download className="h-4 w-4 text-primary" />
+                        Exportar
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="text-xs">
+                      <DropdownMenuItem onClick={handleExportSchoolsCSV}>
+                        CSV (.csv)
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={handleExportSchoolsXLSX}>
+                        Excel (.xlsx)
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+              </TooltipTrigger>
+              {schools.length === 0 && (
+                <TooltipContent>
+                  <p className="text-xs">Nenhuma escola cadastrada no momento para exportar</p>
+                </TooltipContent>
+              )}
+            </Tooltip>
+          </TooltipProvider>
+
+          {isAdmin && (
+            <>
+              <Button
+                variant="outline"
+                onClick={() => setImportDialogOpen(true)}
+                className="gap-1.5"
+              >
+                <FileSpreadsheet className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                Importar CSV
+              </Button>
+              <Button onClick={handleOpenCreate}>
+                <Plus className="mr-2 h-4 w-4" /> Nova Escola Mestre
+              </Button>
+            </>
+          )}
+        </div>
       </div>
 
       {/* Barra de Filtros: Busca textual e Tipo */}
@@ -756,6 +902,24 @@ export default function Schools() {
                         <span>{detailsSchool.email || 'E-mail não informado'}</span>
                       </p>
                     </div>
+
+                    <div className="space-y-1">
+                      <span className="text-xs text-muted-foreground block">CEP</span>
+                      <p className="font-mono text-xs text-foreground/90">
+                        {detailsSchool.cep || 'CEP não informado'}
+                      </p>
+                    </div>
+
+                    <div className="space-y-1">
+                      <span className="text-xs text-muted-foreground block">
+                        Coordenadas (Lat / Long)
+                      </span>
+                      <p className="font-mono text-xs text-foreground/90">
+                        {detailsSchool.latitude && detailsSchool.longitude
+                          ? `${detailsSchool.latitude}, ${detailsSchool.longitude}`
+                          : 'Coordenadas não informadas'}
+                      </p>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -896,6 +1060,38 @@ export default function Schools() {
                 value={address}
                 onChange={(e) => setAddress(e.target.value)}
               />
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="space-y-2">
+                <Label htmlFor="school-cep">CEP</Label>
+                <Input
+                  id="school-cep"
+                  placeholder="Ex: 28970-000"
+                  value={cep}
+                  onChange={(e) => setCep(e.target.value)}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="school-lat">Latitude</Label>
+                <Input
+                  id="school-lat"
+                  placeholder="Ex: -22.8808"
+                  value={latitude}
+                  onChange={(e) => setLatitude(e.target.value)}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="school-lng">Longitude</Label>
+                <Input
+                  id="school-lng"
+                  placeholder="Ex: -42.0256"
+                  value={longitude}
+                  onChange={(e) => setLongitude(e.target.value)}
+                />
+              </div>
             </div>
 
             <DialogFooter className="pt-2">
