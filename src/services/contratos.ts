@@ -3,13 +3,13 @@ import type { ContratoRecord, ContratoItemRecord, ContratoEscolaRecord } from '@
 
 export const contratosService = {
   async getAll(): Promise<ContratoRecord[]> {
-    return await pb.collection('contratos').getFullList<ContratoRecord>({
+    return await pb.collection('operacoes').getFullList<ContratoRecord>({
       sort: '-created',
     })
   },
 
   async getById(id: string): Promise<ContratoRecord> {
-    return await pb.collection('contratos').getOne<ContratoRecord>(id)
+    return await pb.collection('operacoes').getOne<ContratoRecord>(id)
   },
 
   async getItems(contratoId: string): Promise<ContratoItemRecord[]> {
@@ -46,14 +46,14 @@ export const contratosService = {
     encerrado_em?: string
     motivo_cancelamento?: string
   }): Promise<ContratoRecord> {
-    return await pb.collection('contratos').create<ContratoRecord>({
+    return await pb.collection('operacoes').create<ContratoRecord>({
       ...data,
       status: data.status || 'Ativo',
     })
   },
 
   async update(id: string, data: Partial<ContratoRecord>): Promise<ContratoRecord> {
-    return await pb.collection('contratos').update<ContratoRecord>(id, data)
+    return await pb.collection('operacoes').update<ContratoRecord>(id, data)
   },
   async delete(id: string): Promise<boolean> {
     // Delete associated contract items
@@ -72,7 +72,7 @@ export const contratosService = {
       await pb.collection('contrato_escolas').delete(ce.id)
     }
 
-    return await pb.collection('contratos').delete(id)
+    return await pb.collection('operacoes').delete(id)
   },
 
   async syncItems(
@@ -210,7 +210,7 @@ export const contratosService = {
         console.error(`Erro ao atualizar encerrado_em do vínculo ${ce.id}:`, err)
       }
     }
-    return await pb.collection('contratos').update<ContratoRecord>(contratoId, {
+    return await pb.collection('operacoes').update<ContratoRecord>(contratoId, {
       status: 'Encerrado',
       encerrado_em: agora,
     })
@@ -233,7 +233,7 @@ export const contratosService = {
         console.error(`Erro ao atualizar encerrado_em do vínculo ${ce.id}:`, err)
       }
     }
-    return await pb.collection('contratos').update<ContratoRecord>(contratoId, {
+    return await pb.collection('operacoes').update<ContratoRecord>(contratoId, {
       status: 'Cancelado',
       encerrado_em: agora,
       motivo_cancelamento: motivo.trim(),

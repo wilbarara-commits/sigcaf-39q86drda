@@ -926,6 +926,40 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   })
 
+  useRealtime<any>('operacoes', async (_e) => {
+    // Sincronizar quando houver alterações em operacoes
+    try {
+      const rawContratos = await contratosService.getAll()
+      setContracts((prev) => {
+        return rawContratos.map((c) => {
+          const existing = prev.find((p) => p.id === c.id)
+          const totalValue = Number(c.valor_total) || 0
+          return {
+            id: c.id,
+            numero: c.numero,
+            numero_chamada: c.numero_chamada || '',
+            tipo: c.tipo || 'PNAE',
+            modalidade_pedido: c.modalidade_pedido || 'individualizado',
+            tipo_importacao: c.tipo_importacao,
+            abas_planilha: c.abas_planilha || '',
+            num_rotas_logisticas:
+              c.num_rotas_logisticas !== undefined && c.num_rotas_logisticas !== null
+                ? Number(c.num_rotas_logisticas)
+                : undefined,
+            totalValue,
+            balance: existing?.balance ?? totalValue,
+            status: c.status,
+            encerrado_em: c.encerrado_em,
+            motivo_cancelamento: c.motivo_cancelamento,
+            escolas: existing?.escolas ?? [],
+          }
+        })
+      })
+    } catch (err) {
+      console.error('Erro na sincronização realtime de operacoes:', err)
+    }
+  })
+
   useRealtime<any>('contrato_escolas', async (_e) => {
     // Quando houver criação, alteração ou exclusão de vínculo escola↔contrato,
     // recarregar vínculos e contratos para manter o estado global e a tela /escolas sincronizados

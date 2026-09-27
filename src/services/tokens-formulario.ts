@@ -113,7 +113,7 @@ export const tokensFormularioService = {
 
     if (!contrato) {
       try {
-        contrato = await pb.collection('contratos').getOne<ContratoRecord>(contratoId)
+        contrato = await pb.collection('operacoes').getOne<ContratoRecord>(contratoId)
       } catch (cErr) {
         console.warn('Não foi possível carregar contrato para validação:', cErr)
       }

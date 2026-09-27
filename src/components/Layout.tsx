@@ -58,7 +58,7 @@ const NAV_ITEMS: NavItem[] = [
   { name: 'Dashboard', path: '/', icon: LayoutDashboard },
   { name: 'Produtos', path: '/produtos', icon: Sprout, adminOnly: true },
   { name: 'Escolas', path: '/escolas', icon: School, adminOnly: true },
-  { name: 'Contratos', path: '/contratos', icon: FileText, adminOnly: true },
+  { name: 'Operações', path: '/operacoes', icon: FileText, adminOnly: true },
   { name: 'Pedidos', path: '/pedidos', icon: ShoppingCart },
   { name: 'Importação Excel', path: '/importacao', icon: Upload },
   { name: 'Consolidação', path: '/consolidacao', icon: Grid },

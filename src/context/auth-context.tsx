@@ -29,7 +29,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined)
 const MASTER_ONLY_ROUTES = ['/usuarios', '/configuracoes']
 
 // Rotas restritas para Secretária (acessíveis apenas por MASTER e ADMINISTRADOR)
-const ADMIN_ALLOWED_ROUTES = ['/produtos', '/contratos', '/escolas', '/requisitos']
+const ADMIN_ALLOWED_ROUTES = ['/produtos', '/operacoes', '/contratos', '/escolas', '/requisitos']
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<UserRecord | null>(() => authService.getCurrentUser())

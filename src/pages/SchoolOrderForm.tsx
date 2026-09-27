@@ -133,9 +133,9 @@ export default function SchoolOrderForm() {
         const escolaRec = await pb.collection('escolas').getOne<EscolaRecord>(tokenRec.escola_id)
         setEscola(escolaRec)
 
-        // Carregar Contrato
+        // Carregar Operação
         const contratoRec = await pb
-          .collection('contratos')
+          .collection('operacoes')
           .getOne<ContratoRecord>(tokenRec.contrato_id)
         setContrato(contratoRec)
 
