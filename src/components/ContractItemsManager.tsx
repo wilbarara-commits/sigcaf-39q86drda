@@ -66,9 +66,17 @@ import {
 import { produtosService } from '@/services/produtos'
 import { contratosService } from '@/services/contratos'
 import { DEFAULT_PRODUCT_UNIT } from '@/lib/productCsvImporter'
+import { formatQuantityOneDecimal } from '@/lib/decimalUtils'
 import { useApp } from '@/context/app-context'
 import { toast } from 'sonner'
 import * as XLSX from 'xlsx'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 
 export interface ContractItemForm {
   id?: string
@@ -85,6 +93,7 @@ interface ContractItemsManagerProps {
   catalogProducts: Product[]
   onTotalCalculadoChange?: (total: number, hasQuantities: boolean) => void
   contractId?: string
+  contractNumber?: string
 }
 
 export function ContractItemsManager({
@@ -93,6 +102,7 @@ export function ContractItemsManager({
   catalogProducts,
   onTotalCalculadoChange,
   contractId,
+  contractNumber,
 }: ContractItemsManagerProps) {
   // Modal de Seleção em Lote do Catálogo
   const [batchModalOpen, setBatchModalOpen] = useState(false)
@@ -927,6 +937,154 @@ export function ContractItemsManager({
     toast.success('Modelo de planilha baixado!')
   }
 
+  // Prepara os dados brutos e formatados para exportação (CSV / XLSX)
+  const getPreparedExportRows = () => {
+    return items.map((item) => {
+      const prod = productById.get(item.productId)
+      const nomeOperacao =
+        item.nomeContrato && item.nomeContrato.trim().length > 0
+          ? item.nomeContrato.trim()
+          : prod?.name || ''
+      const aka = item.apelidos?.trim() || ''
+      const unidade = prod?.unit || 'Kg'
+      const rawPrice = item.price || 0
+      const rawQty =
+        item.quantity !== undefined && item.quantity !== null && item.quantity > 0
+          ? item.quantity
+          : 0
+      const rawTotal = rawQty * rawPrice
+
+      const precoFormatado = rawPrice.toLocaleString('pt-BR', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      })
+      const qtdFormatada = formatQuantityOneDecimal(rawQty)
+      const totalFormatado = rawTotal.toLocaleString('pt-BR', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      })
+
+      return {
+        nomeOperacao,
+        aka,
+        unidade,
+        rawQty,
+        qtdFormatada,
+        rawPrice,
+        precoFormatado,
+        rawTotal,
+        totalFormatado,
+      }
+    })
+  }
+
+  const getExportBaseFilename = () => {
+    const rawNum = contractNumber ? String(contractNumber).trim() : ''
+    const safeNum = rawNum ? rawNum.replace(/[/\\?%*:|"<>]/g, '-') : 'sem-numero'
+    return `itens-operacao-${safeNum}`
+  }
+
+  // Exportação CSV client-side com BOM UTF-8 e separador ';'
+  const handleExportCSV = () => {
+    if (items.length === 0) {
+      toast.warning('Nenhum item para exportar.')
+      return
+    }
+
+    const preparedRows = getPreparedExportRows()
+    const headers = [
+      'Produto',
+      'AKA/Apelido na Planilha',
+      'Unidade',
+      'Quantidade Contratada',
+      'Preço Unitário (R$)',
+      'Valor Total (R$)',
+    ]
+
+    const escapeCsvField = (field: string) => {
+      if (field.includes(';') || field.includes('"') || field.includes('\n')) {
+        return `"${field.replace(/"/g, '""')}"`
+      }
+      return field
+    }
+
+    const lines: string[] = []
+    lines.push(headers.map(escapeCsvField).join(';'))
+
+    for (const r of preparedRows) {
+      const rowFields = [
+        r.nomeOperacao,
+        r.aka,
+        r.unidade,
+        r.qtdFormatada,
+        r.precoFormatado,
+        r.totalFormatado,
+      ]
+      lines.push(rowFields.map(escapeCsvField).join(';'))
+    }
+
+    const csvContent = '\uFEFF' + lines.join('\r\n')
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `${getExportBaseFilename()}.csv`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+
+    toast.success('Planilha de itens exportada!')
+  }
+
+  // Exportação XLSX compatível com o padrão de relatórios do projeto
+  const handleExportXLSX = () => {
+    if (items.length === 0) {
+      toast.warning('Nenhum item para exportar.')
+      return
+    }
+
+    const preparedRows = getPreparedExportRows()
+    const wsData: any[][] = []
+
+    wsData.push([
+      'Produto',
+      'AKA/Apelido na Planilha',
+      'Unidade',
+      'Quantidade Contratada',
+      'Preço Unitário (R$)',
+      'Valor Total (R$)',
+    ])
+
+    for (const r of preparedRows) {
+      wsData.push([
+        r.nomeOperacao,
+        r.aka,
+        r.unidade,
+        r.qtdFormatada,
+        r.precoFormatado,
+        r.totalFormatado,
+      ])
+    }
+
+    const wb = XLSX.utils.book_new()
+    const ws = XLSX.utils.aoa_to_sheet(wsData)
+
+    ws['!cols'] = [
+      { wch: 32 }, // Produto
+      { wch: 24 }, // AKA
+      { wch: 10 }, // Unidade
+      { wch: 22 }, // Qtd Contratada
+      { wch: 20 }, // Preço
+      { wch: 20 }, // Total
+    ]
+
+    XLSX.utils.book_append_sheet(wb, ws, 'Itens Contratados')
+    XLSX.writeFile(wb, `${getExportBaseFilename()}.xlsx`)
+
+    toast.success('Planilha de itens exportada!')
+  }
+
   return (
     <div className="space-y-3 pt-1">
       {/* Barra de Ações Superior */}
@@ -957,6 +1115,62 @@ export function ContractItemsManager({
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
+          {/* Botão de Exportação de Planilha / CSV */}
+          {items.length === 0 ? (
+            <TooltipProvider delayDuration={200}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-8 text-xs gap-1.5 opacity-60 cursor-not-allowed"
+                      disabled
+                    >
+                      <Download className="h-3.5 w-3.5 text-muted-foreground" />
+                      Exportar CSV
+                    </Button>
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent side="top" className="text-xs">
+                  Nenhum item cadastrado para exportar
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          ) : (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-8 text-xs gap-1.5 text-foreground hover:text-primary hover:border-primary/50"
+                  title="Exportar planilha de itens da operação"
+                >
+                  <Download className="h-3.5 w-3.5 text-primary" />
+                  Exportar CSV
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48">
+                <DropdownMenuItem
+                  onClick={handleExportCSV}
+                  className="text-xs cursor-pointer gap-2"
+                >
+                  <Download className="h-3.5 w-3.5 text-muted-foreground" />
+                  Exportar como CSV (.csv)
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={handleExportXLSX}
+                  className="text-xs cursor-pointer gap-2"
+                >
+                  <FileSpreadsheet className="h-3.5 w-3.5 text-emerald-600" />
+                  Exportar como Excel (.xlsx)
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+
           <Button
             type="button"
             variant="outline"

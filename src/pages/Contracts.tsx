@@ -2169,6 +2169,7 @@ export default function Contracts() {
                       }
                     }}
                     contractId={editingContract?.id}
+                    contractNumber={numero || editingContract?.numero}
                   />
                 )}
               </TabsContent>
