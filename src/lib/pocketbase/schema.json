@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-27T07:42:24.620Z",
+  "generatedAt": "2026-09-27T07:53:55.854Z",
   "collections": [
     {
       "name": "users",
@@ -198,6 +198,24 @@
         },
         {
           "name": "contato",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "cep",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "latitude",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "longitude",
           "type": "text",
           "required": false,
           "system": false
