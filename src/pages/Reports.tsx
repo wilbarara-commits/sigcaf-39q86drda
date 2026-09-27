@@ -351,7 +351,7 @@ export default function Reports() {
     if (activeTab === 'faturamento') {
       if (filterPrograma !== 'todos') list.push({ label: 'Programa', value: filterPrograma })
       if (filterStatusContrato !== 'todos')
-        list.push({ label: 'Status do Contrato', value: filterStatusContrato })
+        list.push({ label: 'Status da Operação', value: filterStatusContrato })
       if (searchContrato.trim())
         list.push({ label: 'Termo de Busca', value: searchContrato.trim() })
     } else if (activeTab === 'entregas') {
@@ -378,7 +378,7 @@ export default function Reports() {
 
       if (activeTab === 'faturamento') {
         const columns: TableExportColumn[] = [
-          { header: 'Nº Contrato', key: 'numero', align: 'left', width: 14 },
+          { header: 'Nº Operação', key: 'numero', align: 'left', width: 14 },
           { header: 'Programa', key: 'tipo', align: 'center', width: 12 },
           { header: 'Instituição / Escola', key: 'escolaNome', align: 'left', width: 30 },
           { header: 'Status', key: 'status', align: 'center', width: 12 },
@@ -403,7 +403,7 @@ export default function Reports() {
           {
             numero: 'TOTAL CONSOLIDADO',
             tipo: '',
-            escolaNome: `${faturamentoTotals.count} Contratos`,
+            escolaNome: `${faturamentoTotals.count} Operações`,
             status: '',
             valorPactuadoStr: formatCurrencyBRL(faturamentoTotals.pactuado),
             totalEntregueStr: formatCurrencyBRL(faturamentoTotals.entregue),
@@ -413,9 +413,9 @@ export default function Reports() {
         ]
 
         exportToExcel({
-          title: 'Relatório Contábil — Faturamento por Contrato (PNAE/PAA)',
+          title: 'Relatório Contábil — Faturamento por Operação (PNAE/PAA)',
           subtitle: 'Resumo de valores pactuados, faturados e saldos remanescentes',
-          filename: `relatorio-faturamento-contratos-${nowStr}`,
+          filename: `relatorio-faturamento-operacoes-${nowStr}`,
           filters,
           columns,
           rows,
@@ -534,7 +534,7 @@ export default function Reports() {
 
       if (activeTab === 'faturamento') {
         const columns: TableExportColumn[] = [
-          { header: 'Nº Contrato', key: 'numero', align: 'left' },
+          { header: 'Nº Operação', key: 'numero', align: 'left' },
           { header: 'Programa', key: 'tipo', align: 'center' },
           { header: 'Instituição / Escola', key: 'escolaNome', align: 'left' },
           { header: 'Status', key: 'status', align: 'center' },
@@ -559,7 +559,7 @@ export default function Reports() {
           {
             numero: 'TOTAL CONSOLIDADO',
             tipo: '',
-            escolaNome: `${faturamentoTotals.count} Contratos`,
+            escolaNome: `${faturamentoTotals.count} Operações`,
             status: '',
             valorPactuadoStr: formatCurrencyBRL(faturamentoTotals.pactuado),
             totalEntregueStr: formatCurrencyBRL(faturamentoTotals.entregue),
@@ -569,9 +569,9 @@ export default function Reports() {
         ]
 
         exportToPdf({
-          title: 'Relatório Contábil — Faturamento por Contrato',
+          title: 'Relatório Contábil — Faturamento por Operação',
           subtitle: 'Acompanhamento de saldo e execução orçamentária PNAE / PAA',
-          filename: `relatorio-faturamento-contratos-${nowStr}`,
+          filename: `relatorio-faturamento-operacoes-${nowStr}`,
           filters,
           columns,
           rows,
@@ -818,7 +818,7 @@ export default function Reports() {
         <TabsList className="grid w-full grid-cols-1 sm:grid-cols-3 h-auto p-1 bg-muted/60">
           <TabsTrigger value="faturamento" className="py-2.5 data-[state=active]:bg-background">
             <TrendingUp className="h-4 w-4 mr-2 text-primary" />
-            1. Faturamento por Contrato
+            1. Faturamento por Operação
           </TabsTrigger>
           <TabsTrigger value="entregas" className="py-2.5 data-[state=active]:bg-background">
             <CheckCircle2 className="h-4 w-4 mr-2 text-primary" />
@@ -846,7 +846,7 @@ export default function Reports() {
                   {formatCurrencyBRL(faturamentoTotals.pactuado)}
                 </div>
                 <p className="text-[11px] text-muted-foreground mt-0.5">
-                  {faturamentoTotals.count} contratos filtrados
+                  {faturamentoTotals.count} operações filtradas
                 </p>
               </CardContent>
             </Card>
@@ -902,10 +902,10 @@ export default function Reports() {
             <CardHeader className="pb-3">
               <CardTitle className="text-base flex items-center gap-2">
                 <Filter className="h-4 w-4 text-primary" />
-                Filtros do Relatório de Contratos
+                Filtros do Relatório de Operações
               </CardTitle>
               <CardDescription>
-                Refine a lista por programa governamental, status do contrato ou nome da escola.
+                Refine a lista por programa governamental, status da operação ou nome da escola.
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -927,7 +927,7 @@ export default function Reports() {
                 </div>
 
                 <div>
-                  <Label className="text-xs">Status do Contrato</Label>
+                  <Label className="text-xs">Status da Operação</Label>
                   <Select value={filterStatusContrato} onValueChange={setFilterStatusContrato}>
                     <SelectTrigger className="mt-1 h-9 text-xs">
                       <SelectValue placeholder="Selecione o status" />
@@ -942,12 +942,12 @@ export default function Reports() {
                 </div>
 
                 <div>
-                  <Label className="text-xs">Buscar Contrato ou Escola</Label>
+                  <Label className="text-xs">Buscar Operação ou Escola</Label>
                   <div className="relative mt-1">
                     <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                     <Input
                       type="text"
-                      placeholder="Ex: C-2026-01 ou Monteiro..."
+                      placeholder="Ex: OP-2026-01 ou Monteiro..."
                       value={searchContrato}
                       onChange={(e) => setSearchContrato(e.target.value)}
                       className="pl-8 h-9 text-xs"
@@ -963,9 +963,9 @@ export default function Reports() {
             <CardHeader className="pb-3">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                 <div>
-                  <CardTitle className="text-base">Tabela de Faturamento por Contrato</CardTitle>
+                  <CardTitle className="text-base">Tabela de Faturamento por Operação</CardTitle>
                   <CardDescription>
-                    Exibindo {faturamentoData.length} contrato(s) com cálculo em tempo real.
+                    Exibindo {faturamentoData.length} operação(ões) com cálculo em tempo real.
                   </CardDescription>
                 </div>
               </div>
@@ -975,7 +975,7 @@ export default function Reports() {
                 <Table>
                   <TableHeader>
                     <TableRow className="bg-muted/40">
-                      <TableHead>Contrato</TableHead>
+                      <TableHead>Operação</TableHead>
                       <TableHead>Programa</TableHead>
                       <TableHead>Instituição / Escola</TableHead>
                       <TableHead>Status</TableHead>
@@ -990,7 +990,7 @@ export default function Reports() {
                       <TableRow>
                         <TableCell colSpan={8} className="text-center py-10 text-muted-foreground">
                           <AlertCircle className="h-6 w-6 mx-auto mb-2 text-muted-foreground/60" />
-                          Nenhum contrato encontrado para os filtros selecionados.
+                          Nenhuma operação encontrada para os filtros selecionados.
                         </TableCell>
                       </TableRow>
                     ) : (

@@ -203,7 +203,7 @@ export default function Index() {
       bg: 'bg-secondary/10',
     },
     {
-      title: 'Contratos Ativos',
+      title: 'Operações Ativas',
       value: activeContracts,
       icon: FileText,
       color: 'text-primary',

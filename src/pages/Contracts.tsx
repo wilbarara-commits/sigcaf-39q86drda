@@ -354,7 +354,7 @@ export default function Contracts() {
   ) => {
     const contractToUse = targetContract || editingContract || viewingContract
     if (!contractToUse) {
-      toast.error('Nenhum contrato selecionado para editar aba.')
+      toast.error('Nenhuma operação selecionada para editar aba.')
       return
     }
     setRouteEditorContract(contractToUse)
@@ -367,7 +367,7 @@ export default function Contracts() {
     const maxPermitido = parseInt(numRotasLogisticas, 10) || 1
     if (contractRotasLogisticas.length >= maxPermitido) {
       toast.error(
-        `O contrato define o limite de EXATAMENTE ${maxPermitido} rota(s) logística(s). Aumente o número de rotas antes de adicionar outra.`,
+        `A operação define o limite de EXATAMENTE ${maxPermitido} rota(s) logística(s). Aumente o número de rotas antes de adicionar outra.`,
       )
       return
     }
@@ -380,7 +380,7 @@ export default function Contracts() {
         (r) => (r.nome || '').trim().replace(/\s+/g, ' ').toLowerCase() === normalizedTarget,
       )
     ) {
-      toast.error('Já existe uma rota com este nome neste contrato.')
+      toast.error('Já existe uma rota com este nome nesta operação.')
       return
     }
 
@@ -410,7 +410,7 @@ export default function Contracts() {
         idx !== editRotaIndex && r.nome.trim().replace(/\s+/g, ' ').toLowerCase() === normTarget,
     )
     if (jaExiste) {
-      toast.error('Já existe uma rota com este nome neste contrato.')
+      toast.error('Já existe uma rota com este nome nesta operação.')
       return
     }
 
@@ -496,11 +496,11 @@ export default function Contracts() {
         const conflitoInfo = checkEscolaConflitoAtivo(schoolId)
         if (conflitoInfo.conflito) {
           toast.error(
-            `Escola já vinculada ao contrato ${conflitoInfo.contratoNome} — desvincule-a lá antes de vincular aqui`,
+            `Escola já vinculada à operação ${conflitoInfo.contratoNome} — desvincule-a lá antes de vincular aqui`,
             conflitoInfo.contratoObj
               ? {
                   action: {
-                    label: 'Abrir contrato',
+                    label: 'Abrir operação',
                     onClick: () => handleOpenEdit(conflitoInfo.contratoObj!),
                   },
                 }
@@ -515,18 +515,18 @@ export default function Contracts() {
 
   const handleAddSchoolLink = (schoolId: string) => {
     if (contractSchoolsForm.some((s) => s.escolaId === schoolId)) {
-      toast.info('Esta escola já está vinculada ao contrato.')
+      toast.info('Esta escola já está vinculada à operação.')
       return
     }
 
     const conflitoInfo = checkEscolaConflitoAtivo(schoolId)
     if (conflitoInfo.conflito) {
       toast.error(
-        `Escola já vinculada ao contrato ${conflitoInfo.contratoNome} — desvincule-a lá antes de vincular aqui`,
+        `Escola já vinculada à operação ${conflitoInfo.contratoNome} — desvincule-a lá antes de vincular aqui`,
         conflitoInfo.contratoObj
           ? {
               action: {
-                label: 'Abrir contrato',
+                label: 'Abrir operação',
                 onClick: () => handleOpenEdit(conflitoInfo.contratoObj!),
               },
             }
@@ -536,7 +536,7 @@ export default function Contracts() {
     }
 
     setContractSchoolsForm((prev) => [...prev, { escolaId: schoolId, rotaId: '' }])
-    toast.success('Escola vinculada ao contrato!')
+    toast.success('Escola vinculada à operação!')
   }
 
   const handleRemoveSchoolLink = (schoolId: string) => {
@@ -574,11 +574,11 @@ export default function Contracts() {
         const conflitoInfo = checkEscolaConflitoAtivo(targetSchoolId)
         if (conflitoInfo.conflito) {
           toast.error(
-            `Escola já vinculada ao contrato ${conflitoInfo.contratoNome} — desvincule-a lá antes de vincular aqui`,
+            `Escola já vinculada à operação ${conflitoInfo.contratoNome} — desvincule-a lá antes de vincular aqui`,
             conflitoInfo.contratoObj
               ? {
                   action: {
-                    label: 'Abrir contrato',
+                    label: 'Abrir operação',
                     onClick: () => handleOpenEdit(conflitoInfo.contratoObj!),
                   },
                 }
@@ -636,7 +636,7 @@ export default function Contracts() {
     e.preventDefault()
     const trimmedNum = numero.trim()
     if (!trimmedNum) {
-      toast.error('Informe o número ou código do contrato.')
+      toast.error('Informe o número ou código da operação.')
       return
     }
 
@@ -646,7 +646,7 @@ export default function Contracts() {
     // Se não informou valor total e também não há itens acordados cadastrados/importados
     if (val <= 0 && contractItems.length === 0) {
       toast.error(
-        'Informe um valor total válido ou importe/adicione os itens acordados do contrato.',
+        'Informe um valor total válido ou importe/adicione os itens acordados da operação.',
       )
       return
     }
@@ -658,14 +658,14 @@ export default function Contracts() {
       return
     }
 
-    // Se o contrato já tiver rotas no banco e tiver um limite numérico preenchido:
+    // Se a operação já tiver rotas no banco e tiver um limite numérico preenchido:
     if (editingContract && parsedNumRotas !== undefined) {
       const existingRotasDoContrato = rotasLogisticas.filter(
         (r) => r.contrato_id === editingContract.id,
       )
       if (existingRotasDoContrato.length > parsedNumRotas) {
         toast.error(
-          `O contrato já possui ${existingRotasDoContrato.length} rota(s) configurada(s). O limite não pode ser inferior a esse valor.`,
+          `A operação já possui ${existingRotasDoContrato.length} rota(s) configurada(s). O limite não pode ser inferior a esse valor.`,
         )
         return
       }
@@ -767,7 +767,7 @@ export default function Contracts() {
           for (const crl of contractRotasLogisticas) {
             const norm = (crl.nome || '').trim().replace(/\s+/g, ' ').toLowerCase()
             if (seenLogNames.has(norm)) {
-              toast.error('Já existe uma rota com este nome neste contrato.')
+              toast.error('Já existe uma rota com este nome nesta operação.')
               setIsSubmitting(false)
               return
             }
@@ -853,12 +853,12 @@ export default function Contracts() {
         )
       }
 
-      toast.success(`Contrato ${trimmedNum} salvo com sucesso!`)
+      toast.success(`Operação ${trimmedNum} salva com sucesso!`)
       setDialogOpen(false)
       await refreshData()
     } catch (err: any) {
-      console.error('Erro ao salvar contrato:', err)
-      toast.error('Falha ao salvar contrato no banco.')
+      console.error('Erro ao salvar operação:', err)
+      toast.error('Falha ao salvar operação no banco.')
     } finally {
       setIsSubmitting(false)
     }
@@ -884,13 +884,13 @@ export default function Contracts() {
     setIsDeleting(true)
     try {
       await contratosService.delete(contractToDelete.id)
-      toast.success(`Contrato ${contractToDelete.numero} excluído com sucesso!`)
+      toast.success(`Operação ${contractToDelete.numero} excluída com sucesso!`)
       setDeleteDialogOpen(false)
       setContractToDelete(null)
       await refreshData()
     } catch (err: any) {
-      console.error('Erro ao excluir contrato:', err)
-      toast.error('Falha ao excluir contrato.')
+      console.error('Erro ao excluir operação:', err)
+      toast.error('Falha ao excluir operação.')
     } finally {
       setIsDeleting(false)
     }
@@ -984,7 +984,7 @@ export default function Contracts() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Contratos & Escolas Participantes</h1>
+          <h1 className="text-2xl font-bold tracking-tight">Operações & Escolas Participantes</h1>
           <p className="text-muted-foreground">
             Gestão N:N de escolas participantes, rotas, produtos contratados e modalidades de
             pedido.
@@ -992,7 +992,7 @@ export default function Contracts() {
         </div>
         {isAdmin && (
           <Button onClick={handleOpenCreate} className="gap-2">
-            <Plus className="h-4 w-4" /> Novo Contrato
+            <Plus className="h-4 w-4" /> Nova Operação
           </Button>
         )}
       </div>
@@ -1000,10 +1000,10 @@ export default function Contracts() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <FileText className="h-5 w-5 text-primary" /> Contratos Vigentes
+            <FileText className="h-5 w-5 text-primary" /> Operações Vigentes
           </CardTitle>
           <CardDescription>
-            Relação completa de contratos, escolas vinculadas, rotas e modalidades operacionais.
+            Relação completa de operações, escolas vinculadas, rotas e modalidades operacionais.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -1011,7 +1011,7 @@ export default function Contracts() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Contrato</TableHead>
+                  <TableHead>Operação</TableHead>
                   <TableHead>Programa</TableHead>
                   <TableHead>Modalidade</TableHead>
                   <TableHead>Escolas Participantes</TableHead>
@@ -1027,14 +1027,14 @@ export default function Contracts() {
                   <TableRow>
                     <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
                       <div className="flex items-center justify-center gap-2">
-                        <Loader2 className="h-4 w-4 animate-spin" /> Carregando contratos...
+                        <Loader2 className="h-4 w-4 animate-spin" /> Carregando operações...
                       </div>
                     </TableCell>
                   </TableRow>
                 ) : contracts.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
-                      Nenhum contrato cadastrado.
+                      Nenhuma operação cadastrada.
                     </TableCell>
                   </TableRow>
                 ) : (
@@ -1148,7 +1148,7 @@ export default function Contracts() {
                                   variant="ghost"
                                   size="icon"
                                   className="h-8 w-8 text-muted-foreground hover:text-foreground"
-                                  title="Editar contrato"
+                                  title="Editar operação"
                                   onClick={() => handleOpenEdit(contract)}
                                 >
                                   <Pencil className="h-4 w-4" />
@@ -1159,7 +1159,7 @@ export default function Contracts() {
                                       variant="ghost"
                                       size="icon"
                                       className="h-8 w-8 text-amber-600 hover:bg-amber-500/10 hover:text-amber-700 dark:text-amber-500 dark:hover:text-amber-400"
-                                      title="Encerrar contrato"
+                                      title="Encerrar operação"
                                       onClick={() => handleOpenEncerrar(contract)}
                                     >
                                       <XCircle className="h-4 w-4" />
@@ -1168,7 +1168,7 @@ export default function Contracts() {
                                       variant="ghost"
                                       size="icon"
                                       className="h-8 w-8 text-amber-700 hover:bg-amber-500/10 hover:text-amber-800 dark:text-amber-400 dark:hover:text-amber-300"
-                                      title="Cancelar contrato"
+                                      title="Cancelar operação"
                                       onClick={() => handleOpenCancelar(contract)}
                                     >
                                       <Ban className="h-4 w-4" />
@@ -1179,7 +1179,7 @@ export default function Contracts() {
                                   variant="ghost"
                                   size="icon"
                                   className="h-8 w-8 text-destructive hover:bg-destructive/10"
-                                  title="Excluir contrato"
+                                  title="Excluir operação"
                                   onClick={() => handleOpenDelete(contract)}
                                 >
                                   <Trash2 className="h-4 w-4" />
@@ -1204,8 +1204,8 @@ export default function Contracts() {
           <DialogHeader>
             <DialogTitle>
               {editingContract
-                ? `Editar Contrato ${editingContract.numero}`
-                : 'Cadastrar Novo Contrato'}
+                ? `Editar Operação ${editingContract.numero}`
+                : 'Cadastrar Nova Operação'}
             </DialogTitle>
             <DialogDescription>
               Configure os dados cadastrais, as rotas de entrega, as escolas participantes e a
@@ -1378,7 +1378,7 @@ export default function Contracts() {
                         <p className="text-[11px] text-muted-foreground">
                           {tipoImportacao === 'unica'
                             ? 'A secretaria envia um arquivo unificado contendo o pedido.'
-                            : 'A secretaria envia arquivos fracionados (remessas/semanas) ao longo do contrato.'}
+                            : 'A secretaria envia arquivos fracionados (remessas/semanas) ao longo da operação.'}
                         </p>
                       </div>
 
@@ -1476,7 +1476,7 @@ export default function Contracts() {
                         className="font-semibold text-foreground flex items-center gap-2"
                       >
                         <DollarSign className="h-4 w-4 text-primary" />
-                        Valor Total do Contrato (R$) <span className="text-destructive">*</span>
+                        Valor Total da Operação (R$) <span className="text-destructive">*</span>
                       </Label>
                       <p className="text-xs text-muted-foreground mt-0.5">
                         {contractItems.some((it) => (it.quantity || 0) > 0)
@@ -1567,7 +1567,7 @@ export default function Contracts() {
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                     <div>
                       <Label className="text-sm font-bold flex items-center gap-2 text-primary">
-                        <Route className="h-4 w-4" /> Rotas do Contrato
+                        <Route className="h-4 w-4" /> Rotas da Operação
                       </Label>
                       <p className="text-xs text-muted-foreground">
                         As rotas, seus nomes, atribuição de escolas e sequenciamento de paradas são
@@ -1622,10 +1622,10 @@ export default function Contracts() {
                         return (
                           <div className="py-8 text-center border rounded-lg bg-muted/20 text-xs text-muted-foreground space-y-2">
                             <p className="font-medium text-foreground">
-                              Nenhuma rota configurada para este contrato ainda.
+                              Nenhuma rota configurada para esta operação ainda.
                             </p>
                             <p>
-                              Você pode salvar este contrato agora sem rotas e configurá-las
+                              Você pode salvar esta operação agora sem rotas e configurá-las
                               diretamente na tela de <strong>Roteamento & Despacho</strong>.
                             </p>
                             <Button
@@ -1676,7 +1676,7 @@ export default function Contracts() {
                   ) : (
                     <div className="py-8 text-center border rounded-lg bg-muted/20 text-xs text-muted-foreground space-y-2">
                       <p className="font-medium text-foreground">
-                        Novo Contrato: As rotas são configuradas na tela de Roteamento & Despacho.
+                        Nova Operação: As rotas são configuradas na tela de Roteamento & Despacho.
                       </p>
                       <p>
                         Salve os dados gerais, escolas e itens agora. Ao abrir a tela de{' '}
@@ -1690,15 +1690,15 @@ export default function Contracts() {
 
               {/* Aba 3: Escolas Participantes (Cadastro Mestre Global + Vínculo com Aba da Planilha) */}
               <TabsContent value="escolas" className="space-y-4 pt-3">
-                {/* Gestão das Abas da Planilha deste Contrato */}
+                {/* Gestão das Abas da Planilha desta Operação */}
                 <div className="space-y-3 p-3.5 rounded-lg border bg-muted/20">
                   <div>
                     <Label className="text-xs font-semibold text-primary uppercase tracking-wider flex items-center gap-1.5">
                       <FileSpreadsheet className="h-3.5 w-3.5" /> Abas da Planilha a Importar (Nomes
-                      Livres deste Contrato)
+                      Livres desta Operação)
                     </Label>
                     <p className="text-[11px] text-muted-foreground mt-0.5">
-                      Cadastre os nomes das abas da planilha deste contrato (ex.: ROTA A, ROTA B,
+                      Cadastre os nomes das abas da planilha desta operação (ex.: ROTA A, ROTA B,
                       ZONA SUL, CIRCUITO 1...). Esses nomes serão casados na importação Excel e
                       atribuídos às escolas participantes abaixo.
                     </p>
@@ -1729,7 +1729,7 @@ export default function Contracts() {
 
                   {contractRotas.length === 0 ? (
                     <p className="text-[11px] text-muted-foreground italic">
-                      Nenhuma aba da planilha cadastrada ainda para este contrato. Cadastre acima
+                      Nenhuma aba da planilha cadastrada ainda para esta operação. Cadastre acima
                       para selecionar nas escolas.
                     </p>
                   ) : (
@@ -2145,7 +2145,7 @@ export default function Contracts() {
                 {isLoadingItems ? (
                   <div className="py-12 flex flex-col items-center justify-center gap-2 text-muted-foreground text-xs">
                     <Loader2 className="h-5 w-5 animate-spin text-primary" />
-                    <span>Carregando itens do contrato...</span>
+                    <span>Carregando itens da operação...</span>
                   </div>
                 ) : (
                   <ContractItemsManager
@@ -2181,7 +2181,7 @@ export default function Contracts() {
                     <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-amber-600 dark:text-amber-400" />
                     <span>
                       {contractItems.length} item(ns) importado(s) pendente(s) de confirmação.
-                      Clique em &quot;Cadastrar Contrato&quot; para gravar no banco.
+                      Clique em &quot;Cadastrar Operação&quot; para gravar no banco.
                     </span>
                   </span>
                 )}
@@ -2203,7 +2203,7 @@ export default function Contracts() {
                   ) : editingContract ? (
                     'Salvar Alterações'
                   ) : (
-                    'Cadastrar Contrato'
+                    'Cadastrar Operação'
                   )}
                 </Button>
               </div>
@@ -2298,7 +2298,7 @@ export default function Contracts() {
         <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <BarChart3 className="h-5 w-5 text-primary" /> Relatório de Execução do Contrato{' '}
+              <BarChart3 className="h-5 w-5 text-primary" /> Relatório de Execução da Operação{' '}
               {reportContract?.numero}
             </DialogTitle>
             <DialogDescription>
@@ -2478,10 +2478,10 @@ export default function Contracts() {
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2">
               <AlertTriangle className="h-5 w-5 text-destructive" />
-              Confirmar Exclusão de Contrato
+              Confirmar Exclusão de Operação
             </AlertDialogTitle>
             <AlertDialogDescription>
-              Deseja realmente remover o contrato <strong>{contractToDelete?.numero}</strong>? Isso
+              Deseja realmente remover a operação <strong>{contractToDelete?.numero}</strong>? Isso
               removerá os vínculos de escolas, rotas e itens acordados.
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -2495,7 +2495,7 @@ export default function Contracts() {
               disabled={isDeleting}
               className="bg-destructive hover:bg-destructive/90"
             >
-              {isDeleting ? 'Excluindo...' : 'Excluir Contrato'}
+              {isDeleting ? 'Excluindo...' : 'Excluir Operação'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -2505,7 +2505,7 @@ export default function Contracts() {
       <Dialog open={detailsDialogOpen} onOpenChange={setDetailsDialogOpen}>
         <DialogContent className="sm:max-w-[550px]">
           <DialogHeader>
-            <DialogTitle>Contrato {viewingContract?.numero}</DialogTitle>
+            <DialogTitle>Operação {viewingContract?.numero}</DialogTitle>
             <DialogDescription>
               {viewingContract?.tipo || 'PNAE'} • Modalidade:{' '}
               {viewingContract?.modalidade_pedido || 'individualizado'}
@@ -2543,7 +2543,7 @@ export default function Contracts() {
                 <div className="p-3 rounded-lg border border-amber-400 bg-amber-50 text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200 space-y-1">
                   <div className="flex items-center gap-1.5 font-semibold">
                     <Ban className="h-4 w-4 text-amber-600" />
-                    <span>Contrato Cancelado</span>
+                    <span>Operação Cancelada</span>
                   </div>
                   {viewingContract.motivo_cancelamento && (
                     <p className="text-[11px] leading-relaxed pt-0.5">
@@ -2569,7 +2569,7 @@ export default function Contracts() {
                 <div className="p-3 rounded-lg border border-slate-300 bg-slate-50 text-slate-800 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 space-y-1">
                   <div className="flex items-center gap-1.5 font-semibold">
                     <XCircle className="h-4 w-4 text-slate-600" />
-                    <span>Contrato Encerrado</span>
+                    <span>Operação Encerrada</span>
                   </div>
                   <p className="text-[10px] text-muted-foreground">
                     Encerrado em:{' '}
@@ -2653,7 +2653,7 @@ export default function Contracts() {
                   if (agrupadoPorPlanilha.size === 0) {
                     return (
                       <div className="p-2.5 rounded bg-muted/20 border text-muted-foreground text-center text-xs">
-                        Nenhuma escola vinculada ao contrato.
+                        Nenhuma escola vinculada à operação.
                       </div>
                     )
                   }
@@ -2832,7 +2832,7 @@ export default function Contracts() {
                           </div>
                         ) : (
                           <p className="text-[11px] text-emerald-600">
-                            Todas as escolas deste contrato estão atribuídas a rotas.
+                            Todas as escolas desta operação estão atribuídas a rotas.
                           </p>
                         )}
                       </div>

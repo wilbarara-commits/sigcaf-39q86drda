@@ -376,7 +376,7 @@ export default function CycleHistory() {
                               <div className="flex flex-wrap gap-1 mt-0.5">
                                 {ccCancelados.map((cc) => {
                                   const cNome =
-                                    contratosMap.get(cc.contrato_id)?.numero || 'Contrato'
+                                    contratosMap.get(cc.contrato_id)?.numero || 'Operação'
                                   return (
                                     <Badge
                                       key={cc.id}
@@ -388,7 +388,7 @@ export default function CycleHistory() {
                                           : undefined
                                       }
                                     >
-                                      {cNome} cancelado
+                                      {cNome} cancelada
                                     </Badge>
                                   )
                                 })}

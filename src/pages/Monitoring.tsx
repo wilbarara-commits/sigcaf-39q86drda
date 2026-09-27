@@ -148,7 +148,7 @@ export default function Monitoring() {
       const contrato = contracts.find((c) => c.id === cc.contrato_id)
       uniqueList.push({
         contratoId: cc.contrato_id,
-        numero: contrato?.numero || cc.expand?.contrato_id?.numero || 'Contrato',
+        numero: contrato?.numero || cc.expand?.contrato_id?.numero || 'Operação',
         fase: cc.fase,
         motivo_cancelamento: cc.motivo_cancelamento,
         data_cancelamento: cc.data_cancelamento,
@@ -334,7 +334,7 @@ export default function Monitoring() {
     }
 
     if (currentFase === 'cancelado') {
-      toast.error('Não é possível alterar a fase de um contrato/ciclo cancelado.')
+      toast.error('Não é possível alterar a fase de uma operação/ciclo cancelado.')
       return
     }
 
@@ -379,9 +379,9 @@ export default function Monitoring() {
   }, [selectedCiclo, cicloContratos, contracts])
 
   const selectedContratoNumero = useMemo(() => {
-    if (selectedContratoId === 'todos') return 'Todos os contratos'
+    if (selectedContratoId === 'todos') return 'Todas as operações'
     const found = contracts.find((c) => c.id === selectedContratoId)
-    return found?.numero || 'Contrato Selecionado'
+    return found?.numero || 'Operação Selecionada'
   }, [selectedContratoId, contracts])
 
   return (
@@ -424,13 +424,13 @@ export default function Monitoring() {
               <SelectTrigger className="h-9 font-medium">
                 <div className="flex items-center gap-1.5 truncate">
                   <FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                  <SelectValue placeholder="Contrato" />
+                  <SelectValue placeholder="Operação" />
                 </div>
               </SelectTrigger>
               <SelectContent>
                 {contratosVinculados.length > 1 && (
                   <SelectItem value="todos">
-                    Todos os contratos ({contratosVinculados.length})
+                    Todas as operações ({contratosVinculados.length})
                   </SelectItem>
                 )}
                 {contratosVinculados.map((c) => (
@@ -715,7 +715,7 @@ export default function Monitoring() {
         </CardContent>
       </Card>
 
-      {/* Resumo do Funil do Ciclo e Contrato Selecionado */}
+      {/* Resumo do Funil do Ciclo e Operação Selecionada */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <Card className="bg-card">
           <CardContent className="p-3 text-center">
@@ -808,8 +808,8 @@ export default function Monitoring() {
                       className="text-center py-8 text-emerald-600 font-medium"
                     >
                       <div className="flex items-center justify-center gap-2">
-                        <CheckCircle2 className="h-5 w-5" /> Todas as escolas estão em dia neste
-                        contrato/ciclo!
+                        <CheckCircle2 className="h-5 w-5" /> Todas as escolas estão em dia nesta
+                        operação/ciclo!
                       </div>
                     </TableCell>
                   </TableRow>

@@ -334,7 +334,7 @@ export function gerarResumoFasesCiclo(
 ): string {
   const vinculadosRaw = cicloContratos.filter((cc) => cc.ciclo_id === cicloId)
   if (vinculadosRaw.length === 0) {
-    return 'Sem contratos vinculados'
+    return 'Sem operações vinculadas'
   }
 
   // Deduplicar por contrato_id para garantir que cada contrato conte exatamente 1 vez
@@ -360,7 +360,7 @@ export function gerarResumoFasesCiclo(
   }
 
   const parts = Object.entries(counts).map(([fase, qtd]) => {
-    return `${qtd} ${qtd === 1 ? 'contrato' : 'contratos'} em ${fase}`
+    return `${qtd} ${qtd === 1 ? 'operação' : 'operações'} em ${fase}`
   })
 
   return parts.join(', ')

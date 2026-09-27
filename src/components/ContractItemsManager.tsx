@@ -275,7 +275,7 @@ export function ContractItemsManager({
     }
 
     onChange([...items, ...newItems])
-    toast.success(`${addedCount} produto(s) adicionado(s) ao contrato!`)
+    toast.success(`${addedCount} produto(s) adicionado(s) à operação!`)
     setBatchModalOpen(false)
   }
 
@@ -334,7 +334,7 @@ export function ContractItemsManager({
     if (!prod) return
     if (prod.price === undefined || prod.price === null || prod.price <= 0) {
       toast.warning(
-        'Este produto não possui preço no catálogo. O preço deve ser informado no item do contrato.',
+        'Este produto não possui preço no catálogo. O preço deve ser informado no item da operação.',
       )
       return
     }
@@ -349,16 +349,16 @@ export function ContractItemsManager({
     const prod = productById.get(removed.productId)
     const updated = items.filter((_, idx) => idx !== itemToDeleteIndex)
     onChange(updated)
-    toast.success(`"${prod?.name || 'Item'}" removido do contrato.`)
+    toast.success(`"${prod?.name || 'Item'}" removido da operação.`)
     setItemToDeleteIndex(null)
   }
 
   // Limpar todos os itens
   const handleClearAll = () => {
     if (items.length === 0) return
-    if (window.confirm('Deseja remover todos os produtos deste contrato?')) {
+    if (window.confirm('Deseja remover todos os produtos desta operação?')) {
       onChange([])
-      toast.info('Lista de produtos do contrato esvaziada.')
+      toast.info('Lista de produtos da operação esvaziada.')
     }
   }
 
@@ -518,10 +518,10 @@ export function ContractItemsManager({
         )
         await refreshData()
         toast.success(
-          `Itens colados e salvos no contrato com sucesso: ${addedCount} adicionado(s), ${updatedCount} atualizado(s)!`,
+          `Itens colados e salvos na operação com sucesso: ${addedCount} adicionado(s), ${updatedCount} atualizado(s)!`,
         )
       } catch (err: any) {
-        console.error('Erro ao salvar itens colados no contrato:', err)
+        console.error('Erro ao salvar itens colados na operação:', err)
         toast.error('Falha ao gravar itens no banco de dados.')
       } finally {
         setIsSubmittingImport(false)
@@ -888,10 +888,10 @@ export function ContractItemsManager({
         )
         await refreshData()
         toast.success(
-          `Planilha importada e gravada no contrato com sucesso: ${addedCount} produto(s) adicionado(s), ${updatedCount} atualizado(s)!`,
+          `Planilha importada e gravada na operação com sucesso: ${addedCount} produto(s) adicionado(s), ${updatedCount} atualizado(s)!`,
         )
       } catch (err: any) {
-        console.error('Erro ao persistir itens do contrato importados:', err)
+        console.error('Erro ao persistir itens da operação importados:', err)
         toast.error('Falha ao salvar itens importados no banco de dados.')
       } finally {
         setIsSubmittingImport(false)
@@ -922,8 +922,8 @@ export function ContractItemsManager({
     ]
     const wb = XLSX.utils.book_new()
     const ws = XLSX.utils.aoa_to_sheet(wsData)
-    XLSX.utils.book_append_sheet(wb, ws, 'Itens do Contrato')
-    XLSX.writeFile(wb, 'modelo_itens_contrato.xlsx')
+    XLSX.utils.book_append_sheet(wb, ws, 'Itens da Operação')
+    XLSX.writeFile(wb, 'modelo_itens_operacao.xlsx')
     toast.success('Modelo de planilha baixado!')
   }
 
@@ -1007,12 +1007,12 @@ export function ContractItemsManager({
                 <strong className="text-foreground">
                   {totalItensComQtd} de {items.length} produto(s)
                 </strong>{' '}
-                têm quantidade contratada. O valor total do contrato é a{' '}
+                têm quantidade contratada. O valor total da operação é a{' '}
                 <strong>soma (preço × quantidade)</strong>.
               </>
             ) : (
               <>
-                Nenhum produto possui quantidade contratada informada. O contrato opera no modo de{' '}
+                Nenhum produto possui quantidade contratada informada. A operação opera no modo de{' '}
                 <strong>Total informado diretamente</strong> na aba Dados Gerais.
               </>
             )}
@@ -1026,7 +1026,7 @@ export function ContractItemsManager({
           <Package className="h-8 w-8 text-muted-foreground/50 mx-auto" />
           <div className="space-y-1">
             <p className="text-sm font-medium text-foreground">
-              Nenhum produto associado a este contrato
+              Nenhum produto associado a esta operação
             </p>
             <p className="text-xs text-muted-foreground max-w-md mx-auto">
               Clique em <strong>"Selecionar Produtos"</strong> para marcar itens do catálogo, ou
@@ -1065,7 +1065,7 @@ export function ContractItemsManager({
             <Table>
               <TableHeader className="bg-muted/30 sticky top-0 z-10 backdrop-blur-xs">
                 <TableRow className="text-xs">
-                  <TableHead className="w-[32%]">Nome no Contrato & AKA</TableHead>
+                  <TableHead className="w-[32%]">Nome na Operação & AKA</TableHead>
                   <TableHead className="w-[18%]">Produto Mestre / Catálogo</TableHead>
                   <TableHead className="w-[8%] text-center">Unidade</TableHead>
                   <TableHead className="w-[16%]">Preço Unit. (R$)</TableHead>
@@ -1101,18 +1101,18 @@ export function ContractItemsManager({
                             <Input
                               value={nomeContratoEfetivo}
                               onChange={(e) => handleNomeContratoChange(index, e.target.value)}
-                              placeholder={prod?.name || 'Nome no contrato'}
+                              placeholder={prod?.name || 'Nome na operação'}
                               className="h-7 text-xs font-semibold text-foreground"
-                              title="Nome oficial do produto no contrato (usado na importação de pedidos e atestos)"
+                              title="Nome oficial do produto na operação (usado na importação de pedidos e atestos)"
                             />
                           </div>
                           <div>
                             <Input
                               value={item.apelidos || ''}
                               onChange={(e) => handleApelidosChange(index, e.target.value)}
-                              placeholder="Nomes Alternativos (AKA no Contrato - vírgulas)"
+                              placeholder="Nomes Alternativos (AKA na Operação - vírgulas)"
                               className="h-6 text-[11px] text-muted-foreground"
-                              title="Nomes alternativos do produto na planilha da secretaria para este contrato (separados por vírgula)"
+                              title="Nomes alternativos do produto na planilha da secretaria para esta operação (separados por vírgula)"
                             />
                           </div>
                         </div>
@@ -1234,7 +1234,7 @@ export function ContractItemsManager({
                           variant="ghost"
                           size="icon"
                           className="h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                          title="Remover produto do contrato"
+                          title="Remover produto da operação"
                           onClick={() => setItemToDeleteIndex(index)}
                         >
                           <Trash2 className="h-3.5 w-3.5" />
@@ -1297,7 +1297,7 @@ export function ContractItemsManager({
               Selecionar Produtos do Catálogo
             </DialogTitle>
             <DialogDescription>
-              Marque os produtos que deseja incluir no contrato. Os preços virão pré-preenchidos com
+              Marque os produtos que deseja incluir na operação. Os preços virão pré-preenchidos com
               o valor cadastrado e poderão ser ajustados junto com as quantidades contratadas.
             </DialogDescription>
           </DialogHeader>
@@ -1378,7 +1378,7 @@ export function ContractItemsManager({
                               variant="secondary"
                               className="text-[9px] py-0 px-1 shrink-0 text-muted-foreground"
                             >
-                              Já no contrato
+                              Já na operação
                             </Badge>
                           )}
                         </div>
@@ -1398,7 +1398,7 @@ export function ContractItemsManager({
                         </>
                       ) : (
                         <span className="text-[11px] text-muted-foreground italic block">
-                          Preço a definir no contrato
+                          Preço a definir na operação
                         </span>
                       )}
                     </div>
@@ -1573,12 +1573,12 @@ export function ContractItemsManager({
               {isSubmittingImport ? (
                 <>
                   <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  Salvando no Contrato...
+                  Salvando na Operação...
                 </>
               ) : (
                 <>
                   <Check className="h-3.5 w-3.5" />
-                  Aplicar {pastePreview?.matched.length || 0} produto(s) ao Contrato
+                  Aplicar {pastePreview?.matched.length || 0} produto(s) à Operação
                 </>
               )}
             </Button>
@@ -1610,7 +1610,7 @@ export function ContractItemsManager({
           <DialogHeader className="shrink-0">
             <DialogTitle className="flex items-center gap-2">
               <FileSpreadsheet className="h-5 w-5 text-primary" />
-              Importação em Massa de Itens do Contrato (Excel / CSV)
+              Importação em Massa de Itens da Operação (Excel / CSV)
             </DialogTitle>
             <DialogDescription>
               Faça upload de uma planilha (.xlsx ou .csv) contendo os produtos, preços e quantidades
@@ -1714,7 +1714,7 @@ export function ContractItemsManager({
                           Produto da Planilha & Correspondência
                         </TableHead>
                         <TableHead className="w-[18%] bg-muted font-semibold">
-                          Status & AKA no Contrato
+                          Status & AKA na Operação
                         </TableHead>
                         <TableHead className="w-[12%] text-right bg-muted font-semibold">
                           Preço
@@ -1808,7 +1808,7 @@ export function ContractItemsManager({
                               )}
                             </TableCell>
 
-                            {/* Status & AKA no Contrato */}
+                            {/* Status & AKA na Operação */}
                             <TableCell>
                               {isIgnored ? (
                                 <Badge
@@ -1985,7 +1985,7 @@ export function ContractItemsManager({
                 {isSubmittingImport ? (
                   <>
                     <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    Salvando no Contrato...
+                    Salvando na Operação...
                   </>
                 ) : (
                   <>
@@ -2013,7 +2013,7 @@ export function ContractItemsManager({
           <DialogHeader className="shrink-0 space-y-1">
             <DialogTitle className="flex items-center gap-2 text-base">
               <Sparkles className="h-5 w-5 text-amber-600" />
-              Definir AKA no Contrato para o Produto
+              Definir AKA na Operação para o Produto
             </DialogTitle>
             <DialogDescription className="text-xs">
               Resolva a linha da planilha associando-a a um produto mestre existente ou criando o
@@ -2039,15 +2039,15 @@ export function ContractItemsManager({
                 </div>
               </div>
 
-              {/* Campo do AKA (Apelido no Contrato) */}
+              {/* Campo do AKA (Apelido na Operação) */}
               <div className="space-y-1.5">
                 <Label
                   htmlFor="aka-input"
                   className="text-xs font-semibold flex items-center justify-between"
                 >
-                  <span>Apelido no Contrato (AKA)</span>
+                  <span>Apelido na Operação (AKA)</span>
                   <span className="text-[10px] text-muted-foreground font-normal">
-                    Fica salvo no item do contrato
+                    Fica salvo no item da operação
                   </span>
                 </Label>
                 <Input
@@ -2059,7 +2059,7 @@ export function ContractItemsManager({
                 />
                 <p className="text-[11px] text-muted-foreground">
                   Sugerido como o próprio nome da planilha. Será usado para reconhecer este produto
-                  em importações de pedidos/atestos para este contrato.
+                  em importações de pedidos/atestos para esta operação.
                 </p>
               </div>
 
@@ -2271,7 +2271,7 @@ export function ContractItemsManager({
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Remover produto do contrato?</AlertDialogTitle>
+            <AlertDialogTitle>Remover produto da operação?</AlertDialogTitle>
             <AlertDialogDescription>
               {itemToDeleteIndex !== null && items[itemToDeleteIndex] && (
                 <>
@@ -2279,7 +2279,7 @@ export function ContractItemsManager({
                   <strong>
                     {productById.get(items[itemToDeleteIndex].productId)?.name || 'este produto'}
                   </strong>{' '}
-                  da lista de itens acordados deste contrato?
+                  da lista de itens acordados desta operação?
                 </>
               )}
             </AlertDialogDescription>
