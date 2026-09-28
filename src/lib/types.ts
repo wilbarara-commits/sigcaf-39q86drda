@@ -71,10 +71,15 @@ export interface CicloRecord {
 
 export interface RotaRecord {
   id: string
-  contrato_id: string
+  contrato_id?: string
+  chamada_id?: string
   nome: string
   ordem?: number
   ativa?: boolean
+  expand?: {
+    contrato_id?: ContratoRecord
+    chamada_id?: ChamadaRecord
+  }
   created?: string
   updated?: string
 }
@@ -97,7 +102,8 @@ export interface ParadaRotaRecord {
 
 export interface DespachoRecord {
   id: string
-  contrato_id: string
+  contrato_id?: string
+  chamada_id?: string
   ciclo_id?: string
   rota_id: string
   data_despacho: string
@@ -105,6 +111,7 @@ export interface DespachoRecord {
   status: 'Em Rota' | 'Entregue' | 'Cancelado'
   expand?: {
     contrato_id?: ContratoRecord
+    chamada_id?: ChamadaRecord
     ciclo_id?: CicloRecord
     rota_id?: RotaRecord
     usuario_id?: UserRecord

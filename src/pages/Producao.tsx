@@ -56,6 +56,8 @@ import {
   ExternalLink,
   School,
   DollarSign,
+  Truck,
+  Route as RouteIcon,
 } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -71,7 +73,7 @@ export const MODULO_PRODUCAO_SUBTITULO = MODULO_CHAMADAS_SUBTITULO
 
 export default function Producao() {
   const navigate = useNavigate()
-  const { chamadas, contracts, isLoading, refreshData } = useApp()
+  const { chamadas, contracts, rotasLogisticas, isLoading, refreshData } = useApp()
   const { isAdmin } = useAuth()
 
   // Estados de busca / filtro
@@ -294,6 +296,7 @@ export default function Producao() {
                   <TableHead>Programa</TableHead>
                   <TableHead>Modalidade</TableHead>
                   <TableHead>Contratos Vinculados</TableHead>
+                  <TableHead>Rotas</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Criada em</TableHead>
                   <TableHead className="text-right">Ações</TableHead>
@@ -302,7 +305,7 @@ export default function Producao() {
               <TableBody>
                 {isLoading ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
                       <div className="flex items-center justify-center gap-2">
                         <Loader2 className="h-4 w-4 animate-spin" /> Carregando{' '}
                         {MODULO_CHAMADAS_LABEL.toLowerCase()}...
@@ -311,7 +314,7 @@ export default function Producao() {
                   </TableRow>
                 ) : filteredChamadas.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
                       {searchQuery || statusFilter !== 'todos' || modalidadeFilter !== 'todos'
                         ? `Nenhuma ${MODULO_CHAMADA_SINGULAR.toLowerCase()} encontrada para os filtros selecionados.`
                         : `Nenhuma ${MODULO_CHAMADA_SINGULAR.toLowerCase()} cadastrada ainda.`}
@@ -320,6 +323,12 @@ export default function Producao() {
                 ) : (
                   filteredChamadas.map((item) => {
                     const contratosDestaChamada = contracts.filter((c) => c.chamada_id === item.id)
+                    const contratosIdsSet = new Set(contratosDestaChamada.map((c) => c.id))
+                    const rotasDestaChamada = rotasLogisticas.filter(
+                      (r) =>
+                        r.chamada_id === item.id ||
+                        (r.contrato_id && contratosIdsSet.has(r.contrato_id)),
+                    )
 
                     return (
                       <TableRow
@@ -360,6 +369,17 @@ export default function Producao() {
                           </div>
                         </TableCell>
                         <TableCell>
+                          <div className="flex items-center gap-1.5">
+                            <Badge
+                              variant="outline"
+                              className="font-medium text-xs border-primary/40 text-primary gap-1"
+                            >
+                              <Truck className="h-3 w-3" />
+                              {rotasDestaChamada.length} rota(s)
+                            </Badge>
+                          </div>
+                        </TableCell>
+                        <TableCell>
                           <Badge
                             className={
                               item.status === 'Ativo'
@@ -382,7 +402,17 @@ export default function Producao() {
                         </TableCell>
                         <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                           <div className="flex items-center justify-end gap-1">
-                            {isAdmin ? (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-8 text-xs gap-1 border-primary/40 text-primary hover:bg-primary/5"
+                              title="Gerenciar Rotas de Entrega desta Chamada"
+                              onClick={() => navigate(`/rotas?chamadaId=${item.id}`)}
+                            >
+                              <RouteIcon className="h-3.5 w-3.5 text-primary" />
+                              <span className="hidden sm:inline">Gerenciar Rotas</span>
+                            </Button>
+                            {isAdmin && (
                               <>
                                 <Button
                                   variant="ghost"
@@ -403,8 +433,6 @@ export default function Producao() {
                                   <Trash2 className="h-4 w-4" />
                                 </Button>
                               </>
-                            ) : (
-                              <span className="text-xs text-muted-foreground">Somente leitura</span>
                             )}
                           </div>
                         </TableCell>

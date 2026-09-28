@@ -8,12 +8,17 @@ export const rotasLogisticasService = {
     return await rotasService.getAll()
   },
 
+  async getByChamada(chamadaId: string): Promise<RotaRecord[]> {
+    return await rotasService.getByChamada(chamadaId)
+  },
+
   async getByContrato(contratoId: string): Promise<RotaRecord[]> {
     return await rotasService.getByContrato(contratoId)
   },
 
   async create(data: {
-    contrato_id: string
+    contrato_id?: string
+    chamada_id?: string
     nome: string
     ordem?: number
     ativa?: boolean
@@ -57,13 +62,15 @@ export const rotasLogisticasService = {
   async despacharRotaBatch(data: {
     rota_id?: string
     rota_logistica_id?: string
-    contrato_id: string
+    chamada_id?: string
+    contrato_id?: string
     ciclo_id?: string
     user_id?: string
   }): Promise<{ despacho: DespachoRecord; pedidos: any[] }> {
     const rId = data.rota_id || data.rota_logistica_id || ''
     return await rotasService.despacharRotaBatch({
       rota_id: rId,
+      chamada_id: data.chamada_id,
       contrato_id: data.contrato_id,
       ciclo_id: data.ciclo_id,
       user_id: data.user_id,
@@ -99,12 +106,15 @@ export const rotasLogisticasService = {
     return await rotasService.moverEscolaEntreRotas(data)
   },
 
-  async getDespachos(contratoId?: string): Promise<DespachoRecord[]> {
-    return await rotasService.getDespachos(contratoId)
+  async getDespachos(
+    filterOpt?: { contratoId?: string; chamadaId?: string } | string,
+  ): Promise<DespachoRecord[]> {
+    return await rotasService.getDespachos(filterOpt)
   },
 
   async criarDespacho(data: {
-    contrato_id: string
+    contrato_id?: string
+    chamada_id?: string
     ciclo_id?: string
     rota_id?: string
     rota_logistica_id?: string
@@ -115,6 +125,7 @@ export const rotasLogisticasService = {
     const rId = data.rota_id || data.rota_logistica_id || ''
     return await rotasService.criarDespacho({
       contrato_id: data.contrato_id,
+      chamada_id: data.chamada_id,
       ciclo_id: data.ciclo_id,
       rota_id: rId,
       usuario_id: data.usuario_id,

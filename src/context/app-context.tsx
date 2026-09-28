@@ -97,8 +97,9 @@ interface AppState {
   cancelarPedido: (id: string, motivo: string, isEmRota?: boolean) => Promise<boolean>
   despacharRotaInteira: (
     rotaLogisticaId: string,
-    contratoId: string,
+    contratoId?: string,
     userId?: string,
+    chamadaId?: string,
   ) => Promise<boolean>
   confirmarEntregaRotaInteira: (rotaLogisticaId: string, userId?: string) => Promise<boolean>
   marcarNaoEntreguePedido: (
@@ -107,7 +108,8 @@ interface AppState {
     userId?: string,
   ) => Promise<boolean>
   criarRotaLogistica: (data: {
-    contrato_id: string
+    chamada_id?: string
+    contrato_id?: string
     nome: string
     ordem?: number
     ativa?: boolean
@@ -126,6 +128,7 @@ interface AppState {
     rotaLogisticaId: string,
     escolaIds: string[],
     pedidoIds?: string[],
+    chamadaId?: string,
   ) => Promise<boolean>
   atribuirPedidosARotaLogistica: (pedidoIds: string[], rotaLogisticaId: string) => Promise<boolean>
   salvarSequenciamentoParadas: (
@@ -1463,8 +1466,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // Operação em BATCH ÚNICO via backend hook transacional + Optimistic Update
   const despacharRotaInteira = async (
     rotaLogisticaId: string,
-    contratoId: string,
+    contratoId?: string,
     userId?: string,
+    chamadaId?: string,
   ): Promise<boolean> => {
     // Escolas que pertencem a esta rota (via paradas_rota)
     const escolasDaRota = new Set(
@@ -1507,9 +1511,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
       ),
     )
 
+    const effectiveChamadaId = chamadaId || rotaLog?.chamada_id
+    const effectiveContratoId = contratoId || rotaLog?.contrato_id
+
     const tempDespacho: DespachoRecord = {
       id: `temp-desp-${Date.now()}`,
-      contrato_id: contratoId,
+      chamada_id: effectiveChamadaId,
+      contrato_id: effectiveContratoId,
       ciclo_id: activeCiclo?.id,
       rota_id: rotaLogisticaId,
       usuario_id: userId,
@@ -1523,7 +1531,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     try {
       const res = await rotasLogisticasService.despacharRotaBatch({
         rota_logistica_id: rotaLogisticaId,
-        contrato_id: contratoId,
+        chamada_id: effectiveChamadaId,
+        contrato_id: effectiveContratoId,
         ciclo_id: activeCiclo?.id || undefined,
         user_id: userId,
       })
@@ -1683,7 +1692,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   // Criar nova rota logística para um contrato
   const criarRotaLogistica = async (data: {
-    contrato_id: string
+    chamada_id?: string
+    contrato_id?: string
     nome: string
     ordem?: number
     ativa?: boolean
@@ -1694,21 +1704,31 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return null
     }
 
-    // Validação de unicidade no frontend contra o estado já carregado/realtime
+    // Validação de unicidade no frontend contra o escopo da chamada ou contrato
     const normalizedTarget = cleanNome.toLowerCase()
-    const existeDuplicata = rotasLogisticas.some(
-      (r) =>
-        r.contrato_id === data.contrato_id &&
-        (r.nome || '').trim().replace(/\s+/g, ' ').toLowerCase() === normalizedTarget,
-    )
+    const existeDuplicata = rotasLogisticas.some((r) => {
+      const matchEscopo = data.chamada_id
+        ? r.chamada_id === data.chamada_id
+        : data.contrato_id
+          ? r.contrato_id === data.contrato_id
+          : false
+      return (
+        matchEscopo && (r.nome || '').trim().replace(/\s+/g, ' ').toLowerCase() === normalizedTarget
+      )
+    })
     if (existeDuplicata) {
-      toast.error('Já existe uma rota com este nome neste contrato.')
+      toast.error(
+        data.chamada_id
+          ? 'Já existe uma rota com este nome nesta Chamada.'
+          : 'Já existe uma rota com este nome neste Contrato.',
+      )
       return null
     }
 
     const tempId = `temp-rota-${Date.now()}`
     const tempRecord: RotaLogisticaRecord = {
       id: tempId,
+      chamada_id: data.chamada_id,
       contrato_id: data.contrato_id,
       nome: cleanNome,
       ordem: data.ordem || rotasLogisticas.length + 1,
@@ -1914,9 +1934,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     rotaLogisticaId: string,
     escolaIds: string[],
     _pedidoIdsIgnorado?: string[],
+    chamadaId?: string,
   ): Promise<boolean> => {
     const rotaLog = rotasLogisticas.find((r) => r.id === rotaLogisticaId)
     const nomeRota = rotaLog?.nome || 'Rota'
+    const targetChamadaId = chamadaId || rotaLog?.chamada_id
 
     const paradasAnteriores = paradasRota.filter((p) => p.rota_id === rotaLogisticaId)
     const escolasAnterioresIds = paradasAnteriores.map((p) => p.escola_id)
@@ -1972,9 +1994,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
     )
 
     // 3. Optimistic Update em contractSchools
+    // Se contratoId for fornecido, atualiza para esse contrato; se não ou se for chamada,
+    // atualiza para contratos vinculados a essa chamada ou contrato
+    const matchingContratoIds = new Set<string>()
+    if (contratoId) {
+      matchingContratoIds.add(contratoId)
+    }
+    if (targetChamadaId) {
+      contracts
+        .filter((c) => c.chamada_id === targetChamadaId)
+        .forEach((c) => matchingContratoIds.add(c.id))
+    }
+
     setContractSchools((prev) =>
       prev.map((ce) => {
-        if (ce.contrato_id !== contratoId) return ce
+        if (matchingContratoIds.size > 0 && !matchingContratoIds.has(ce.contrato_id)) return ce
         if (escolaIds.includes(ce.escola_id)) {
           return { ...ce, rota_id: rotaLogisticaId }
         }
@@ -1987,13 +2021,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     try {
       // Atualizar vínculo de rota em contrato_escolas.rota_id
+      // Encontrar para cada escola qual é o seu contrato_id correto
       for (const escId of escolaIds) {
         try {
-          await contratosService.updateEscolaRotaByContratoEscola(
-            contratoId,
-            escId,
-            rotaLogisticaId,
+          const ceItem = contractSchools.find((ce) =>
+            matchingContratoIds.size > 0
+              ? matchingContratoIds.has(ce.contrato_id) && ce.escola_id === escId
+              : ce.escola_id === escId,
           )
+          const targetCId = ceItem?.contrato_id || contratoId
+          if (targetCId) {
+            await contratosService.updateEscolaRotaByContratoEscola(
+              targetCId,
+              escId,
+              rotaLogisticaId,
+            )
+          }
         } catch (linkErr) {
           console.warn(`Erro ao sincronizar rota_id para escola ${escId}:`, linkErr)
         }
@@ -2001,7 +2044,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
       for (const escId of escolasDesatribuidas) {
         try {
-          await contratosService.updateEscolaRotaByContratoEscola(contratoId, escId, '')
+          const ceItem = contractSchools.find((ce) =>
+            matchingContratoIds.size > 0
+              ? matchingContratoIds.has(ce.contrato_id) && ce.escola_id === escId
+              : ce.escola_id === escId,
+          )
+          const targetCId = ceItem?.contrato_id || contratoId
+          if (targetCId) {
+            await contratosService.updateEscolaRotaByContratoEscola(targetCId, escId, '')
+          }
         } catch (linkErr) {
           console.warn(`Erro ao limpar rota_id para escola ${escId}:`, linkErr)
         }

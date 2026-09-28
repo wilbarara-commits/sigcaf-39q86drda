@@ -1804,7 +1804,15 @@ export default function Contracts() {
                               className="text-xs gap-1 mt-2"
                               onClick={() => {
                                 setDialogOpen(false)
-                                navigate('/rotas')
+                                const params = new URLSearchParams()
+                                if (editingContract?.chamada_id) {
+                                  params.set('chamadaId', editingContract.chamada_id)
+                                } else if (editingContract?.id) {
+                                  params.set('contratoId', editingContract.id)
+                                }
+                                navigate(
+                                  `/rotas${params.toString() ? `?${params.toString()}` : ''}`,
+                                )
                               }}
                             >
                               <Truck className="h-3.5 w-3.5 text-primary" /> Ir para Roteamento &
@@ -2939,7 +2947,13 @@ export default function Contracts() {
                     className="h-7 text-xs text-primary gap-1"
                     onClick={() => {
                       setDetailsDialogOpen(false)
-                      navigate('/rotas')
+                      const params = new URLSearchParams()
+                      if (viewingContract.chamada_id) {
+                        params.set('chamadaId', viewingContract.chamada_id)
+                      } else if (viewingContract.id) {
+                        params.set('contratoId', viewingContract.id)
+                      }
+                      navigate(`/rotas${params.toString() ? `?${params.toString()}` : ''}`)
                     }}
                   >
                     <SlidersHorizontal className="h-3 w-3" /> Configurar no Roteamento & Despacho

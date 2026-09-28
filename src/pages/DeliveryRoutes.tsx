@@ -1,4 +1,5 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useApp } from '@/context/app-context'
 import { useAuth } from '@/context/auth-context'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
@@ -54,6 +55,7 @@ import {
   HelpCircle,
   Check,
   Upload,
+  PhoneCall,
 } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
@@ -84,7 +86,12 @@ export function isFaseElegivelParaDespacho(fase?: string): boolean {
 }
 
 export default function DeliveryRoutes() {
+  const [searchParams, setSearchParams] = useSearchParams()
+  const paramChamadaId = searchParams.get('chamadaId')
+  const paramContratoId = searchParams.get('contratoId')
+
   const {
+    chamadas,
     contracts,
     contractSchools,
     cicloContratos,
@@ -110,8 +117,89 @@ export default function DeliveryRoutes() {
   } = useApp()
   const { user } = useAuth()
 
-  // Selecionar contrato ativo para roteamento e despacho
-  const [selectedContratoId, setSelectedContratoId] = useState<string>(contracts[0]?.id || 'todos')
+  // Selecionar primariamente a CHAMADA (ou se não houver chamadas, cai para todos ou contratos)
+  const initialChamadaId = useMemo(() => {
+    if (paramChamadaId) return paramChamadaId
+    if (paramContratoId) {
+      const cnt = contracts.find((c) => c.id === paramContratoId)
+      if (cnt?.chamada_id) return cnt.chamada_id
+    }
+    return chamadas[0]?.id || 'todas'
+  }, [paramChamadaId, paramContratoId, contracts, chamadas])
+
+  const [selectedChamadaId, setSelectedChamadaId] = useState<string>(initialChamadaId)
+
+  // Sincronizar se o param da URL mudar
+  useEffect(() => {
+    if (paramChamadaId) {
+      setSelectedChamadaId(paramChamadaId)
+    } else if (paramContratoId) {
+      const cnt = contracts.find((c) => c.id === paramContratoId)
+      if (cnt?.chamada_id) {
+        setSelectedChamadaId(cnt.chamada_id)
+      }
+    }
+  }, [paramChamadaId, paramContratoId, contracts])
+
+  // Chamada atualmente focada
+  const currentChamada = useMemo(() => {
+    if (selectedChamadaId === 'todas') return null
+    return chamadas.find((ch) => ch.id === selectedChamadaId) || null
+  }, [chamadas, selectedChamadaId])
+
+  // Contratos vinculados à chamada selecionada (ou todos se 'todas')
+  const chamadaContratos = useMemo(() => {
+    if (!currentChamada) return contracts
+    return contracts.filter((c) => c.chamada_id === currentChamada.id)
+  }, [contracts, currentChamada])
+
+  // Catálogo unificado de escolas da Chamada: agrega escolas de TODOS os contratos vinculados a esta chamada
+  const unifiedChamadaSchools = useMemo(() => {
+    // Mapa escolaId -> { escolaId, escolaNome, escolaEndereco, escolaAlunos, contratoId, contratoNumero }
+    const map = new Map<
+      string,
+      {
+        escolaId: string
+        escolaNome: string
+        escolaEndereco: string
+        escolaTelefone?: string
+        escolaAlunos?: number
+        contratoId: string
+        contratoNumero: string
+      }
+    >()
+
+    chamadaContratos.forEach((cnt) => {
+      cnt.escolas.forEach((esc) => {
+        if (!map.has(esc.escolaId)) {
+          map.set(esc.escolaId, {
+            escolaId: esc.escolaId,
+            escolaNome: esc.escolaNome || 'Escola',
+            escolaEndereco: esc.escolaEndereco || '',
+            escolaTelefone: esc.escolaTelefone,
+            escolaAlunos: esc.escolaAlunos,
+            contratoId: cnt.id,
+            contratoNumero: cnt.numero,
+          })
+        }
+      })
+    })
+
+    return Array.from(map.values())
+  }, [chamadaContratos])
+
+  // Mapa rápido de escolaId -> Contrato de Origem (para exibir badges em paradas e pedidos)
+  const escolaContratoOrigemMap = useMemo(() => {
+    const map = new Map<string, { contratoId: string; contratoNumero: string }>()
+    contracts.forEach((cnt) => {
+      cnt.escolas.forEach((esc) => {
+        if (!map.has(esc.escolaId)) {
+          map.set(esc.escolaId, { contratoId: cnt.id, contratoNumero: cnt.numero })
+        }
+      })
+    })
+    return map
+  }, [contracts])
 
   // Estado para criação rápida de rota logística
   const [createRouteDialogOpen, setCreateRouteDialogOpen] = useState(false)
@@ -180,16 +268,21 @@ export default function DeliveryRoutes() {
   const currentContrato = useMemo(() => {
     if (selectedContratoId === 'todos') return null
     return contracts.find((c) => c.id === selectedContratoId) || null
-  }, [contracts, selectedContratoId])
+  }, [contracts])
 
-  // Rotas logísticas filtradas pelo contrato selecionado com deduplicação defensiva por ID e por Nome
+  // Rotas logísticas filtradas pela Chamada (ou contrato legado se houver vínculo direto)
   const filteredRotasLogisticas = useMemo(() => {
     let list = rotasLogisticas
-    if (selectedContratoId !== 'todos') {
-      list = list.filter((r) => r.contrato_id === selectedContratoId)
+    if (selectedChamadaId !== 'todas') {
+      const contratosDaChamadaIds = new Set(chamadaContratos.map((c) => c.id))
+      list = list.filter((r) => {
+        if (r.chamada_id && r.chamada_id === selectedChamadaId) return true
+        if (r.contrato_id && contratosDaChamadaIds.has(r.contrato_id)) return true
+        return false
+      })
     }
 
-    // Deduplicação defensiva por ID e por Nome normalizado no mesmo contrato
+    // Deduplicação defensiva por ID e por Nome normalizado no mesmo escopo
     const seenIds = new Set<string>()
     const seenNames = new Set<string>()
     const dedupedList: RotaLogisticaRecord[] = []
@@ -199,8 +292,8 @@ export default function DeliveryRoutes() {
       seenIds.add(r.id)
 
       const normName = (r.nome || '').trim().replace(/\s+/g, ' ').toLowerCase()
-      // Se for temporário e já existir rota salva com o mesmo nome, ou duplicata de nome:
-      const keyName = `${r.contrato_id}:${normName}`
+      const scopeKey = r.chamada_id || r.contrato_id || 'global'
+      const keyName = `${scopeKey}:${normName}`
       if (seenNames.has(keyName)) {
         continue
       }
@@ -208,23 +301,20 @@ export default function DeliveryRoutes() {
       dedupedList.push(r)
     }
 
-    // Regra 3: O despacho e o sequenciamento só operam sobre rotas dentro do limite definido no contrato
-    if (currentContrato?.num_rotas_logisticas) {
-      return dedupedList.slice(0, currentContrato.num_rotas_logisticas)
-    }
     return dedupedList
-  }, [rotasLogisticas, selectedContratoId, currentContrato])
+  }, [rotasLogisticas, selectedChamadaId, chamadaContratos])
 
-  // Pedidos que pertencem ao contrato selecionado (via escolas do contrato)
-  const contratoOrders = useMemo(() => {
-    if (!currentContrato) return orders
-    const schoolIds = new Set(currentContrato.escolas.map((e) => e.escolaId))
+  // Pedidos que pertencem à chamada selecionada (via escolas dos contratos da chamada)
+  const chamadaOrders = useMemo(() => {
+    if (!currentChamada) return orders
+    const schoolIds = new Set(unifiedChamadaSchools.map((e) => e.escolaId))
     return orders.filter((o) => schoolIds.has(o.schoolId))
-  }, [orders, currentContrato])
+  }, [orders, currentChamada, unifiedChamadaSchools])
 
   // Detalhes completos por rota logística
   const rotasLogisticasDetalhes = useMemo(() => {
     return filteredRotasLogisticas.map((rota) => {
+      const chamadaObj = chamadas.find((ch) => ch.id === rota.chamada_id)
       const contrato = contracts.find((c) => c.id === rota.contrato_id)
 
       // Paradas cadastradas no banco (collection paradas_rota) - estrutura da rota baseada em escolas
@@ -245,25 +335,29 @@ export default function DeliveryRoutes() {
       const pedidosEntregues = pedidosDaRota.filter((o) => o.status === 'Entregue')
       const pedidosCancelados = pedidosDaRota.filter((o) => o.status === 'Cancelado')
 
-      // Montar lista ordenada de paradas (baseada estritamente nas escolas cadastradas em paradas_rota)
+      // Montar lista ordenada de paradas com badge de contrato de origem
       const paradasOrdenadas: Array<{
         escolaId: string
         nome: string
         endereco: string
         alunos?: number
         ordem: number
+        contratoNumero?: string
         pedidos: Order[]
       }> = []
 
       paradasCadastradas.forEach((p, idx) => {
         const sch = schools.find((s) => s.id === p.escola_id)
         const peds = pedidosDaRota.filter((o) => o.schoolId === p.escola_id)
+        const contratoOrigem = escolaContratoOrigemMap.get(p.escola_id)
+
         paradasOrdenadas.push({
           escolaId: p.escola_id,
           nome: sch?.name || 'Escola',
           endereco: sch?.address || '',
           alunos: sch?.alunos,
           ordem: idx + 1,
+          contratoNumero: contratoOrigem?.contratoNumero,
           pedidos: peds,
         })
       })
@@ -283,8 +377,9 @@ export default function DeliveryRoutes() {
 
       return {
         rota,
-        contratoNumero: contrato?.numero || 'Sem contrato',
-        modalidade: contrato?.modalidade_pedido || 'individualizado',
+        chamadaNome: chamadaObj?.chamada || 'Chamada',
+        contratoNumero: contrato?.numero,
+        modalidade: chamadaObj?.modalidade || contrato?.modalidade_pedido || 'individualizado',
         pedidosDaRota,
         pedidosPendentes,
         pedidosEmRota,
@@ -296,23 +391,36 @@ export default function DeliveryRoutes() {
         valorTotal,
       }
     })
-  }, [filteredRotasLogisticas, contracts, orders, schools, paradasRota, despachos])
+  }, [
+    filteredRotasLogisticas,
+    chamadas,
+    contracts,
+    orders,
+    schools,
+    paradasRota,
+    despachos,
+    escolaContratoOrigemMap,
+  ])
 
-  // Escolas vinculadas ao contrato selecionado que AINDA NÃO têm rota logística atribuída
+  // Escolas vinculadas à Chamada (em qualquer dos seus contratos) que AINDA NÃO têm rota logística atribuída
   const escolasSemRota = useMemo(() => {
-    if (!currentContrato) return []
-    // IDs de todas as escolas em paradas_rota de qualquer rota logística
-    const escolasComRotaSet = new Set(paradasRota.map((p) => p.escola_id))
-    return currentContrato.escolas.filter((e) => !escolasComRotaSet.has(e.escolaId))
-  }, [currentContrato, paradasRota])
+    if (!currentChamada) return []
+    // IDs de todas as escolas em paradas_rota de qualquer rota logística desta chamada
+    const paradasDestaChamadaSet = new Set(
+      filteredRotasLogisticas.flatMap((r) =>
+        paradasRota.filter((p) => p.rota_id === r.id).map((p) => p.escola_id),
+      ),
+    )
+    return unifiedChamadaSchools.filter((e) => !paradasDestaChamadaSet.has(e.escolaId))
+  }, [currentChamada, filteredRotasLogisticas, paradasRota, unifiedChamadaSchools])
 
-  // Pedidos de escolas sem rota logística atribuída (ficam Pendente sem rota e não bloqueiam as demais)
+  // Pedidos de escolas sem rota logística atribuída
   const pedidosSemRota = useMemo(() => {
     const escolasSemRotaIds = new Set(escolasSemRota.map((e) => e.escolaId))
-    return contratoOrders.filter(
+    return chamadaOrders.filter(
       (o) => o.status === 'Pendente' && (!o.rotaLogisticaId || escolasSemRotaIds.has(o.schoolId)),
     )
-  }, [escolasSemRota, contratoOrders])
+  }, [escolasSemRota, chamadaOrders])
 
   // Despacho: Abrir modal de confirmação para colocar rota inteira em rota
   const handleOpenDispatch = (rota: RotaLogisticaRecord) => {
@@ -393,7 +501,12 @@ export default function DeliveryRoutes() {
 
     setIsDispatching(true)
     try {
-      await despacharRotaInteira(rotaToDispatch.id, rotaToDispatch.contrato_id, user?.id)
+      await despacharRotaInteira(
+        rotaToDispatch.id,
+        rotaToDispatch.contrato_id,
+        user?.id,
+        rotaToDispatch.chamada_id || currentChamada?.id,
+      )
       setDispatchConfirmOpen(false)
       setRotaToDispatch(null)
     } finally {
@@ -458,37 +571,30 @@ export default function DeliveryRoutes() {
       return
     }
 
-    if (!currentContrato) {
-      toast.error('Selecione um contrato específico para criar uma rota.')
+    if (!currentChamada) {
+      toast.error('Selecione uma Chamada específica para criar uma rota.')
       return
     }
 
-    // Validação local no frontend: checar duplicata case-insensitive e trim no mesmo contrato
+    // Validação local no frontend: checar duplicata case-insensitive e trim na mesma Chamada
     const cleanNome = trimmed.replace(/\s+/g, ' ')
     const normalizedTarget = cleanNome.toLowerCase()
     const existeDuplicata = rotasLogisticas.some(
       (r) =>
-        r.contrato_id === currentContrato.id &&
+        (r.chamada_id === currentChamada.id ||
+          (r.contrato_id && chamadaContratos.some((c) => c.id === r.contrato_id))) &&
         (r.nome || '').trim().replace(/\s+/g, ' ').toLowerCase() === normalizedTarget,
     )
     if (existeDuplicata) {
-      toast.error('Já existe uma rota com este nome neste contrato.')
-      return
-    }
-
-    // Verificar se já atingiu o limite se num_rotas_logisticas estiver definido
-    if (
-      currentContrato.num_rotas_logisticas &&
-      filteredRotasLogisticas.length >= currentContrato.num_rotas_logisticas
-    ) {
-      toast.error(`Este contrato permite no máximo ${currentContrato.num_rotas_logisticas} rotas.`)
+      toast.error('Já existe uma rota com este nome nesta Chamada.')
       return
     }
 
     setIsCreatingRoute(true)
     try {
       const created = await criarRotaLogistica({
-        contrato_id: currentContrato.id,
+        chamada_id: currentChamada.id,
+        contrato_id: chamadaContratos[0]?.id,
         nome: trimmed,
         ordem: filteredRotasLogisticas.length + 1,
         ativa: true,
@@ -518,16 +624,20 @@ export default function DeliveryRoutes() {
       return
     }
 
-    // Validação local no frontend: bloquear nome duplicado no mesmo contrato (exceto ela própria)
+    // Validação local no frontend: bloquear nome duplicado na mesma Chamada/Contrato
     const normalizedTarget = trimmed.replace(/\s+/g, ' ').toLowerCase()
-    const existeDuplicata = rotasLogisticas.some(
-      (r) =>
-        r.id !== routeToEdit.id &&
-        r.contrato_id === routeToEdit.contrato_id &&
-        (r.nome || '').trim().replace(/\s+/g, ' ').toLowerCase() === normalizedTarget,
-    )
+    const targetScopeChamada = routeToEdit.chamada_id || currentChamada?.id
+    const existeDuplicata = rotasLogisticas.some((r) => {
+      if (r.id === routeToEdit.id) return false
+      const matchScope = targetScopeChamada
+        ? r.chamada_id === targetScopeChamada
+        : r.contrato_id === routeToEdit.contrato_id
+      return (
+        matchScope && (r.nome || '').trim().replace(/\s+/g, ' ').toLowerCase() === normalizedTarget
+      )
+    })
     if (existeDuplicata) {
-      toast.error('Já existe uma rota com este nome neste contrato.')
+      toast.error('Já existe uma rota com este nome nesta Chamada.')
       return
     }
 
@@ -576,8 +686,8 @@ export default function DeliveryRoutes() {
 
   // Processar colagem de lista de escolas com endereço
   const handleApplyPastedSchools = () => {
-    if (!currentContrato) {
-      toast.error('Nenhum contrato selecionado.')
+    if (!currentChamada && unifiedChamadaSchools.length === 0) {
+      toast.error('Nenhuma Chamada selecionada.')
       return
     }
 
@@ -594,8 +704,15 @@ export default function DeliveryRoutes() {
     const matchedIds: string[] = []
     const unmatched: string[] = []
 
+    // Converte escolas unificadas da chamada no formato esperado pelo matcher
+    const escolasParaMatching = unifiedChamadaSchools.map((u) => ({
+      escolaId: u.escolaId,
+      escolaNome: u.escolaNome,
+      escolaEndereco: u.escolaEndereco,
+    }))
+
     for (const line of lines) {
-      const match = matchPastedSchoolLine(line, currentContrato.escolas, schools)
+      const match = matchPastedSchoolLine(line, escolasParaMatching as any, schools)
       if (match.matchedLink) {
         matchedIds.push(match.matchedLink.escolaId)
       } else {
@@ -627,16 +744,19 @@ export default function DeliveryRoutes() {
     }
   }
 
-  // Roteamento por contrato: Salvar atribuição de escolas à rota
+  // Roteamento da Chamada: Salvar atribuição de escolas à rota
   // Preenche paradas_rota, atualiza pedidos pendentes automaticamente e sincroniza contrato_escolas
   const handleSaveRouting = async () => {
     if (!selectedRotaForRouting) return
     setIsSavingAssignment(true)
     try {
+      const targetCId = selectedRotaForRouting.contrato_id || chamadaContratos[0]?.id || ''
       await sincronizarEscolasRotaLogistica(
-        selectedRotaForRouting.contrato_id,
+        targetCId,
         selectedRotaForRouting.id,
         selectedSchoolsToAssign,
+        undefined,
+        selectedRotaForRouting.chamada_id || currentChamada?.id,
       )
 
       setRoutingDialogOpen(false)
@@ -845,52 +965,48 @@ export default function DeliveryRoutes() {
 
   return (
     <div className="space-y-6">
-      {/* Header e Seleção de Contrato */}
+      {/* Header e Seleção de Chamada */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Roteamento & Despacho</h1>
           <p className="text-muted-foreground text-sm">
-            Gestão de rotas da cooperativa, sequenciamento drag-and-drop de paradas e despacho por
-            rota inteira.
+            Gestão de rotas no nível da Chamada, agrupando escolas de diferentes contratos
+            vinculados em uma mesma rota.
           </p>
         </div>
 
-        {/* Filtro por Contrato e Ações */}
+        {/* Filtro por Chamada e Ações */}
         <div className="flex items-center gap-2">
           <Layers className="h-4 w-4 text-primary shrink-0" />
-          <Select value={selectedContratoId} onValueChange={setSelectedContratoId}>
-            <SelectTrigger className="w-[280px]">
-              <SelectValue placeholder="Selecione o Contrato" />
+          <Select
+            value={selectedChamadaId}
+            onValueChange={(val) => {
+              setSelectedChamadaId(val)
+              setSearchParams(val === 'todas' ? {} : { chamadaId: val })
+            }}
+          >
+            <SelectTrigger className="w-[300px]">
+              <SelectValue placeholder="Selecione a Chamada" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="todos">Todos os Contratos</SelectItem>
-              {contracts.map((c) => (
-                <SelectItem key={c.id} value={c.id}>
-                  {c.numero} (
-                  {c.num_rotas_logisticas
-                    ? `${c.num_rotas_logisticas} rota(s) max`
-                    : 'Rotas livres'}
-                  )
-                </SelectItem>
-              ))}
+              <SelectItem value="todas">Todas as Chamadas</SelectItem>
+              {chamadas.map((ch) => {
+                const cnts = contracts.filter((c) => c.chamada_id === ch.id)
+                return (
+                  <SelectItem key={ch.id} value={ch.id}>
+                    {ch.chamada} ({ch.programa || 'PNAE'}) • {cnts.length} contrato(s)
+                  </SelectItem>
+                )
+              })}
             </SelectContent>
           </Select>
 
-          {selectedContratoId !== 'todos' && (
+          {selectedChamadaId !== 'todas' && (
             <Button
               onClick={handleOpenCreateRoute}
               size="sm"
               className="gap-1.5 shrink-0"
-              disabled={
-                Boolean(currentContrato?.num_rotas_logisticas) &&
-                filteredRotasLogisticas.length >= (currentContrato?.num_rotas_logisticas || 0)
-              }
-              title={
-                Boolean(currentContrato?.num_rotas_logisticas) &&
-                filteredRotasLogisticas.length >= (currentContrato?.num_rotas_logisticas || 0)
-                  ? `Limite de ${currentContrato?.num_rotas_logisticas} rotas atingido`
-                  : 'Criar nova rota para este contrato'
-              }
+              title="Criar nova rota para esta Chamada"
             >
               <Plus className="h-4 w-4" /> Nova Rota
             </Button>
@@ -898,13 +1014,13 @@ export default function DeliveryRoutes() {
         </div>
       </div>
 
-      {/* Painel de Escolas Vinculadas sem Rota Atribuída */}
-      {selectedContratoId !== 'todos' && escolasSemRota.length > 0 && (
+      {/* Painel de Escolas da Chamada sem Rota Atribuída */}
+      {selectedChamadaId !== 'todas' && escolasSemRota.length > 0 && (
         <div className="p-4 rounded-lg border border-amber-500/40 bg-amber-500/10 space-y-2 text-xs">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
             <div className="flex items-center gap-2 text-amber-950 dark:text-amber-200 font-semibold">
               <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />
-              <span>{escolasSemRota.length} escola(s) vinculada(s) ao contrato ainda sem rota</span>
+              <span>{escolasSemRota.length} escola(s) vinculada(s) à Chamada ainda sem rota</span>
             </div>
             <Badge
               variant="outline"
@@ -914,8 +1030,9 @@ export default function DeliveryRoutes() {
             </Badge>
           </div>
           <p className="text-[11px] text-muted-foreground leading-relaxed">
-            As escolas abaixo fazem parte do contrato mas ainda não foram distribuídas em nenhuma
-            rota. Os pedidos delas ficam como <strong>Pendente sem rota</strong> e{' '}
+            As escolas abaixo fazem parte dos contratos desta chamada mas ainda não foram
+            distribuídas em nenhuma rota. Os pedidos delas ficam como{' '}
+            <strong>Pendente sem rota</strong> e{' '}
             <strong>não bloqueiam o despacho das demais rotas</strong>. Atribua-as usando o botão
             "Roteamento" em uma das rotas.
           </p>
@@ -924,11 +1041,16 @@ export default function DeliveryRoutes() {
               <Badge
                 key={esc.escolaId}
                 variant="secondary"
-                className="text-[11px] bg-background/80 border border-amber-300 text-foreground"
+                className="text-[11px] bg-background/80 border border-amber-300 text-foreground flex items-center gap-1"
               >
-                <Building2 className="h-3 w-3 mr-1 text-amber-600" />
-                {esc.escolaNome}
-                {esc.escolaAlunos ? ` (${esc.escolaAlunos} alunos)` : ''}
+                <Building2 className="h-3 w-3 text-amber-600" />
+                <span>{esc.escolaNome}</span>
+                {esc.escolaAlunos ? (
+                  <span className="text-muted-foreground">({esc.escolaAlunos} alunos)</span>
+                ) : null}
+                <span className="text-[9px] font-mono px-1 py-0.2 bg-muted rounded border border-border">
+                  {esc.contratoNumero}
+                </span>
               </Badge>
             ))}
           </div>
@@ -943,27 +1065,22 @@ export default function DeliveryRoutes() {
               <RouteIcon className="h-7 w-7" />
             </div>
             <div className="max-w-md mx-auto space-y-1.5">
-              <h3 className="text-lg font-bold text-foreground">
-                Primeira Configuração de Rotas do Contrato
-              </h3>
+              <h3 className="text-lg font-bold text-foreground">Rotas da Chamada</h3>
               <p className="text-xs text-muted-foreground leading-relaxed">
-                {currentContrato ? (
+                {currentChamada ? (
                   <>
-                    O contrato <strong>{currentContrato.numero}</strong> ainda não possui rotas
-                    configuradas. Crie as rotas aqui mesmo com nomes livres (
-                    {currentContrato.num_rotas_logisticas
-                      ? `até ${currentContrato.num_rotas_logisticas} rota(s) conforme o contrato`
-                      : 'quantas desejar'}
-                    ), atribua as escolas e pedidos do contrato e ordene as paradas por
-                    drag-and-drop.
+                    A chamada <strong>{currentChamada.chamada}</strong> (
+                    {currentChamada.programa || 'PNAE'}) ainda não possui rotas configuradas. Crie
+                    as rotas no nível da chamada e agrupe escolas de todos os seus contratos
+                    vinculados ({chamadaContratos.length} contrato(s)) em uma mesma rota.
                   </>
                 ) : (
-                  'Selecione um contrato acima para iniciar a primeira configuração de rotas, atribuição de escolas e pedidos.'
+                  'Selecione uma Chamada acima para visualizar e gerenciar as rotas integradas com escolas de diferentes contratos.'
                 )}
               </p>
             </div>
 
-            {currentContrato && (
+            {currentChamada && (
               <div className="pt-2">
                 <Button onClick={handleOpenCreateRoute} className="gap-2">
                   <Plus className="h-4 w-4" /> Criar Primeira Rota
@@ -1005,9 +1122,18 @@ export default function DeliveryRoutes() {
                           </Badge>
                         )}
                       </div>
-                      <CardDescription className="text-xs mt-0.5">
-                        Contrato: <strong className="text-foreground">{item.contratoNumero}</strong>{' '}
-                        • Modalidade: <span className="capitalize">{item.modalidade}</span>
+                      <CardDescription className="text-xs mt-0.5 flex flex-wrap items-center gap-1.5">
+                        <span>
+                          Chamada: <strong className="text-foreground">{item.chamadaNome}</strong>
+                        </span>
+                        {item.contratoNumero && (
+                          <span className="text-muted-foreground">
+                            • Contrato ref: {item.contratoNumero}
+                          </span>
+                        )}
+                        <span>
+                          • Modalidade: <span className="capitalize">{item.modalidade}</span>
+                        </span>
                       </CardDescription>
                     </div>
                     <div className="flex items-center gap-1.5 shrink-0">
@@ -1283,9 +1409,20 @@ export default function DeliveryRoutes() {
                                     {parada.ordem}
                                   </span>
                                   <div className="min-w-0">
-                                    <p className="font-semibold text-foreground truncate">
-                                      {parada.nome}
-                                    </p>
+                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                      <p className="font-semibold text-foreground truncate">
+                                        {parada.nome}
+                                      </p>
+                                      {parada.contratoNumero && (
+                                        <Badge
+                                          variant="outline"
+                                          className="text-[9px] px-1 py-0 border-primary/30 text-primary font-mono shrink-0"
+                                          title={`Escola vinculada ao Contrato ${parada.contratoNumero}`}
+                                        >
+                                          {parada.contratoNumero}
+                                        </Badge>
+                                      )}
+                                    </div>
                                     <p className="text-[10px] text-muted-foreground truncate">
                                       {parada.endereco || 'Endereço não informado'}
                                     </p>
@@ -1401,16 +1538,16 @@ export default function DeliveryRoutes() {
         </div>
       )}
 
-      {/* MODAL 0: Criar Rota no Contrato */}
+      {/* MODAL 0: Criar Rota na Chamada */}
       <Dialog open={createRouteDialogOpen} onOpenChange={setCreateRouteDialogOpen}>
         <DialogContent className="sm:max-w-[440px]">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <Truck className="h-5 w-5 text-primary" /> Nova Rota
+              <Truck className="h-5 w-5 text-primary" /> Nova Rota na Chamada
             </DialogTitle>
             <DialogDescription>
-              Crie uma rota para o contrato <strong>{currentContrato?.numero}</strong>. O nome é
-              livre e define o roteiro de despacho da cooperativa.
+              Crie uma rota para a chamada <strong>{currentChamada?.chamada}</strong>. O nome é
+              livre e agrupará escolas de todos os contratos vinculados a esta chamada.
             </DialogDescription>
           </DialogHeader>
 
@@ -1427,14 +1564,7 @@ export default function DeliveryRoutes() {
                 autoFocus
               />
               <p className="text-[10px] text-muted-foreground">
-                {currentContrato?.num_rotas_logisticas ? (
-                  <>
-                    Limite contratual: {filteredRotasLogisticas.length + 1} de{' '}
-                    {currentContrato.num_rotas_logisticas} rotas permitidas.
-                  </>
-                ) : (
-                  'Número de rotas ilimitado para este contrato.'
-                )}
+                Rotas criadas nesta Chamada podem conter escolas de múltiplos contratos vinculados.
               </p>
             </div>
           </div>
@@ -1566,18 +1696,18 @@ export default function DeliveryRoutes() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* MODAL 1: Montagem de Roteamento por Contrato (Operando sobre ESCOLAS) */}
+      {/* MODAL 1: Montagem de Roteamento por Chamada (Catálogo Unificado de Escolas) */}
       <Dialog open={routingDialogOpen} onOpenChange={setRoutingDialogOpen}>
-        <DialogContent className="sm:max-w-[620px] max-h-[85vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-[660px] max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <SlidersHorizontal className="h-5 w-5 text-primary" /> Roteamento de Escolas da Rota
             </DialogTitle>
             <DialogDescription>
-              Atribua as <strong>escolas participantes do contrato</strong> que compõem o roteiro da
-              rota <strong>{selectedRotaForRouting?.nome}</strong>. O roteamento é estrutura do
-              contrato: feita uma vez, repetida em todos os ciclos. Pedidos existentes ou futuros
-              destas escolas <strong>herdam esta rota automaticamente</strong>.
+              Atribua as <strong>escolas da Chamada {currentChamada?.chamada}</strong> que compõem o
+              roteiro da rota <strong>{selectedRotaForRouting?.nome}</strong>. Você pode selecionar
+              escolas de <strong>diferentes contratos</strong> vinculados a esta chamada em uma
+              mesma rota.
             </DialogDescription>
           </DialogHeader>
 
@@ -1591,17 +1721,19 @@ export default function DeliveryRoutes() {
                 >
                   <ClipboardPaste className="h-4 w-4 text-primary" /> Adicionar Escolas em Lote
                 </Label>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  className="h-7 text-xs gap-1.5 border-primary/40 text-primary hover:bg-primary/10 w-fit"
-                  onClick={() => setBatchImportFileModalOpen(true)}
-                  title="Selecionar arquivo Excel, Word, CSV ou texto simples"
-                >
-                  <Upload className="h-3.5 w-3.5" />
-                  Selecionar Arquivo (Excel/Word/CSV/TXT)
-                </Button>
+                {chamadaContratos[0] && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="h-7 text-xs gap-1.5 border-primary/40 text-primary hover:bg-primary/10 w-fit"
+                    onClick={() => setBatchImportFileModalOpen(true)}
+                    title="Selecionar arquivo Excel, Word, CSV ou texto simples"
+                  >
+                    <Upload className="h-3.5 w-3.5" />
+                    Selecionar Arquivo (Excel/Word/CSV/TXT)
+                  </Button>
+                )}
               </div>
 
               <div className="flex items-center justify-between pt-1">
@@ -1687,7 +1819,7 @@ Ou apenas o nome da escola copiado do Excel/Word`}
                     </Button>
                   </div>
                   <p className="text-[10px] text-muted-foreground">
-                    Estas linhas não casaram com as escolas cadastradas neste contrato. Você pode
+                    Estas linhas não casaram com as escolas cadastradas nesta Chamada. Você pode
                     corrigir o nome e reaplicar:
                   </p>
                   <ul className="list-disc list-inside space-y-0.5 text-amber-950 dark:text-amber-200 font-mono text-[10px] max-h-24 overflow-y-auto">
@@ -1704,7 +1836,8 @@ Ou apenas o nome da escola copiado do Excel/Word`}
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <Label className="font-semibold text-foreground flex items-center gap-1.5">
-                  <Building2 className="h-4 w-4 text-primary" /> Escolas do Contrato
+                  <Building2 className="h-4 w-4 text-primary" /> Catálogo Unificado de Escolas da
+                  Chamada
                 </Label>
                 <div className="flex items-center gap-2">
                   <Button
@@ -1713,8 +1846,7 @@ Ou apenas o nome da escola copiado do Excel/Word`}
                     size="sm"
                     className="h-6 text-[10px] px-2 text-primary"
                     onClick={() => {
-                      if (!currentContrato) return
-                      setSelectedSchoolsToAssign(currentContrato.escolas.map((e) => e.escolaId))
+                      setSelectedSchoolsToAssign(unifiedChamadaSchools.map((e) => e.escolaId))
                     }}
                   >
                     Marcar Todas
@@ -1734,14 +1866,14 @@ Ou apenas o nome da escola copiado do Excel/Word`}
                 </div>
               </div>
               <p className="text-[11px] text-muted-foreground">
-                Marque as escolas atendidas por esta rota. Ao salvar, as paradas serão criadas em{' '}
-                <code>paradas_rota</code> e os pedidos das escolas receberão esta rota
-                automaticamente.
+                Marque as escolas atendidas por esta rota. Escolas de contratos diferentes podem ser
+                atribuídas à mesma rota. Ao salvar, as paradas serão criadas em{' '}
+                <code>paradas_rota</code>.
               </p>
 
               <div className="rounded-lg border divide-y max-h-[300px] overflow-y-auto bg-card">
-                {currentContrato ? (
-                  currentContrato.escolas.map((esc) => {
+                {unifiedChamadaSchools.length > 0 ? (
+                  unifiedChamadaSchools.map((esc) => {
                     const isChecked = selectedSchoolsToAssign.includes(esc.escolaId)
                     // Verificar se já está em outra rota
                     const paradaOutraRota = paradasRota.find(
@@ -1779,9 +1911,18 @@ Ou apenas o nome da escola copiado do Excel/Word`}
                             className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
                           />
                           <div>
-                            <p className="font-semibold text-foreground text-sm">
-                              {esc.escolaNome || 'Escola'}
-                            </p>
+                            <div className="flex items-center gap-1.5">
+                              <p className="font-semibold text-foreground text-sm">
+                                {esc.escolaNome || 'Escola'}
+                              </p>
+                              <Badge
+                                variant="outline"
+                                className="text-[9px] px-1 py-0 font-mono text-muted-foreground border-border"
+                                title={`Contrato de origem: ${esc.contratoNumero}`}
+                              >
+                                {esc.contratoNumero}
+                              </Badge>
+                            </div>
                             <p className="text-[11px] text-muted-foreground">
                               {esc.escolaEndereco || 'Endereço não informado'}
                             </p>
@@ -1801,21 +1942,13 @@ Ou apenas o nome da escola copiado do Excel/Word`}
                               Atualmente na {outraRotaObj.nome}
                             </Badge>
                           )}
-                          {(esc.rotaPlanilha || esc.rotaNome) && !outraRotaObj && (
-                            <Badge
-                              variant="outline"
-                              className="text-[9px] bg-muted/50 text-muted-foreground"
-                            >
-                              Aba: {esc.rotaPlanilha || esc.rotaNome}
-                            </Badge>
-                          )}
                         </div>
                       </label>
                     )
                   })
                 ) : (
                   <div className="py-6 text-center text-muted-foreground">
-                    Selecione um contrato específico para visualizar e atribuir suas escolas.
+                    Nenhuma escola encontrada para a chamada selecionada.
                   </div>
                 )}
               </div>
@@ -2000,14 +2133,14 @@ Ou apenas o nome da escola copiado do Excel/Word`}
       </Dialog>
 
       {/* Modal de Importação em Lote via Arquivo (Excel, Word, CSV, TXT) */}
-      {currentContrato && selectedRotaForRouting && (
+      {chamadaContratos[0] && selectedRotaForRouting && (
         <RouteSchoolBatchImportModal
           open={batchImportFileModalOpen}
           onOpenChange={setBatchImportFileModalOpen}
           targetRouteName={selectedRotaForRouting.nome}
           targetRouteId={selectedRotaForRouting.id}
           targetRouteType="logistica"
-          contract={currentContrato}
+          contract={chamadaContratos[0]}
           allContracts={contracts}
           masterSchools={schools}
           paradasRota={paradasRota}

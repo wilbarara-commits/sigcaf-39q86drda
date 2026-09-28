@@ -8,6 +8,13 @@ export const rotasService = {
     })
   },
 
+  async getByChamada(chamadaId: string): Promise<RotaRecord[]> {
+    return await pb.collection('rotas').getFullList<RotaRecord>({
+      filter: `chamada_id = "${chamadaId}"`,
+      sort: 'ordem,nome',
+    })
+  },
+
   async getByContrato(contratoId: string): Promise<RotaRecord[]> {
     return await pb.collection('rotas').getFullList<RotaRecord>({
       filter: `contrato_id = "${contratoId}"`,
@@ -16,7 +23,8 @@ export const rotasService = {
   },
 
   async create(data: {
-    contrato_id: string
+    contrato_id?: string
+    chamada_id?: string
     nome: string
     ordem?: number
     ativa?: boolean
@@ -116,7 +124,8 @@ export const rotasService = {
 
   async despacharRotaBatch(data: {
     rota_id: string
-    contrato_id: string
+    chamada_id?: string
+    contrato_id?: string
     ciclo_id?: string
     user_id?: string
   }): Promise<{ despacho: DespachoRecord; pedidos: any[] }> {
@@ -167,17 +176,29 @@ export const rotasService = {
   },
 
   // Despachos
-  async getDespachos(contratoId?: string): Promise<DespachoRecord[]> {
-    const filter = contratoId ? `contrato_id = "${contratoId}"` : ''
+  async getDespachos(
+    filterOpt?: { contratoId?: string; chamadaId?: string } | string,
+  ): Promise<DespachoRecord[]> {
+    let filter = ''
+    if (typeof filterOpt === 'string') {
+      filter = filterOpt ? `contrato_id = "${filterOpt}"` : ''
+    } else if (filterOpt) {
+      if (filterOpt.chamadaId) {
+        filter = `chamada_id = "${filterOpt.chamadaId}"`
+      } else if (filterOpt.contratoId) {
+        filter = `contrato_id = "${filterOpt.contratoId}"`
+      }
+    }
     return await pb.collection('despachos').getFullList<DespachoRecord>({
       filter,
       sort: '-data_despacho',
-      expand: 'contrato_id,ciclo_id,rota_id,usuario_id',
+      expand: 'contrato_id,chamada_id,ciclo_id,rota_id,usuario_id',
     })
   },
 
   async criarDespacho(data: {
-    contrato_id: string
+    contrato_id?: string
+    chamada_id?: string
     ciclo_id?: string
     rota_id: string
     usuario_id?: string

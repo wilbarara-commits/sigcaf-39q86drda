@@ -672,8 +672,18 @@ export default function Monitoring() {
                       <Button
                         size="sm"
                         className="w-full text-xs bg-amber-600 hover:bg-amber-700 text-white gap-1"
-                        onClick={() => navigate('/rotas')}
-                        title="Ir para tela de rotas logísticas e despacho"
+                        onClick={() => {
+                          const selectedContratoObj = contracts.find(
+                            (c) => c.id === selectedContratoId,
+                          )
+                          const chId = selectedContratoObj?.chamada_id
+                          const cId = selectedCiclo?.id
+                          const params = new URLSearchParams()
+                          if (chId) params.set('chamadaId', chId)
+                          if (cId) params.set('cicloId', cId)
+                          navigate(`/rotas${params.toString() ? `?${params.toString()}` : ''}`)
+                        }}
+                        title="Ir para tela de rotas da chamada e despacho"
                       >
                         <Truck className="h-3.5 w-3.5" /> Colocar em Rota
                       </Button>
