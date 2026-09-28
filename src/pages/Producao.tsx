@@ -201,7 +201,7 @@ export default function Producao() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight">{MODULO_CHAMADAS_LABEL}</h1>
           <p className="text-muted-foreground text-sm">
-            {MODULO_CHAMADAS_SUBTITULO} Nível hierárquico: Escolas → Operações →{' '}
+            {MODULO_CHAMADAS_SUBTITULO} Nível hierárquico: Escolas → Contratos →{' '}
             {MODULO_CHAMADAS_LABEL}.
           </p>
         </div>

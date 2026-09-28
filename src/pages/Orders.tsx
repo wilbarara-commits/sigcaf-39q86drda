@@ -746,10 +746,10 @@ export default function Orders() {
             <form onSubmit={handleCreateOrder} className="space-y-4 pt-2">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="ord-contrato">Operação Vinculada</Label>
+                  <Label htmlFor="ord-contrato">Contrato Vinculado</Label>
                   <Select value={selectedContractId} onValueChange={setSelectedContractId}>
                     <SelectTrigger id="ord-contrato">
-                      <SelectValue placeholder="Selecione a Operação" />
+                      <SelectValue placeholder="Selecione o Contrato" />
                     </SelectTrigger>
                     <SelectContent>
                       {individualContracts.map((c) => (
@@ -1765,7 +1765,7 @@ export default function Orders() {
                   <span className="capitalize">{orderToEdit.origem}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">Fase da Operação:</span>
+                  <span className="text-muted-foreground">Fase do Contrato:</span>
                   <Badge variant="outline" className="capitalize">
                     {getFaseContratoDoPedido(orderToEdit)}
                   </Badge>

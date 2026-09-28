@@ -1786,7 +1786,7 @@ export default function Contracts() {
 
               {/* Aba 3: Escolas Participantes (Cadastro Mestre Global + Vínculo com Aba da Planilha) */}
               <TabsContent value="escolas" className="space-y-4 pt-3">
-                {/* Gestão das Abas da Planilha desta Operação */}
+                {/* Gestão das Abas da Planilha deste Contrato */}
                 <div className="space-y-3 p-3.5 rounded-lg border bg-muted/20">
                   <div>
                     <Label className="text-xs font-semibold text-primary uppercase tracking-wider flex items-center gap-1.5">
