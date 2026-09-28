@@ -32,6 +32,7 @@ const MASTER_ONLY_ROUTES = ['/usuarios', '/configuracoes']
 const ADMIN_ALLOWED_ROUTES = [
   '/produtos',
   '/escolas',
+  '/chamadas',
   '/producao',
   '/operacoes',
   '/contratos',

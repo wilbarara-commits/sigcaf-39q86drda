@@ -84,13 +84,14 @@ const App = () => (
                 }
               />
               <Route
-                path="/producao"
+                path="/chamadas"
                 element={
                   <ProtectedRoute requiredRole="ADMINISTRADOR">
                     <Producao />
                   </ProtectedRoute>
                 }
               />
+              <Route path="/producao" element={<Navigate to="/chamadas" replace />} />
               <Route
                 path="/operacoes"
                 element={

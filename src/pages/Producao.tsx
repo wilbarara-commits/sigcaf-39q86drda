@@ -44,10 +44,15 @@ import {
 import { Layers, Plus, Pencil, Trash2, Loader2, Search, Calendar, Sparkles } from 'lucide-react'
 import { toast } from 'sonner'
 
-// Rótulo PROVISÓRIO do módulo: configurado em constante para facilitar evolução futura
-export const MODULO_PRODUCAO_LABEL = 'Produção'
-export const MODULO_PRODUCAO_SUBTITULO =
+// Rótulos do módulo: configurados em constantes para facilitar evolução futura
+export const MODULO_CHAMADA_SINGULAR = 'Chamada'
+export const MODULO_CHAMADAS_LABEL = 'Chamadas'
+export const MODULO_CHAMADAS_SUBTITULO =
   'Gestão centralizada de chamadas públicas e programas de fornecimento.'
+
+// Compatibilidade transitória com referências legadas
+export const MODULO_PRODUCAO_LABEL = MODULO_CHAMADAS_LABEL
+export const MODULO_PRODUCAO_SUBTITULO = MODULO_CHAMADAS_SUBTITULO
 
 export default function Producao() {
   const { chamadas, isLoading, refreshData } = useApp()
@@ -100,7 +105,7 @@ export default function Producao() {
     e.preventDefault()
     const trimmedChamada = formChamada.trim()
     if (!trimmedChamada) {
-      toast.error('O campo Chamada é obrigatório.')
+      toast.error(`O campo ${MODULO_CHAMADA_SINGULAR} é obrigatório.`)
       return
     }
 
@@ -113,7 +118,7 @@ export default function Producao() {
           modalidade: formModalidade,
           status: formStatus,
         })
-        toast.success(`Chamada "${trimmedChamada}" atualizada com sucesso!`)
+        toast.success(`${MODULO_CHAMADA_SINGULAR} "${trimmedChamada}" atualizada com sucesso!`)
       } else {
         await chamadasService.create({
           chamada: trimmedChamada,
@@ -121,13 +126,16 @@ export default function Producao() {
           modalidade: formModalidade,
           status: formStatus,
         })
-        toast.success(`Chamada "${trimmedChamada}" criada com sucesso!`)
+        toast.success(`${MODULO_CHAMADA_SINGULAR} "${trimmedChamada}" criada com sucesso!`)
       }
       setDialogOpen(false)
       await refreshData()
     } catch (err: any) {
       console.error('Erro ao salvar chamada:', err)
-      const msg = err?.data?.message || err?.message || 'Falha ao salvar chamada.'
+      const msg =
+        err?.data?.message ||
+        err?.message ||
+        `Falha ao salvar ${MODULO_CHAMADA_SINGULAR.toLowerCase()}.`
       toast.error(msg)
     } finally {
       setIsSubmitting(false)
@@ -139,13 +147,13 @@ export default function Producao() {
     setIsDeleting(true)
     try {
       await chamadasService.delete(chamadaToDelete.id)
-      toast.success(`Chamada "${chamadaToDelete.chamada}" excluída com sucesso!`)
+      toast.success(`${MODULO_CHAMADA_SINGULAR} "${chamadaToDelete.chamada}" excluída com sucesso!`)
       setDeleteDialogOpen(false)
       setChamadaToDelete(null)
       await refreshData()
     } catch (err: any) {
       console.error('Erro ao excluir chamada:', err)
-      toast.error('Falha ao excluir chamada.')
+      toast.error(`Falha ao excluir ${MODULO_CHAMADA_SINGULAR.toLowerCase()}.`)
     } finally {
       setIsDeleting(false)
     }
@@ -191,19 +199,15 @@ export default function Producao() {
       {/* Cabeçalho */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-bold tracking-tight">{MODULO_PRODUCAO_LABEL}</h1>
-            <Badge variant="outline" className="text-[10px] text-muted-foreground uppercase">
-              Provisório
-            </Badge>
-          </div>
+          <h1 className="text-2xl font-bold tracking-tight">{MODULO_CHAMADAS_LABEL}</h1>
           <p className="text-muted-foreground text-sm">
-            {MODULO_PRODUCAO_SUBTITULO} Nível hierárquico: Escolas → Operações → Chamadas.
+            {MODULO_CHAMADAS_SUBTITULO} Nível hierárquico: Escolas → Operações →{' '}
+            {MODULO_CHAMADAS_LABEL}.
           </p>
         </div>
         {isAdmin && (
           <Button onClick={handleOpenCreate} className="gap-2">
-            <Plus className="h-4 w-4" /> Nova Chamada
+            <Plus className="h-4 w-4" /> Nova {MODULO_CHAMADA_SINGULAR}
           </Button>
         )}
       </div>
@@ -215,7 +219,7 @@ export default function Producao() {
             <div className="relative">
               <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Buscar chamada, programa..."
+                placeholder={`Buscar ${MODULO_CHAMADA_SINGULAR.toLowerCase()}, programa...`}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="pl-9"
@@ -255,11 +259,11 @@ export default function Producao() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Layers className="h-5 w-5 text-primary" /> Chamadas Cadastradas
+            <Layers className="h-5 w-5 text-primary" /> {MODULO_CHAMADAS_LABEL} Cadastradas
           </CardTitle>
           <CardDescription>
-            Relação completa de chamadas públicas com seus respectivos programas, modalidades e
-            status.
+            Relação completa de {MODULO_CHAMADAS_LABEL.toLowerCase()} públicas com seus respectivos
+            programas, modalidades e status.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -267,7 +271,7 @@ export default function Producao() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Chamada</TableHead>
+                  <TableHead>{MODULO_CHAMADA_SINGULAR}</TableHead>
                   <TableHead>Programa</TableHead>
                   <TableHead>Modalidade</TableHead>
                   <TableHead>Status</TableHead>
@@ -280,7 +284,8 @@ export default function Producao() {
                   <TableRow>
                     <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
                       <div className="flex items-center justify-center gap-2">
-                        <Loader2 className="h-4 w-4 animate-spin" /> Carregando chamadas...
+                        <Loader2 className="h-4 w-4 animate-spin" /> Carregando{' '}
+                        {MODULO_CHAMADAS_LABEL.toLowerCase()}...
                       </div>
                     </TableCell>
                   </TableRow>
@@ -288,8 +293,8 @@ export default function Producao() {
                   <TableRow>
                     <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
                       {searchQuery || statusFilter !== 'todos' || modalidadeFilter !== 'todos'
-                        ? 'Nenhuma chamada encontrada para os filtros selecionados.'
-                        : 'Nenhuma chamada cadastrada ainda.'}
+                        ? `Nenhuma ${MODULO_CHAMADA_SINGULAR.toLowerCase()} encontrada para os filtros selecionados.`
+                        : `Nenhuma ${MODULO_CHAMADA_SINGULAR.toLowerCase()} cadastrada ainda.`}
                     </TableCell>
                   </TableRow>
                 ) : (
@@ -344,7 +349,7 @@ export default function Producao() {
                                 variant="ghost"
                                 size="icon"
                                 className="h-8 w-8 text-muted-foreground hover:text-foreground"
-                                title="Editar chamada"
+                                title={`Editar ${MODULO_CHAMADA_SINGULAR.toLowerCase()}`}
                                 onClick={() => handleOpenEdit(item)}
                               >
                                 <Pencil className="h-4 w-4" />
@@ -353,7 +358,7 @@ export default function Producao() {
                                 variant="ghost"
                                 size="icon"
                                 className="h-8 w-8 text-destructive hover:bg-destructive/10"
-                                title="Excluir chamada"
+                                title={`Excluir ${MODULO_CHAMADA_SINGULAR.toLowerCase()}`}
                                 onClick={() => handleOpenDelete(item)}
                               >
                                 <Trash2 className="h-4 w-4" />
@@ -380,20 +385,20 @@ export default function Producao() {
             <DialogTitle className="flex items-center gap-2">
               <Sparkles className="h-5 w-5 text-primary" />
               {editingChamada
-                ? `Editar Chamada ${editingChamada.chamada}`
-                : 'Cadastrar Nova Chamada'}
+                ? `Editar ${MODULO_CHAMADA_SINGULAR} ${editingChamada.chamada}`
+                : `Cadastrar Nova ${MODULO_CHAMADA_SINGULAR}`}
             </DialogTitle>
             <DialogDescription>
               {editingChamada
-                ? 'Atualize os dados e parâmetros da chamada pública.'
-                : 'Preencha os campos para cadastrar uma nova chamada no módulo de produção.'}
+                ? `Atualize os dados e parâmetros da ${MODULO_CHAMADA_SINGULAR.toLowerCase()} pública.`
+                : `Preencha os campos para cadastrar uma nova ${MODULO_CHAMADA_SINGULAR.toLowerCase()} no módulo de ${MODULO_CHAMADAS_LABEL.toLowerCase()}.`}
             </DialogDescription>
           </DialogHeader>
 
           <form onSubmit={handleSubmit} className="space-y-4 pt-2">
             <div className="space-y-2">
               <Label htmlFor="ch-nome">
-                Chamada <span className="text-destructive">*</span>
+                {MODULO_CHAMADA_SINGULAR} <span className="text-destructive">*</span>
               </Label>
               <Input
                 id="ch-nome"
@@ -468,7 +473,7 @@ export default function Producao() {
                 ) : editingChamada ? (
                   'Salvar Alterações'
                 ) : (
-                  'Cadastrar Chamada'
+                  `Cadastrar ${MODULO_CHAMADA_SINGULAR}`
                 )}
               </Button>
             </DialogFooter>
@@ -480,9 +485,9 @@ export default function Producao() {
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Excluir chamada?</AlertDialogTitle>
+            <AlertDialogTitle>Excluir {MODULO_CHAMADA_SINGULAR.toLowerCase()}?</AlertDialogTitle>
             <AlertDialogDescription>
-              Tem certeza que deseja excluir a chamada{' '}
+              Tem certeza que deseja excluir a {MODULO_CHAMADA_SINGULAR.toLowerCase()}{' '}
               <strong className="text-foreground">{chamadaToDelete?.chamada}</strong>? Esta ação não
               poderá ser desfeita.
             </AlertDialogDescription>
