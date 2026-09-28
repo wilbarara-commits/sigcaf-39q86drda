@@ -1,13 +1,16 @@
-// Hook para despacho de rota inteira em transação atômica única
-// POST /backend/v1/rotas-logisticas/despachar (mantido para compatibilidade)
-// POST /backend/v1/rotas/despachar
-// Body: { rota_id?: string, rota_logistica_id?: string, contrato_id: string, ciclo_id?: string, user_id?: string }
-// Atualiza pedidos pendentes da rota para 'Em Rota' e cria registro de despacho.
+// Endpoint customizado para despachar rota em transação única
+// Executa em batch no servidor:
+// 1. Identifica escolas da rota pelas paradas_rota
+// 2. Busca pedidos pendentes da rota (pelo ciclo ativo se informado)
+// 3. Cria registro de despacho (com chamada_id e contrato_id)
+// 4. Atualiza pedidos afetados para 'Em Rota'
+// Body: { rota_id?: string, rota_logistica_id?: string, chamada_id?: string, contrato_id?: string, ciclo_id?: string, user_id?: string }
 
 routerAdd('POST', '/backend/v1/rotas-logisticas/despachar', (e) => {
   const body = e.requestInfo().body || {}
   const rotaId = body.rota_id || body.rota_logistica_id
-  const contratoId = body.contrato_id
+  let chamadaId = body.chamada_id || ''
+  let contratoId = body.contrato_id || ''
   const cicloId = body.ciclo_id || ''
   const userId = body.user_id || ''
 
@@ -19,7 +22,16 @@ routerAdd('POST', '/backend/v1/rotas-logisticas/despachar', (e) => {
   const updatedOrders = []
 
   $app.runInTransaction((txApp) => {
-    // 1. Identificar escolas da rota pelas paradas_rota
+    try {
+      const rotaRec = txApp.findRecordById('rotas', rotaId)
+      if (!chamadaId) {
+        chamadaId = rotaRec.getString('chamada_id')
+      }
+      if (!contratoId) {
+        contratoId = rotaRec.getString('contrato_id')
+      }
+    } catch (_) {}
+
     const paradas = txApp.findRecordsByFilter(
       'paradas_rota',
       'rota_id = {:rotaId}',
@@ -34,8 +46,6 @@ routerAdd('POST', '/backend/v1/rotas-logisticas/despachar', (e) => {
       escolaIds.push(paradas[i].getString('escola_id'))
     }
 
-    // 2. Buscar pedidos pendentes da rota
-    // Critérios: status = 'Pendente' E (rota_id = rotaId OU escola_id em escolaIds)
     let pedidos = []
     if (cicloId) {
       pedidos = txApp.findRecordsByFilter(
@@ -67,10 +77,10 @@ routerAdd('POST', '/backend/v1/rotas-logisticas/despachar', (e) => {
 
     const nowIso = new Date().toISOString()
 
-    // 3. Criar registro de despacho
     const despachosCol = txApp.findCollectionByNameOrId('despachos')
     const despRec = new Record(despachosCol)
-    despRec.set('contrato_id', contratoId)
+    if (chamadaId) despRec.set('chamada_id', chamadaId)
+    if (contratoId) despRec.set('contrato_id', contratoId)
     if (cicloId) despRec.set('ciclo_id', cicloId)
     despRec.set('rota_id', rotaId)
     if (userId) despRec.set('usuario_id', userId)
@@ -79,7 +89,6 @@ routerAdd('POST', '/backend/v1/rotas-logisticas/despachar', (e) => {
     txApp.save(despRec)
     despachoRecord = despRec.publicExport()
 
-    // 4. Atualizar pedidos em lote para 'Em Rota'
     for (let i = 0; i < pedidosParaDespachar.length; i++) {
       const p = pedidosParaDespachar[i]
       p.set('status', 'Em Rota')
@@ -99,7 +108,8 @@ routerAdd('POST', '/backend/v1/rotas-logisticas/despachar', (e) => {
 routerAdd('POST', '/backend/v1/rotas/despachar', (e) => {
   const body = e.requestInfo().body || {}
   const rotaId = body.rota_id || body.rota_logistica_id
-  const contratoId = body.contrato_id
+  let chamadaId = body.chamada_id || ''
+  let contratoId = body.contrato_id || ''
   const cicloId = body.ciclo_id || ''
   const userId = body.user_id || ''
 
@@ -111,7 +121,16 @@ routerAdd('POST', '/backend/v1/rotas/despachar', (e) => {
   const updatedOrders = []
 
   $app.runInTransaction((txApp) => {
-    // 1. Identificar escolas da rota pelas paradas_rota
+    try {
+      const rotaRec = txApp.findRecordById('rotas', rotaId)
+      if (!chamadaId) {
+        chamadaId = rotaRec.getString('chamada_id')
+      }
+      if (!contratoId) {
+        contratoId = rotaRec.getString('contrato_id')
+      }
+    } catch (_) {}
+
     const paradas = txApp.findRecordsByFilter(
       'paradas_rota',
       'rota_id = {:rotaId}',
@@ -126,8 +145,6 @@ routerAdd('POST', '/backend/v1/rotas/despachar', (e) => {
       escolaIds.push(paradas[i].getString('escola_id'))
     }
 
-    // 2. Buscar pedidos pendentes da rota
-    // Critérios: status = 'Pendente' E (rota_id = rotaId OU escola_id em escolaIds)
     let pedidos = []
     if (cicloId) {
       pedidos = txApp.findRecordsByFilter(
@@ -159,10 +176,10 @@ routerAdd('POST', '/backend/v1/rotas/despachar', (e) => {
 
     const nowIso = new Date().toISOString()
 
-    // 3. Criar registro de despacho
     const despachosCol = txApp.findCollectionByNameOrId('despachos')
     const despRec = new Record(despachosCol)
-    despRec.set('contrato_id', contratoId)
+    if (chamadaId) despRec.set('chamada_id', chamadaId)
+    if (contratoId) despRec.set('contrato_id', contratoId)
     if (cicloId) despRec.set('ciclo_id', cicloId)
     despRec.set('rota_id', rotaId)
     if (userId) despRec.set('usuario_id', userId)
@@ -171,7 +188,6 @@ routerAdd('POST', '/backend/v1/rotas/despachar', (e) => {
     txApp.save(despRec)
     despachoRecord = despRec.publicExport()
 
-    // 4. Atualizar pedidos em lote para 'Em Rota'
     for (let i = 0; i < pedidosParaDespachar.length; i++) {
       const p = pedidosParaDespachar[i]
       p.set('status', 'Em Rota')
