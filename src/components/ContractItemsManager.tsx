@@ -66,7 +66,11 @@ import {
 import { produtosService } from '@/services/produtos'
 import { contratosService } from '@/services/contratos'
 import { DEFAULT_PRODUCT_UNIT } from '@/lib/productCsvImporter'
-import { formatQuantityOneDecimal } from '@/lib/decimalUtils'
+import {
+  formatQuantityOneDecimal,
+  normalizeDecimalTyping,
+  formatQuantityOnBlur,
+} from '@/lib/decimalUtils'
 import { useApp } from '@/context/app-context'
 import { toast } from 'sonner'
 import * as XLSX from 'xlsx'

@@ -666,7 +666,7 @@ export function ChamadaItemsManager({
         updatedCount++
       } else {
         currentMap.set(key, {
-          productId: r.productId || r.product?.id,
+          productId: r.product?.id,
           produto: prodName,
           aka,
           unidade,

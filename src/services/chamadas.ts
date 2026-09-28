@@ -118,8 +118,8 @@ export const chamadasService = {
     }>,
   ): Promise<ChamadaItemRecord[]> {
     const existingItems = await this.getItems(chamadaId)
-    const existingIds = new Set(existingItems.map((i) => i.id))
-    const incomingIds = new Set(items.map((i) => i.id).filter(Boolean) as string[])
+    const existingIds = new Set<string>(existingItems.map((i) => i.id))
+    const incomingIds = new Set<string>(items.map((i) => i.id).filter(Boolean) as string[])
 
     for (const exId of existingIds) {
       if (!incomingIds.has(exId)) {

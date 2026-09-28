@@ -126,14 +126,16 @@ export default function Producao() {
     const hasAnyQtdMap = new Map<string, boolean>()
 
     for (const ci of cItensDestaChamada) {
-      const q = ci.quantidade_contratada ? Number(ci.quantidade_contratada) : undefined
+      const rawQ = ci.quantidade_contratada
+      const q =
+        rawQ !== undefined && rawQ !== null && String(rawQ).trim() !== '' ? Number(rawQ) : undefined
       const keys: string[] = []
       if (ci.produto_id) keys.push(ci.produto_id)
       const nomeKey = (ci.nome_contrato || ci.expand?.produto_id?.nome || '').trim().toLowerCase()
       if (nomeKey) keys.push(nomeKey)
 
-      for (const k of keys) {
-        if (q !== undefined && !isNaN(q) && q > 0) {
+      if (q !== undefined && !isNaN(q) && q > 0) {
+        for (const k of keys) {
           somaQtdMap.set(k, (somaQtdMap.get(k) || 0) + q)
           hasAnyQtdMap.set(k, true)
         }
@@ -147,8 +149,13 @@ export default function Producao() {
       const keyId = gi.produto_id || ''
       const keyNome = (gi.produto || '').trim().toLowerCase()
 
-      const hasQtd = hasAnyQtdMap.get(keyId) || hasAnyQtdMap.get(keyNome)
-      const soma = somaQtdMap.get(keyId) ?? somaQtdMap.get(keyNome) ?? 0
+      const hasQtd = Boolean(
+        (keyId && hasAnyQtdMap.get(keyId)) || (keyNome && hasAnyQtdMap.get(keyNome)),
+      )
+      const soma =
+        (keyId ? somaQtdMap.get(keyId) : undefined) ??
+        (keyNome ? somaQtdMap.get(keyNome) : undefined) ??
+        0
 
       return {
         id: gi.id,

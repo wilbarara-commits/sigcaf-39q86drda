@@ -80,6 +80,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { toast } from 'sonner'
+import { chamadasService } from '@/services/chamadas'
 import { contratosService } from '@/services/contratos'
 import { rotasService } from '@/services/rotas'
 import { rotasLogisticasService } from '@/services/rotas-logisticas'
@@ -2308,7 +2309,7 @@ export default function Contracts() {
                     }}
                     contractId={editingContract?.id}
                     contractNumber={numero || editingContract?.numero}
-                    chamadaId={selectedChamadaId || editingContract?.chamada_id}
+                    chamadaId={chamadaId || editingContract?.chamada_id}
                   />
                 )}
               </TabsContent>
