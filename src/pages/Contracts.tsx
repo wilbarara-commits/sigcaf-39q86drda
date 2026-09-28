@@ -1506,45 +1506,50 @@ export default function Contracts() {
 
                   <div className="space-y-2">
                     <Label htmlFor="c-tipo">Tipo de Programa</Label>
-                    <Select value={tipo} onValueChange={setTipo}>
-                      <SelectTrigger id="c-tipo">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="PNAE">PNAE (Alimentação Escolar)</SelectItem>
-                        <SelectItem value="PAA">PAA (Aquisição de Alimentos)</SelectItem>
-                        <SelectItem value="Municipal">Municipal / Direto</SelectItem>
-                        <SelectItem value="Outro">Outro</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <Input
+                      id="c-tipo"
+                      value={
+                        tipo === 'PNAE'
+                          ? 'PNAE (Alimentação Escolar)'
+                          : tipo === 'PAA'
+                            ? 'PAA (Aquisição de Alimentos)'
+                            : tipo === 'Municipal'
+                              ? 'Municipal / Direto'
+                              : tipo || 'PNAE (Alimentação Escolar)'
+                      }
+                      readOnly
+                      disabled
+                      tabIndex={-1}
+                      className="bg-muted cursor-not-allowed font-medium"
+                      title="O Programa e a Modalidade são herdados da Chamada Pública vinculada e só podem ser alterados no módulo Chamadas (/chamadas)."
+                    />
+                    <p className="text-[10px] text-muted-foreground">
+                      Herdado da Chamada Pública. Altere em{' '}
+                      <span className="font-semibold">/chamadas</span>.
+                    </p>
                   </div>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="c-modalidade">Modalidade de Pedido</Label>
-                    <Select
-                      value={modalidade}
-                      onValueChange={(v) => {
-                        const newMod = v as 'individualizado' | 'centralizado'
-                        setModalidade(newMod)
-                        if (newMod === 'centralizado' && !tipoImportacao) {
-                          setTipoImportacao('unica')
-                        }
-                      }}
-                    >
-                      <SelectTrigger id="c-modalidade">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="individualizado">
-                          Individualizado (Pedido por Escola via WhatsApp/Manual)
-                        </SelectItem>
-                        <SelectItem value="centralizado">
-                          Centralizado (Consolidado por Importação de Planilha)
-                        </SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <Input
+                      id="c-modalidade"
+                      value={
+                        modalidade === 'centralizado'
+                          ? 'Centralizado (Consolidado por Importação de Planilha)'
+                          : 'Individualizado (Pedido por Escola via WhatsApp/Manual)'
+                      }
+                      readOnly
+                      disabled
+                      tabIndex={-1}
+                      className="bg-muted cursor-not-allowed font-medium"
+                      title="O Programa e a Modalidade são herdados da Chamada Pública vinculada e só podem ser alterados no módulo Chamadas (/chamadas)."
+                    />
+                    <p className="text-[10px] text-muted-foreground">
+                      O Programa e a Modalidade são herdados da Chamada Pública vinculada e só podem
+                      ser alterados no módulo Chamadas (/chamadas).
+                    </p>
                   </div>
 
                   <div className="space-y-2">

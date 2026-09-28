@@ -38,7 +38,7 @@ const MODULES: ModuleSpec[] = [
     route: '/chamadas',
     goal: 'Gestão do nível institucional superior do SIGCAF que agrupa e relaciona os contratos da cooperativa, centralizando produtos, AKAs e preços oficiais.',
     details: [
-      'Hierarquia Estrutural: Escolas → Contratos → Chamadas Públicas. Vínculos são escola↔contrato e chamada↔contrato. Não há nenhum vínculo escola↔chamada.',
+      'Hierarquia Estrutural: Chamadas Públicas → Contratos → Escolas. Vínculos são chamada↔contrato e escola↔contrato. Não há nenhum vínculo escola↔chamada.',
       'Regra de Vínculo Chamada↔Contrato: 1 chamada pública pode ter um ou mais contratos; cada contrato pertence a exatamente uma chamada pública (vínculo obrigatório).',
       'Aba "Itens & Preços" na Chamada: Modal de cadastro/edição da chamada pública possui a aba dedicada "Itens & Preços", renderizando o gerenciador ChamadaItemsManager com colunas Produto, AKA/Apelido na Planilha, Unidade, Preço Unitário (R$), Quantidade da Chamada e Valor Total.',
       'Produtos, Preço e AKA Vivem na Chamada (v0.0.78): Os produtos licitados, seus apelidos de planilha (AKA) e os preços unitários oficiais são definidos e gerenciados na chamada (collection chamada_itens). Os contratos vinculados espelham automaticamente esses valores.',

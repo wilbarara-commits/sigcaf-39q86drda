@@ -316,8 +316,8 @@ export default function Producao() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight">{MODULO_CHAMADAS_LABEL}</h1>
           <p className="text-muted-foreground text-sm">
-            {MODULO_CHAMADAS_SUBTITULO} Nível hierárquico: Escolas → Contratos →{' '}
-            {MODULO_CHAMADAS_LABEL}.
+            {MODULO_CHAMADAS_SUBTITULO} Nível hierárquico: {MODULO_CHAMADAS_LABEL} → Contratos →
+            Escolas.
           </p>
         </div>
         {isAdmin && (
@@ -624,12 +624,17 @@ export default function Producao() {
 
                       <div className="space-y-2">
                         <Label htmlFor="ch-prog">Programa</Label>
-                        <Input
-                          id="ch-prog"
-                          placeholder="Ex: PNAE, PAA, Municipal..."
-                          value={formPrograma}
-                          onChange={(e) => setFormPrograma(e.target.value)}
-                        />
+                        <Select value={formPrograma} onValueChange={setFormPrograma}>
+                          <SelectTrigger id="ch-prog">
+                            <SelectValue placeholder="Selecione o programa" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="PNAE">PNAE (Alimentação Escolar)</SelectItem>
+                            <SelectItem value="PAA">PAA (Aquisição de Alimentos)</SelectItem>
+                            <SelectItem value="Municipal">Municipal / Direto</SelectItem>
+                            <SelectItem value="Outro">Outro</SelectItem>
+                          </SelectContent>
+                        </Select>
                       </div>
 
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -644,10 +649,10 @@ export default function Producao() {
                             </SelectTrigger>
                             <SelectContent>
                               <SelectItem value="individualizado">
-                                Individualizado (por Escola)
+                                Individualizado (Pedido por Escola via WhatsApp/Manual)
                               </SelectItem>
                               <SelectItem value="centralizado">
-                                Centralizado (por Planilha)
+                                Centralizado (Consolidado por Importação de Planilha)
                               </SelectItem>
                             </SelectContent>
                           </Select>
@@ -681,7 +686,7 @@ export default function Producao() {
                               className="font-semibold text-xs text-foreground flex items-center gap-1.5"
                             >
                               <School className="h-3.5 w-3.5 text-primary" />
-                              Escolas Agregadas
+                              Escolas Vinculadas (total)
                             </Label>
                             <p className="text-[11px] text-muted-foreground">
                               Soma das escolas de todos os contratos vinculados a esta chamada. O
@@ -862,6 +867,36 @@ export default function Producao() {
 
                   {/* Aba Contratos Vinculados (padrão Escolas Participantes de Contratos) */}
                   <TabsContent value="contratos" className="space-y-4 pt-2">
+                    {/* Card de Sumário no Topo da aba Contratos */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div className="p-3 rounded-lg border bg-card flex items-center justify-between">
+                        <div className="space-y-0.5">
+                          <p className="text-xs font-medium text-muted-foreground">
+                            Total de Contratos vinculados
+                          </p>
+                          <p className="text-xl font-bold text-foreground">
+                            {contratosDestaChamada.length}
+                          </p>
+                        </div>
+                        <div className="h-9 w-9 rounded-full bg-primary/10 flex items-center justify-center text-primary">
+                          <FileText className="h-5 w-5" />
+                        </div>
+                      </div>
+                      <div className="p-3 rounded-lg border bg-card flex items-center justify-between">
+                        <div className="space-y-0.5">
+                          <p className="text-xs font-medium text-muted-foreground">
+                            Total de Escolas Vinculadas à Chamada
+                          </p>
+                          <p className="text-xl font-bold text-foreground">
+                            {totalEscolasAgregadas}
+                          </p>
+                        </div>
+                        <div className="h-9 w-9 rounded-full bg-primary/10 flex items-center justify-center text-primary">
+                          <School className="h-5 w-5" />
+                        </div>
+                      </div>
+                    </div>
+
                     <div className="rounded-lg border p-3 bg-muted/20 space-y-3">
                       <div className="flex items-center justify-between">
                         <div>
@@ -870,8 +905,8 @@ export default function Producao() {
                             Pública
                           </h4>
                           <p className="text-xs text-muted-foreground">
-                            Relação de contratos vinculados a esta chamada pública (1 chamada : N
-                            contratos).
+                            Hierarquia: {MODULO_CHAMADAS_LABEL} → Contratos → Escolas. Relação de
+                            contratos vinculados a esta chamada pública (1 chamada : N contratos).
                           </p>
                         </div>
                         <Button
@@ -1014,12 +1049,17 @@ export default function Producao() {
 
                   <div className="space-y-2">
                     <Label htmlFor="ch-prog">Programa</Label>
-                    <Input
-                      id="ch-prog"
-                      placeholder="Ex: PNAE, PAA, Municipal..."
-                      value={formPrograma}
-                      onChange={(e) => setFormPrograma(e.target.value)}
-                    />
+                    <Select value={formPrograma} onValueChange={setFormPrograma}>
+                      <SelectTrigger id="ch-prog">
+                        <SelectValue placeholder="Selecione o programa" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="PNAE">PNAE (Alimentação Escolar)</SelectItem>
+                        <SelectItem value="PAA">PAA (Aquisição de Alimentos)</SelectItem>
+                        <SelectItem value="Municipal">Municipal / Direto</SelectItem>
+                        <SelectItem value="Outro">Outro</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -1034,9 +1074,11 @@ export default function Producao() {
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="individualizado">
-                            Individualizado (por Escola)
+                            Individualizado (Pedido por Escola via WhatsApp/Manual)
                           </SelectItem>
-                          <SelectItem value="centralizado">Centralizado (por Planilha)</SelectItem>
+                          <SelectItem value="centralizado">
+                            Centralizado (Consolidado por Importação de Planilha)
+                          </SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
