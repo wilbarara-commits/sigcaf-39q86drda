@@ -94,6 +94,7 @@ interface ContractItemsManagerProps {
   onTotalCalculadoChange?: (total: number, hasQuantities: boolean) => void
   contractId?: string
   contractNumber?: string
+  chamadaId?: string
 }
 
 export function ContractItemsManager({
@@ -103,7 +104,9 @@ export function ContractItemsManager({
   onTotalCalculadoChange,
   contractId,
   contractNumber,
+  chamadaId,
 }: ContractItemsManagerProps) {
+  const { chamadaItems } = useApp()
   // Modal de Seleção em Lote do Catálogo
   const [batchModalOpen, setBatchModalOpen] = useState(false)
   const [batchSearchQuery, setBatchSearchQuery] = useState('')
@@ -181,6 +184,27 @@ export function ContractItemsManager({
     }
     return map
   }, [allAvailableProducts])
+
+  // Itens da chamada correspondente (para espelhar AKA e Preço)
+  const itensDestaChamada = useMemo(() => {
+    if (!chamadaId || !chamadaItems) return []
+    return chamadaItems.filter((ci) => ci.chamada_id === chamadaId)
+  }, [chamadaId, chamadaItems])
+
+  // Map de itens da chamada por produto_id ou por nome
+  const chamadaItemByProductId = useMemo(() => {
+    const map = new Map<string, (typeof itensDestaChamada)[0]>()
+    for (const ci of itensDestaChamada) {
+      if (ci.produto_id) {
+        map.set(ci.produto_id, ci)
+      }
+      const normNome = (ci.produto || '').trim().toLowerCase()
+      if (normNome && !map.has(normNome)) {
+        map.set(normNome, ci)
+      }
+    }
+    return map
+  }, [itensDestaChamada])
 
   // IDs já inclusos no contrato
   const includedProductIds = useMemo(() => {
@@ -273,12 +297,18 @@ export function ContractItemsManager({
     for (const prodId of selectedProductIds) {
       if (!includedProductIds.has(prodId)) {
         const prod = productById.get(prodId)
+        const ci =
+          chamadaItemByProductId.get(prodId) ||
+          (prod?.name ? chamadaItemByProductId.get(prod.name.trim().toLowerCase()) : undefined)
+        const effectivePrice = ci?.preco !== undefined ? ci.preco : prod?.price || 0
+        const effectiveAka = ci?.aka || ''
+
         newItems.push({
           productId: prodId,
-          price: prod?.price || 0,
-          quantity: 0,
-          nomeContrato: prod?.name || '',
-          apelidos: '',
+          price: effectivePrice,
+          quantity: undefined,
+          nomeContrato: ci?.produto || prod?.name || '',
+          apelidos: effectiveAka,
         })
         addedCount++
       }
@@ -301,13 +331,14 @@ export function ContractItemsManager({
     onChange(updated)
   }
 
-  // Edição inline de quantidade contratada
-  const handleQuantityChange = (index: number, newQuantity: number) => {
+  // Edição inline de quantidade contratada (podendo ficar em branco/indefinida)
+  const handleQuantityChange = (index: number, newQuantity: number | undefined) => {
     const updated = items.map((it, idx) => {
       if (idx !== index) return it
       return {
         ...it,
-        quantity: isNaN(newQuantity) ? 0 : Math.max(0, newQuantity),
+        quantity:
+          newQuantity === undefined || isNaN(newQuantity) ? undefined : Math.max(0, newQuantity),
       }
     })
     onChange(updated)
@@ -337,19 +368,21 @@ export function ContractItemsManager({
     onChange(updated)
   }
 
-  // Restaurar preço original do catálogo
+  // Restaurar preço da chamada (ou catálogo)
   const handleResetToCatalogPrice = (index: number) => {
     const it = items[index]
     const prod = productById.get(it.productId)
-    if (!prod) return
-    if (prod.price === undefined || prod.price === null || prod.price <= 0) {
-      toast.warning(
-        'Este produto não possui preço no catálogo. O preço deve ser informado no item do contrato.',
-      )
+    const ci =
+      chamadaItemByProductId.get(it.productId) ||
+      (prod?.name ? chamadaItemByProductId.get(prod.name.trim().toLowerCase()) : undefined)
+    const targetPrice = ci?.preco !== undefined ? ci.preco : prod?.price
+
+    if (targetPrice === undefined || targetPrice === null || targetPrice < 0) {
+      toast.warning('Este produto não possui preço na chamada nem no catálogo.')
       return
     }
-    handlePriceChange(index, prod.price)
-    toast.info(`Preço redefinido para o valor do catálogo (R$ ${prod.price.toFixed(2)})`)
+    handlePriceChange(index, targetPrice)
+    toast.info(`Preço redefinido para o valor da chamada (R$ ${targetPrice.toFixed(2)})`)
   }
 
   // Exclusão de item com confirmação
@@ -1397,31 +1430,44 @@ export function ContractItemsManager({
                         </div>
                       </TableCell>
 
-                      {/* Quantidade contratada inline */}
+                      {/* Quantidade contratada inline (em branco aceita) */}
                       <TableCell className="py-2">
-                        <div className="relative max-w-[110px]">
+                        <div className="relative max-w-[120px]">
                           <Input
-                            type="number"
-                            step="any"
-                            min="0"
-                            placeholder="0 (opcional)"
+                            type="text"
+                            inputMode="decimal"
+                            placeholder="em branco"
                             value={
-                              item.quantity === undefined ||
-                              item.quantity === null ||
-                              item.quantity === 0
+                              item.quantity === undefined || item.quantity === null
                                 ? ''
-                                : item.quantity
+                                : formatQuantityOneDecimal(item.quantity)
                             }
                             onChange={(e) => {
-                              const val =
-                                e.target.value.trim() === '' ? 0 : parseFloat(e.target.value)
-                              handleQuantityChange(index, isNaN(val) ? 0 : val)
+                              const raw = e.target.value
+                              if (raw.trim() === '') {
+                                handleQuantityChange(index, undefined)
+                                return
+                              }
+                              const norm = normalizeDecimalTyping(raw)
+                              const parsed = parseFloat(norm.replace(',', '.'))
+                              handleQuantityChange(index, isNaN(parsed) ? undefined : parsed)
+                            }}
+                            onBlur={(e) => {
+                              const raw = e.target.value.trim()
+                              if (!raw) {
+                                handleQuantityChange(index, undefined)
+                                return
+                              }
+                              const formatted = formatQuantityOnBlur(raw)
+                              const parsed = parseFloat(formatted.replace(',', '.'))
+                              handleQuantityChange(index, isNaN(parsed) ? undefined : parsed)
                             }}
                             className={`h-7 px-2 text-xs font-mono font-medium ${
                               qty > 0
                                 ? 'border-primary/50 bg-primary/5 font-semibold text-primary'
-                                : 'text-muted-foreground'
+                                : 'text-muted-foreground placeholder:italic'
                             }`}
+                            title="Quantidade para este contrato (deixe em branco se não contratar este item)"
                           />
                         </div>
                       </TableCell>

@@ -108,6 +108,7 @@ export const contratosService = {
       const qtd =
         item.quantidade_contratada !== undefined &&
         item.quantidade_contratada !== null &&
+        !isNaN(item.quantidade_contratada) &&
         item.quantidade_contratada > 0
           ? item.quantidade_contratada
           : null
@@ -121,6 +122,7 @@ export const contratosService = {
         const currentQtd =
           current.quantidade_contratada !== undefined &&
           current.quantidade_contratada !== null &&
+          !isNaN(current.quantidade_contratada) &&
           current.quantidade_contratada > 0
             ? current.quantidade_contratada
             : null

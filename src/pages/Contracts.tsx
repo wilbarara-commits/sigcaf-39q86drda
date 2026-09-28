@@ -292,15 +292,44 @@ export default function Contracts() {
     setDialogOpen(true)
     setIsLoadingItems(true)
     try {
-      const items = await contratosService.getItems(contract.id)
-      const mapped = items.map((it) => ({
-        id: it.id,
-        productId: it.produto_id,
-        price: Number(it.preco) || 0,
-        quantity: it.quantidade_contratada ? Number(it.quantidade_contratada) : 0,
-        nomeContrato: it.nome_contrato || it.expand?.produto_id?.nome || '',
-        apelidos: it.apelidos || '',
-      }))
+      const [items, chamadaItens] = await Promise.all([
+        contratosService.getItems(contract.id),
+        contract.chamada_id
+          ? chamadasService.getItems(contract.chamada_id).catch(() => [])
+          : Promise.resolve([]),
+      ])
+
+      const chamadaItemMap = new Map<string, any>()
+      for (const ci of chamadaItens) {
+        if (ci.produto_id) chamadaItemMap.set(ci.produto_id, ci)
+        const normNome = (ci.produto || '').trim().toLowerCase()
+        if (normNome && !chamadaItemMap.has(normNome)) chamadaItemMap.set(normNome, ci)
+      }
+
+      const mapped = items.map((it) => {
+        const prod = products.find((p) => p.id === it.produto_id)
+        const chItem =
+          chamadaItemMap.get(it.produto_id) ||
+          (prod?.name ? chamadaItemMap.get(prod.name.trim().toLowerCase()) : undefined)
+
+        // Preço e AKA espelhados da chamada quando presentes
+        const effectivePrice =
+          chItem?.preco !== undefined ? Number(chItem.preco) : Number(it.preco) || 0
+        const effectiveAka = chItem?.aka !== undefined ? chItem.aka : it.apelidos || ''
+        const effectiveNome =
+          chItem?.produto || it.nome_contrato || it.expand?.produto_id?.nome || ''
+
+        const rawQtd = it.quantidade_contratada ? Number(it.quantidade_contratada) : undefined
+
+        return {
+          id: it.id,
+          productId: it.produto_id,
+          price: effectivePrice,
+          quantity: rawQtd,
+          nomeContrato: effectiveNome,
+          apelidos: effectiveAka,
+        }
+      })
       setContractItems(mapped)
 
       // Se há produtos com quantidade contratada informada > 0, sincroniza o total automaticamente
@@ -321,8 +350,33 @@ export default function Contracts() {
     setViewingContract(contract)
     setDetailsDialogOpen(true)
     try {
-      const items = await contratosService.getItems(contract.id)
-      setViewingItems(items)
+      const [items, chamadaItens] = await Promise.all([
+        contratosService.getItems(contract.id),
+        contract.chamada_id
+          ? chamadasService.getItems(contract.chamada_id).catch(() => [])
+          : Promise.resolve([]),
+      ])
+
+      const chMap = new Map<string, any>()
+      for (const ci of chamadaItens) {
+        if (ci.produto_id) chMap.set(ci.produto_id, ci)
+        const norm = (ci.produto || '').trim().toLowerCase()
+        if (norm && !chMap.has(norm)) chMap.set(norm, ci)
+      }
+
+      const merged = items.map((it) => {
+        const prod = products.find((p) => p.id === it.produto_id)
+        const ch =
+          chMap.get(it.produto_id) ||
+          (prod?.name ? chMap.get(prod.name.trim().toLowerCase()) : undefined)
+        return {
+          ...it,
+          preco: ch?.preco !== undefined ? ch.preco : it.preco,
+          apelidos: ch?.aka !== undefined ? ch.aka : it.apelidos,
+          nome_contrato: ch?.produto || it.nome_contrato,
+        }
+      })
+      setViewingItems(merged)
     } catch (err) {
       console.error('Erro ao buscar itens para detalhes:', err)
       setViewingItems([])
@@ -333,8 +387,33 @@ export default function Contracts() {
     setReportContract(contract)
     setReportDialogOpen(true)
     try {
-      const items = await contratosService.getItems(contract.id)
-      setViewingItems(items)
+      const [items, chamadaItens] = await Promise.all([
+        contratosService.getItems(contract.id),
+        contract.chamada_id
+          ? chamadasService.getItems(contract.chamada_id).catch(() => [])
+          : Promise.resolve([]),
+      ])
+
+      const chMap = new Map<string, any>()
+      for (const ci of chamadaItens) {
+        if (ci.produto_id) chMap.set(ci.produto_id, ci)
+        const norm = (ci.produto || '').trim().toLowerCase()
+        if (norm && !chMap.has(norm)) chMap.set(norm, ci)
+      }
+
+      const merged = items.map((it) => {
+        const prod = products.find((p) => p.id === it.produto_id)
+        const ch =
+          chMap.get(it.produto_id) ||
+          (prod?.name ? chMap.get(prod.name.trim().toLowerCase()) : undefined)
+        return {
+          ...it,
+          preco: ch?.preco !== undefined ? ch.preco : it.preco,
+          apelidos: ch?.aka !== undefined ? ch.aka : it.apelidos,
+          nome_contrato: ch?.produto || it.nome_contrato,
+        }
+      })
+      setViewingItems(merged)
     } catch (err) {
       console.error('Erro ao buscar itens do relatório:', err)
       setViewingItems([])
@@ -955,7 +1034,13 @@ export default function Contracts() {
             id: it.id,
             produto_id: it.productId,
             preco: it.price,
-            quantidade_contratada: it.quantity && it.quantity > 0 ? it.quantity : undefined,
+            quantidade_contratada:
+              it.quantity !== undefined &&
+              it.quantity !== null &&
+              !isNaN(it.quantity) &&
+              it.quantity > 0
+                ? it.quantity
+                : undefined,
             nome_contrato: it.nomeContrato || undefined,
             apelidos: it.apelidos || undefined,
           })),
@@ -2223,6 +2308,7 @@ export default function Contracts() {
                     }}
                     contractId={editingContract?.id}
                     contractNumber={numero || editingContract?.numero}
+                    chamadaId={selectedChamadaId || editingContract?.chamada_id}
                   />
                 )}
               </TabsContent>

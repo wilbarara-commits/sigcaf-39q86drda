@@ -59,8 +59,10 @@ import {
   Truck,
   Route as RouteIcon,
   SlidersHorizontal,
+  Package,
 } from 'lucide-react'
 import { toast } from 'sonner'
+import { ChamadaItemsManager, ChamadaItemForm } from '@/components/ChamadaItemsManager'
 
 // Rótulos do módulo: configurados em constantes para facilitar evolução futura
 export const MODULO_CHAMADA_SINGULAR = 'Chamada'
@@ -76,7 +78,10 @@ export default function Producao() {
   const navigate = useNavigate()
   const {
     chamadas,
+    chamadaItems,
     contracts,
+    contractItems,
+    products,
     rotasLogisticas,
     contractSchools,
     paradasRota,
@@ -101,10 +106,61 @@ export default function Producao() {
   const [formPrograma, setFormPrograma] = useState('PNAE')
   const [formModalidade, setFormModalidade] = useState<ChamadaModalidade>('individualizado')
   const [formStatus, setFormStatus] = useState<ChamadaStatus>('Ativo')
-  const [activeTab, setActiveTab] = useState<'geral' | 'rotas' | 'contratos'>('geral')
+  const [activeTab, setActiveTab] = useState<'geral' | 'itens' | 'rotas' | 'contratos'>('geral')
+  const [formItems, setFormItems] = useState<ChamadaItemForm[]>([])
 
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
+
+  // Carrega e agrega itens da chamada combinando com as quantidades dos contratos vinculados
+  const buildChamadaItemsForModal = (chamadaId: string) => {
+    // 1. Contratos pertencentes a esta chamada
+    const contratosDestaChamada = contracts.filter((c) => c.chamada_id === chamadaId)
+    const contratosIdsSet = new Set(contratosDestaChamada.map((c) => c.id))
+
+    // 2. contrato_itens desses contratos
+    const cItensDestaChamada = contractItems.filter((ci) => contratosIdsSet.has(ci.contrato_id))
+
+    // Mapa de somas de quantidade por chave (produto_id ou nome normalizado)
+    const somaQtdMap = new Map<string, number>()
+    const hasAnyQtdMap = new Map<string, boolean>()
+
+    for (const ci of cItensDestaChamada) {
+      const q = ci.quantidade_contratada ? Number(ci.quantidade_contratada) : undefined
+      const keys: string[] = []
+      if (ci.produto_id) keys.push(ci.produto_id)
+      const nomeKey = (ci.nome_contrato || ci.expand?.produto_id?.nome || '').trim().toLowerCase()
+      if (nomeKey) keys.push(nomeKey)
+
+      for (const k of keys) {
+        if (q !== undefined && !isNaN(q) && q > 0) {
+          somaQtdMap.set(k, (somaQtdMap.get(k) || 0) + q)
+          hasAnyQtdMap.set(k, true)
+        }
+      }
+    }
+
+    // 3. Itens gravados em chamada_itens
+    const gravados = chamadaItems.filter((ci) => ci.chamada_id === chamadaId)
+
+    return gravados.map((gi) => {
+      const keyId = gi.produto_id || ''
+      const keyNome = (gi.produto || '').trim().toLowerCase()
+
+      const hasQtd = hasAnyQtdMap.get(keyId) || hasAnyQtdMap.get(keyNome)
+      const soma = somaQtdMap.get(keyId) ?? somaQtdMap.get(keyNome) ?? 0
+
+      return {
+        id: gi.id,
+        productId: gi.produto_id,
+        produto: gi.produto,
+        aka: gi.aka || '',
+        unidade: gi.unidade || 'Kg',
+        preco: Number(gi.preco) || 0,
+        quantidadeAgregada: hasQtd ? soma : undefined,
+      }
+    })
+  }
 
   const handleOpenCreate = () => {
     setEditingChamada(null)
@@ -112,6 +168,7 @@ export default function Producao() {
     setFormPrograma('PNAE')
     setFormModalidade('individualizado')
     setFormStatus('Ativo')
+    setFormItems([])
     setActiveTab('geral')
     setDialogOpen(true)
   }
@@ -122,6 +179,7 @@ export default function Producao() {
     setFormPrograma(item.programa || 'PNAE')
     setFormModalidade(item.modalidade || 'individualizado')
     setFormStatus(item.status || 'Ativo')
+    setFormItems(buildChamadaItemsForModal(item.id))
     setActiveTab('geral')
     setDialogOpen(true)
   }
@@ -141,6 +199,7 @@ export default function Producao() {
 
     setIsSubmitting(true)
     try {
+      let savedChamadaId: string
       if (editingChamada) {
         await chamadasService.update(editingChamada.id, {
           chamada: trimmedChamada,
@@ -148,16 +207,35 @@ export default function Producao() {
           modalidade: formModalidade,
           status: formStatus,
         })
+        savedChamadaId = editingChamada.id
         toast.success(`${MODULO_CHAMADA_SINGULAR} "${trimmedChamada}" atualizada com sucesso!`)
       } else {
-        await chamadasService.create({
+        const created = await chamadasService.create({
           chamada: trimmedChamada,
           programa: formPrograma.trim(),
           modalidade: formModalidade,
           status: formStatus,
         })
+        savedChamadaId = created.id
         toast.success(`${MODULO_CHAMADA_SINGULAR} "${trimmedChamada}" criada com sucesso!`)
       }
+
+      // Sincronizar itens da chamada (chamada_itens)
+      if (formItems && formItems.length >= 0) {
+        const validItems = formItems.filter((i) => i.produto && i.produto.trim())
+        await chamadasService.syncItems(
+          savedChamadaId,
+          validItems.map((it) => ({
+            id: it.id,
+            produto_id: it.productId,
+            produto: it.produto.trim(),
+            aka: it.aka?.trim() || '',
+            unidade: it.unidade?.trim() || 'Kg',
+            preco: Number(it.preco) || 0,
+          })),
+        )
+      }
+
       setDialogOpen(false)
       await refreshData()
     } catch (err: any) {
@@ -509,13 +587,12 @@ export default function Producao() {
                   onValueChange={(v) => setActiveTab(v as any)}
                   className="w-full"
                 >
-                  <TabsList className="grid grid-cols-3 w-full">
+                  <TabsList className="grid grid-cols-4 w-full">
                     <TabsTrigger value="geral">Dados Gerais</TabsTrigger>
-                    <TabsTrigger value="rotas">
-                      Rotas Logísticas ({chamadaRotas.length})
-                    </TabsTrigger>
+                    <TabsTrigger value="itens">Itens & Preços ({formItems.length})</TabsTrigger>
+                    <TabsTrigger value="rotas">Rotas ({chamadaRotas.length})</TabsTrigger>
                     <TabsTrigger value="contratos">
-                      Contratos Vinculados ({contratosDestaChamada.length})
+                      Contratos ({contratosDestaChamada.length})
                     </TabsTrigger>
                   </TabsList>
 
@@ -637,6 +714,37 @@ export default function Producao() {
                         </Button>
                       </DialogFooter>
                     </form>
+                  </TabsContent>
+
+                  {/* Aba Itens & Preços da Chamada */}
+                  <TabsContent value="itens" className="space-y-4 pt-2">
+                    <ChamadaItemsManager
+                      chamadaId={editingChamada.id}
+                      chamadaNumero={editingChamada.chamada}
+                      items={formItems}
+                      onChange={setFormItems}
+                      catalogProducts={products}
+                    />
+
+                    <DialogFooter className="pt-4 gap-2 border-t">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => setDialogOpen(false)}
+                        disabled={isSubmitting}
+                      >
+                        Fechar
+                      </Button>
+                      <Button type="button" onClick={handleSubmit} disabled={isSubmitting}>
+                        {isSubmitting ? (
+                          <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Salvando...
+                          </>
+                        ) : (
+                          'Salvar Chamada & Itens'
+                        )}
+                      </Button>
+                    </DialogFooter>
                   </TabsContent>
 
                   {/* Aba Rotas Logísticas da Chamada */}
@@ -868,90 +976,133 @@ export default function Producao() {
               )
             })()
           ) : (
-            <form onSubmit={handleSubmit} className="space-y-4 pt-2">
-              <div className="space-y-2">
-                <Label htmlFor="ch-nome">
-                  {MODULO_CHAMADA_SINGULAR} <span className="text-destructive">*</span>
-                </Label>
-                <Input
-                  id="ch-nome"
-                  placeholder="Ex: 001/2026 - PNAE Municipal"
-                  value={formChamada}
-                  onChange={(e) => setFormChamada(e.target.value)}
-                  required
-                  autoFocus
+            <Tabs
+              value={activeTab}
+              onValueChange={(v) => setActiveTab(v as any)}
+              className="w-full"
+            >
+              <TabsList className="grid grid-cols-2 w-full">
+                <TabsTrigger value="geral">Dados Gerais</TabsTrigger>
+                <TabsTrigger value="itens">Itens & Preços ({formItems.length})</TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="geral" className="space-y-4 pt-2">
+                <form onSubmit={handleSubmit} className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="ch-nome">
+                      {MODULO_CHAMADA_SINGULAR} <span className="text-destructive">*</span>
+                    </Label>
+                    <Input
+                      id="ch-nome"
+                      placeholder="Ex: 001/2026 - PNAE Municipal"
+                      value={formChamada}
+                      onChange={(e) => setFormChamada(e.target.value)}
+                      required
+                      autoFocus
+                    />
+                    <p className="text-[11px] text-muted-foreground">
+                      Identificador ou número oficial da chamada pública.
+                    </p>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="ch-prog">Programa</Label>
+                    <Input
+                      id="ch-prog"
+                      placeholder="Ex: PNAE, PAA, Municipal..."
+                      value={formPrograma}
+                      onChange={(e) => setFormPrograma(e.target.value)}
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="ch-mod">Modalidade</Label>
+                      <Select
+                        value={formModalidade}
+                        onValueChange={(v) => setFormModalidade(v as ChamadaModalidade)}
+                      >
+                        <SelectTrigger id="ch-mod">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="individualizado">
+                            Individualizado (por Escola)
+                          </SelectItem>
+                          <SelectItem value="centralizado">Centralizado (por Planilha)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="ch-status">Status</Label>
+                      <Select
+                        value={formStatus}
+                        onValueChange={(v) => setFormStatus(v as ChamadaStatus)}
+                      >
+                        <SelectTrigger id="ch-status">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Ativo">Ativo</SelectItem>
+                          <SelectItem value="Pendente">Pendente</SelectItem>
+                          <SelectItem value="Encerrado">Encerrado</SelectItem>
+                          <SelectItem value="Cancelado">Cancelado</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  <DialogFooter className="pt-4 gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setDialogOpen(false)}
+                      disabled={isSubmitting}
+                    >
+                      Cancelar
+                    </Button>
+                    <Button type="submit" disabled={isSubmitting}>
+                      {isSubmitting ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Salvando...
+                        </>
+                      ) : (
+                        `Cadastrar ${MODULO_CHAMADA_SINGULAR}`
+                      )}
+                    </Button>
+                  </DialogFooter>
+                </form>
+              </TabsContent>
+
+              <TabsContent value="itens" className="space-y-4 pt-2">
+                <ChamadaItemsManager
+                  items={formItems}
+                  onChange={setFormItems}
+                  catalogProducts={products}
                 />
-                <p className="text-[11px] text-muted-foreground">
-                  Identificador ou número oficial da chamada pública.
-                </p>
-              </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="ch-prog">Programa</Label>
-                <Input
-                  id="ch-prog"
-                  placeholder="Ex: PNAE, PAA, Municipal..."
-                  value={formPrograma}
-                  onChange={(e) => setFormPrograma(e.target.value)}
-                />
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="ch-mod">Modalidade</Label>
-                  <Select
-                    value={formModalidade}
-                    onValueChange={(v) => setFormModalidade(v as ChamadaModalidade)}
+                <DialogFooter className="pt-4 gap-2 border-t">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setDialogOpen(false)}
+                    disabled={isSubmitting}
                   >
-                    <SelectTrigger id="ch-mod">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="individualizado">Individualizado (por Escola)</SelectItem>
-                      <SelectItem value="centralizado">Centralizado (por Planilha)</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="ch-status">Status</Label>
-                  <Select
-                    value={formStatus}
-                    onValueChange={(v) => setFormStatus(v as ChamadaStatus)}
-                  >
-                    <SelectTrigger id="ch-status">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Ativo">Ativo</SelectItem>
-                      <SelectItem value="Pendente">Pendente</SelectItem>
-                      <SelectItem value="Encerrado">Encerrado</SelectItem>
-                      <SelectItem value="Cancelado">Cancelado</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              <DialogFooter className="pt-4 gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setDialogOpen(false)}
-                  disabled={isSubmitting}
-                >
-                  Cancelar
-                </Button>
-                <Button type="submit" disabled={isSubmitting}>
-                  {isSubmitting ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Salvando...
-                    </>
-                  ) : (
-                    `Cadastrar ${MODULO_CHAMADA_SINGULAR}`
-                  )}
-                </Button>
-              </DialogFooter>
-            </form>
+                    Cancelar
+                  </Button>
+                  <Button type="button" onClick={handleSubmit} disabled={isSubmitting}>
+                    {isSubmitting ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Salvando...
+                      </>
+                    ) : (
+                      `Cadastrar ${MODULO_CHAMADA_SINGULAR} & Itens`
+                    )}
+                  </Button>
+                </DialogFooter>
+              </TabsContent>
+            </Tabs>
           )}
         </DialogContent>
       </Dialog>

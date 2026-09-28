@@ -199,6 +199,22 @@ export interface ContratoItemRecord {
   updated?: string
 }
 
+export interface ChamadaItemRecord {
+  id: string
+  chamada_id: string
+  produto_id?: string
+  produto: string
+  aka?: string
+  unidade: string
+  preco: number
+  expand?: {
+    produto_id?: ProdutoRecord
+    chamada_id?: ChamadaRecord
+  }
+  created?: string
+  updated?: string
+}
+
 export interface PedidoValidacao {
   status: 'validado' | 'em_progresso' | 'invalido'
   motivo?: string

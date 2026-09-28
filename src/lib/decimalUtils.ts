@@ -73,11 +73,11 @@ export function validateQuantityStepHalf(valStr: string): ValidationStepHalfResu
   }
 
   const numVal = parseFloat(normalized.replace(',', '.'))
-  if (isNaN(numVal) || numVal <= 0) {
+  if (isNaN(numVal) || numVal < 0) {
     return {
       isValid: false,
       numericValue: 0,
-      error: 'A quantidade deve ser maior que zero',
+      error: 'A quantidade não pode ser negativa',
     }
   }
 

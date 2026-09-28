@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-28T12:19:31.027Z",
+  "generatedAt": "2026-09-28T12:47:42.644Z",
   "collections": [
     {
       "name": "users",
@@ -1385,6 +1385,75 @@
       "indexes": [
         "CREATE INDEX idx_chamadas_chamada ON chamadas (chamada)",
         "CREATE INDEX idx_chamadas_status ON chamadas (status)"
+      ]
+    },
+    {
+      "name": "chamada_itens",
+      "type": "base",
+      "apiRules": {
+        "list": "",
+        "view": "",
+        "create": "",
+        "update": "",
+        "delete": ""
+      },
+      "fields": [
+        {
+          "name": "chamada_id",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "chamadas"
+        },
+        {
+          "name": "produto_id",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "produtos"
+        },
+        {
+          "name": "produto",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "aka",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "unidade",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "preco",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": [
+        "CREATE INDEX idx_chamada_itens_chamada ON chamada_itens (chamada_id)",
+        "CREATE INDEX idx_chamada_itens_produto ON chamada_itens (produto)"
       ]
     }
   ]

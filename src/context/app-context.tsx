@@ -24,6 +24,7 @@ import type {
   PedidoValidacao,
   ConfiguracoesRecord,
   ChamadaRecord,
+  ChamadaItemRecord,
 } from '@/lib/types'
 import { configuracoesService } from '@/services/configuracoes'
 import { chamadasService } from '@/services/chamadas'
@@ -58,6 +59,7 @@ interface AppState {
   products: Product[]
   schools: School[]
   chamadas: ChamadaRecord[]
+  chamadaItems: ChamadaItemRecord[]
   contracts: Contract[]
   contractSchools: ContratoEscolaRecord[]
   contractItems: ContratoItemRecord[]
@@ -182,6 +184,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [products, setProducts] = useState<Product[]>([])
   const [schools, setSchools] = useState<School[]>([])
   const [chamadas, setChamadas] = useState<ChamadaRecord[]>([])
+  const [chamadaItems, setChamadaItems] = useState<ChamadaItemRecord[]>([])
   const [contracts, setContracts] = useState<Contract[]>([])
   const [contractSchools, setContractSchools] = useState<ContratoEscolaRecord[]>([])
   const [contractItems, setContractItems] = useState<ContratoItemRecord[]>([])
@@ -219,6 +222,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         rawDespachos,
         rawConfig,
         rawChamadas,
+        rawChamadaItens,
       ] = await Promise.all([
         produtosService.getAll(),
         escolasService.getAll(),
@@ -236,9 +240,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
         rotasService.getDespachos(),
         configuracoesService.get(),
         chamadasService.getAll().catch(() => [] as ChamadaRecord[]),
+        chamadasService.getAllItems().catch(() => [] as ChamadaItemRecord[]),
       ])
 
       setChamadas(rawChamadas || [])
+      setChamadaItems(rawChamadaItens || [])
       setConfig(rawConfig)
       const computedLogo = configuracoesService.getLogoUrl(rawConfig)
       setLogoUrl(computedLogo)
@@ -964,6 +970,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setChamadas(updatedChamadas)
     } catch (err) {
       console.error('Erro na sincronização realtime de chamadas:', err)
+    }
+  })
+
+  useRealtime<any>('chamada_itens', async (_e) => {
+    try {
+      const updatedChamadaItens = await chamadasService.getAllItems()
+      setChamadaItems(updatedChamadaItens)
+    } catch (err) {
+      console.error('Erro na sincronização realtime de chamada_itens:', err)
     }
   })
 
@@ -3064,6 +3079,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         products,
         schools,
         chamadas,
+        chamadaItems,
         contracts,
         contractSchools,
         contractItems,
