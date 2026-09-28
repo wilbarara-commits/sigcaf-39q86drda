@@ -167,7 +167,7 @@ export default function Contracts() {
   const [tipoImportacao, setTipoImportacao] = useState<'unica' | 'fracionada'>('unica')
   const [planilhaTemAbas, setPlanilhaTemAbas] = useState<boolean>(false)
   const [abasPlanilhaTexto, setAbasPlanilhaTexto] = useState('')
-  const [numRotasLogisticas, setNumRotasLogisticas] = useState<string>('')
+
   const [valorTotal, setValorTotal] = useState('')
   const [status, setStatus] = useState<'Ativo' | 'Encerrado' | 'Cancelado' | 'Pendente'>('Ativo')
 
@@ -224,7 +224,6 @@ export default function Contracts() {
     setTipoImportacao('unica')
     setPlanilhaTemAbas(false)
     setAbasPlanilhaTexto('')
-    setNumRotasLogisticas('')
     setValorTotal('')
     setStatus('Ativo')
     setContractSchoolsForm([])
@@ -249,11 +248,6 @@ export default function Contracts() {
     const abasText = contract.abas_planilha || ''
     setAbasPlanilhaTexto(abasText)
     setPlanilhaTemAbas(Boolean(abasText.trim()))
-    setNumRotasLogisticas(
-      contract.num_rotas_logisticas !== undefined && contract.num_rotas_logisticas !== null
-        ? contract.num_rotas_logisticas.toString()
-        : '',
-    )
     setValorTotal(contract.totalValue.toString())
     setStatus(contract.status)
 
@@ -457,16 +451,8 @@ export default function Contracts() {
     setRouteEditorOpen(true)
   }
 
-  // Rotas Logísticas da Cooperativa (com validação estrita do número definido no contrato)
+  // Rotas Logísticas da Cooperativa
   const handleAddRotaLogistica = () => {
-    const maxPermitido = parseInt(numRotasLogisticas, 10) || 1
-    if (contractRotasLogisticas.length >= maxPermitido) {
-      toast.error(
-        `O contrato define o limite de EXATAMENTE ${maxPermitido} rota(s) logística(s). Aumente o número de rotas antes de adicionar outra.`,
-      )
-      return
-    }
-
     const trimmed = newRotaLogisticaNome.trim()
     if (!trimmed) return
     const normalizedTarget = trimmed.replace(/\s+/g, ' ').toLowerCase()
@@ -509,9 +495,6 @@ export default function Contracts() {
       return
     }
 
-    const targetOldNome = contractRotasLogisticas[editRotaIndex].nome
-    const targetId = contractRotasLogisticas[editRotaIndex].id
-
     setContractRotasLogisticas((prev) =>
       prev.map((r, idx) => (idx === editRotaIndex ? { ...r, nome: cleanNome } : r)),
     )
@@ -532,27 +515,6 @@ export default function Contracts() {
       }
     }
     setContractRotasLogisticas((prev) => prev.filter((_, i) => i !== index))
-  }
-
-  // Validação ao alterar o campo num_rotas_logisticas
-  const handleNumRotasChange = (novoValorStr: string) => {
-    const novoValor = parseInt(novoValorStr, 10)
-    setNumRotasLogisticas(novoValorStr)
-
-    if (!isNaN(novoValor) && novoValor < contractRotasLogisticas.length) {
-      // Verificar se as rotas excedentes (além do novo limite) têm pedidos vinculados
-      const rotasExcedentes = contractRotasLogisticas.slice(novoValor)
-      const excedentesComPedidos = rotasExcedentes.filter((r) => {
-        if (!r.id) return false
-        return orders.some((o) => o.rotaLogisticaId === r.id)
-      })
-
-      if (excedentesComPedidos.length > 0) {
-        toast.warning(
-          `Atenção: Existem rotas excedentes com pedidos atribuídos (${excedentesComPedidos.map((r) => r.nome).join(', ')}). É preciso reatribuí-los antes de reduzir o número de rotas.`,
-        )
-      }
-    }
   }
 
   // Helper para verificar se a escola já está vinculada a outro contrato ativo
@@ -838,26 +800,6 @@ export default function Contracts() {
       return
     }
 
-    // num_rotas_logisticas é opcional: se preenchido, valida número positivo
-    const parsedNumRotas = numRotasLogisticas.trim() ? parseInt(numRotasLogisticas, 10) : undefined
-    if (parsedNumRotas !== undefined && (isNaN(parsedNumRotas) || parsedNumRotas < 1)) {
-      toast.error('Se preenchido, o número de rotas deve ser no mínimo 1.')
-      return
-    }
-
-    // Se o contrato já tiver rotas no banco e tiver um limite numérico preenchido:
-    if (editingContract && parsedNumRotas !== undefined) {
-      const existingRotasDoContrato = rotasLogisticas.filter(
-        (r) => r.contrato_id === editingContract.id,
-      )
-      if (existingRotasDoContrato.length > parsedNumRotas) {
-        toast.error(
-          `O contrato já possui ${existingRotasDoContrato.length} rota(s) configurada(s). O limite não pode ser inferior a esse valor.`,
-        )
-        return
-      }
-    }
-
     // Validação da regra da modalidade centralizada
     let cleanedAbasString = ''
     if (modalidade === 'centralizado') {
@@ -909,7 +851,7 @@ export default function Contracts() {
           modalidade === 'centralizado' && tipoImportacao === 'unica' && planilhaTemAbas
             ? cleanedAbasString
             : '',
-        num_rotas_logisticas: parsedNumRotas,
+        num_rotas_logisticas: editingContract?.num_rotas_logisticas,
         valor_total: val,
         status,
       }
@@ -1761,36 +1703,6 @@ export default function Contracts() {
                       <strong>Itens & Preços</strong>.
                     </p>
                   )}
-                </div>
-
-                <div className="p-3 rounded-lg border bg-muted/40 space-y-2">
-                  <div className="flex items-center justify-between gap-4">
-                    <div>
-                      <Label
-                        htmlFor="c-num-rotas"
-                        className="font-semibold text-xs text-foreground"
-                      >
-                        Número de Rotas da Cooperativa{' '}
-                        <span className="text-muted-foreground font-normal">(Opcional)</span>
-                      </Label>
-                      <p className="text-[11px] text-muted-foreground">
-                        Se preenchido, define um teto máximo de rotas no despacho. Se deixado vazio,
-                        não há limite de criação de rotas.
-                      </p>
-                    </div>
-                    <div className="w-24">
-                      <Input
-                        id="c-num-rotas"
-                        type="number"
-                        min="1"
-                        step="1"
-                        placeholder="Ilimitado"
-                        className="h-8 font-bold text-center bg-background"
-                        value={numRotasLogisticas}
-                        onChange={(e) => handleNumRotasChange(e.target.value)}
-                      />
-                    </div>
-                  </div>
                 </div>
               </TabsContent>
 
