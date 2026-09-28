@@ -125,6 +125,21 @@ export type MotivoLogisticoCancelamento = (typeof MOTIVOS_LOGISTICOS_CANCELAMENT
 
 export type ContratoTipoImportacao = 'unica' | 'fracionada'
 
+export type ChamadaStatus = 'Ativo' | 'Encerrado' | 'Cancelado' | 'Pendente'
+export type ChamadaModalidade = 'individualizado' | 'centralizado'
+
+export interface ChamadaRecord {
+  id: string
+  chamada: string
+  programa?: string
+  modalidade?: ChamadaModalidade
+  status: ChamadaStatus
+  created?: string
+  updated?: string
+}
+
+export type Chamada = ChamadaRecord
+
 export interface ContratoRecord {
   id: string
   numero: string

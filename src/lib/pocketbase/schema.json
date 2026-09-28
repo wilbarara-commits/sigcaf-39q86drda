@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-27T07:53:55.854Z",
+  "generatedAt": "2026-09-28T10:15:01.631Z",
   "collections": [
     {
       "name": "users",
@@ -1403,6 +1403,63 @@
         }
       ],
       "indexes": []
+    },
+    {
+      "name": "chamadas",
+      "type": "base",
+      "apiRules": {
+        "list": "",
+        "view": "",
+        "create": "",
+        "update": "",
+        "delete": ""
+      },
+      "fields": [
+        {
+          "name": "chamada",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "programa",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "modalidade",
+          "type": "select",
+          "required": false,
+          "system": false,
+          "selectValues": ["individualizado", "centralizado"]
+        },
+        {
+          "name": "status",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": ["Ativo", "Encerrado", "Cancelado", "Pendente"]
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": [
+        "CREATE INDEX idx_chamadas_chamada ON chamadas (chamada)",
+        "CREATE INDEX idx_chamadas_status ON chamadas (status)"
+      ]
     }
   ]
 }

@@ -23,8 +23,10 @@ import type {
   ContratoItemRecord,
   PedidoValidacao,
   ConfiguracoesRecord,
+  ChamadaRecord,
 } from '@/lib/types'
 import { configuracoesService } from '@/services/configuracoes'
+import { chamadasService } from '@/services/chamadas'
 import { produtosService } from '@/services/produtos'
 import { escolasService } from '@/services/escolas'
 import { contratosService } from '@/services/contratos'
@@ -55,6 +57,7 @@ export interface CreateOrderData {
 interface AppState {
   products: Product[]
   schools: School[]
+  chamadas: ChamadaRecord[]
   contracts: Contract[]
   contractSchools: ContratoEscolaRecord[]
   contractItems: ContratoItemRecord[]
@@ -175,6 +178,7 @@ const AppContext = createContext<AppState | undefined>(undefined)
 export function AppProvider({ children }: { children: ReactNode }) {
   const [products, setProducts] = useState<Product[]>([])
   const [schools, setSchools] = useState<School[]>([])
+  const [chamadas, setChamadas] = useState<ChamadaRecord[]>([])
   const [contracts, setContracts] = useState<Contract[]>([])
   const [contractSchools, setContractSchools] = useState<ContratoEscolaRecord[]>([])
   const [contractItems, setContractItems] = useState<ContratoItemRecord[]>([])
@@ -211,6 +215,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         rawParadasRota,
         rawDespachos,
         rawConfig,
+        rawChamadas,
       ] = await Promise.all([
         produtosService.getAll(),
         escolasService.getAll(),
@@ -227,8 +232,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
         rotasService.getParadas(),
         rotasService.getDespachos(),
         configuracoesService.get(),
+        chamadasService.getAll().catch(() => [] as ChamadaRecord[]),
       ])
 
+      setChamadas(rawChamadas || [])
       setConfig(rawConfig)
       const computedLogo = configuracoesService.getLogoUrl(rawConfig)
       setLogoUrl(computedLogo)
@@ -938,6 +945,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setActiveCiclo(cicloAtivo || null)
         return updated
       })
+    }
+  })
+
+  useRealtime<any>('chamadas', async (_e) => {
+    try {
+      const updatedChamadas = await chamadasService.getAll()
+      setChamadas(updatedChamadas)
+    } catch (err) {
+      console.error('Erro na sincronização realtime de chamadas:', err)
     }
   })
 
@@ -2966,6 +2982,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       value={{
         products,
         schools,
+        chamadas,
         contracts,
         contractSchools,
         contractItems,

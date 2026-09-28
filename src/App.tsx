@@ -12,6 +12,7 @@ import Index from './pages/Index'
 import NotFound from './pages/NotFound'
 import Products from './pages/Products'
 import Schools from './pages/Schools'
+import Producao from './pages/Producao'
 import Contracts from './pages/Contracts'
 import Orders from './pages/Orders'
 import DeliveryRoutes from './pages/DeliveryRoutes'
@@ -79,6 +80,14 @@ const App = () => (
                 element={
                   <ProtectedRoute requiredRole="ADMINISTRADOR">
                     <Schools />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/producao"
+                element={
+                  <ProtectedRoute requiredRole="ADMINISTRADOR">
+                    <Producao />
                   </ProtectedRoute>
                 }
               />
