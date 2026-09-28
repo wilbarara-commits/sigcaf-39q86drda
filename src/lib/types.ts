@@ -143,6 +143,7 @@ export type Chamada = ChamadaRecord
 export interface ContratoRecord {
   id: string
   numero: string
+  chamada_id?: string
   numero_chamada?: string
   tipo?: string
   modalidade_pedido?: 'individualizado' | 'centralizado'
@@ -153,6 +154,9 @@ export interface ContratoRecord {
   status: 'Ativo' | 'Encerrado' | 'Cancelado' | 'Pendente'
   encerrado_em?: string
   motivo_cancelamento?: string
+  expand?: {
+    chamada_id?: ChamadaRecord
+  }
   created?: string
   updated?: string
 }
@@ -340,6 +344,11 @@ export interface ContractSchoolLink {
 export interface Contract {
   id: string
   numero: string
+  chamada_id: string
+  chamadaNumero?: string
+  chamadaPrograma?: string
+  chamadaModalidade?: ChamadaModalidade
+  chamadaStatus?: ChamadaStatus
   numero_chamada?: string
   tipo?: string
   modalidade_pedido: 'individualizado' | 'centralizado'

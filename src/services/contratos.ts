@@ -5,11 +5,14 @@ export const contratosService = {
   async getAll(): Promise<ContratoRecord[]> {
     return await pb.collection('contratos').getFullList<ContratoRecord>({
       sort: '-created',
+      expand: 'chamada_id',
     })
   },
 
   async getById(id: string): Promise<ContratoRecord> {
-    return await pb.collection('contratos').getOne<ContratoRecord>(id)
+    return await pb.collection('contratos').getOne<ContratoRecord>(id, {
+      expand: 'chamada_id',
+    })
   },
 
   async getItems(contratoId: string): Promise<ContratoItemRecord[]> {
@@ -35,6 +38,7 @@ export const contratosService = {
 
   async create(data: {
     numero: string
+    chamada_id: string
     numero_chamada?: string
     tipo?: string
     modalidade_pedido?: 'individualizado' | 'centralizado'
@@ -46,14 +50,21 @@ export const contratosService = {
     encerrado_em?: string
     motivo_cancelamento?: string
   }): Promise<ContratoRecord> {
-    return await pb.collection('contratos').create<ContratoRecord>({
-      ...data,
-      status: data.status || 'Ativo',
-    })
+    return await pb.collection('contratos').create<ContratoRecord>(
+      {
+        ...data,
+        status: data.status || 'Ativo',
+      },
+      {
+        expand: 'chamada_id',
+      },
+    )
   },
 
   async update(id: string, data: Partial<ContratoRecord>): Promise<ContratoRecord> {
-    return await pb.collection('contratos').update<ContratoRecord>(id, data)
+    return await pb.collection('contratos').update<ContratoRecord>(id, data, {
+      expand: 'chamada_id',
+    })
   },
   async delete(id: string): Promise<boolean> {
     // Delete associated contract items

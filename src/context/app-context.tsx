@@ -475,10 +475,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const consumed = contractOrders.reduce((acc, o) => acc + o.total, 0)
         const balance = Math.max(0, totalValue - consumed)
 
+        const matchedChamada =
+          rawChamadas.find((ch) => ch.id === c.chamada_id) || c.expand?.chamada_id
         return {
           id: c.id,
           numero: c.numero,
-          numero_chamada: c.numero_chamada || '',
+          chamada_id: c.chamada_id || matchedChamada?.id || '',
+          chamadaNumero: matchedChamada?.chamada || c.numero_chamada || '',
+          chamadaPrograma: matchedChamada?.programa || c.tipo || '',
+          chamadaModalidade: matchedChamada?.modalidade || (c.modalidade_pedido as any),
+          chamadaStatus: matchedChamada?.status || (c.status as any),
+          numero_chamada: c.numero_chamada || matchedChamada?.chamada || '',
           tipo: c.tipo || 'PNAE',
           modalidade_pedido: c.modalidade_pedido || 'individualizado',
           tipo_importacao: c.tipo_importacao,
@@ -964,11 +971,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setContracts((prev) => {
         return rawContratos.map((c) => {
           const existing = prev.find((p) => p.id === c.id)
+          const matchedChamada =
+            chamadas.find((ch) => ch.id === c.chamada_id) || c.expand?.chamada_id
           const totalValue = Number(c.valor_total) || 0
           return {
             id: c.id,
             numero: c.numero,
-            numero_chamada: c.numero_chamada || '',
+            chamada_id: c.chamada_id || matchedChamada?.id || existing?.chamada_id || '',
+            chamadaNumero:
+              matchedChamada?.chamada || c.numero_chamada || existing?.chamadaNumero || '',
+            chamadaPrograma: matchedChamada?.programa || c.tipo || existing?.chamadaPrograma || '',
+            chamadaModalidade:
+              matchedChamada?.modalidade ||
+              (c.modalidade_pedido as any) ||
+              existing?.chamadaModalidade,
+            chamadaStatus: matchedChamada?.status || (c.status as any) || existing?.chamadaStatus,
+            numero_chamada: c.numero_chamada || matchedChamada?.chamada || '',
             tipo: c.tipo || 'PNAE',
             modalidade_pedido: c.modalidade_pedido || 'individualizado',
             tipo_importacao: c.tipo_importacao,
@@ -1009,6 +1027,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
       setContracts((prevContracts) => {
         return (rawContratos.length > 0 ? rawContratos : prevContracts).map((c) => {
+          const existing = prevContracts.find((p) => p.id === c.id)
+          const matchedChamada =
+            chamadas.find((ch) => ch.id === c.chamada_id) || c.expand?.chamada_id
           const links = updatedContratoEscolas.filter((ce) => ce.contrato_id === c.id)
           const linkedSchools = links.map((ce) => {
             const sch = schools.find((s) => s.id === ce.escola_id)
@@ -1061,7 +1082,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
           return {
             id: c.id,
             numero: c.numero,
-            numero_chamada: c.numero_chamada || '',
+            chamada_id: c.chamada_id || matchedChamada?.id || existing?.chamada_id || '',
+            chamadaNumero:
+              matchedChamada?.chamada || c.numero_chamada || existing?.chamadaNumero || '',
+            chamadaPrograma: matchedChamada?.programa || c.tipo || existing?.chamadaPrograma || '',
+            chamadaModalidade:
+              matchedChamada?.modalidade ||
+              (c.modalidade_pedido as any) ||
+              existing?.chamadaModalidade,
+            chamadaStatus: matchedChamada?.status || (c.status as any) || existing?.chamadaStatus,
+            numero_chamada: c.numero_chamada || matchedChamada?.chamada || '',
             tipo: c.tipo || 'PNAE',
             modalidade_pedido: c.modalidade_pedido || 'individualizado',
             tipo_importacao: c.tipo_importacao,

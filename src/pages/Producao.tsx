@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useApp } from '@/context/app-context'
 import { useAuth } from '@/context/auth-context'
 import type { ChamadaRecord, ChamadaStatus, ChamadaModalidade } from '@/lib/types'
@@ -41,7 +42,21 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Layers, Plus, Pencil, Trash2, Loader2, Search, Calendar, Sparkles } from 'lucide-react'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import {
+  Layers,
+  Plus,
+  Pencil,
+  Trash2,
+  Loader2,
+  Search,
+  Calendar,
+  Sparkles,
+  FileText,
+  ExternalLink,
+  School,
+  DollarSign,
+} from 'lucide-react'
 import { toast } from 'sonner'
 
 // Rótulos do módulo: configurados em constantes para facilitar evolução futura
@@ -55,7 +70,8 @@ export const MODULO_PRODUCAO_LABEL = MODULO_CHAMADAS_LABEL
 export const MODULO_PRODUCAO_SUBTITULO = MODULO_CHAMADAS_SUBTITULO
 
 export default function Producao() {
-  const { chamadas, isLoading, refreshData } = useApp()
+  const navigate = useNavigate()
+  const { chamadas, contracts, isLoading, refreshData } = useApp()
   const { isAdmin } = useAuth()
 
   // Estados de busca / filtro
@@ -74,6 +90,7 @@ export default function Producao() {
   const [formPrograma, setFormPrograma] = useState('PNAE')
   const [formModalidade, setFormModalidade] = useState<ChamadaModalidade>('individualizado')
   const [formStatus, setFormStatus] = useState<ChamadaStatus>('Ativo')
+  const [activeTab, setActiveTab] = useState<'geral' | 'contratos'>('geral')
 
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
@@ -84,6 +101,7 @@ export default function Producao() {
     setFormPrograma('PNAE')
     setFormModalidade('individualizado')
     setFormStatus('Ativo')
+    setActiveTab('geral')
     setDialogOpen(true)
   }
 
@@ -93,6 +111,7 @@ export default function Producao() {
     setFormPrograma(item.programa || 'PNAE')
     setFormModalidade(item.modalidade || 'individualizado')
     setFormStatus(item.status || 'Ativo')
+    setActiveTab('geral')
     setDialogOpen(true)
   }
 
@@ -274,6 +293,7 @@ export default function Producao() {
                   <TableHead>{MODULO_CHAMADA_SINGULAR}</TableHead>
                   <TableHead>Programa</TableHead>
                   <TableHead>Modalidade</TableHead>
+                  <TableHead>Contratos Vinculados</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Criada em</TableHead>
                   <TableHead className="text-right">Ações</TableHead>
@@ -282,7 +302,7 @@ export default function Producao() {
               <TableBody>
                 {isLoading ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
                       <div className="flex items-center justify-center gap-2">
                         <Loader2 className="h-4 w-4 animate-spin" /> Carregando{' '}
                         {MODULO_CHAMADAS_LABEL.toLowerCase()}...
@@ -291,86 +311,106 @@ export default function Producao() {
                   </TableRow>
                 ) : filteredChamadas.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
                       {searchQuery || statusFilter !== 'todos' || modalidadeFilter !== 'todos'
                         ? `Nenhuma ${MODULO_CHAMADA_SINGULAR.toLowerCase()} encontrada para os filtros selecionados.`
                         : `Nenhuma ${MODULO_CHAMADA_SINGULAR.toLowerCase()} cadastrada ainda.`}
                     </TableCell>
                   </TableRow>
                 ) : (
-                  filteredChamadas.map((item) => (
-                    <TableRow
-                      key={item.id}
-                      className={isAdmin ? 'cursor-pointer hover:bg-muted/50' : undefined}
-                      onClick={() => {
-                        if (isAdmin) handleOpenEdit(item)
-                      }}
-                    >
-                      <TableCell className="font-semibold text-primary">
-                        <span className="hover:underline font-bold">{item.chamada}</span>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline">{item.programa || 'PNAE'}</Badge>
-                      </TableCell>
-                      <TableCell>
-                        <Badge
-                          variant={item.modalidade === 'centralizado' ? 'secondary' : 'default'}
-                          className="capitalize text-xs"
-                        >
-                          {item.modalidade || 'individualizado'}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <Badge
-                          className={
-                            item.status === 'Ativo'
-                              ? 'bg-emerald-600 text-white hover:bg-emerald-700'
-                              : item.status === 'Encerrado'
-                                ? 'bg-slate-600 text-slate-100 dark:bg-slate-700 hover:bg-slate-600 border border-slate-500/40'
-                                : item.status === 'Cancelado'
-                                  ? 'bg-amber-600 text-white hover:bg-amber-700'
-                                  : 'bg-muted text-muted-foreground border'
-                          }
-                        >
-                          {item.status}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-xs text-muted-foreground">
-                        <div className="flex items-center gap-1.5">
-                          <Calendar className="h-3.5 w-3.5" />
-                          <span>{formatDate(item.created)}</span>
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
-                        <div className="flex items-center justify-end gap-1">
-                          {isAdmin ? (
-                            <>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8 text-muted-foreground hover:text-foreground"
-                                title={`Editar ${MODULO_CHAMADA_SINGULAR.toLowerCase()}`}
-                                onClick={() => handleOpenEdit(item)}
-                              >
-                                <Pencil className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8 text-destructive hover:bg-destructive/10"
-                                title={`Excluir ${MODULO_CHAMADA_SINGULAR.toLowerCase()}`}
-                                onClick={() => handleOpenDelete(item)}
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </>
-                          ) : (
-                            <span className="text-xs text-muted-foreground">Somente leitura</span>
-                          )}
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))
+                  filteredChamadas.map((item) => {
+                    const contratosDestaChamada = contracts.filter((c) => c.chamada_id === item.id)
+
+                    return (
+                      <TableRow
+                        key={item.id}
+                        className={isAdmin ? 'cursor-pointer hover:bg-muted/50' : undefined}
+                        onClick={() => {
+                          if (isAdmin) handleOpenEdit(item)
+                        }}
+                      >
+                        <TableCell className="font-semibold text-primary">
+                          <span className="hover:underline font-bold">{item.chamada}</span>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="outline">{item.programa || 'PNAE'}</Badge>
+                        </TableCell>
+                        <TableCell>
+                          <Badge
+                            variant={item.modalidade === 'centralizado' ? 'secondary' : 'default'}
+                            className="capitalize text-xs"
+                          >
+                            {item.modalidade || 'individualizado'}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-1.5">
+                            <Badge
+                              variant="secondary"
+                              className="font-medium text-xs bg-muted border"
+                            >
+                              <FileText className="h-3 w-3 mr-1 text-primary" />
+                              {contratosDestaChamada.length} contrato(s)
+                            </Badge>
+                            {contratosDestaChamada.length > 0 && (
+                              <span className="text-[11px] text-muted-foreground truncate max-w-[150px]">
+                                ({contratosDestaChamada.map((c) => c.numero).join(', ')})
+                              </span>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <Badge
+                            className={
+                              item.status === 'Ativo'
+                                ? 'bg-emerald-600 text-white hover:bg-emerald-700'
+                                : item.status === 'Encerrado'
+                                  ? 'bg-slate-600 text-slate-100 dark:bg-slate-700 hover:bg-slate-600 border border-slate-500/40'
+                                  : item.status === 'Cancelado'
+                                    ? 'bg-amber-600 text-white hover:bg-amber-700'
+                                    : 'bg-muted text-muted-foreground border'
+                            }
+                          >
+                            {item.status}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-xs text-muted-foreground">
+                          <div className="flex items-center gap-1.5">
+                            <Calendar className="h-3.5 w-3.5" />
+                            <span>{formatDate(item.created)}</span>
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
+                          <div className="flex items-center justify-end gap-1">
+                            {isAdmin ? (
+                              <>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                                  title={`Editar ${MODULO_CHAMADA_SINGULAR.toLowerCase()}`}
+                                  onClick={() => handleOpenEdit(item)}
+                                >
+                                  <Pencil className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8 text-destructive hover:bg-destructive/10"
+                                  title={`Excluir ${MODULO_CHAMADA_SINGULAR.toLowerCase()}`}
+                                  onClick={() => handleOpenDelete(item)}
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">Somente leitura</span>
+                            )}
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    )
+                  })
                 )}
               </TableBody>
             </Table>
@@ -380,7 +420,7 @@ export default function Producao() {
 
       {/* Modal de Criação / Edição de Chamada */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="sm:max-w-[560px]">
+        <DialogContent className="sm:max-w-[650px] max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Sparkles className="h-5 w-5 text-primary" />
@@ -390,94 +430,320 @@ export default function Producao() {
             </DialogTitle>
             <DialogDescription>
               {editingChamada
-                ? `Atualize os dados e parâmetros da ${MODULO_CHAMADA_SINGULAR.toLowerCase()} pública.`
+                ? `Atualize os dados e parâmetros da ${MODULO_CHAMADA_SINGULAR.toLowerCase()} pública e visualize os contratos vinculados.`
                 : `Preencha os campos para cadastrar uma nova ${MODULO_CHAMADA_SINGULAR.toLowerCase()} no módulo de ${MODULO_CHAMADAS_LABEL.toLowerCase()}.`}
             </DialogDescription>
           </DialogHeader>
 
-          <form onSubmit={handleSubmit} className="space-y-4 pt-2">
-            <div className="space-y-2">
-              <Label htmlFor="ch-nome">
-                {MODULO_CHAMADA_SINGULAR} <span className="text-destructive">*</span>
-              </Label>
-              <Input
-                id="ch-nome"
-                placeholder="Ex: 001/2026 - PNAE Municipal"
-                value={formChamada}
-                onChange={(e) => setFormChamada(e.target.value)}
-                required
-                autoFocus
-              />
-              <p className="text-[11px] text-muted-foreground">
-                Identificador ou número oficial da chamada pública.
-              </p>
-            </div>
+          {editingChamada ? (
+            <Tabs
+              value={activeTab}
+              onValueChange={(v) => setActiveTab(v as any)}
+              className="w-full"
+            >
+              <TabsList className="grid grid-cols-2 w-full">
+                <TabsTrigger value="geral">Dados Gerais</TabsTrigger>
+                <TabsTrigger value="contratos">
+                  Contratos Vinculados (
+                  {contracts.filter((c) => c.chamada_id === editingChamada.id).length})
+                </TabsTrigger>
+              </TabsList>
 
-            <div className="space-y-2">
-              <Label htmlFor="ch-prog">Programa</Label>
-              <Input
-                id="ch-prog"
-                placeholder="Ex: PNAE, PAA, Municipal..."
-                value={formPrograma}
-                onChange={(e) => setFormPrograma(e.target.value)}
-              />
-            </div>
+              <TabsContent value="geral" className="space-y-4 pt-2">
+                <form onSubmit={handleSubmit} className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="ch-nome">
+                      {MODULO_CHAMADA_SINGULAR} <span className="text-destructive">*</span>
+                    </Label>
+                    <Input
+                      id="ch-nome"
+                      placeholder="Ex: 001/2026 - PNAE Municipal"
+                      value={formChamada}
+                      onChange={(e) => setFormChamada(e.target.value)}
+                      required
+                      autoFocus
+                    />
+                    <p className="text-[11px] text-muted-foreground">
+                      Identificador ou número oficial da chamada pública.
+                    </p>
+                  </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="ch-prog">Programa</Label>
+                    <Input
+                      id="ch-prog"
+                      placeholder="Ex: PNAE, PAA, Municipal..."
+                      value={formPrograma}
+                      onChange={(e) => setFormPrograma(e.target.value)}
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="ch-mod">Modalidade</Label>
+                      <Select
+                        value={formModalidade}
+                        onValueChange={(v) => setFormModalidade(v as ChamadaModalidade)}
+                      >
+                        <SelectTrigger id="ch-mod">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="individualizado">
+                            Individualizado (por Escola)
+                          </SelectItem>
+                          <SelectItem value="centralizado">Centralizado (por Planilha)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="ch-status">Status</Label>
+                      <Select
+                        value={formStatus}
+                        onValueChange={(v) => setFormStatus(v as ChamadaStatus)}
+                      >
+                        <SelectTrigger id="ch-status">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Ativo">Ativo</SelectItem>
+                          <SelectItem value="Pendente">Pendente</SelectItem>
+                          <SelectItem value="Encerrado">Encerrado</SelectItem>
+                          <SelectItem value="Cancelado">Cancelado</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  <DialogFooter className="pt-4 gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setDialogOpen(false)}
+                      disabled={isSubmitting}
+                    >
+                      Cancelar
+                    </Button>
+                    <Button type="submit" disabled={isSubmitting}>
+                      {isSubmitting ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Salvando...
+                        </>
+                      ) : (
+                        'Salvar Alterações'
+                      )}
+                    </Button>
+                  </DialogFooter>
+                </form>
+              </TabsContent>
+
+              {/* Aba Contratos Vinculados (padrão Escolas Participantes de Contratos) */}
+              <TabsContent value="contratos" className="space-y-4 pt-2">
+                <div className="rounded-lg border p-3 bg-muted/20 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h4 className="text-sm font-semibold flex items-center gap-1.5">
+                        <FileText className="h-4 w-4 text-primary" /> Contratos Desta Chamada
+                        Pública
+                      </h4>
+                      <p className="text-xs text-muted-foreground">
+                        Relação de contratos vinculados a esta chamada pública (1 chamada : N
+                        contratos).
+                      </p>
+                    </div>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="gap-1.5 text-xs"
+                      onClick={() => {
+                        setDialogOpen(false)
+                        navigate('/contratos')
+                      }}
+                    >
+                      <Plus className="h-3.5 w-3.5" /> Novo Contrato
+                    </Button>
+                  </div>
+
+                  {(() => {
+                    const contratosDesta = contracts.filter(
+                      (c) => c.chamada_id === editingChamada.id,
+                    )
+                    if (contratosDesta.length === 0) {
+                      return (
+                        <div className="text-center py-6 text-xs text-muted-foreground border border-dashed rounded-md bg-background">
+                          Nenhum contrato vinculado a esta chamada pública ainda.
+                          <div className="mt-2">
+                            <Button
+                              type="button"
+                              variant="link"
+                              size="sm"
+                              className="text-xs text-primary"
+                              onClick={() => {
+                                setDialogOpen(false)
+                                navigate('/contratos')
+                              }}
+                            >
+                              Ir para Contratos vincular
+                            </Button>
+                          </div>
+                        </div>
+                      )
+                    }
+
+                    return (
+                      <div className="space-y-2">
+                        {contratosDesta.map((c) => (
+                          <div
+                            key={c.id}
+                            className="flex items-center justify-between p-2.5 rounded-md border bg-background hover:bg-muted/40 transition-colors"
+                          >
+                            <div className="space-y-1">
+                              <div className="flex items-center gap-2">
+                                <span className="font-bold text-sm text-foreground">
+                                  {c.numero}
+                                </span>
+                                <Badge variant="outline" className="text-[10px]">
+                                  {c.tipo || 'PNAE'}
+                                </Badge>
+                                <Badge
+                                  className={
+                                    c.status === 'Ativo'
+                                      ? 'bg-emerald-600 text-white text-[10px]'
+                                      : 'bg-muted text-muted-foreground text-[10px] border'
+                                  }
+                                >
+                                  {c.status}
+                                </Badge>
+                              </div>
+                              <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                                <span className="flex items-center gap-1">
+                                  <DollarSign className="h-3 w-3" />
+                                  R${' '}
+                                  {c.totalValue.toLocaleString('pt-BR', {
+                                    minimumFractionDigits: 2,
+                                  })}
+                                </span>
+                                <span className="flex items-center gap-1">
+                                  <School className="h-3 w-3" />
+                                  {c.escolas.length} escola(s) vinculada(s)
+                                </span>
+                              </div>
+                            </div>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="gap-1 text-xs text-primary hover:bg-primary/10"
+                              onClick={() => {
+                                setDialogOpen(false)
+                                navigate('/contratos')
+                              }}
+                              title="Abrir contrato"
+                            >
+                              Abrir <ExternalLink className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    )
+                  })()}
+                </div>
+
+                <DialogFooter className="pt-2">
+                  <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>
+                    Fechar
+                  </Button>
+                </DialogFooter>
+              </TabsContent>
+            </Tabs>
+          ) : (
+            <form onSubmit={handleSubmit} className="space-y-4 pt-2">
               <div className="space-y-2">
-                <Label htmlFor="ch-mod">Modalidade</Label>
-                <Select
-                  value={formModalidade}
-                  onValueChange={(v) => setFormModalidade(v as ChamadaModalidade)}
+                <Label htmlFor="ch-nome">
+                  {MODULO_CHAMADA_SINGULAR} <span className="text-destructive">*</span>
+                </Label>
+                <Input
+                  id="ch-nome"
+                  placeholder="Ex: 001/2026 - PNAE Municipal"
+                  value={formChamada}
+                  onChange={(e) => setFormChamada(e.target.value)}
+                  required
+                  autoFocus
+                />
+                <p className="text-[11px] text-muted-foreground">
+                  Identificador ou número oficial da chamada pública.
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="ch-prog">Programa</Label>
+                <Input
+                  id="ch-prog"
+                  placeholder="Ex: PNAE, PAA, Municipal..."
+                  value={formPrograma}
+                  onChange={(e) => setFormPrograma(e.target.value)}
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="ch-mod">Modalidade</Label>
+                  <Select
+                    value={formModalidade}
+                    onValueChange={(v) => setFormModalidade(v as ChamadaModalidade)}
+                  >
+                    <SelectTrigger id="ch-mod">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="individualizado">Individualizado (por Escola)</SelectItem>
+                      <SelectItem value="centralizado">Centralizado (por Planilha)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="ch-status">Status</Label>
+                  <Select
+                    value={formStatus}
+                    onValueChange={(v) => setFormStatus(v as ChamadaStatus)}
+                  >
+                    <SelectTrigger id="ch-status">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Ativo">Ativo</SelectItem>
+                      <SelectItem value="Pendente">Pendente</SelectItem>
+                      <SelectItem value="Encerrado">Encerrado</SelectItem>
+                      <SelectItem value="Cancelado">Cancelado</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <DialogFooter className="pt-4 gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setDialogOpen(false)}
+                  disabled={isSubmitting}
                 >
-                  <SelectTrigger id="ch-mod">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="individualizado">Individualizado (por Escola)</SelectItem>
-                    <SelectItem value="centralizado">Centralizado (por Planilha)</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="ch-status">Status</Label>
-                <Select value={formStatus} onValueChange={(v) => setFormStatus(v as ChamadaStatus)}>
-                  <SelectTrigger id="ch-status">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Ativo">Ativo</SelectItem>
-                    <SelectItem value="Pendente">Pendente</SelectItem>
-                    <SelectItem value="Encerrado">Encerrado</SelectItem>
-                    <SelectItem value="Cancelado">Cancelado</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            <DialogFooter className="pt-4 gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setDialogOpen(false)}
-                disabled={isSubmitting}
-              >
-                Cancelar
-              </Button>
-              <Button type="submit" disabled={isSubmitting}>
-                {isSubmitting ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Salvando...
-                  </>
-                ) : editingChamada ? (
-                  'Salvar Alterações'
-                ) : (
-                  `Cadastrar ${MODULO_CHAMADA_SINGULAR}`
-                )}
-              </Button>
-            </DialogFooter>
-          </form>
+                  Cancelar
+                </Button>
+                <Button type="submit" disabled={isSubmitting}>
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Salvando...
+                    </>
+                  ) : (
+                    `Cadastrar ${MODULO_CHAMADA_SINGULAR}`
+                  )}
+                </Button>
+              </DialogFooter>
+            </form>
+          )}
         </DialogContent>
       </Dialog>
 

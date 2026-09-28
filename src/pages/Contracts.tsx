@@ -115,6 +115,7 @@ export default function Contracts() {
   const navigate = useNavigate()
   const {
     contracts,
+    chamadas,
     schools,
     products,
     orders,
@@ -156,6 +157,8 @@ export default function Contracts() {
 
   // Formulário de Contrato
   const [numero, setNumero] = useState('')
+  const [chamadaId, setChamadaId] = useState('')
+  const [chamadaSearch, setChamadaSearch] = useState('')
   const [numeroChamada, setNumeroChamada] = useState('')
   const [tipo, setTipo] = useState('PNAE')
   const [modalidade, setModalidade] = useState<'individualizado' | 'centralizado'>(
@@ -213,6 +216,8 @@ export default function Contracts() {
   const handleOpenCreate = () => {
     setEditingContract(null)
     setNumero('')
+    setChamadaId('')
+    setChamadaSearch('')
     setNumeroChamada('')
     setTipo('PNAE')
     setModalidade('individualizado')
@@ -234,6 +239,8 @@ export default function Contracts() {
     setEditingContract(contract)
     setDeletedRotaIds([])
     setNumero(contract.numero)
+    setChamadaId(contract.chamada_id || '')
+    setChamadaSearch('')
     setNumeroChamada(contract.numero_chamada || '')
     setTipo(contract.tipo || 'PNAE')
     setModalidade(contract.modalidade_pedido || 'individualizado')
@@ -736,6 +743,11 @@ export default function Contracts() {
       return
     }
 
+    if (!chamadaId) {
+      toast.error('Selecione a Chamada Pública do contrato (campo obrigatório).')
+      return
+    }
+
     const rawVal = parseFloat((valorTotal || '0').replace(',', '.'))
     const val = isNaN(rawVal) ? 0 : Math.max(0, rawVal)
 
@@ -806,9 +818,11 @@ export default function Contracts() {
     try {
       let contractId = editingContract?.id
 
+      const selectedChamadaObj = chamadas.find((ch) => ch.id === chamadaId)
       const payloadToSave = {
         numero: trimmedNum,
-        numero_chamada: numeroChamada.trim() || undefined,
+        chamada_id: chamadaId,
+        numero_chamada: numeroChamada.trim() || selectedChamadaObj?.chamada || undefined,
         tipo,
         modalidade_pedido: modalidade,
         tipo_importacao: modalidade === 'centralizado' ? tipoImportacao : undefined,
@@ -1108,6 +1122,7 @@ export default function Contracts() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Contrato</TableHead>
+                  <TableHead>Chamada Pública</TableHead>
                   <TableHead>Programa</TableHead>
                   <TableHead>Modalidade</TableHead>
                   <TableHead>Escolas Participantes</TableHead>
@@ -1121,7 +1136,7 @@ export default function Contracts() {
               <TableBody>
                 {isLoading ? (
                   <TableRow>
-                    <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={10} className="text-center py-8 text-muted-foreground">
                       <div className="flex items-center justify-center gap-2">
                         <Loader2 className="h-4 w-4 animate-spin" /> Carregando contratos...
                       </div>
@@ -1129,7 +1144,7 @@ export default function Contracts() {
                   </TableRow>
                 ) : contracts.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={10} className="text-center py-8 text-muted-foreground">
                       Nenhum contrato cadastrado.
                     </TableCell>
                   </TableRow>
@@ -1138,6 +1153,12 @@ export default function Contracts() {
                     const total = contract.totalValue || 1
                     const used = Math.max(0, contract.totalValue - contract.balance)
                     const percentage = Math.min(100, Math.max(0, (used / total) * 100))
+                    const chamadaEncontrada = chamadas.find((ch) => ch.id === contract.chamada_id)
+                    const rotuloChamada =
+                      chamadaEncontrada?.chamada ||
+                      contract.chamadaNumero ||
+                      contract.numero_chamada ||
+                      '-'
 
                     return (
                       <TableRow key={contract.id}>
@@ -1149,6 +1170,29 @@ export default function Contracts() {
                           >
                             {contract.numero}
                           </button>
+                        </TableCell>
+                        <TableCell>
+                          {chamadaEncontrada ? (
+                            <div className="flex flex-col gap-0.5">
+                              <Badge
+                                variant="outline"
+                                className="font-bold border-primary/40 bg-primary/5 text-primary hover:bg-primary/10 cursor-pointer w-fit"
+                                onClick={() => navigate('/chamadas')}
+                                title="Abrir módulo de Chamadas"
+                              >
+                                {rotuloChamada}
+                              </Badge>
+                              {chamadaEncontrada.programa && (
+                                <span className="text-[10px] text-muted-foreground">
+                                  {chamadaEncontrada.programa}
+                                </span>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="text-xs text-muted-foreground font-mono">
+                              {rotuloChamada}
+                            </span>
+                          )}
                         </TableCell>
                         <TableCell>
                           <Badge variant="outline">{contract.tipo || 'PNAE'}</Badge>
@@ -1360,15 +1404,44 @@ export default function Contracts() {
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="c-chamada">Nº da Chamada Pública</Label>
-                    <Input
-                      id="c-chamada"
-                      placeholder="Ex: 001/2026"
-                      value={numeroChamada}
-                      onChange={(e) => setNumeroChamada(e.target.value)}
-                    />
+                    <Label htmlFor="c-chamada-select">
+                      Chamada Pública <span className="text-destructive">*</span>
+                    </Label>
+                    <Select
+                      value={chamadaId}
+                      onValueChange={(val) => {
+                        setChamadaId(val)
+                        const ch = chamadas.find((c) => c.id === val)
+                        if (ch) {
+                          setNumeroChamada(ch.chamada)
+                          if (ch.programa) setTipo(ch.programa)
+                          if (ch.modalidade) setModalidade(ch.modalidade)
+                        }
+                      }}
+                      required
+                    >
+                      <SelectTrigger
+                        id="c-chamada-select"
+                        className={!chamadaId ? 'border-destructive/60' : ''}
+                      >
+                        <SelectValue placeholder="Selecione a Chamada vinculada..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {chamadas.length === 0 ? (
+                          <div className="p-2 text-xs text-muted-foreground">
+                            Nenhuma chamada cadastrada. Cadastre em /chamadas.
+                          </div>
+                        ) : (
+                          chamadas.map((ch) => (
+                            <SelectItem key={ch.id} value={ch.id}>
+                              {ch.chamada} {ch.programa ? `(${ch.programa})` : ''} - {ch.status}
+                            </SelectItem>
+                          ))
+                        )}
+                      </SelectContent>
+                    </Select>
                     <p className="text-[10px] text-muted-foreground">
-                      Exibido no Termo de Recebimento oficial (Atesto).
+                      Vínculo obrigatório: todo contrato pertence a uma chamada pública.
                     </p>
                   </div>
 

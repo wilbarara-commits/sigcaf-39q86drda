@@ -1,5 +1,5 @@
 import pb from '@/lib/pocketbase/client'
-import type { ChamadaRecord, ChamadaStatus, ChamadaModalidade } from '@/lib/types'
+import type { ChamadaRecord, ChamadaStatus, ChamadaModalidade, ContratoRecord } from '@/lib/types'
 
 export interface CreateChamadaData {
   chamada: string
@@ -24,6 +24,14 @@ export const chamadasService = {
 
   async getById(id: string): Promise<ChamadaRecord> {
     return await pb.collection('chamadas').getOne<ChamadaRecord>(id)
+  },
+
+  async getContratos(chamadaId: string): Promise<ContratoRecord[]> {
+    return await pb.collection('contratos').getFullList<ContratoRecord>({
+      filter: `chamada_id = "${chamadaId}"`,
+      sort: '-created',
+      expand: 'chamada_id',
+    })
   },
 
   async create(data: CreateChamadaData): Promise<ChamadaRecord> {

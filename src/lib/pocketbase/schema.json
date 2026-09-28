@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-28T10:31:00.167Z",
+  "generatedAt": "2026-09-28T10:53:40.893Z",
   "collections": [
     {
       "name": "users",
@@ -316,9 +316,16 @@
           "type": "text",
           "required": false,
           "system": false
+        },
+        {
+          "name": "chamada_id",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "chamadas"
         }
       ],
-      "indexes": []
+      "indexes": ["CREATE INDEX `idx_contratos_chamada_id` ON `contratos` (chamada_id)"]
     },
     {
       "name": "contrato_itens",
