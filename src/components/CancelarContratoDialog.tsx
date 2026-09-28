@@ -121,14 +121,14 @@ export function CancelarContratoDialog({
     setIsSubmitting(true)
     try {
       await contratosService.cancelarContrato(contract.id, motivo)
-      toast.success(`Operação ${contract.numero} cancelada com sucesso!`)
+      toast.success(`Contrato ${contract.numero} cancelado com sucesso!`)
       handleOpenChange(false)
       await refreshData()
       onSuccess?.()
     } catch (err: any) {
       console.error('Erro ao cancelar contrato:', err)
       toast.error(
-        err?.message || 'Falha ao cancelar a operação. Verifique sua conexão e tente novamente.',
+        err?.message || 'Falha ao cancelar o contrato. Verifique sua conexão e tente novamente.',
       )
     } finally {
       setIsSubmitting(false)
@@ -141,10 +141,10 @@ export function CancelarContratoDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-foreground">
             <Ban className="h-5 w-5 text-amber-600" />
-            Cancelar Operação {contract.numero}
+            Cancelar Contrato {contract.numero}
           </DialogTitle>
           <DialogDescription className="text-xs leading-relaxed text-muted-foreground pt-1">
-            A operação fica com status &quot;Cancelada&quot;, deixa de receber pedidos, importações
+            O contrato fica com status &quot;Cancelada&quot;, deixa de receber pedidos, importações
             e despachos, e todos os vínculos de escolas serão liberados. O histórico de pedidos,
             atestos e despachos permanece preservado e continua acessível em Relatórios e Histórico.
           </DialogDescription>
@@ -158,8 +158,8 @@ export function CancelarContratoDialog({
               <AlertTitle className="font-semibold text-xs">Cancelamento Bloqueado</AlertTitle>
               <AlertDescription className="text-xs mt-1.5 leading-relaxed">
                 Existem <strong>{analise.totalAtestosBloqueantes} atesto(s) emitido(s)</strong> para
-                esta operação em ciclo(s) em andamento. Já houve entrega formalizada; o caminho é
-                aguardar o fechamento do ciclo para poder cancelar a operação.
+                este contrato em ciclo(s) em andamento. Já houve entrega formalizada; o caminho é
+                aguardar o fechamento do ciclo para poder cancelar o contrato.
               </AlertDescription>
             </Alert>
           )}
@@ -175,8 +175,8 @@ export function CancelarContratoDialog({
                 <AlertDescription className="text-xs mt-1 leading-relaxed">
                   {analise.ciclosNaoTerminais.map((c, i) => (
                     <div key={i}>
-                      A operação participa do <strong>{c.nome}</strong> em fase{' '}
-                      <strong>{c.fase}</strong> — cancelar cancela a participação dela no ciclo.
+                      O contrato participa do <strong>{c.nome}</strong> em fase{' '}
+                      <strong>{c.fase}</strong> — cancelar cancela a participação dele no ciclo.
                     </div>
                   ))}
                 </AlertDescription>
@@ -193,8 +193,8 @@ export function CancelarContratoDialog({
                   htmlFor="confirm-ciclo-cancelar"
                   className="text-xs text-foreground cursor-pointer select-none leading-snug"
                 >
-                  Estou ciente de que a operação participa de ciclo(s) em fase não-terminal e
-                  confirmo o cancelamento da participação dela no ciclo ao cancelá-la.
+                  Estou ciente de que o contrato participa de ciclo(s) em fase não-terminal e
+                  confirmo o cancelamento da participação dele no ciclo ao cancelá-lo.
                 </label>
               </div>
             </div>
@@ -222,7 +222,7 @@ export function CancelarContratoDialog({
               </Label>
               <Textarea
                 id="motivo-cancelamento-contrato"
-                placeholder="Descreva detalhadamente o motivo do cancelamento desta operação (obrigatório)..."
+                placeholder="Descreva detalhadamente o motivo do cancelamento deste contrato (obrigatório)..."
                 value={motivo}
                 onChange={(e) => setMotivo(e.target.value)}
                 rows={3}
@@ -231,8 +231,8 @@ export function CancelarContratoDialog({
               />
               {!isMotivoValido && (
                 <p className="text-[11px] text-muted-foreground">
-                  O motivo é obrigatório e será registrado de forma permanente no histórico da
-                  operação.
+                  O motivo é obrigatório e será registrado de forma permanente no histórico do
+                  contrato.
                 </p>
               )}
             </div>
@@ -261,7 +261,7 @@ export function CancelarContratoDialog({
                   <Loader2 className="h-4 w-4 animate-spin" /> Cancelando...
                 </>
               ) : (
-                'Cancelar Operação'
+                'Cancelar Contrato'
               )}
             </Button>
           )}

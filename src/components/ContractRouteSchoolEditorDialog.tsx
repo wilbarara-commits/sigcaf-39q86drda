@@ -159,14 +159,14 @@ export function ContractRouteSchoolEditorDialog({
 
       if (allocation.isCurrentContract) {
         toast.error(
-          `Bloqueio de Exclusividade: A escola "${school.name}" já está alocada na aba "${allocation.rotaNome}" desta operação. Retire-a da outra aba antes de incluir aqui.`,
+          `Bloqueio de Exclusividade: A escola "${school.name}" já está alocada na aba "${allocation.rotaNome}" deste contrato. Retire-a da outra aba antes de incluir aqui.`,
         )
         return
       }
 
       // Se está em outro contrato ativo
       toast.error(
-        `Bloqueio de Exclusividade: A escola "${school.name}" já está alocada na aba "${allocation.rotaNome}" da Operação ${allocation.contratoNumero}. Desvincule-a primeiro para incluir nesta aba.`,
+        `Bloqueio de Exclusividade: A escola "${school.name}" já está alocada na aba "${allocation.rotaNome}" do Contrato ${allocation.contratoNumero}. Desvincule-a primeiro para incluir nesta aba.`,
       )
       return
     }
@@ -186,7 +186,7 @@ export function ContractRouteSchoolEditorDialog({
       await onSuccess()
     } catch (err: any) {
       console.error('Erro ao incluir escola na aba:', err)
-      toast.error(err?.message || 'Falha ao incluir escola na aba da operação.')
+      toast.error(err?.message || 'Falha ao incluir escola na aba do contrato.')
     } finally {
       setIsProcessing(false)
     }
@@ -212,7 +212,7 @@ export function ContractRouteSchoolEditorDialog({
         const allocation = schoolAllocationMap.get(targetSchool.id)
         if (allocation) {
           toast.error(
-            `A escola "${targetSchool.name}" já existe no cadastro mestre e está alocada na aba "${allocation.rotaNome}" (${allocation.isCurrentContract ? 'desta operação' : `Operação ${allocation.contratoNumero}`}).`,
+            `A escola "${targetSchool.name}" já existe no cadastro mestre e está alocada na aba "${allocation.rotaNome}" (${allocation.isCurrentContract ? 'deste contrato' : `Contrato ${allocation.contratoNumero}`}).`,
           )
           setIsProcessing(false)
           return
@@ -317,12 +317,12 @@ export function ContractRouteSchoolEditorDialog({
               Editar Aba: <span className="text-primary">{currentRouteName}</span>
             </DialogTitle>
             <Badge variant="outline" className="text-xs">
-              Operação {contract.numero}
+              Contrato {contract.numero}
             </Badge>
           </div>
           <DialogDescription className="text-xs">
             Gerencie as escolas que pertencem a esta aba da planilha. Alterações aqui sincronizam no
-            cadastro mestre global e na operação. Uma escola só pode pertencer a uma aba por vez.
+            cadastro mestre global e no contrato. Uma escola só pode pertencer a uma aba por vez.
           </DialogDescription>{' '}
         </DialogHeader>
 
@@ -487,8 +487,8 @@ export function ContractRouteSchoolEditorDialog({
                                   <AlertTriangle className="h-3 w-3 shrink-0" />
                                   Alocada na aba "{alloc.rotaNome}" (
                                   {alloc.isCurrentContract
-                                    ? 'desta operação'
-                                    : `Operação ${alloc.contratoNumero}`}
+                                    ? 'deste contrato'
+                                    : `Contrato ${alloc.contratoNumero}`}
                                   )
                                 </p>
                               )}

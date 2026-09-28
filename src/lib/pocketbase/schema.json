@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-28T10:23:16.822Z",
+  "generatedAt": "2026-09-28T10:31:00.167Z",
   "collections": [
     {
       "name": "users",
@@ -1306,103 +1306,6 @@
         "CREATE INDEX idx_tokens_form_ciclo ON tokens_formulario (ciclo_id)",
         "CREATE UNIQUE INDEX `idx_tokens_form_escola_contrato_ciclo` ON `tokens_formulario` (escola_id,contrato_id,ciclo_id)"
       ]
-    },
-    {
-      "name": "operacoes",
-      "type": "base",
-      "apiRules": {
-        "list": "",
-        "view": "",
-        "create": "",
-        "update": "",
-        "delete": ""
-      },
-      "fields": [
-        {
-          "name": "numero",
-          "type": "text",
-          "required": true,
-          "system": false
-        },
-        {
-          "name": "tipo",
-          "type": "text",
-          "required": false,
-          "system": false
-        },
-        {
-          "name": "valor_total",
-          "type": "number",
-          "required": false,
-          "system": false
-        },
-        {
-          "name": "status",
-          "type": "select",
-          "required": true,
-          "system": false,
-          "selectValues": ["Ativo", "Encerrado", "Cancelado", "Pendente"]
-        },
-        {
-          "name": "modalidade_pedido",
-          "type": "select",
-          "required": false,
-          "system": false,
-          "selectValues": ["individualizado", "centralizado"]
-        },
-        {
-          "name": "numero_chamada",
-          "type": "text",
-          "required": false,
-          "system": false
-        },
-        {
-          "name": "num_rotas_logisticas",
-          "type": "number",
-          "required": false,
-          "system": false
-        },
-        {
-          "name": "tipo_importacao",
-          "type": "select",
-          "required": false,
-          "system": false,
-          "selectValues": ["unica", "fracionada"]
-        },
-        {
-          "name": "abas_planilha",
-          "type": "text",
-          "required": false,
-          "system": false
-        },
-        {
-          "name": "encerrado_em",
-          "type": "date",
-          "required": false,
-          "system": false
-        },
-        {
-          "name": "motivo_cancelamento",
-          "type": "text",
-          "required": false,
-          "system": false
-        },
-        {
-          "name": "created",
-          "type": "autodate",
-          "required": false,
-          "system": false,
-          "autodateTriggers": ["onCreate"]
-        },
-        {
-          "name": "updated",
-          "type": "autodate",
-          "required": false,
-          "system": false,
-          "autodateTriggers": ["onCreate", "onUpdate"]
-        }
-      ],
-      "indexes": []
     },
     {
       "name": "chamadas",

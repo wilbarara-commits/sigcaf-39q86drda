@@ -93,14 +93,14 @@ const App = () => (
               />
               <Route path="/producao" element={<Navigate to="/chamadas" replace />} />
               <Route
-                path="/operacoes"
+                path="/contratos"
                 element={
                   <ProtectedRoute requiredRole="ADMINISTRADOR">
                     <Contracts />
                   </ProtectedRoute>
                 }
               />
-              <Route path="/contratos" element={<Navigate to="/operacoes" replace />} />
+              <Route path="/operacoes" element={<Navigate to="/contratos" replace />} />
               <Route
                 path="/requisitos"
                 element={

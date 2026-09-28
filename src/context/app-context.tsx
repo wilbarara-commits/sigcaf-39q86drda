@@ -957,8 +957,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   })
 
-  useRealtime<any>('operacoes', async (_e) => {
-    // Sincronizar quando houver alterações em operacoes
+  useRealtime<any>('contratos', async (_e) => {
+    // Sincronizar quando houver alterações em contratos
     try {
       const rawContratos = await contratosService.getAll()
       setContracts((prev) => {
@@ -987,7 +987,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         })
       })
     } catch (err) {
-      console.error('Erro na sincronização realtime de operacoes:', err)
+      console.error('Erro na sincronização realtime de contratos:', err)
     }
   })
 

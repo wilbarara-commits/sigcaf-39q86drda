@@ -115,13 +115,13 @@ export function EncerrarContratoDialog({
     setIsSubmitting(true)
     try {
       await contratosService.encerrarContrato(contract.id)
-      toast.success(`Operação ${contract.numero} encerrada com sucesso!`)
+      toast.success(`Contrato ${contract.numero} encerrado com sucesso!`)
       handleOpenChange(false)
       await refreshData()
       onSuccess?.()
     } catch (err: any) {
       console.error('Erro ao encerrar contrato:', err)
-      toast.error('Falha ao encerrar a operação. Verifique sua conexão e tente novamente.')
+      toast.error('Falha ao encerrar o contrato. Verifique sua conexão e tente novamente.')
     } finally {
       setIsSubmitting(false)
     }
@@ -133,10 +133,10 @@ export function EncerrarContratoDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-foreground">
             <AlertTriangle className="h-5 w-5 text-amber-600" />
-            Encerrar Operação {contract.numero}
+            Encerrar Contrato {contract.numero}
           </DialogTitle>
           <DialogDescription className="text-xs leading-relaxed text-muted-foreground pt-1">
-            Ela deixa de receber pedidos, importações e despachos, e todos os vínculos de escolas
+            Ele deixa de receber pedidos, importações e despachos, e todos os vínculos de escolas
             serão liberados. O histórico de pedidos, atestos e despachos permanece preservado.
           </DialogDescription>
         </DialogHeader>
@@ -149,8 +149,8 @@ export function EncerrarContratoDialog({
               <AlertTitle className="font-semibold text-xs">Encerramento Bloqueado</AlertTitle>
               <AlertDescription className="text-xs mt-1.5 leading-relaxed">
                 Existem <strong>{analise.totalAtestosBloqueantes} atesto(s) emitido(s)</strong> para
-                esta operação em ciclo(s) em andamento. Já houve entrega formalizada; o caminho é
-                aguardar o fechamento do ciclo para poder encerrar a operação.
+                este contrato em ciclo(s) em andamento. Já houve entrega formalizada; o caminho é
+                aguardar o fechamento do ciclo para poder encerrar o contrato.
               </AlertDescription>
             </Alert>
           )}
@@ -166,8 +166,8 @@ export function EncerrarContratoDialog({
                 <AlertDescription className="text-xs mt-1 leading-relaxed">
                   {analise.ciclosNaoTerminais.map((c, i) => (
                     <div key={i}>
-                      A operação participa do <strong>{c.nome}</strong> em fase{' '}
-                      <strong>{c.fase}</strong> — encerrar cancela a participação dela no ciclo.
+                      O contrato participa do <strong>{c.nome}</strong> em fase{' '}
+                      <strong>{c.fase}</strong> — encerrar cancela a participação dele no ciclo.
                     </div>
                   ))}
                 </AlertDescription>
@@ -184,8 +184,8 @@ export function EncerrarContratoDialog({
                   htmlFor="confirm-ciclo-encerrar"
                   className="text-xs text-foreground cursor-pointer select-none leading-snug"
                 >
-                  Estou ciente de que a operação participa de ciclo(s) em fase não-terminal e
-                  confirmo o cancelamento da participação dela no ciclo ao encerrá-la.
+                  Estou ciente de que o contrato participa de ciclo(s) em fase não-terminal e
+                  confirmo o cancelamento da participação dele no ciclo ao encerrá-lo.
                 </label>
               </div>
             </div>
@@ -225,7 +225,7 @@ export function EncerrarContratoDialog({
                   <Loader2 className="h-4 w-4 animate-spin" /> Encerrando...
                 </>
               ) : (
-                'Encerrar Operação'
+                'Encerrar Contrato'
               )}
             </Button>
           )}

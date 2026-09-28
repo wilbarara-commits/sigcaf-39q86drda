@@ -161,12 +161,12 @@ export const DesvincularEscolaDialog: React.FC<DesvincularEscolaDialogProps> = (
       setSubmitting(true)
       await contratosService.unlinkEscola(contratoEscolaId)
       await refreshData()
-      toast.success(`A escola ${escolaNome} foi desvinculada com sucesso desta operação.`)
+      toast.success(`A escola ${escolaNome} foi desvinculada com sucesso deste contrato.`)
       onSuccess()
       onOpenChange(false)
     } catch (error: any) {
       console.error('Erro ao desvincular escola:', error)
-      toast.error(error?.message || 'Não foi possível desvincular a escola da operação.')
+      toast.error(error?.message || 'Não foi possível desvincular a escola do contrato.')
     } finally {
       setSubmitting(false)
     }
@@ -180,11 +180,11 @@ export const DesvincularEscolaDialog: React.FC<DesvincularEscolaDialogProps> = (
         <DialogHeader>
           <div className="flex items-center gap-2 text-destructive">
             <AlertTriangle className="h-5 w-5" />
-            <DialogTitle>Desvincular Escola da Operação</DialogTitle>
+            <DialogTitle>Desvincular Escola do Contrato</DialogTitle>
           </div>
           <DialogDescription className="pt-2 text-sm text-foreground">
             A escola <span className="font-semibold text-foreground">{escolaNome}</span> deixa de
-            pertencer a esta operação. Pedidos já existentes permanecem no histórico.
+            pertencer a este contrato. Pedidos já existentes permanecem no histórico.
           </DialogDescription>
         </DialogHeader>
 
@@ -200,7 +200,7 @@ export const DesvincularEscolaDialog: React.FC<DesvincularEscolaDialogProps> = (
               <AlertTitle className="font-semibold">Desvinculação impedida</AlertTitle>
               <AlertDescription className="text-xs space-y-2 mt-1">
                 <p>
-                  Existem pedidos em aberto para esta escola em ciclos ativos desta operação. Para
+                  Existem pedidos em aberto para esta escola em ciclos ativos deste contrato. Para
                   desvincular a escola, é necessário cancelar os pedidos em aberto primeiro.
                 </p>
                 <div className="mt-2 space-y-1 rounded bg-background/80 p-2 text-foreground font-mono text-xs">
@@ -223,7 +223,7 @@ export const DesvincularEscolaDialog: React.FC<DesvincularEscolaDialogProps> = (
               </div>
               <p>
                 Após a confirmação, o vínculo atual será finalizado e a escola ficará disponível
-                para outras operações.
+                para outros contratos.
               </p>
             </div>
           )}

@@ -133,21 +133,21 @@ export function ContractSchoolImportDialog({
       setParseResult(res)
 
       if (res.processableRows.length > 0) {
-        toast.info(`${res.processableRows.length} escola(s) elegíveis para vinculação à operação.`)
+        toast.info(`${res.processableRows.length} escola(s) elegíveis para vinculação ao contrato.`)
       } else {
         toast.warning('Nenhuma escola elegível para importação identificada no arquivo.')
       }
 
       if (res.conflictOtherContractRows.length > 0) {
         toast.warning(
-          `${res.conflictOtherContractRows.length} escola(s) vinculada(s) a outra operação foram bloqueadas e não serão vinculadas.`,
+          `${res.conflictOtherContractRows.length} escola(s) vinculada(s) a outro contrato foram bloqueadas e não serão vinculadas.`,
         )
       }
 
       const invalidRotasCount = res.allRows.filter((r) => r.status === 'invalid_rota').length
       if (invalidRotasCount > 0) {
         toast.error(
-          `${invalidRotasCount} escola(s) com rota não cadastrada na operação bloqueadas no preview.`,
+          `${invalidRotasCount} escola(s) com rota não cadastrada no contrato bloqueadas no preview.`,
         )
       }
     } catch (err: any) {
@@ -383,7 +383,7 @@ export function ContractSchoolImportDialog({
           )
         } else {
           toast.info(
-            `${linksToForm.length} escola(s) preparadas com suas respectivas rotas. Clique em "Cadastrar Operação" para gravar os vínculos.`,
+            `${linksToForm.length} escola(s) preparadas com suas respectivas rotas. Clique em "Cadastrar Contrato" para gravar os vínculos.`,
           )
         }
       } else if (linksToForm.length > 0) {
@@ -437,11 +437,11 @@ export function ContractSchoolImportDialog({
         <DialogHeader className="shrink-0">
           <DialogTitle className="flex items-center gap-2 text-xl">
             <FileSpreadsheet className="h-5 w-5 text-primary" />
-            Importar Escolas para a Operação (CSV / Planilha)
+            Importar Escolas para o Contrato (CSV / Planilha)
           </DialogTitle>
           <DialogDescription>
-            Importe uma relação de escolas para associar à Aba da Planilha selecionada desta
-            operação. Escolas novas serão cadastradas no mestre global e as já existentes terão seus
+            Importe uma relação de escolas para associar à Aba da Planilha selecionada deste
+            contrato. Escolas novas serão cadastradas no mestre global e as já existentes terão seus
             vínculos atualizados.
           </DialogDescription>{' '}
         </DialogHeader>
@@ -463,7 +463,7 @@ export function ContractSchoolImportDialog({
           <div className="w-full sm:w-64 shrink-0">
             {contractRotas.length === 0 ? (
               <div className="p-2 border border-destructive/40 bg-destructive/10 rounded text-[11px] text-destructive">
-                Nenhuma aba cadastrada nesta operação. Cadastre abas na operação antes de importar.
+                Nenhuma aba cadastrada neste contrato. Cadastre abas no contrato antes de importar.
               </div>
             ) : (
               <Select
@@ -552,7 +552,7 @@ export function ContractSchoolImportDialog({
                 <div className="space-y-1">
                   <p className="font-medium text-sm">
                     {isParsing
-                      ? 'Analisando arquivo e validando operações...'
+                      ? 'Analisando arquivo e validando contratos...'
                       : 'Arraste seu arquivo CSV ou Excel aqui'}
                   </p>
                   <p className="text-xs text-muted-foreground">
@@ -638,12 +638,12 @@ export function ContractSchoolImportDialog({
                   <h3 className="font-semibold text-lg">
                     {importSummary.isDirectPersistence
                       ? 'Vínculo e Atualização Gravados no Banco'
-                      : 'Escolas Preparadas para a Nova Operação'}
+                      : 'Escolas Preparadas para o Novo Contrato'}
                   </h3>
                   <p className="text-sm text-muted-foreground">
                     {importSummary.isDirectPersistence
-                      ? `As escolas foram integradas e gravadas diretamente na operação com a Aba da Planilha "${selectedRota}".`
-                      : `As escolas foram preparadas no formulário com a Aba da Planilha "${selectedRota}". Atenção: os vínculos só serão persistidos ao clicar em "Cadastrar Operação".`}
+                      ? `As escolas foram integradas e gravadas diretamente no contrato com a Aba da Planilha "${selectedRota}".`
+                      : `As escolas foram preparadas no formulário com a Aba da Planilha "${selectedRota}". Atenção: os vínculos só serão persistidos ao clicar em "Cadastrar Contrato".`}
                   </p>
                 </div>
               </div>
@@ -674,9 +674,9 @@ export function ContractSchoolImportDialog({
 
             {!importSummary.isDirectPersistence && (
               <div className="p-3 bg-blue-500/10 border border-blue-200 dark:border-blue-800 rounded-lg text-xs text-blue-900 dark:text-blue-200">
-                <strong>Aviso:</strong> Como esta operação é nova e ainda não foi criada no banco,
-                as escolas foram adicionadas à lista da operação. Para persistir os vínculos,
-                complete o formulário e clique no botão <strong>"Cadastrar Operação"</strong>.
+                <strong>Aviso:</strong> Como este contrato é novo e ainda não foi criado no banco,
+                as escolas foram adicionadas à lista do contrato. Para persistir os vínculos,
+                complete o formulário e clique no botão <strong>"Cadastrar Contrato"</strong>.
               </div>
             )}
 
@@ -700,7 +700,7 @@ export function ContractSchoolImportDialog({
                 <p className="text-2xl font-bold text-primary">{importSummary.linked}</p>
               </div>
               <div className="bg-card p-3 rounded-lg border border-border">
-                <span className="text-xs text-muted-foreground">Outra Operação</span>
+                <span className="text-xs text-muted-foreground">Outro Contrato</span>
                 <p className="text-2xl font-bold text-amber-600 dark:text-amber-400">
                   {importSummary.conflictsIgnored}
                 </p>
@@ -744,19 +744,19 @@ export function ContractSchoolImportDialog({
         {/* PREVIEW DA IMPORTAÇÃO COM MÉTRICAS E FILTROS */}
         {parseResult && !importSummary && (
           <div className="flex-1 min-h-0 flex flex-col space-y-3">
-            {/* Aviso de bloqueio se houver conflitos com outra operação */}
+            {/* Aviso de bloqueio se houver conflitos com outro contrato */}
             {parseResult.conflictOtherContractRows.length > 0 && (
               <div className="shrink-0 p-3 bg-amber-500/10 border border-amber-300 dark:border-amber-800 rounded-lg flex items-start gap-2.5 text-xs text-amber-900 dark:text-amber-200">
                 <ShieldAlert className="h-4 w-4 shrink-0 text-amber-600 mt-0.5" />
                 <div className="space-y-0.5">
                   <p className="font-semibold">
-                    {parseResult.conflictOtherContractRows.length} escola(s) já vinculada(s) a outra
-                    operação
+                    {parseResult.conflictOtherContractRows.length} escola(s) já vinculada(s) a outro
+                    contrato
                   </p>
                   <p className="text-[11px] text-amber-800 dark:text-amber-300">
-                    Conforme a regra operacional, uma escola não pode pertencer a mais de uma
-                    operação simultaneamente. Essas linhas <strong>não serão vinculadas</strong>{' '}
-                    (devem ser desvinculadas da operação anterior primeiro). As demais linhas
+                    Conforme a regra operacional, uma escola não pode pertencer a mais de um
+                    contrato simultaneamente. Essas linhas <strong>não serão vinculadas</strong>{' '}
+                    (devem ser desvinculadas do contrato anterior primeiro). As demais linhas
                     válidas prosseguirão normalmente.
                   </p>
                 </div>
@@ -821,7 +821,7 @@ export function ContractSchoolImportDialog({
                     onClick={() => setFilterTab('conflicts')}
                   >
                     <ShieldAlert className="h-3 w-3 mr-1" />
-                    Outra Operação ({parseResult.conflictOtherContractRows.length})
+                    Outro Contrato ({parseResult.conflictOtherContractRows.length})
                   </Button>
                 )}
                 {parseResult.allRows.some(
@@ -867,7 +867,7 @@ export function ContractSchoolImportDialog({
                 <div className="flex justify-between text-xs">
                   <span className="flex items-center gap-2">
                     <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
-                    Criando novas escolas, atualizando dados e vinculando à operação...
+                    Criando novas escolas, atualizando dados e vinculando ao contrato...
                   </span>
                   <span className="font-semibold">{saveProgress}%</span>
                 </div>
@@ -958,10 +958,10 @@ export function ContractSchoolImportDialog({
                             <div className="space-y-0.5">
                               <span className="inline-flex items-center gap-1 text-amber-700 dark:text-amber-400 font-semibold">
                                 <ShieldAlert className="h-3.5 w-3.5 shrink-0" />
-                                Bloqueada: Operação {row.otherContractNumber}
+                                Bloqueada: Contrato {row.otherContractNumber}
                               </span>
                               <span className="text-[11px] text-muted-foreground">
-                                Não será vinculada. Requer desvinculação prévia da operação{' '}
+                                Não será vinculada. Requer desvinculação prévia do contrato{' '}
                                 <strong>{row.otherContractNumber}</strong>.
                               </span>
                             </div>
@@ -1046,7 +1046,7 @@ export function ContractSchoolImportDialog({
                             <div className="space-y-0.5">
                               <span className="inline-flex items-center gap-1 text-destructive font-semibold">
                                 <XCircle className="h-3.5 w-3.5 shrink-0" />
-                                Rota não cadastrada na operação
+                                Rota não cadastrada no contrato
                               </span>
                               <span className="text-[10px] text-destructive/90 block">
                                 {row.statusReason}
