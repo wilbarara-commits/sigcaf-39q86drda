@@ -2610,6 +2610,28 @@ export default function Contracts() {
             prev.filter((s) => s.escolaId !== desvincularEscolaDialogState.escolaId),
           )
           await refreshData()
+          if (editingContract) {
+            setEditingContract((prev) => {
+              if (!prev) return prev
+              return {
+                ...prev,
+                escolas: prev.escolas.filter(
+                  (e) => e.escolaId !== desvincularEscolaDialogState.escolaId,
+                ),
+              }
+            })
+          }
+          if (viewingContract) {
+            setViewingContract((prev) => {
+              if (!prev) return prev
+              return {
+                ...prev,
+                escolas: prev.escolas.filter(
+                  (e) => e.escolaId !== desvincularEscolaDialogState.escolaId,
+                ),
+              }
+            })
+          }
         }}
       />
 

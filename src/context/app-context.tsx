@@ -434,7 +434,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
       // Map contratos with N:N escolas and balance calculation
       const mappedContracts: Contract[] = dedupedContratos.map((c) => {
-        const links = rawContratoEscolas.filter((ce) => ce.contrato_id === c.id)
+        const links = rawContratoEscolas.filter((ce) => ce.contrato_id === c.id && !ce.encerrado_em)
         const linkedSchools = links.map((ce) => {
           const sch = mappedSchools.find((s) => s.id === ce.escola_id)
           const rt = rawRotas.find((r) => r.id === ce.rota_id)
@@ -1048,7 +1048,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
           const existing = prevContracts.find((p) => p.id === c.id)
           const matchedChamada =
             chamadas.find((ch) => ch.id === c.chamada_id) || c.expand?.chamada_id
-          const links = updatedContratoEscolas.filter((ce) => ce.contrato_id === c.id)
+          const links = updatedContratoEscolas.filter(
+            (ce) => ce.contrato_id === c.id && !ce.encerrado_em,
+          )
           const linkedSchools = links.map((ce) => {
             const sch = schools.find((s) => s.id === ce.escola_id)
             const rt = rawRotas.find((r) => r.id === ce.rota_id)

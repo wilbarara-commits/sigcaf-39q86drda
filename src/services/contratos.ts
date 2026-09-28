@@ -28,8 +28,18 @@ export const contratosService = {
     })
   },
 
-  async getEscolas(contratoId?: string): Promise<ContratoEscolaRecord[]> {
-    const filter = contratoId ? `contrato_id = "${contratoId}"` : ''
+  async getEscolas(
+    contratoId?: string,
+    apenasAtivos: boolean = true,
+  ): Promise<ContratoEscolaRecord[]> {
+    const parts: string[] = []
+    if (contratoId) {
+      parts.push(`contrato_id = "${contratoId}"`)
+    }
+    if (apenasAtivos) {
+      parts.push('(encerrado_em = "" || encerrado_em = null)')
+    }
+    const filter = parts.join(' && ')
     return await pb.collection('contrato_escolas').getFullList<ContratoEscolaRecord>({
       filter,
       expand: 'escola_id,rota_id,contrato_id',
@@ -179,19 +189,25 @@ export const contratosService = {
     // Check if link already exists
     const existing = await pb.collection('contrato_escolas').getFullList<ContratoEscolaRecord>({
       filter: `contrato_id = "${data.contrato_id}" && escola_id = "${data.escola_id}"`,
+      sort: '-created',
     })
     if (existing.length > 0) {
+      const target = existing[0]
       const updates: Record<string, any> = {}
-      if (effectiveRotaId && existing[0].rota_id !== effectiveRotaId) {
+      if (target.encerrado_em) {
+        // Reativação de vínculo histórico: limpa explicitamente encerrado_em
+        updates.encerrado_em = null
+      }
+      if (effectiveRotaId && target.rota_id !== effectiveRotaId) {
         updates.rota_id = effectiveRotaId
       }
-      if (data.coleta_por && existing[0].coleta_por !== data.coleta_por) {
+      if (data.coleta_por && target.coleta_por !== data.coleta_por) {
         updates.coleta_por = data.coleta_por
       }
       if (Object.keys(updates).length > 0) {
-        return await pb.collection('contrato_escolas').update(existing[0].id, updates)
+        return await pb.collection('contrato_escolas').update(target.id, updates)
       }
-      return existing[0]
+      return target
     }
     return await pb.collection('contrato_escolas').create<ContratoEscolaRecord>({
       contrato_id: data.contrato_id,
