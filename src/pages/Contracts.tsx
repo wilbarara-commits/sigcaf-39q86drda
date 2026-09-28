@@ -54,7 +54,6 @@ import {
   AlertTriangle,
   Info,
   MapPin,
-  Route,
   School as SchoolIcon,
   BarChart3,
   TrendingUp,
@@ -1348,44 +1347,18 @@ export default function Contracts() {
                 : 'Cadastrar Novo Contrato'}
             </DialogTitle>
             <DialogDescription>
-              Configure os dados cadastrais, as rotas de entrega, as escolas participantes e a
-              tabela de produtos com preços acordados.
+              Configure os dados cadastrais, as escolas participantes e a tabela de produtos com
+              preços acordados.
             </DialogDescription>
           </DialogHeader>
 
           <form onSubmit={handleSubmit} className="space-y-4 pt-2">
             <Tabs defaultValue="geral" className="w-full">
-              {editingContract ? (
-                <TabsList className="grid grid-cols-4 w-full">
-                  <TabsTrigger value="geral">Dados Gerais</TabsTrigger>
-                  <TabsTrigger value="rotas">
-                    Rotas (
-                    {(() => {
-                      const seen = new Set<string>()
-                      return rotasLogisticas.filter((r) => {
-                        if (r.contrato_id !== editingContract.id) return false
-                        const norm = (r.nome || '').trim().replace(/\s+/g, ' ').toLowerCase()
-                        if (seen.has(norm)) return false
-                        seen.add(norm)
-                        return true
-                      }).length
-                    })()}
-                    )
-                  </TabsTrigger>
-                  <TabsTrigger value="escolas">Escolas ({contractSchoolsForm.length})</TabsTrigger>
-                  <TabsTrigger value="produtos">
-                    Itens & Preços ({contractItems.length})
-                  </TabsTrigger>
-                </TabsList>
-              ) : (
-                <TabsList className="grid grid-cols-3 w-full">
-                  <TabsTrigger value="geral">Dados Gerais</TabsTrigger>
-                  <TabsTrigger value="escolas">Escolas ({contractSchoolsForm.length})</TabsTrigger>
-                  <TabsTrigger value="produtos">
-                    Itens & Preços ({contractItems.length})
-                  </TabsTrigger>
-                </TabsList>
-              )}
+              <TabsList className="grid grid-cols-3 w-full">
+                <TabsTrigger value="geral">Dados Gerais</TabsTrigger>
+                <TabsTrigger value="escolas">Escolas ({contractSchoolsForm.length})</TabsTrigger>
+                <TabsTrigger value="produtos">Itens & Preços ({contractItems.length})</TabsTrigger>
+              </TabsList>
 
               {/* Aba 1: Dados Gerais */}
               <TabsContent value="geral" className="space-y-4 pt-3">
@@ -1730,142 +1703,7 @@ export default function Contracts() {
                 </div>
               </TabsContent>
 
-              {/* Aba 2: Resumo Somente Leitura das Rotas com Atalho */}
-              <TabsContent value="rotas" className="space-y-4 pt-3">
-                <div className="space-y-3 p-4 rounded-lg border bg-card">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                    <div>
-                      <Label className="text-sm font-bold flex items-center gap-2 text-primary">
-                        <Route className="h-4 w-4" /> Rotas do Contrato
-                      </Label>
-                      <p className="text-xs text-muted-foreground">
-                        As rotas, seus nomes, atribuição de escolas e sequenciamento de paradas são
-                        configurados diretamente na tela de Roteamento & Despacho.
-                        {numRotasLogisticas ? (
-                          <>
-                            {' '}
-                            Limite definido: <strong>{numRotasLogisticas} rota(s)</strong>.
-                          </>
-                        ) : (
-                          <>
-                            {' '}
-                            Limite de rotas: <strong>Ilimitado</strong>.
-                          </>
-                        )}
-                      </p>
-                    </div>
-
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="gap-1.5 text-xs text-primary border-primary/40 hover:bg-primary/10 shrink-0"
-                      onClick={() => {
-                        setDialogOpen(false)
-                        navigate('/rotas')
-                      }}
-                    >
-                      <SlidersHorizontal className="h-3.5 w-3.5" />
-                      Configurar no Roteamento & Despacho
-                    </Button>
-                  </div>
-
-                  {editingContract ? (
-                    (() => {
-                      const rawRoutes = rotasLogisticas.filter(
-                        (r) => r.contrato_id === editingContract.id,
-                      )
-                      // Deduplicar defensivamente por ID e por Nome
-                      const seenIds = new Set<string>()
-                      const seenNames = new Set<string>()
-                      const contractLogRoutes = rawRoutes.filter((r) => {
-                        if (seenIds.has(r.id)) return false
-                        seenIds.add(r.id)
-                        const norm = (r.nome || '').trim().replace(/\s+/g, ' ').toLowerCase()
-                        if (seenNames.has(norm)) return false
-                        seenNames.add(norm)
-                        return true
-                      })
-
-                      if (contractLogRoutes.length === 0) {
-                        return (
-                          <div className="py-8 text-center border rounded-lg bg-muted/20 text-xs text-muted-foreground space-y-2">
-                            <p className="font-medium text-foreground">
-                              Nenhuma rota configurada para este contrato ainda.
-                            </p>
-                            <p>
-                              Você pode salvar este contrato agora sem rotas e configurá-las
-                              diretamente na tela de <strong>Roteamento & Despacho</strong>.
-                            </p>
-                            <Button
-                              type="button"
-                              variant="secondary"
-                              size="sm"
-                              className="text-xs gap-1 mt-2"
-                              onClick={() => {
-                                setDialogOpen(false)
-                                const params = new URLSearchParams()
-                                if (editingContract?.chamada_id) {
-                                  params.set('chamadaId', editingContract.chamada_id)
-                                } else if (editingContract?.id) {
-                                  params.set('contratoId', editingContract.id)
-                                }
-                                navigate(
-                                  `/rotas${params.toString() ? `?${params.toString()}` : ''}`,
-                                )
-                              }}
-                            >
-                              <Truck className="h-3.5 w-3.5 text-primary" /> Ir para Roteamento &
-                              Despacho
-                            </Button>
-                          </div>
-                        )
-                      }
-
-                      return (
-                        <div className="space-y-2 max-h-[240px] overflow-y-auto">
-                          {contractLogRoutes.map((r, idx) => {
-                            const paradasCount = paradasRota.filter(
-                              (p) => (p.rota_id || (p as any).rota_logistica_id) === r.id,
-                            ).length
-                            return (
-                              <div
-                                key={r.id}
-                                className="flex items-center justify-between p-2.5 rounded border bg-muted/20 text-xs"
-                              >
-                                <div className="flex items-center gap-2.5">
-                                  <Badge variant="outline" className="font-mono text-[10px]">
-                                    {idx + 1}ª
-                                  </Badge>
-                                  <span className="font-semibold text-foreground">{r.nome}</span>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                  <Badge variant="secondary" className="text-[10px]">
-                                    {paradasCount} parada(s)
-                                  </Badge>
-                                </div>
-                              </div>
-                            )
-                          })}
-                        </div>
-                      )
-                    })()
-                  ) : (
-                    <div className="py-8 text-center border rounded-lg bg-muted/20 text-xs text-muted-foreground space-y-2">
-                      <p className="font-medium text-foreground">
-                        Novo Contrato: As rotas são configuradas na tela de Roteamento & Despacho.
-                      </p>
-                      <p>
-                        Salve os dados gerais, escolas e itens agora. Ao abrir a tela de{' '}
-                        <strong>Roteamento & Despacho</strong>, você poderá criar as rotas com nome
-                        livre, atribuir escolas e sequenciar paradas.
-                      </p>
-                    </div>
-                  )}
-                </div>
-              </TabsContent>
-
-              {/* Aba 3: Escolas Participantes (Cadastro Mestre Global + Vínculo com Aba da Planilha) */}
+              {/* Aba 2: Escolas Participantes (Cadastro Mestre Global + Vínculo com Aba da Planilha) */}
               <TabsContent value="escolas" className="space-y-4 pt-3">
                 {/* Gestão das Abas da Planilha deste Contrato */}
                 <div className="space-y-3 p-3.5 rounded-lg border bg-muted/20">

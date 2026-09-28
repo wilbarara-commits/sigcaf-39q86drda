@@ -58,6 +58,7 @@ import {
   DollarSign,
   Truck,
   Route as RouteIcon,
+  SlidersHorizontal,
 } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -73,7 +74,15 @@ export const MODULO_PRODUCAO_SUBTITULO = MODULO_CHAMADAS_SUBTITULO
 
 export default function Producao() {
   const navigate = useNavigate()
-  const { chamadas, contracts, rotasLogisticas, isLoading, refreshData } = useApp()
+  const {
+    chamadas,
+    contracts,
+    rotasLogisticas,
+    contractSchools,
+    paradasRota,
+    isLoading,
+    refreshData,
+  } = useApp()
   const { isAdmin } = useAuth()
 
   // Estados de busca / filtro
@@ -92,7 +101,7 @@ export default function Producao() {
   const [formPrograma, setFormPrograma] = useState('PNAE')
   const [formModalidade, setFormModalidade] = useState<ChamadaModalidade>('individualizado')
   const [formStatus, setFormStatus] = useState<ChamadaStatus>('Ativo')
-  const [activeTab, setActiveTab] = useState<'geral' | 'contratos'>('geral')
+  const [activeTab, setActiveTab] = useState<'geral' | 'rotas' | 'contratos'>('geral')
 
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
@@ -464,228 +473,400 @@ export default function Producao() {
           </DialogHeader>
 
           {editingChamada ? (
-            <Tabs
-              value={activeTab}
-              onValueChange={(v) => setActiveTab(v as any)}
-              className="w-full"
-            >
-              <TabsList className="grid grid-cols-2 w-full">
-                <TabsTrigger value="geral">Dados Gerais</TabsTrigger>
-                <TabsTrigger value="contratos">
-                  Contratos Vinculados (
-                  {contracts.filter((c) => c.chamada_id === editingChamada.id).length})
-                </TabsTrigger>
-              </TabsList>
+            (() => {
+              const contratosDestaChamada = contracts.filter(
+                (c) => c.chamada_id === editingChamada.id,
+              )
+              const contratosIdsSet = new Set(contratosDestaChamada.map((c) => c.id))
 
-              <TabsContent value="geral" className="space-y-4 pt-2">
-                <form onSubmit={handleSubmit} className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="ch-nome">
-                      {MODULO_CHAMADA_SINGULAR} <span className="text-destructive">*</span>
-                    </Label>
-                    <Input
-                      id="ch-nome"
-                      placeholder="Ex: 001/2026 - PNAE Municipal"
-                      value={formChamada}
-                      onChange={(e) => setFormChamada(e.target.value)}
-                      required
-                      autoFocus
-                    />
-                    <p className="text-[11px] text-muted-foreground">
-                      Identificador ou número oficial da chamada pública.
-                    </p>
-                  </div>
+              // Escolas agregadas: vínculos vivos em contrato_escolas dos contratos com chamada_id = chamada em edição
+              // contractSchools do context são os vínculos de contrato_escolas carregados
+              const vinculosEscolasChamada = contractSchools.filter(
+                (ce) => contratosIdsSet.has(ce.contrato_id) && !ce.encerrado_em,
+              )
+              const totalEscolasAgregadas = vinculosEscolasChamada.length
 
-                  <div className="space-y-2">
-                    <Label htmlFor="ch-prog">Programa</Label>
-                    <Input
-                      id="ch-prog"
-                      placeholder="Ex: PNAE, PAA, Municipal..."
-                      value={formPrograma}
-                      onChange={(e) => setFormPrograma(e.target.value)}
-                    />
-                  </div>
+              // Rotas logísticas da chamada
+              const rawRoutes = rotasLogisticas.filter(
+                (r) =>
+                  r.chamada_id === editingChamada.id ||
+                  (r.contrato_id && contratosIdsSet.has(r.contrato_id)),
+              )
+              const seenIds = new Set<string>()
+              const seenNames = new Set<string>()
+              const chamadaRotas = rawRoutes.filter((r) => {
+                if (seenIds.has(r.id)) return false
+                seenIds.add(r.id)
+                const norm = (r.nome || '').trim().replace(/\s+/g, ' ').toLowerCase()
+                if (seenNames.has(norm)) return false
+                seenNames.add(norm)
+                return true
+              })
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="ch-mod">Modalidade</Label>
-                      <Select
-                        value={formModalidade}
-                        onValueChange={(v) => setFormModalidade(v as ChamadaModalidade)}
-                      >
-                        <SelectTrigger id="ch-mod">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="individualizado">
-                            Individualizado (por Escola)
-                          </SelectItem>
-                          <SelectItem value="centralizado">Centralizado (por Planilha)</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
+              return (
+                <Tabs
+                  value={activeTab}
+                  onValueChange={(v) => setActiveTab(v as any)}
+                  className="w-full"
+                >
+                  <TabsList className="grid grid-cols-3 w-full">
+                    <TabsTrigger value="geral">Dados Gerais</TabsTrigger>
+                    <TabsTrigger value="rotas">
+                      Rotas Logísticas ({chamadaRotas.length})
+                    </TabsTrigger>
+                    <TabsTrigger value="contratos">
+                      Contratos Vinculados ({contratosDestaChamada.length})
+                    </TabsTrigger>
+                  </TabsList>
 
-                    <div className="space-y-2">
-                      <Label htmlFor="ch-status">Status</Label>
-                      <Select
-                        value={formStatus}
-                        onValueChange={(v) => setFormStatus(v as ChamadaStatus)}
-                      >
-                        <SelectTrigger id="ch-status">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="Ativo">Ativo</SelectItem>
-                          <SelectItem value="Pendente">Pendente</SelectItem>
-                          <SelectItem value="Encerrado">Encerrado</SelectItem>
-                          <SelectItem value="Cancelado">Cancelado</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
+                  <TabsContent value="geral" className="space-y-4 pt-2">
+                    <form onSubmit={handleSubmit} className="space-y-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="ch-nome">
+                          {MODULO_CHAMADA_SINGULAR} <span className="text-destructive">*</span>
+                        </Label>
+                        <Input
+                          id="ch-nome"
+                          placeholder="Ex: 001/2026 - PNAE Municipal"
+                          value={formChamada}
+                          onChange={(e) => setFormChamada(e.target.value)}
+                          required
+                          autoFocus
+                        />
+                        <p className="text-[11px] text-muted-foreground">
+                          Identificador ou número oficial da chamada pública.
+                        </p>
+                      </div>
 
-                  <DialogFooter className="pt-4 gap-2">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => setDialogOpen(false)}
-                      disabled={isSubmitting}
-                    >
-                      Cancelar
-                    </Button>
-                    <Button type="submit" disabled={isSubmitting}>
-                      {isSubmitting ? (
-                        <>
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Salvando...
-                        </>
+                      <div className="space-y-2">
+                        <Label htmlFor="ch-prog">Programa</Label>
+                        <Input
+                          id="ch-prog"
+                          placeholder="Ex: PNAE, PAA, Municipal..."
+                          value={formPrograma}
+                          onChange={(e) => setFormPrograma(e.target.value)}
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="ch-mod">Modalidade</Label>
+                          <Select
+                            value={formModalidade}
+                            onValueChange={(v) => setFormModalidade(v as ChamadaModalidade)}
+                          >
+                            <SelectTrigger id="ch-mod">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="individualizado">
+                                Individualizado (por Escola)
+                              </SelectItem>
+                              <SelectItem value="centralizado">
+                                Centralizado (por Planilha)
+                              </SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label htmlFor="ch-status">Status</Label>
+                          <Select
+                            value={formStatus}
+                            onValueChange={(v) => setFormStatus(v as ChamadaStatus)}
+                          >
+                            <SelectTrigger id="ch-status">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="Ativo">Ativo</SelectItem>
+                              <SelectItem value="Pendente">Pendente</SelectItem>
+                              <SelectItem value="Encerrado">Encerrado</SelectItem>
+                              <SelectItem value="Cancelado">Cancelado</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+
+                      {/* Contador de Escolas Agregadas (somente leitura) */}
+                      <div className="p-3 rounded-lg border bg-muted/40 space-y-2">
+                        <div className="flex items-center justify-between gap-4">
+                          <div>
+                            <Label
+                              htmlFor="ch-escolas-agregadas"
+                              className="font-semibold text-xs text-foreground flex items-center gap-1.5"
+                            >
+                              <School className="h-3.5 w-3.5 text-primary" />
+                              Escolas Agregadas
+                            </Label>
+                            <p className="text-[11px] text-muted-foreground">
+                              Soma das escolas de todos os contratos vinculados a esta chamada. O
+                              vínculo e edição de escolas é feito nos contratos.
+                            </p>
+                          </div>
+                          <div className="w-24">
+                            <Input
+                              id="ch-escolas-agregadas"
+                              readOnly
+                              tabIndex={-1}
+                              aria-readonly="true"
+                              className="h-8 font-bold text-center bg-background cursor-default select-all"
+                              value={totalEscolasAgregadas}
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      <DialogFooter className="pt-4 gap-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => setDialogOpen(false)}
+                          disabled={isSubmitting}
+                        >
+                          Cancelar
+                        </Button>
+                        <Button type="submit" disabled={isSubmitting}>
+                          {isSubmitting ? (
+                            <>
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Salvando...
+                            </>
+                          ) : (
+                            'Salvar Alterações'
+                          )}
+                        </Button>
+                      </DialogFooter>
+                    </form>
+                  </TabsContent>
+
+                  {/* Aba Rotas Logísticas da Chamada */}
+                  <TabsContent value="rotas" className="space-y-4 pt-2">
+                    <div className="space-y-3 p-4 rounded-lg border bg-card">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                        <div>
+                          <Label className="text-sm font-bold flex items-center gap-2 text-primary">
+                            <RouteIcon className="h-4 w-4" /> Rotas Logísticas da Chamada
+                          </Label>
+                          <p className="text-xs text-muted-foreground">
+                            As rotas logísticas, seus nomes, atribuição de escolas e sequenciamento
+                            de paradas são configurados diretamente na tela de{' '}
+                            <strong>Roteamento & Despacho</strong>, agrupando escolas de todos os
+                            contratos da chamada.
+                          </p>
+                        </div>
+
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="gap-1.5 text-xs text-primary border-primary/40 hover:bg-primary/10 shrink-0"
+                          onClick={() => {
+                            setDialogOpen(false)
+                            navigate(`/rotas?chamadaId=${editingChamada.id}`)
+                          }}
+                        >
+                          <SlidersHorizontal className="h-3.5 w-3.5" />
+                          Configurar no Roteamento & Despacho
+                        </Button>
+                      </div>
+
+                      {chamadaRotas.length === 0 ? (
+                        <div className="py-8 text-center border rounded-lg bg-muted/20 text-xs text-muted-foreground space-y-2">
+                          <p className="font-medium text-foreground">
+                            Nenhuma rota logística configurada para esta chamada ainda.
+                          </p>
+                          <p>
+                            Você pode salvar esta chamada agora sem rotas e configurá-las
+                            diretamente na tela de <strong>Roteamento & Despacho</strong>.
+                          </p>
+                          <Button
+                            type="button"
+                            size="sm"
+                            className="text-xs gap-1 mt-2 bg-amber-500 hover:bg-amber-600 text-amber-950 font-semibold shadow-sm"
+                            onClick={() => {
+                              setDialogOpen(false)
+                              navigate(`/rotas?chamadaId=${editingChamada.id}`)
+                            }}
+                          >
+                            <Truck className="h-3.5 w-3.5 text-amber-950" /> Ir para Roteamento &
+                            Despacho
+                          </Button>
+                        </div>
                       ) : (
-                        'Salvar Alterações'
-                      )}
-                    </Button>
-                  </DialogFooter>
-                </form>
-              </TabsContent>
+                        <div className="space-y-3">
+                          <div className="space-y-2 max-h-[240px] overflow-y-auto">
+                            {chamadaRotas.map((r, idx) => {
+                              const paradasCount = paradasRota.filter(
+                                (p) => (p.rota_id || (p as any).rota_logistica_id) === r.id,
+                              ).length
+                              return (
+                                <div
+                                  key={r.id}
+                                  className="flex items-center justify-between p-2.5 rounded border bg-muted/20 text-xs"
+                                >
+                                  <div className="flex items-center gap-2.5">
+                                    <Badge variant="outline" className="font-mono text-[10px]">
+                                      {idx + 1}ª
+                                    </Badge>
+                                    <span className="font-semibold text-foreground">{r.nome}</span>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <Badge variant="secondary" className="text-[10px]">
+                                      {paradasCount} parada(s)
+                                    </Badge>
+                                  </div>
+                                </div>
+                              )
+                            })}
+                          </div>
 
-              {/* Aba Contratos Vinculados (padrão Escolas Participantes de Contratos) */}
-              <TabsContent value="contratos" className="space-y-4 pt-2">
-                <div className="rounded-lg border p-3 bg-muted/20 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h4 className="text-sm font-semibold flex items-center gap-1.5">
-                        <FileText className="h-4 w-4 text-primary" /> Contratos Desta Chamada
-                        Pública
-                      </h4>
-                      <p className="text-xs text-muted-foreground">
-                        Relação de contratos vinculados a esta chamada pública (1 chamada : N
-                        contratos).
-                      </p>
-                    </div>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      className="gap-1.5 text-xs"
-                      onClick={() => {
-                        setDialogOpen(false)
-                        navigate('/contratos')
-                      }}
-                    >
-                      <Plus className="h-3.5 w-3.5" /> Novo Contrato
-                    </Button>
-                  </div>
-
-                  {(() => {
-                    const contratosDesta = contracts.filter(
-                      (c) => c.chamada_id === editingChamada.id,
-                    )
-                    if (contratosDesta.length === 0) {
-                      return (
-                        <div className="text-center py-6 text-xs text-muted-foreground border border-dashed rounded-md bg-background">
-                          Nenhum contrato vinculado a esta chamada pública ainda.
-                          <div className="mt-2">
+                          <div className="flex justify-end pt-2">
                             <Button
                               type="button"
-                              variant="link"
                               size="sm"
-                              className="text-xs text-primary"
+                              className="text-xs gap-1.5 bg-amber-500 hover:bg-amber-600 text-amber-950 font-semibold shadow-sm"
                               onClick={() => {
                                 setDialogOpen(false)
-                                navigate('/contratos')
+                                navigate(`/rotas?chamadaId=${editingChamada.id}`)
                               }}
                             >
-                              Ir para Contratos vincular
+                              <Truck className="h-3.5 w-3.5 text-amber-950" /> Ir para Roteamento &
+                              Despacho
                             </Button>
                           </div>
                         </div>
-                      )
-                    }
+                      )}
+                    </div>
 
-                    return (
-                      <div className="space-y-2">
-                        {contratosDesta.map((c) => (
-                          <div
-                            key={c.id}
-                            className="flex items-center justify-between p-2.5 rounded-md border bg-background hover:bg-muted/40 transition-colors"
-                          >
-                            <div className="space-y-1">
-                              <div className="flex items-center gap-2">
-                                <span className="font-bold text-sm text-foreground">
-                                  {c.numero}
-                                </span>
-                                <Badge variant="outline" className="text-[10px]">
-                                  {c.tipo || 'PNAE'}
-                                </Badge>
-                                <Badge
-                                  className={
-                                    c.status === 'Ativo'
-                                      ? 'bg-emerald-600 text-white text-[10px]'
-                                      : 'bg-muted text-muted-foreground text-[10px] border'
-                                  }
+                    <DialogFooter className="pt-2">
+                      <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>
+                        Fechar
+                      </Button>
+                    </DialogFooter>
+                  </TabsContent>
+
+                  {/* Aba Contratos Vinculados (padrão Escolas Participantes de Contratos) */}
+                  <TabsContent value="contratos" className="space-y-4 pt-2">
+                    <div className="rounded-lg border p-3 bg-muted/20 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h4 className="text-sm font-semibold flex items-center gap-1.5">
+                            <FileText className="h-4 w-4 text-primary" /> Contratos Desta Chamada
+                            Pública
+                          </h4>
+                          <p className="text-xs text-muted-foreground">
+                            Relação de contratos vinculados a esta chamada pública (1 chamada : N
+                            contratos).
+                          </p>
+                        </div>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          className="gap-1.5 text-xs"
+                          onClick={() => {
+                            setDialogOpen(false)
+                            navigate('/contratos')
+                          }}
+                        >
+                          <Plus className="h-3.5 w-3.5" /> Novo Contrato
+                        </Button>
+                      </div>
+
+                      {(() => {
+                        const contratosDesta = contracts.filter(
+                          (c) => c.chamada_id === editingChamada.id,
+                        )
+                        if (contratosDesta.length === 0) {
+                          return (
+                            <div className="text-center py-6 text-xs text-muted-foreground border border-dashed rounded-md bg-background">
+                              Nenhum contrato vinculado a esta chamada pública ainda.
+                              <div className="mt-2">
+                                <Button
+                                  type="button"
+                                  variant="link"
+                                  size="sm"
+                                  className="text-xs text-primary"
+                                  onClick={() => {
+                                    setDialogOpen(false)
+                                    navigate('/contratos')
+                                  }}
                                 >
-                                  {c.status}
-                                </Badge>
-                              </div>
-                              <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                                <span className="flex items-center gap-1">
-                                  <DollarSign className="h-3 w-3" />
-                                  R${' '}
-                                  {c.totalValue.toLocaleString('pt-BR', {
-                                    minimumFractionDigits: 2,
-                                  })}
-                                </span>
-                                <span className="flex items-center gap-1">
-                                  <School className="h-3 w-3" />
-                                  {c.escolas.length} escola(s) vinculada(s)
-                                </span>
+                                  Ir para Contratos vincular
+                                </Button>
                               </div>
                             </div>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="sm"
-                              className="gap-1 text-xs text-primary hover:bg-primary/10"
-                              onClick={() => {
-                                setDialogOpen(false)
-                                navigate('/contratos')
-                              }}
-                              title="Abrir contrato"
-                            >
-                              Abrir <ExternalLink className="h-3.5 w-3.5" />
-                            </Button>
-                          </div>
-                        ))}
-                      </div>
-                    )
-                  })()}
-                </div>
+                          )
+                        }
 
-                <DialogFooter className="pt-2">
-                  <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>
-                    Fechar
-                  </Button>
-                </DialogFooter>
-              </TabsContent>
-            </Tabs>
+                        return (
+                          <div className="space-y-2">
+                            {contratosDesta.map((c) => (
+                              <div
+                                key={c.id}
+                                className="flex items-center justify-between p-2.5 rounded-md border bg-background hover:bg-muted/40 transition-colors"
+                              >
+                                <div className="space-y-1">
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-bold text-sm text-foreground">
+                                      {c.numero}
+                                    </span>
+                                    <Badge variant="outline" className="text-[10px]">
+                                      {c.tipo || 'PNAE'}
+                                    </Badge>
+                                    <Badge
+                                      className={
+                                        c.status === 'Ativo'
+                                          ? 'bg-emerald-600 text-white text-[10px]'
+                                          : 'bg-muted text-muted-foreground text-[10px] border'
+                                      }
+                                    >
+                                      {c.status}
+                                    </Badge>
+                                  </div>
+                                  <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                                    <span className="flex items-center gap-1">
+                                      <DollarSign className="h-3 w-3" />
+                                      R${' '}
+                                      {c.totalValue.toLocaleString('pt-BR', {
+                                        minimumFractionDigits: 2,
+                                      })}
+                                    </span>
+                                    <span className="flex items-center gap-1">
+                                      <School className="h-3 w-3" />
+                                      {c.escolas.length} escola(s) vinculada(s)
+                                    </span>
+                                  </div>
+                                </div>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  className="gap-1 text-xs text-primary hover:bg-primary/10"
+                                  onClick={() => {
+                                    setDialogOpen(false)
+                                    navigate('/contratos')
+                                  }}
+                                  title="Abrir contrato"
+                                >
+                                  Abrir <ExternalLink className="h-3.5 w-3.5" />
+                                </Button>
+                              </div>
+                            ))}
+                          </div>
+                        )
+                      })()}
+                    </div>
+
+                    <DialogFooter className="pt-2">
+                      <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>
+                        Fechar
+                      </Button>
+                    </DialogFooter>
+                  </TabsContent>
+                </Tabs>
+              )
+            })()
           ) : (
             <form onSubmit={handleSubmit} className="space-y-4 pt-2">
               <div className="space-y-2">

@@ -264,12 +264,6 @@ export default function DeliveryRoutes() {
   } | null>(null)
   const [targetRotaIdMobile, setTargetRotaIdMobile] = useState<string>('')
 
-  // Contrato atualmente focado
-  const currentContrato = useMemo(() => {
-    if (selectedContratoId === 'todos') return null
-    return contracts.find((c) => c.id === selectedContratoId) || null
-  }, [contracts])
-
   // Rotas logísticas filtradas pela Chamada (ou contrato legado se houver vínculo direto)
   const filteredRotasLogisticas = useMemo(() => {
     let list = rotasLogisticas
