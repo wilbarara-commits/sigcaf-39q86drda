@@ -175,14 +175,6 @@ export default function Contracts() {
   const [contractSchoolsForm, setContractSchoolsForm] = useState<ContractSchoolForm[]>([])
   const [contractItems, setContractItems] = useState<ContractItemForm[]>([])
 
-  // Gestão de Rotas Logísticas da Cooperativa
-  const [contractRotasLogisticas, setContractRotasLogisticas] = useState<
-    ContractRotaLogisticaForm[]
-  >([])
-  const [newRotaLogisticaNome, setNewRotaLogisticaNome] = useState('')
-  const [editRotaIndex, setEditRotaIndex] = useState<number | null>(null)
-  const [editRotaNome, setEditRotaNome] = useState('')
-
   // Autocomplete e busca de escolas mestre no diálogo
   const [schoolSearchQuery, setSchoolSearchQuery] = useState('')
   const [showQuickCreateSchool, setShowQuickCreateSchool] = useState(false)
@@ -229,7 +221,6 @@ export default function Contracts() {
     setContractSchoolsForm([])
     setContractRotas([])
     setDeletedRotaIds([])
-    setContractRotasLogisticas([])
     setContractItems([])
     setDialogOpen(true)
   }
@@ -262,27 +253,6 @@ export default function Contracts() {
     // Rotas da planilha da secretaria (sem defaults fixos)
     const existingRotas = rotas.filter((r) => r.contrato_id === contract.id)
     setContractRotas(existingRotas.map((r) => ({ id: r.id, nome: r.nome, ordem: r.ordem || 1 })))
-
-    // Rotas logísticas da cooperativa (com dedup defensivo por id e nome)
-    const existingLog = rotasLogisticas.filter((r) => r.contrato_id === contract.id)
-    const seenLogIds = new Set<string>()
-    const seenLogNames = new Set<string>()
-    const dedupedLog: Array<{ id?: string; nome: string; ordem: number; ativa: boolean }> = []
-
-    for (const r of existingLog) {
-      if (seenLogIds.has(r.id)) continue
-      seenLogIds.add(r.id)
-      const norm = (r.nome || '').trim().replace(/\s+/g, ' ').toLowerCase()
-      if (seenLogNames.has(norm)) continue
-      seenLogNames.add(norm)
-      dedupedLog.push({
-        id: r.id,
-        nome: r.nome,
-        ordem: r.ordem || 1,
-        ativa: r.ativa !== false,
-      })
-    }
-    setContractRotasLogisticas(dedupedLog)
 
     setDialogOpen(true)
     setIsLoadingItems(true)
@@ -449,72 +419,6 @@ export default function Contracts() {
     setRouteEditorContract(contractToUse)
     setEditingRouteInfo(rota)
     setRouteEditorOpen(true)
-  }
-
-  // Rotas Logísticas da Cooperativa
-  const handleAddRotaLogistica = () => {
-    const trimmed = newRotaLogisticaNome.trim()
-    if (!trimmed) return
-    const normalizedTarget = trimmed.replace(/\s+/g, ' ').toLowerCase()
-    if (
-      contractRotasLogisticas.some(
-        (r) => (r.nome || '').trim().replace(/\s+/g, ' ').toLowerCase() === normalizedTarget,
-      )
-    ) {
-      toast.error('Já existe uma rota com este nome neste contrato.')
-      return
-    }
-
-    setContractRotasLogisticas((prev) => [
-      ...prev,
-      { nome: trimmed.replace(/\s+/g, ' '), ordem: prev.length + 1, ativa: true },
-    ])
-    setNewRotaLogisticaNome('')
-  }
-
-  const handleStartEditRotaLogistica = (index: number) => {
-    setEditRotaIndex(index)
-    setEditRotaNome(contractRotasLogisticas[index].nome)
-  }
-
-  const handleSaveEditRotaLogistica = () => {
-    if (editRotaIndex === null || !contractRotasLogisticas[editRotaIndex]) return
-    const cleanNome = editRotaNome.trim().replace(/\s+/g, ' ')
-    if (!cleanNome) {
-      toast.error('Informe o nome da rota.')
-      return
-    }
-
-    const normTarget = cleanNome.toLowerCase()
-    const jaExiste = contractRotasLogisticas.some(
-      (r, idx) =>
-        idx !== editRotaIndex && r.nome.trim().replace(/\s+/g, ' ').toLowerCase() === normTarget,
-    )
-    if (jaExiste) {
-      toast.error('Já existe uma rota com este nome neste contrato.')
-      return
-    }
-
-    setContractRotasLogisticas((prev) =>
-      prev.map((r, idx) => (idx === editRotaIndex ? { ...r, nome: cleanNome } : r)),
-    )
-
-    setEditRotaIndex(null)
-    setEditRotaNome('')
-  }
-  const handleRemoveRotaLogistica = (index: number) => {
-    const rotaAlvo = contractRotasLogisticas[index]
-    if (rotaAlvo?.id) {
-      // Checar se há pedidos atribuídos a esta rota logística
-      const pedidosComRota = orders.filter((o) => o.rotaLogisticaId === rotaAlvo.id)
-      if (pedidosComRota.length > 0) {
-        toast.error(
-          `Esta rota possui ${pedidosComRota.length} pedido(s) atribuído(s). É preciso reatribuí-los antes de remover a rota.`,
-        )
-        return
-      }
-    }
-    setContractRotasLogisticas((prev) => prev.filter((_, i) => i !== index))
   }
 
   // Helper para verificar se a escola já está vinculada a outro contrato ativo
@@ -888,31 +792,6 @@ export default function Contracts() {
             })
             savedRotasMap.set(cr.nome, newR.id)
             savedRotasMap.set(newR.id, newR.id)
-          }
-        }
-
-        // 1.1 Em edição, apenas atualiza/mantém rotas logísticas caso o modal tenha sido usado para renomear
-        if (editingContract && contractRotasLogisticas.length > 0) {
-          // Checar se há nomes duplicados internamente entre as rotas logísticas
-          const seenLogNames = new Set<string>()
-          for (const crl of contractRotasLogisticas) {
-            const norm = (crl.nome || '').trim().replace(/\s+/g, ' ').toLowerCase()
-            if (seenLogNames.has(norm)) {
-              toast.error('Já existe uma rota com este nome neste contrato.')
-              setIsSubmitting(false)
-              return
-            }
-            seenLogNames.add(norm)
-          }
-
-          for (const crl of contractRotasLogisticas) {
-            if (crl.id) {
-              await rotasLogisticasService.update(crl.id, {
-                nome: (crl.nome || '').trim().replace(/\s+/g, ' '),
-                ordem: crl.ordem,
-                ativa: crl.ativa !== false,
-              })
-            }
           }
         }
 
@@ -2516,6 +2395,7 @@ export default function Contracts() {
         onOpenChange={(open) => setDesvincularEscolaDialogState((prev) => ({ ...prev, open }))}
         contractId={editingContract?.id || null}
         contratoEscolaId={desvincularEscolaDialogState.contratoEscolaId}
+        chamadaId={chamadaId || editingContract?.chamada_id || null}
         escolaId={desvincularEscolaDialogState.escolaId}
         escolaNome={desvincularEscolaDialogState.escolaNome}
         onRemoveDraft={() => {
