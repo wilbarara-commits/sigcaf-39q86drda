@@ -14,9 +14,13 @@ import {
   Upload,
   Image,
   Trash2,
+  Warehouse,
+  RotateCcw,
+  Navigation,
 } from 'lucide-react'
 import { configuracoesService } from '@/services/configuracoes'
 import type { ConfiguracoesRecord } from '@/lib/types'
+import { DEPOSITO_CENTRAL, extrairCoordenadas } from '@/lib/routeOptimization'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -56,6 +60,11 @@ export default function SettingsPage() {
   const [logoRemoved, setLogoRemoved] = useState<boolean>(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
+  // Depósito Central (origem das rotas)
+  const [depositoNome, setDepositoNome] = useState<string>(DEPOSITO_CENTRAL.nome)
+  const [depositoLatitude, setDepositoLatitude] = useState(String(DEPOSITO_CENTRAL.latitude))
+  const [depositoLongitude, setDepositoLongitude] = useState(String(DEPOSITO_CENTRAL.longitude))
+
   const loadConfiguracoes = () => {
     return configuracoesService
       .get()
@@ -73,6 +82,17 @@ export default function SettingsPage() {
           const existingUrl = configuracoesService.getLogoUrl(data)
           setLogoPreview(existingUrl || null)
           setLogoRemoved(false)
+          setDepositoNome(data.deposito_nome || DEPOSITO_CENTRAL.nome)
+          setDepositoLatitude(
+            data.deposito_latitude !== undefined && data.deposito_latitude !== ''
+              ? String(data.deposito_latitude)
+              : String(DEPOSITO_CENTRAL.latitude),
+          )
+          setDepositoLongitude(
+            data.deposito_longitude !== undefined && data.deposito_longitude !== ''
+              ? String(data.deposito_longitude)
+              : String(DEPOSITO_CENTRAL.longitude),
+          )
         }
         setIsLoading(false)
       })
@@ -94,6 +114,36 @@ export default function SettingsPage() {
       return
     }
 
+    // Normalização e validação das coordenadas do Depósito Central
+    const nomeDepFinal = depositoNome.trim() || DEPOSITO_CENTRAL.nome
+    const rawLat = depositoLatitude.trim()
+    const rawLon = depositoLongitude.trim()
+
+    let latFinal = String(DEPOSITO_CENTRAL.latitude)
+    let lonFinal = String(DEPOSITO_CENTRAL.longitude)
+
+    if (rawLat === '' || rawLon === '') {
+      toast.info(
+        `Coordenadas em branco: utilizando coordenadas padrão do ${DEPOSITO_CENTRAL.nome} (${DEPOSITO_CENTRAL.latitude}, ${DEPOSITO_CENTRAL.longitude}).`,
+      )
+      setDepositoLatitude(latFinal)
+      setDepositoLongitude(lonFinal)
+    } else {
+      const parsedCoords = extrairCoordenadas(rawLat, rawLon)
+      if (!parsedCoords) {
+        toast.warning(
+          `Coordenadas inválidas: utilizando coordenadas padrão (${DEPOSITO_CENTRAL.latitude}, ${DEPOSITO_CENTRAL.longitude}). Verifique se latitude [-90 a 90] e longitude [-180 a 180] são válidas.`,
+        )
+        setDepositoLatitude(latFinal)
+        setDepositoLongitude(lonFinal)
+      } else {
+        latFinal = String(parsedCoords.latitude)
+        lonFinal = String(parsedCoords.longitude)
+        setDepositoLatitude(latFinal)
+        setDepositoLongitude(lonFinal)
+      }
+    }
+
     setIsSaving(true)
     try {
       let saved: ConfiguracoesRecord
@@ -110,6 +160,9 @@ export default function SettingsPage() {
         formData.append('cidade_uf', cidadeUf.trim())
         formData.append('exibir_atalhos_demo', String(exibirAtalhosDemo))
         formData.append('logotipo', logoFile)
+        formData.append('deposito_nome', nomeDepFinal)
+        formData.append('deposito_latitude', latFinal)
+        formData.append('deposito_longitude', lonFinal)
         saved = await configuracoesService.save(formData, config?.id)
       } else if (logoRemoved) {
         // No PocketBase, passar null ou string vazia no campo file remove o arquivo existente
@@ -123,6 +176,9 @@ export default function SettingsPage() {
         formData.append('cidade_uf', cidadeUf.trim())
         formData.append('exibir_atalhos_demo', String(exibirAtalhosDemo))
         formData.append('logotipo', '')
+        formData.append('deposito_nome', nomeDepFinal)
+        formData.append('deposito_latitude', latFinal)
+        formData.append('deposito_longitude', lonFinal)
         saved = await configuracoesService.save(formData, config?.id)
       } else {
         saved = await configuracoesService.save(
@@ -135,6 +191,9 @@ export default function SettingsPage() {
             email: email.trim(),
             cidade_uf: cidadeUf.trim(),
             exibir_atalhos_demo: exibirAtalhosDemo,
+            deposito_nome: nomeDepFinal,
+            deposito_latitude: latFinal,
+            deposito_longitude: lonFinal,
           },
           config?.id,
         )
@@ -420,6 +479,113 @@ export default function SettingsPage() {
                     className="pl-9"
                   />
                 </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Card: Depósito Central & Ponto de Partida das Rotas */}
+        <Card className="border-border shadow-sm border-l-4 border-l-primary">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Warehouse className="h-5 w-5 text-primary" />
+                <CardTitle className="text-base font-semibold">
+                  Depósito Central (Origem Fixa das Rotas)
+                </CardTitle>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="text-xs h-7 gap-1"
+                onClick={() => {
+                  setDepositoNome(DEPOSITO_CENTRAL.nome)
+                  setDepositoLatitude(String(DEPOSITO_CENTRAL.latitude))
+                  setDepositoLongitude(String(DEPOSITO_CENTRAL.longitude))
+                  toast.info('Valores padrão do Depósito Central restaurados no formulário.')
+                }}
+                title="Restaurar valores de fábrica do Depósito Central"
+              >
+                <RotateCcw className="h-3.5 w-3.5" /> Restaurar Padrão
+              </Button>
+            </div>
+            <CardDescription>
+              Ponto de partida geográfico utilizado pelo algoritmo de otimização de rotas (vizinho
+              mais próximo e 2-opt) e exibido como a primeira origem fixa no diálogo comparativo da
+              tela de Roteamento & Despacho.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="depositoNome">Identificação / Nome do Ponto de Partida</Label>
+              <div className="relative">
+                <Warehouse className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  id="depositoNome"
+                  value={depositoNome}
+                  onChange={(e) => setDepositoNome(e.target.value)}
+                  placeholder="Ex: Depósito Central"
+                  className="pl-9"
+                  required
+                />
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Nome exibido com o selo &quot;Origem fixa da rota&quot; no diálogo comparativo de
+                otimização de rota.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="depositoLatitude">Latitude</Label>
+                <div className="relative">
+                  <Navigation className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    id="depositoLatitude"
+                    value={depositoLatitude}
+                    onChange={(e) => setDepositoLatitude(e.target.value)}
+                    placeholder="Ex: -22.260264"
+                    className="pl-9 font-mono"
+                  />
+                </div>
+                <p className="text-[11px] text-muted-foreground">
+                  Aceita ponto ou vírgula decimal (ex: -22.260264 ou -22,260264). Intervalo: -90 a
+                  90.
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="depositoLongitude">Longitude</Label>
+                <div className="relative">
+                  <Navigation className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    id="depositoLongitude"
+                    value={depositoLongitude}
+                    onChange={(e) => setDepositoLongitude(e.target.value)}
+                    placeholder="Ex: -42.738042"
+                    className="pl-9 font-mono"
+                  />
+                </div>
+                <p className="text-[11px] text-muted-foreground">
+                  Aceita ponto ou vírgula decimal (ex: -42.738042 ou -42,738042). Intervalo: -180 a
+                  180.
+                </p>
+              </div>
+            </div>
+
+            <div className="p-3 rounded-lg bg-muted/40 border border-border text-xs flex items-start gap-2.5 text-muted-foreground">
+              <MapPin className="h-4 w-4 text-primary shrink-0 mt-0.5" />
+              <div className="space-y-0.5">
+                <p className="font-semibold text-foreground">Regra de Fallback e Resiliência</p>
+                <p className="text-[11px] leading-relaxed">
+                  Caso as coordenadas sejam deixadas em branco ou informadas com formato inválido, o
+                  sistema manterá automaticamente o padrão da cooperativa (
+                  <span className="font-mono text-foreground font-medium">
+                    {DEPOSITO_CENTRAL.latitude}, {DEPOSITO_CENTRAL.longitude}
+                  </span>
+                  ), garantindo que o algoritmo de roteamento nunca seja interrompido.
+                </p>
               </div>
             </div>
           </CardContent>

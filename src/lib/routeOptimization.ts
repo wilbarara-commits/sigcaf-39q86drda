@@ -19,6 +19,45 @@ export const DEPOSITO_CENTRAL = {
   longitude: -42.738042,
 } as const
 
+export interface DepositoCentralConfig {
+  nome: string
+  latitude: number
+  longitude: number
+}
+
+/**
+ * Resolve o Depósito Central ativo a partir da configuração fornecida (banco/contexto),
+ * aplicando fallback seguro para as coordenadas e nome padrão se campos estiverem vazios/inválidos.
+ */
+export function resolverDepositoCentral(
+  config?: {
+    deposito_nome?: string | null
+    deposito_latitude?: string | number | null
+    deposito_longitude?: string | number | null
+  } | null,
+): DepositoCentralConfig {
+  if (!config) {
+    return { ...DEPOSITO_CENTRAL }
+  }
+
+  const coords = extrairCoordenadas(config.deposito_latitude, config.deposito_longitude)
+  const nome = config.deposito_nome?.trim() || DEPOSITO_CENTRAL.nome
+
+  if (!coords) {
+    return {
+      nome,
+      latitude: DEPOSITO_CENTRAL.latitude,
+      longitude: DEPOSITO_CENTRAL.longitude,
+    }
+  }
+
+  return {
+    nome,
+    latitude: coords.latitude,
+    longitude: coords.longitude,
+  }
+}
+
 export interface ParadaOtimizavel {
   escolaId: string
   nome: string

@@ -20,6 +20,9 @@ export const configuracoesService = {
         cidade_uf: item.cidade_uf || '',
         exibir_atalhos_demo: item.exibir_atalhos_demo !== false,
         logotipo: item.logotipo || '',
+        deposito_nome: item.deposito_nome || '',
+        deposito_latitude: item.deposito_latitude || '',
+        deposito_longitude: item.deposito_longitude || '',
         created: item.created,
         updated: item.updated,
       }
@@ -77,6 +80,9 @@ export const configuracoesService = {
           cidade_uf: updated.cidade_uf || '',
           exibir_atalhos_demo: updated.exibir_atalhos_demo !== false,
           logotipo: updated.logotipo || '',
+          deposito_nome: updated.deposito_nome || '',
+          deposito_latitude: updated.deposito_latitude || '',
+          deposito_longitude: updated.deposito_longitude || '',
           created: updated.created,
           updated: updated.updated,
         }
@@ -102,6 +108,9 @@ export const configuracoesService = {
       cidade_uf: created.cidade_uf || '',
       exibir_atalhos_demo: created.exibir_atalhos_demo !== false,
       logotipo: created.logotipo || '',
+      deposito_nome: created.deposito_nome || '',
+      deposito_latitude: created.deposito_latitude || '',
+      deposito_longitude: created.deposito_longitude || '',
       created: created.created,
       updated: created.updated,
     }

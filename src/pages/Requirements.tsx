@@ -157,7 +157,7 @@ const MODULES: ModuleSpec[] = [
       'Rotas no Nível da Chamada: A coleção `rotas` opera primariamente associada a `chamada_id` (com `contrato_id` preservado para legado). Em uma rota, a cooperativa pode agrupar escolas de diferentes contratos vinculados à mesma chamada pública.',
       'Catálogo Unificado de Escolas da Chamada: Na montagem do roteamento, o sistema carrega os vínculos `contrato_escolas` de todos os contratos com aquele `chamada_id`, disponibilizando uma visão unificada para seleção e distribuição nas rotas.',
       'Identificação Visual do Contrato de Origem: Na listagem de paradas e pedidos, cada escola exibe um badge sutil com o número do contrato de origem (ex.: "C-2026-01"), preservando a clareza institucional.',
-      'Otimização Geográfica de Rotas Partindo do Depósito Central: O módulo conta com algoritmo de roteamento geográfico (heurística do vizinho mais próximo + melhoria local 2-opt com cálculo Haversine) que utiliza o Depósito Central da cooperativa (latitude -22.260264, longitude -42.738042) como ponto de partida fixo. As escolas são ordenadas pela proximidade real partindo do depósito e o diálogo comparativo exibe o trecho inicial e a quilometragem estimada antes da aplicação da sugestão.',
+      'Otimização Geográfica de Rotas Partindo do Depósito Central Configurável: O módulo conta com algoritmo de roteamento geográfico (heurística do vizinho mais próximo + melhoria local 2-opt com cálculo Haversine) que utiliza o Depósito Central da cooperativa como ponto de partida fixo da rota. As coordenadas e o nome do depósito são dinamicamente parametrizáveis na tela de Configurações (/configuracoes), possuindo fallback resiliente para as coordenadas padrão de referência da cooperativa (latitude -22.260264, longitude -42.738042). As escolas são ordenadas pela proximidade real partindo do depósito e o diálogo comparativo exibe a identificação personalizada, o trecho inicial e a quilometragem estimada antes da aplicação da sugestão.',
       'Preservação de Escolas Sem Coordenadas: Escolas sem latitude/longitude cadastradas são mantidas em sua ordem relativa original ao final do percurso sugerido, acompanhadas de aviso explícito no diálogo de otimização.',
       'Herança Automática da Rota pelos Pedidos: Os pedidos continuam referenciando seu respectivo contrato de origem e herdam o `rota_id` da escola vinculada.',
       'Preservação e Atestos: Pedidos, itens faturados e atestos mantêm estrita referência ao seu contrato de origem (número de empenho e itens contratuais), mesmo compartilhando o percurso logístico com escolas de outros contratos.',
@@ -293,6 +293,7 @@ const MODULES: ModuleSpec[] = [
       'Controle de atalhos demo na tela de login: toggle para ocultar ou exibir botões de teste rápido (para produção segura).',
       'Dados institucionais da cooperativa: Razão Social, Sigla, CNPJ, Município/UF, Telefone e E-mail.',
       'Logotipo Institucional da Cooperativa: upload de imagem (PNG, JPG, WEBP) aplicado dinamicamente em todo o aplicativo — menu lateral desktop, cabeçalho mobile, tela pública de login e favicon/apple-touch-icon da aba do navegador, com fallback resiliente para ícone/sigla.',
+      'Depósito Central & Origem das Rotas de Entrega: Configuração geográfica do ponto de partida da cooperativa para a otimização de rotas, incluindo Nome/Identificação, Latitude e Longitude (aceitando formatação com vírgula ou ponto decimal), botão para restaurar valores de fábrica e fallback automático para as coordenadas de referência (-22.260264, -42.738042) caso os campos estejam vazios ou inválidos.',
       'Integração dos dados da cooperativa em atestos, relatórios e telas do sistema.',
     ],
   },
@@ -367,7 +368,7 @@ const STACK = [
 
 const DATA_MODEL = [
   'users (id, email, nome/name, celular, foto [file], perfil [MASTER/ADMINISTRADOR/SECRETARIA], ativo [bool])',
-  'configuracoes (id, nome_cooperativa, sigla, cnpj, telefone, email, cidade_uf, exibir_atalhos_demo [bool], logotipo [file], subtitulo_sistema)',
+  'configuracoes (id, nome_cooperativa, sigla, cnpj, telefone, email, cidade_uf, exibir_atalhos_demo [bool], logotipo [file], subtitulo_sistema, deposito_nome, deposito_latitude, deposito_longitude)',
   'ciclos (id, nome, data_inicio, data_fim, status [texto extensível: coletando / correcao / coleta_encerrada / fechado / cancelado], motivo_cancelamento [texto], data_cancelamento [data], snapshot [json com regra semanal e despacho_previsto_segunda]) [Terminal: fechado e cancelado × Não-terminal: todo o resto]',
   'ciclo_contratos (id, ciclo_id → ciclos, contrato_id → contratos, fase [texto extensível por contrato], motivo_cancelamento [texto], data_cancelamento [data]) [Controle granular de fase por contrato vinculado]',
   'chamadas (id, chamada, programa, modalidade [individualizado/centralizado], status [Ativo/Pendente/Encerrado/Cancelado]) [Nível estrutural superior: 1 chamada pública : N contratos; populado inicialmente por migração dos contratos com deduplicação futura]',

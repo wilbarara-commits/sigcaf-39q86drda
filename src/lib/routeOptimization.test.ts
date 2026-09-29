@@ -3,6 +3,7 @@ import {
   calcularDistanciaHaversineKm,
   extrairCoordenadas,
   otimizarSequenciaParadas,
+  resolverDepositoCentral,
   DEPOSITO_CENTRAL,
   type ParadaOtimizavel,
 } from './routeOptimization'
@@ -172,6 +173,69 @@ describe('routeOptimization', () => {
       const ids = res.paradasSugeridas.map((p) => p.escolaId)
       expect(ids.slice(-2)).toEqual(['SEM-1', 'SEM-2'])
       expect(res.paradasSugeridas.find((p) => p.escolaId === 'SEM-1')?.semCoordenada).toBe(true)
+    })
+
+    it('permite customizar o Depósito Central configurado mantendo resiliência e fallback', () => {
+      const depositoCustomizado = {
+        nome: 'Galpão Regional Sul',
+        latitude: -22.34,
+        longitude: -42.84,
+      }
+
+      const paradas: ParadaOtimizavel[] = [
+        {
+          escolaId: '1',
+          nome: 'Escola A (perto do galpão customizado)',
+          ordem: 1,
+          latitude: -22.341,
+          longitude: -42.841,
+        },
+        {
+          escolaId: '2',
+          nome: 'Escola B (longe do galpão customizado, perto do depósito padrão)',
+          ordem: 2,
+          latitude: -22.260264,
+          longitude: -42.738042,
+        },
+        {
+          escolaId: '3',
+          nome: 'Escola C (intermediária)',
+          ordem: 3,
+          latitude: -22.35,
+          longitude: -42.85,
+        },
+      ]
+
+      // Com o depósito customizado, Escola A deve ser a primeira parada
+      const resultadoCustom = otimizarSequenciaParadas(paradas, depositoCustomizado)
+      expect(resultadoCustom.depositoPartida.nome).toBe('Galpão Regional Sul')
+      expect(resultadoCustom.paradasSugeridas[0].escolaId).toBe('1')
+
+      // Testar helper resolverDepositoCentral com campos nulos/vazios
+      const resolvidoPadrao = resolverDepositoCentral(null)
+      expect(resolvidoPadrao.nome).toBe(DEPOSITO_CENTRAL.nome)
+      expect(resolvidoPadrao.latitude).toBe(DEPOSITO_CENTRAL.latitude)
+      expect(resolvidoPadrao.longitude).toBe(DEPOSITO_CENTRAL.longitude)
+
+      // Testar com strings e números válidos
+      const resolvidoParcial = resolverDepositoCentral({
+        deposito_nome: 'Novo Depósito',
+        deposito_latitude: '-22.500000',
+        deposito_longitude: '-42.900000',
+      })
+      expect(resolvidoParcial.nome).toBe('Novo Depósito')
+      expect(resolvidoParcial.latitude).toBeCloseTo(-22.5)
+      expect(resolvidoParcial.longitude).toBeCloseTo(-42.9)
+
+      // Testar fallback quando latitude/longitude são inválidas
+      const resolvidoInvalido = resolverDepositoCentral({
+        deposito_nome: 'Depósito Inválido',
+        deposito_latitude: 'invalido',
+        deposito_longitude: '999',
+      })
+      expect(resolvidoInvalido.nome).toBe('Depósito Inválido')
+      expect(resolvidoInvalido.latitude).toBe(DEPOSITO_CENTRAL.latitude)
+      expect(resolvidoInvalido.longitude).toBe(DEPOSITO_CENTRAL.longitude)
     })
   })
 })

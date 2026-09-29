@@ -475,6 +475,9 @@ export interface ConfiguracoesRecord {
   cidade_uf?: string
   exibir_atalhos_demo?: boolean
   logotipo?: string
+  deposito_nome?: string
+  deposito_latitude?: string
+  deposito_longitude?: string
   created?: string
   updated?: string
 }

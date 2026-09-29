@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-29T11:20:47.168Z",
+  "generatedAt": "2026-09-29T11:26:55.484Z",
   "collections": [
     {
       "name": "users",
@@ -1049,6 +1049,24 @@
         },
         {
           "name": "subtitulo_sistema",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "deposito_nome",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "deposito_latitude",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "deposito_longitude",
           "type": "text",
           "required": false,
           "system": false

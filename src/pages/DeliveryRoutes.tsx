@@ -67,6 +67,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import {
   otimizarSequenciaParadas,
   extrairCoordenadas,
+  resolverDepositoCentral,
   type ParadaOtimizavel,
   type ResultadoOtimizacaoRota,
 } from '@/lib/routeOptimization'
@@ -123,6 +124,7 @@ export default function DeliveryRoutes() {
     moverEscolaEntreRotas,
     updateOrderStatus,
     refreshData,
+    config,
   } = useApp()
   const { user } = useAuth()
 
@@ -1007,7 +1009,8 @@ export default function DeliveryRoutes() {
       }
     })
 
-    const resultado = otimizarSequenciaParadas(paradasParaOtimizar)
+    const depositoAtivo = resolverDepositoCentral(config)
+    const resultado = otimizarSequenciaParadas(paradasParaOtimizar, depositoAtivo)
 
     if (!resultado.podeOtimizar && resultado.motivoNaoOtimizavel) {
       toast.error(resultado.motivoNaoOtimizavel)
