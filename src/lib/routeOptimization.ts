@@ -1,13 +1,23 @@
 /**
  * Utilitário de otimização de rotas por coordenadas geográficas.
- * Utiliza distância Haversine, heurística do Vizinho Mais Próximo com âncora na 1ª parada,
- * e melhoria local 2-opt para redução do percurso total.
+ * Utiliza distância Haversine, heurística do Vizinho Mais Próximo partindo do Depósito Central,
+ * e melhoria local 2-opt para redução do percurso total de entrega.
  */
 
 export interface CoordenadaGeo {
   latitude: number
   longitude: number
 }
+
+/**
+ * Ponto de partida padrão de todas as rotas otimizadas da cooperativa:
+ * Depósito Central (coordenadas geográficas fixas).
+ */
+export const DEPOSITO_CENTRAL = {
+  nome: 'Depósito Central',
+  latitude: -22.260264,
+  longitude: -42.738042,
+} as const
 
 export interface ParadaOtimizavel {
   escolaId: string
@@ -39,6 +49,11 @@ export interface ResultadoOtimizacaoRota {
   totalParadas: number
   podeOtimizar: boolean
   motivoNaoOtimizavel?: string
+  depositoPartida?: {
+    nome: string
+    latitude: number
+    longitude: number
+  }
 }
 
 /**
@@ -131,26 +146,31 @@ export function calcularDistanciaTotalCaminho(
 }
 
 /**
- * Heurística do Vizinho Mais Próximo com a primeira parada fixa (âncora).
+ * Heurística do Vizinho Mais Próximo partindo de uma origem geográfica fixa (ex.: Depósito Central).
+ * Ordena as escolas escolhendo a cada passo a escola mais próxima do ponto atual,
+ * iniciando pela escola mais próxima da origem.
  */
-function vizinhoMaisProximo(paradasComCoord: ParadaOtimizavel[]): ParadaOtimizavel[] {
-  if (paradasComCoord.length <= 2) {
+function vizinhoMaisProximoComOrigem(
+  origem: CoordenadaGeo,
+  paradasComCoord: ParadaOtimizavel[],
+): ParadaOtimizavel[] {
+  if (paradasComCoord.length <= 1) {
     return [...paradasComCoord]
   }
 
-  const rota = [paradasComCoord[0]]
-  const naoVisitadas = paradasComCoord.slice(1)
+  const rota: ParadaOtimizavel[] = []
+  const naoVisitadas = [...paradasComCoord]
+  let pontoAtual: CoordenadaGeo = origem
 
   while (naoVisitadas.length > 0) {
-    const atual = rota[rota.length - 1]
     let menorDist = Infinity
     let menorIdx = -1
 
     for (let i = 0; i < naoVisitadas.length; i++) {
       const candidato = naoVisitadas[i]
       const dist = calcularDistanciaHaversineKm(
-        atual.latitude!,
-        atual.longitude!,
+        pontoAtual.latitude,
+        pontoAtual.longitude,
         candidato.latitude!,
         candidato.longitude!,
       )
@@ -161,10 +181,14 @@ function vizinhoMaisProximo(paradasComCoord: ParadaOtimizavel[]): ParadaOtimizav
     }
 
     if (menorIdx !== -1) {
-      rota.push(naoVisitadas[menorIdx])
+      const proxima = naoVisitadas[menorIdx]
+      rota.push(proxima)
+      pontoAtual = { latitude: proxima.latitude!, longitude: proxima.longitude! }
       naoVisitadas.splice(menorIdx, 1)
     } else {
-      rota.push(naoVisitadas.pop()!)
+      const proxima = naoVisitadas.pop()!
+      rota.push(proxima)
+      pontoAtual = { latitude: proxima.latitude!, longitude: proxima.longitude! }
     }
   }
 
@@ -172,16 +196,21 @@ function vizinhoMaisProximo(paradasComCoord: ParadaOtimizavel[]): ParadaOtimizav
 }
 
 /**
- * Aplica 2-opt mantendo a 1ª parada fixa (índice 0 nunca é invertido).
- * O trecho invertido abrange os índices entre i e k inclusive (1 <= i < k < n).
+ * Aplica melhoria local 2-opt em toda a sequência de paradas considerando a origem fixa.
+ * O percurso avaliado é: Origem -> paradas[0] -> ... -> paradas[n-1].
+ * Pode inverter qualquer segmento entre 0 e n-1 (0 <= i < k < n), desde que reduza a distância total partindo da origem.
  */
-function aplicar2Opt(paradas: ParadaOtimizavel[], maxIteracoes = 100): ParadaOtimizavel[] {
-  if (paradas.length <= 3) {
+function aplicar2OptComOrigem(
+  origem: CoordenadaGeo,
+  paradas: ParadaOtimizavel[],
+  maxIteracoes = 100,
+): ParadaOtimizavel[] {
+  if (paradas.length < 2) {
     return paradas
   }
 
   let melhorRota = [...paradas]
-  let melhorDistancia = calcularDistanciaTotalCaminho(melhorRota)
+  let melhorDistancia = calcularDistanciaTotalCaminho([origem, ...melhorRota])
   let houveMelhoria = true
   let iteracao = 0
 
@@ -190,8 +219,7 @@ function aplicar2Opt(paradas: ParadaOtimizavel[], maxIteracoes = 100): ParadaOti
     iteracao++
 
     const n = melhorRota.length
-    // i começa em 1 para manter a 1ª parada intacta
-    for (let i = 1; i < n - 1; i++) {
+    for (let i = 0; i < n - 1; i++) {
       for (let k = i + 1; k < n; k++) {
         // Criar rota com segmento invertido entre i e k
         const novaRota = [
@@ -200,7 +228,7 @@ function aplicar2Opt(paradas: ParadaOtimizavel[], maxIteracoes = 100): ParadaOti
           ...melhorRota.slice(k + 1),
         ]
 
-        const novaDistancia = calcularDistanciaTotalCaminho(novaRota)
+        const novaDistancia = calcularDistanciaTotalCaminho([origem, ...novaRota])
         // Redução significativa de percurso (> 1 metro)
         if (novaDistancia + 0.001 < melhorDistancia) {
           melhorRota = novaRota
@@ -217,18 +245,25 @@ function aplicar2Opt(paradas: ParadaOtimizavel[], maxIteracoes = 100): ParadaOti
 }
 
 /**
- * Função principal para otimizar uma lista de paradas da rota:
+ * Função principal para otimizar uma lista de paradas da rota partindo do Depósito Central:
  * 1. Separa paradas com coordenadas e sem coordenadas.
- * 2. Mantém a 1ª parada da rota atual como âncora do percurso.
- * 3. Aplica vizinho mais próximo nas paradas com coordenadas partindo da âncora.
- * 4. Aplica melhoria 2-opt no resultado.
+ * 2. Define o Depósito Central como ponto de partida da rota.
+ * 3. Aplica vizinho mais próximo nas paradas com coordenadas partindo do Depósito Central.
+ * 4. Aplica melhoria 2-opt considerando o percurso completo desde o Depósito Central.
  * 5. Mantém as escolas sem coordenadas na ordem relativa original após as escolas com coordenadas.
- * 6. Monta o comparativo completo (atual vs sugerido, distâncias km, badges).
+ * 6. Calcula a distância estimada partindo do Depósito Central (depósito -> primeira parada -> subsequentes).
+ * 7. Monta o comparativo completo (atual vs sugerido partindo do depósito, distâncias km, badges).
  */
 export function otimizarSequenciaParadas(
   paradasOriginais: ParadaOtimizavel[],
+  origemCustomizada?: CoordenadaGeo & { nome?: string },
 ): ResultadoOtimizacaoRota {
   const totalParadas = paradasOriginais.length
+  const origem: CoordenadaGeo & { nome: string } = {
+    latitude: origemCustomizada?.latitude ?? DEPOSITO_CENTRAL.latitude,
+    longitude: origemCustomizada?.longitude ?? DEPOSITO_CENTRAL.longitude,
+    nome: origemCustomizada?.nome ?? DEPOSITO_CENTRAL.nome,
+  }
 
   if (totalParadas < 3) {
     return {
@@ -243,6 +278,7 @@ export function otimizarSequenciaParadas(
       totalParadas,
       podeOtimizar: false,
       motivoNaoOtimizavel: 'A otimização de rota faz sentido a partir de 3 paradas.',
+      depositoPartida: origem,
     }
   }
 
@@ -280,38 +316,31 @@ export function otimizarSequenciaParadas(
       podeOtimizar: false,
       motivoNaoOtimizavel:
         'Nenhuma escola desta rota possui coordenadas geográficas (latitude/longitude) cadastradas.',
+      depositoPartida: origem,
     }
   }
 
-  // Caso especial: se a PRIMEIRA parada não tem coordenadas mas outras têm,
-  // mantemos as com coordenadas ordenadas após ela ou ajustamos o conjunto
+  // Sequenciamento partindo da origem fixa (Depósito Central)
   let rotaComCoordOtimizada: ParadaOtimizavel[] = []
 
   if (comCoord.length >= 2) {
-    // Se a primeira parada de todas tiver coordenadas, ela é garantidamente a âncora.
-    // Se a primeira parada não tem coordenadas, ela ficará no semCoord, e a âncora será a primeira que tem coordenadas.
-    const rotaNN = vizinhoMaisProximo(comCoord)
-    rotaComCoordOtimizada = aplicar2Opt(rotaNN)
+    const rotaNN = vizinhoMaisProximoComOrigem(origem, comCoord)
+    rotaComCoordOtimizada = aplicar2OptComOrigem(origem, rotaNN)
   } else {
     rotaComCoordOtimizada = [...comCoord]
   }
 
-  // Agrupar a nova sequência:
-  // Se a primeira parada original era sem coordenadas, mantemos a primeira parada original onde estava?
-  // O requisito 5 diz:
-  // "(a) escola da rota SEM coordenadas cadastradas → excluí-la da otimização, mantê-la na posição relativa atual ao final, e avisar no diálogo"
-  // E o requisito 2 diz: "heurística do vizinho mais próximo partindo da PRIMEIRA parada atual como âncora (a rota continua começando onde começa hoje)"
-  // Portanto: paradas com coordenadas otimizadas primeiro (partindo da primeira parada atual como âncora), seguidas das sem coordenadas ao final na ordem original relativa.
-  // Caso a primeira parada atual NÃO tenha coordenadas: para respeitar a âncora "continua começando onde começa hoje",
-  // se p[0] não tiver coordenadas, p[0] ainda é a primeira?
-  // Requisito 5(a): "mantê-la na posição relativa atual ao final". Logo, as com coordenadas vêm primeiro (iniciando pela 1ª parada com coordenada, ou se p[0] tiver coordenada, por ela), e as sem coordenadas vão ao final na ordem relativa original.
-  // Se p[0] tem coordenadas, comCoord[0] == p[0], então a rota continua começando em p[0]!
-
+  // Sequência final: paradas com coordenadas otimizadas partindo do depósito + sem coordenadas ao final
   const sequenciaFinalBruta: ParadaOtimizavel[] = [...rotaComCoordOtimizada, ...semCoord]
 
-  // Calcular distâncias estimadas (somatório haversine para os pares consecutivos que possuem coordenadas)
-  const distanciaAtualKm = calcularDistanciaTotalCaminho(paradasOriginais)
-  const distanciaSugeridaKm = calcularDistanciaTotalCaminho(sequenciaFinalBruta)
+  // Calcular distâncias estimadas partindo do Depósito Central:
+  // Caminho atual: Depósito -> paradasOriginais consecutivas com coordenadas
+  // Caminho sugerido: Depósito -> sequenciaFinalBruta consecutivas com coordenadas
+  const caminhoAtualComOrigem = [origem, ...paradasOriginais]
+  const caminhoSugeridoComOrigem = [origem, ...sequenciaFinalBruta]
+
+  const distanciaAtualKm = calcularDistanciaTotalCaminho(caminhoAtualComOrigem)
+  const distanciaSugeridaKm = calcularDistanciaTotalCaminho(caminhoSugeridoComOrigem)
 
   const economiaKm = Math.max(0, distanciaAtualKm - distanciaSugeridaKm)
   const economiaPercentual = distanciaAtualKm > 0 ? (economiaKm / distanciaAtualKm) * 100 : 0
@@ -345,5 +374,6 @@ export function otimizarSequenciaParadas(
     escolasComCoordenadasCount: comCoord.length,
     totalParadas,
     podeOtimizar: true,
+    depositoPartida: origem,
   }
 }

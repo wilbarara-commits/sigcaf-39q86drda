@@ -3,6 +3,7 @@ import {
   calcularDistanciaHaversineKm,
   extrairCoordenadas,
   otimizarSequenciaParadas,
+  DEPOSITO_CENTRAL,
   type ParadaOtimizavel,
 } from './routeOptimization'
 
@@ -18,6 +19,14 @@ describe('routeOptimization', () => {
       const dist = calcularDistanciaHaversineKm(-23.5505, -46.6333, -22.9068, -43.1729)
       expect(dist).toBeGreaterThan(340)
       expect(dist).toBeLessThan(400)
+    })
+  })
+
+  describe('DEPOSITO_CENTRAL', () => {
+    it('possui as coordenadas e nome corretos do Depósito Central', () => {
+      expect(DEPOSITO_CENTRAL.latitude).toBeCloseTo(-22.260264, 5)
+      expect(DEPOSITO_CENTRAL.longitude).toBeCloseTo(-42.738042, 5)
+      expect(DEPOSITO_CENTRAL.nome).toBe('Depósito Central')
     })
   })
 
@@ -64,61 +73,60 @@ describe('routeOptimization', () => {
       expect(res.motivoNaoOtimizavel).toContain('Nenhuma escola')
     })
 
-    it('mantém a 1ª parada como âncora e preserva badges de contrato', () => {
-      // Suponhamos 4 paradas em linha reta: A(0km), D(30km), B(10km), C(20km)
-      // A ordem original é A -> D -> B -> C (percurso vai e volta: 0 -> 30 -> 10 -> 20 = 30 + 20 + 10 = 60km)
-      // A ordem otimizada partindo de A deve ser A -> B -> C -> D (0 -> 10 -> 20 -> 30 = 30km)
+    it('inicia no Depósito Central e ordena pela proximidade a partir dele, preservando badges de contrato', () => {
+      // Depósito Central em (-22.260264, -42.738042)
+      // Definimos 3 escolas em ordem de afastamento progressivo ao norte do depósito:
+      // Perto (-22.25, -42.738), Media (-22.24, -42.738), Longe (-22.23, -42.738)
+      // Se a ordem original na rota era Longe -> Perto -> Media:
+      // Sem depósito ou com depósito, Longe -> Perto -> Media faz zigue-zague.
+      // Partindo do Depósito, o primeiro nó mais próximo é Perto, depois Media, depois Longe.
       const paradas: ParadaOtimizavel[] = [
         {
-          escolaId: 'A',
-          nome: 'Escola Âncora A',
+          escolaId: 'LONGE',
+          nome: 'Escola Longe',
           ordem: 1,
-          contratoNumero: 'CT-01',
-          latitude: -23.0,
-          longitude: -46.0,
-        },
-        {
-          escolaId: 'D',
-          nome: 'Escola Distante D',
-          ordem: 2,
           contratoNumero: 'CT-02',
-          latitude: -23.3,
-          longitude: -46.0,
+          latitude: -22.23,
+          longitude: -42.738,
         },
         {
-          escolaId: 'B',
-          nome: 'Escola Próxima B',
-          ordem: 3,
+          escolaId: 'PERTO',
+          nome: 'Escola Perto',
+          ordem: 2,
           contratoNumero: 'CT-01',
-          latitude: -23.1,
-          longitude: -46.0,
+          latitude: -22.25,
+          longitude: -42.738,
         },
         {
-          escolaId: 'C',
-          nome: 'Escola Média C',
-          ordem: 4,
+          escolaId: 'MEDIA',
+          nome: 'Escola Media',
+          ordem: 3,
           contratoNumero: 'CT-03',
-          latitude: -23.2,
-          longitude: -46.0,
+          latitude: -22.24,
+          longitude: -42.738,
         },
       ]
 
       const res = otimizarSequenciaParadas(paradas)
       expect(res.podeOtimizar).toBe(true)
       expect(res.houveMudanca).toBe(true)
-      expect(res.paradasSugeridas[0].escolaId).toBe('A') // Âncora preservada
-      expect(res.paradasSugeridas[1].escolaId).toBe('B')
-      expect(res.paradasSugeridas[2].escolaId).toBe('C')
-      expect(res.paradasSugeridas[3].escolaId).toBe('D')
+      expect(res.depositoPartida?.nome).toBe('Depósito Central')
+      expect(res.depositoPartida?.latitude).toBeCloseTo(-22.260264, 5)
+
+      // Partindo do depósito (-22.260264), a ordem ótima é PERTO (-22.25) -> MEDIA (-22.24) -> LONGE (-22.23)
+      expect(res.paradasSugeridas[0].escolaId).toBe('PERTO')
+      expect(res.paradasSugeridas[1].escolaId).toBe('MEDIA')
+      expect(res.paradasSugeridas[2].escolaId).toBe('LONGE')
 
       // Preservação de badges e numeração sequencial
       expect(res.paradasSugeridas[0].ordemSugerida).toBe(1)
       expect(res.paradasSugeridas[1].ordemSugerida).toBe(2)
-      expect(res.paradasSugeridas[1].contratoNumero).toBe('CT-01')
-      expect(res.paradasSugeridas[2].contratoNumero).toBe('CT-03')
-      expect(res.paradasSugeridas[3].contratoNumero).toBe('CT-02')
+      expect(res.paradasSugeridas[2].ordemSugerida).toBe(3)
+      expect(res.paradasSugeridas[0].contratoNumero).toBe('CT-01')
+      expect(res.paradasSugeridas[1].contratoNumero).toBe('CT-03')
+      expect(res.paradasSugeridas[2].contratoNumero).toBe('CT-02')
 
-      // Distância sugerida deve ser substancialmente menor
+      // Distância sugerida incluindo o trecho do depósito até a 1ª escola deve ser menor que a atual
       expect(res.distanciaSugeridaKm).toBeLessThan(res.distanciaAtualKm)
       expect(res.economiaKm).toBeGreaterThan(0)
     })

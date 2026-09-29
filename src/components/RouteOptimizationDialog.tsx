@@ -15,11 +15,12 @@ import {
   AlertTriangle,
   ArrowRight,
   TrendingDown,
-  Building2,
+  Warehouse,
   Sparkles,
   MapPinOff,
 } from 'lucide-react'
 import type { ResultadoOtimizacaoRota, ParadaOtimizavel } from '@/lib/routeOptimization'
+import { DEPOSITO_CENTRAL } from '@/lib/routeOptimization'
 
 interface RouteOptimizationDialogProps {
   open: boolean
@@ -81,8 +82,9 @@ export function RouteOptimizationDialog({
                 </Badge>
               </DialogTitle>
               <DialogDescription className="text-xs mt-0.5">
-                Cálculo geográfico por proximidade (vizinho mais próximo + 2-opt). A rota permanece
-                iniciando na primeira parada atual como âncora.
+                Cálculo geográfico por proximidade (vizinho mais próximo + 2-opt) iniciando no{' '}
+                <strong>{resultado.depositoPartida?.nome || DEPOSITO_CENTRAL.nome}</strong> da
+                cooperativa.
               </DialogDescription>
             </div>
           </div>
@@ -99,7 +101,9 @@ export function RouteOptimizationDialog({
               <p className="text-lg font-bold text-foreground mt-0.5">
                 {distanciaAtualFormatada} <span className="text-xs font-normal">km</span>
               </p>
-              <span className="text-[10px] text-muted-foreground">Somatório do percurso atual</span>
+              <span className="text-[10px] text-muted-foreground">
+                Partindo do depósito na ordem atual
+              </span>
             </div>
 
             <div className="p-3 rounded-lg border border-primary/30 bg-primary/5">
@@ -109,7 +113,9 @@ export function RouteOptimizationDialog({
               <p className="text-lg font-bold text-primary mt-0.5">
                 {distanciaSugeridaFormatada} <span className="text-xs font-normal">km</span>
               </p>
-              <span className="text-[10px] text-muted-foreground">Com o novo sequenciamento</span>
+              <span className="text-[10px] text-muted-foreground">
+                Partindo do depósito na ordem otimizada
+              </span>
             </div>
 
             <div className="p-3 rounded-lg border border-emerald-500/30 bg-emerald-500/10">
@@ -187,6 +193,28 @@ export function RouteOptimizationDialog({
                     {paradasOriginais.length} paradas
                   </Badge>
                 </div>
+
+                {/* Ponto de partida fixo no topo da lista atual */}
+                <div className="flex items-center gap-2 p-2 rounded-md bg-muted/60 border border-muted text-xs">
+                  <div className="flex h-5 w-5 items-center justify-center rounded-full bg-muted-foreground/20 text-muted-foreground shrink-0">
+                    <Warehouse className="h-3 w-3" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-semibold text-foreground text-[11px]">
+                        {resultado.depositoPartida?.nome || DEPOSITO_CENTRAL.nome}
+                      </span>
+                      <Badge variant="secondary" className="text-[9px] px-1 py-0">
+                        Ponto de partida
+                      </Badge>
+                    </div>
+                    <p className="text-[10px] text-muted-foreground font-mono truncate">
+                      {resultado.depositoPartida?.latitude ?? DEPOSITO_CENTRAL.latitude},{' '}
+                      {resultado.depositoPartida?.longitude ?? DEPOSITO_CENTRAL.longitude}
+                    </p>
+                  </div>
+                </div>
+
                 <div className="space-y-1.5 max-h-[320px] overflow-y-auto pr-1">
                   {paradasOriginais.map((p, idx) => {
                     const ordemAtual = idx + 1
@@ -233,6 +261,32 @@ export function RouteOptimizationDialog({
                     Otimizada
                   </Badge>
                 </div>
+
+                {/* Ponto de partida fixo no topo da sequência sugerida */}
+                <div className="flex items-center gap-2 p-2 rounded-md bg-primary/10 border border-primary/30 text-xs shadow-xs">
+                  <div className="flex h-5 w-5 items-center justify-center rounded-full bg-primary text-primary-foreground shrink-0">
+                    <Warehouse className="h-3 w-3" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-bold text-primary text-[11px]">
+                        {resultado.depositoPartida?.nome || DEPOSITO_CENTRAL.nome}
+                      </span>
+                      <Badge
+                        variant="secondary"
+                        className="text-[9px] px-1.5 py-0 bg-primary/20 text-primary font-semibold"
+                      >
+                        Origem fixa da rota
+                      </Badge>
+                    </div>
+                    <p className="text-[10px] text-muted-foreground font-mono truncate">
+                      Coordenadas:{' '}
+                      {resultado.depositoPartida?.latitude ?? DEPOSITO_CENTRAL.latitude},{' '}
+                      {resultado.depositoPartida?.longitude ?? DEPOSITO_CENTRAL.longitude}
+                    </p>
+                  </div>
+                </div>
+
                 <div className="space-y-1.5 max-h-[320px] overflow-y-auto pr-1">
                   {resultado.paradasSugeridas.map((p) => {
                     return (
