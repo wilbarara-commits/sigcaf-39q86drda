@@ -26,6 +26,7 @@ export interface RouteMapViewProps {
     latitude: number
     longitude: number
   }
+  caminhaoEscolaId?: string | null
   height?: string | number
   className?: string
 }
@@ -103,6 +104,79 @@ function createNumberedStopIcon(ordem: number, isFirst: boolean) {
 }
 
 /**
+ * Cria divIcon do Leaflet para o Marcador de CAMINHÃO com animação de pulso.
+ * Posicionado junto à parada indicada, com visual chamativo e elegante (laranja/âmbar escuro com pulso).
+ */
+function createTruckMarkerIcon(ordem: number) {
+  return L.divIcon({
+    className: 'custom-truck-marker',
+    html: `
+      <div style="
+        position: relative;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 44px;
+        height: 44px;
+        pointer-events: auto;
+      ">
+        <!-- Anel de pulso contínuo -->
+        <span style="
+          position: absolute;
+          width: 40px;
+          height: 40px;
+          border-radius: 9999px;
+          background-color: rgba(245, 158, 11, 0.45);
+          animation: truck-pulse 2s cubic-bezier(0, 0, 0.2, 1) infinite;
+        "></span>
+        <!-- Botão/Pino do Caminhão -->
+        <div style="
+          position: relative;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          width: 36px;
+          height: 36px;
+          border-radius: 9999px;
+          background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+          color: #ffffff;
+          border: 2.5px solid #ffffff;
+          box-shadow: 0 4px 12px rgba(217, 119, 6, 0.6), 0 2px 4px rgba(0,0,0,0.25);
+          cursor: pointer;
+          font-size: 18px;
+          line-height: 1;
+        " title="Caminhão de Entrega — Parada atual #${ordem}">
+          🚚
+        </div>
+        <!-- Badgezinha com número da parada -->
+        <div style="
+          position: absolute;
+          top: -2px;
+          right: -2px;
+          background-color: #1e293b;
+          color: #f8fafc;
+          border: 1.5px solid #ffffff;
+          border-radius: 9999px;
+          font-size: 10px;
+          font-weight: 800;
+          padding: 0 4px;
+          line-height: 14px;
+          min-width: 16px;
+          text-align: center;
+          box-shadow: 0 1px 3px rgba(0,0,0,0.4);
+        ">
+          ${ordem}
+        </div>
+      </div>
+    `,
+    iconSize: [44, 44],
+    // Leve offset (-16, -26) para ficar visível ao lado/acima do pino verde da parada
+    iconAnchor: [30, 36],
+    popupAnchor: [-8, -36],
+  })
+}
+
+/**
  * Sub-componente que ajusta a visualização para enquadrar todos os pontos (fitBounds).
  */
 function MapBoundsUpdater({
@@ -134,6 +208,7 @@ export function RouteMapView({
   rotaNome,
   paradas,
   deposito,
+  caminhaoEscolaId,
   height = 420,
   className = '',
 }: RouteMapViewProps) {
@@ -166,6 +241,12 @@ export function RouteMapView({
   }, [paradas])
 
   const escolasSemCoordCount = paradas.length - paradasComCoord.length
+
+  // Parada onde o caminhão se encontra atualmente (se houver e tiver coordenadas)
+  const paradaCaminhao = useMemo(() => {
+    if (!caminhaoEscolaId) return null
+    return paradasComCoord.find((p) => p.parada.escolaId === caminhaoEscolaId) || null
+  }, [caminhaoEscolaId, paradasComCoord])
 
   // Coordenadas válidas do depósito
   const depositoCoords = useMemo(() => {
@@ -240,6 +321,12 @@ export function RouteMapView({
             <span className="inline-block w-2.5 h-2.5 rounded-full bg-emerald-700 border border-white"></span>
             Paradas (1..N)
           </span>
+          {paradaCaminhao && (
+            <span className="inline-flex items-center gap-1 font-semibold text-amber-600 dark:text-amber-400">
+              <span className="inline-block">🚚</span>
+              Caminhão na Parada #{paradaCaminhao.ordem}
+            </span>
+          )}
         </div>
       </div>
 
@@ -334,6 +421,44 @@ export function RouteMapView({
             )
           })}
 
+          {/* Marcador destacado de CAMINHÃO MANUAL sobre a parada indicada */}
+          {paradaCaminhao && (
+            <Marker
+              position={[paradaCaminhao.lat, paradaCaminhao.lng]}
+              icon={createTruckMarkerIcon(paradaCaminhao.ordem)}
+              zIndexOffset={1000}
+            >
+              <Popup>
+                <div className="text-xs p-1 space-y-1.5 min-w-[210px] max-w-[280px]">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xl">🚚</span>
+                    <div>
+                      <div className="font-bold text-amber-800 dark:text-amber-300">
+                        Caminhão de Entrega Aqui Agora
+                      </div>
+                      <div className="text-[11px] text-muted-foreground">
+                        Posição manual na Parada #{paradaCaminhao.ordem}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="p-1.5 rounded bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800">
+                    <p className="font-semibold text-slate-900 dark:text-slate-100">
+                      {paradaCaminhao.parada.nome}
+                    </p>
+                    {paradaCaminhao.parada.endereco && (
+                      <p className="text-[10px] text-slate-600 dark:text-slate-400 mt-0.5">
+                        {paradaCaminhao.parada.endereco}
+                      </p>
+                    )}
+                  </div>
+                  <div className="text-[10px] text-muted-foreground">
+                    Marcado manualmente pelo operador da cooperativa.
+                  </div>
+                </div>
+              </Popup>
+            </Marker>
+          )}
+
           {/* Trecho 1: Depósito -> Primeira parada (Tracejado) */}
           {trechoOrigem && (
             <Polyline
@@ -373,6 +498,12 @@ export function RouteMapView({
             <span className="w-5 h-1 bg-emerald-700 inline-block rounded-xs"></span>
             <span>Sequência de Entrega (1 → {paradasComCoord.length})</span>
           </div>
+          {paradaCaminhao && (
+            <div className="flex items-center gap-1.5 text-amber-700 dark:text-amber-300 font-medium">
+              <span className="inline-block text-xs">🚚</span>
+              <span>Caminhão: Parada #{paradaCaminhao.ordem}</span>
+            </div>
+          )}
         </div>
       </div>
 

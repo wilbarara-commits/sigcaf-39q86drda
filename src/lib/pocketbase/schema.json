@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-29T11:45:58.145Z",
+  "generatedAt": "2026-09-29T12:07:54.216Z",
   "collections": [
     {
       "name": "users",
@@ -755,6 +755,19 @@
           "required": false,
           "system": false,
           "collectionRef": "chamadas"
+        },
+        {
+          "name": "caminhao_escola_id",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "escolas"
+        },
+        {
+          "name": "caminhao_posicao_atual",
+          "type": "number",
+          "required": false,
+          "system": false
         }
       ],
       "indexes": [

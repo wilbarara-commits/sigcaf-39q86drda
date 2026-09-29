@@ -122,8 +122,15 @@ interface AppState {
       nome?: string
       ordem?: number
       ativa?: boolean
+      caminhao_escola_id?: string | null
+      caminhao_posicao_atual?: number | null
     },
   ) => Promise<RotaLogisticaRecord | null>
+  atualizarPosicaoCaminhaoRota: (
+    rotaId: string,
+    escolaId: string | null,
+    posicaoAtual?: number | null,
+  ) => Promise<boolean>
   excluirRotaLogistica: (id: string) => Promise<boolean>
   sincronizarEscolasRotaLogistica: (
     contratoId: string,
@@ -1803,6 +1810,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       nome?: string
       ordem?: number
       ativa?: boolean
+      caminhao_escola_id?: string | null
+      caminhao_posicao_atual?: number | null
     },
   ): Promise<RotaLogisticaRecord | null> => {
     const rotaAtual = rotasLogisticas.find((r) => r.id === id)
@@ -1845,6 +1854,34 @@ export function AppProvider({ children }: { children: ReactNode }) {
               nome: cleanNome ?? r.nome,
               ordem: data.ordem ?? r.ordem,
               ativa: data.ativa ?? r.ativa,
+              caminhao_escola_id:
+                data.caminhao_escola_id !== undefined
+                  ? data.caminhao_escola_id || undefined
+                  : r.caminhao_escola_id,
+              caminhao_posicao_atual:
+                data.caminhao_posicao_atual !== undefined
+                  ? data.caminhao_posicao_atual || undefined
+                  : r.caminhao_posicao_atual,
+            }
+          : r,
+      ),
+    )
+    setRotas((prev) =>
+      prev.map((r) =>
+        r.id === id
+          ? {
+              ...r,
+              nome: cleanNome ?? r.nome,
+              ordem: data.ordem ?? r.ordem,
+              ativa: data.ativa ?? r.ativa,
+              caminhao_escola_id:
+                data.caminhao_escola_id !== undefined
+                  ? data.caminhao_escola_id || undefined
+                  : r.caminhao_escola_id,
+              caminhao_posicao_atual:
+                data.caminhao_posicao_atual !== undefined
+                  ? data.caminhao_posicao_atual || undefined
+                  : r.caminhao_posicao_atual,
             }
           : r,
       ),
@@ -1863,11 +1900,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
         nome: cleanNome,
       })
       setRotasLogisticas((prev) => prev.map((r) => (r.id === id ? updated : r)))
+      setRotas((prev) => prev.map((r) => (r.id === id ? updated : r)))
       toast.success(`Rota "${updated.nome}" atualizada com sucesso!`)
       return updated
     } catch (err: any) {
       console.error('Erro ao atualizar rota:', err)
       setRotasLogisticas(prevRotas)
+      setRotas(prevRotas)
       setOrders(prevOrders)
       const serverMsg = err?.data?.message || err?.message || ''
       if (
@@ -1881,6 +1920,44 @@ export function AppProvider({ children }: { children: ReactNode }) {
         )
       }
       return null
+    }
+  }
+
+  // Atualizar especificamente o pino de caminhão manual da rota
+  const atualizarPosicaoCaminhaoRota = async (
+    rotaId: string,
+    escolaId: string | null,
+    posicaoAtual?: number | null,
+  ): Promise<boolean> => {
+    const prevRotas = [...rotasLogisticas]
+
+    // Optimistic update
+    const updateCaminhao = (rList: RotaRecord[]) =>
+      rList.map((r) =>
+        r.id === rotaId
+          ? {
+              ...r,
+              caminhao_escola_id: escolaId || undefined,
+              caminhao_posicao_atual: posicaoAtual || undefined,
+            }
+          : r,
+      )
+
+    setRotasLogisticas(updateCaminhao)
+    setRotas(updateCaminhao)
+
+    try {
+      await rotasService.atualizarPosicaoCaminhao(rotaId, {
+        caminhao_escola_id: escolaId,
+        caminhao_posicao_atual: posicaoAtual,
+      })
+      return true
+    } catch (err: any) {
+      console.error('Erro ao atualizar posição do caminhão na rota:', err)
+      setRotasLogisticas(prevRotas)
+      setRotas(prevRotas)
+      toast.error('Erro ao atualizar posição manual do caminhão.')
+      return false
     }
   }
 
@@ -1961,6 +2038,31 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const escolasAnterioresIds = paradasAnteriores.map((p) => p.escola_id)
     const novasEscolasSet = new Set(escolaIds)
     const escolasDesatribuidas = escolasAnterioresIds.filter((id) => !novasEscolasSet.has(id))
+
+    // Se o caminhão manual estava posicionado em uma escola que foi removida da rota, limpa a posição
+    if (rotaLog?.caminhao_escola_id && !novasEscolasSet.has(rotaLog.caminhao_escola_id)) {
+      rotasService
+        .atualizarPosicaoCaminhao(rotaLogisticaId, {
+          caminhao_escola_id: null,
+          caminhao_posicao_atual: null,
+        })
+        .catch((e) => console.warn('Erro ao limpar caminhão de escola removida da rota:', e))
+
+      setRotasLogisticas((prev) =>
+        prev.map((r) =>
+          r.id === rotaLogisticaId
+            ? { ...r, caminhao_escola_id: undefined, caminhao_posicao_atual: undefined }
+            : r,
+        ),
+      )
+      setRotas((prev) =>
+        prev.map((r) =>
+          r.id === rotaLogisticaId
+            ? { ...r, caminhao_escola_id: undefined, caminhao_posicao_atual: undefined }
+            : r,
+        ),
+      )
+    }
 
     const prevParadas = [...paradasRota]
     const prevOrders = [...orders]
@@ -2251,6 +2353,34 @@ export function AppProvider({ children }: { children: ReactNode }) {
       origemRotaId || paradasRota.find((p) => p.escola_id === escolaId)?.rota_id
 
     // --- OPTIMISTIC UPDATE ---
+    // Se a escola movida para fora da rota de origem tinha o caminhão nela, limpa a posição da rota de origem
+    if (efetivaOrigemId && efetivaOrigemId !== destinoRotaId) {
+      const origemRotaObj = rotasLogisticas.find((r) => r.id === efetivaOrigemId)
+      if (origemRotaObj?.caminhao_escola_id === escolaId) {
+        rotasService
+          .atualizarPosicaoCaminhao(efetivaOrigemId, {
+            caminhao_escola_id: null,
+            caminhao_posicao_atual: null,
+          })
+          .catch((e) => console.warn('Erro ao limpar caminhão da rota de origem:', e))
+
+        setRotasLogisticas((prev) =>
+          prev.map((r) =>
+            r.id === efetivaOrigemId
+              ? { ...r, caminhao_escola_id: undefined, caminhao_posicao_atual: undefined }
+              : r,
+          ),
+        )
+        setRotas((prev) =>
+          prev.map((r) =>
+            r.id === efetivaOrigemId
+              ? { ...r, caminhao_escola_id: undefined, caminhao_posicao_atual: undefined }
+              : r,
+          ),
+        )
+      }
+    }
+
     // 1. Atualizar paradas da rota de origem e da rota de destino
     if (efetivaOrigemId === destinoRotaId) {
       // Reordenação na mesma rota
@@ -3104,6 +3234,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         cancelarPedido,
         criarRotaLogistica,
         atualizarRotaLogistica,
+        atualizarPosicaoCaminhaoRota,
         excluirRotaLogistica,
         sincronizarEscolasRotaLogistica,
         despacharRotaInteira,

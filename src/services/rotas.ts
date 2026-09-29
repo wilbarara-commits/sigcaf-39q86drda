@@ -45,6 +45,16 @@ export const rotasService = {
     return await pb.collection('rotas').update<RotaRecord>(id, payload)
   },
 
+  async atualizarPosicaoCaminhao(
+    id: string,
+    posicao: { caminhao_escola_id?: string | null; caminhao_posicao_atual?: number | null },
+  ): Promise<RotaRecord> {
+    return await pb.collection('rotas').update<RotaRecord>(id, {
+      caminhao_escola_id: posicao.caminhao_escola_id || null,
+      caminhao_posicao_atual: posicao.caminhao_posicao_atual || null,
+    })
+  },
+
   async delete(id: string): Promise<boolean> {
     return await pb.collection('rotas').delete(id)
   },

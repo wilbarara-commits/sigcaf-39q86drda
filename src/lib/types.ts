@@ -76,9 +76,12 @@ export interface RotaRecord {
   nome: string
   ordem?: number
   ativa?: boolean
+  caminhao_escola_id?: string
+  caminhao_posicao_atual?: number
   expand?: {
     contrato_id?: ContratoRecord
     chamada_id?: ChamadaRecord
+    caminhao_escola_id?: EscolaRecord
   }
   created?: string
   updated?: string

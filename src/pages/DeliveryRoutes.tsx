@@ -117,6 +117,7 @@ export default function DeliveryRoutes() {
     despachos,
     criarRotaLogistica,
     atualizarRotaLogistica,
+    atualizarPosicaoCaminhaoRota,
     excluirRotaLogistica,
     sincronizarEscolasRotaLogistica,
     despacharRotaInteira,
@@ -129,7 +130,8 @@ export default function DeliveryRoutes() {
     refreshData,
     config,
   } = useApp()
-  const { user } = useAuth()
+  const { user, isAdmin, isMaster } = useAuth()
+  const canEditRoutes = isAdmin || isMaster
 
   // Selecionar primariamente a CHAMADA (ou se não houver chamadas, cai para todos ou contratos)
   const initialChamadaId = useMemo(() => {
@@ -282,6 +284,42 @@ export default function DeliveryRoutes() {
   const [routeViewModeMap, setRouteViewModeMap] = useState<
     Record<string, 'ambos' | 'mapa' | 'lista'>
   >({})
+
+  // Estado para controle de salvamento de posição do caminhão por rota
+  const [updatingTruckRotaId, setUpdatingTruckRotaId] = useState<string | null>(null)
+
+  // Atualizar a posição do caminhão manual para uma rota
+  const handleChangeCaminhaoPosicao = async (
+    rotaId: string,
+    escolaIdOuNenhuma: string,
+    paradas: Array<{ escolaId: string; ordem: number }>,
+  ) => {
+    if (!canEditRoutes) {
+      toast.error('Você não tem permissão para alterar a posição do caminhão.')
+      return
+    }
+
+    setUpdatingTruckRotaId(rotaId)
+    try {
+      if (!escolaIdOuNenhuma || escolaIdOuNenhuma === 'nenhuma') {
+        const ok = await atualizarPosicaoCaminhaoRota(rotaId, null, null)
+        if (ok) {
+          toast.success('Pino do caminhão desmarcado.')
+        }
+      } else {
+        const parada = paradas.find((p) => p.escolaId === escolaIdOuNenhuma)
+        const ordem = parada ? parada.ordem : null
+        const ok = await atualizarPosicaoCaminhaoRota(rotaId, escolaIdOuNenhuma, ordem)
+        if (ok) {
+          toast.success(
+            ordem ? `🚚 Caminhão marcado na Parada #${ordem}!` : 'Posição do caminhão salva!',
+          )
+        }
+      }
+    } finally {
+      setUpdatingTruckRotaId(null)
+    }
+  }
 
   // Estado para sugestão de rota otimizada (cálculo cliente haversine + vizinho mais próximo + 2-opt)
   const [optimizationDialogOpen, setOptimizationDialogOpen] = useState(false)
@@ -1403,6 +1441,162 @@ export default function DeliveryRoutes() {
                     </div>
                   </div>
 
+                  {/* Controle de Posição Manual do Caminhão (Sem GPS) */}
+                  <div className="p-2.5 rounded-lg border bg-amber-500/10 border-amber-300 dark:border-amber-900/60 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                    <div className="space-y-0.5 min-w-0">
+                      <div className="flex items-center gap-1.5 font-bold text-xs text-amber-900 dark:text-amber-200">
+                        <span className="text-base">🚚</span>
+                        <span>Posição Atual da Entrega (Pino Manual)</span>
+                        {updatingTruckRotaId === item.rota.id && (
+                          <Loader2 className="h-3 w-3 animate-spin text-amber-700 dark:text-amber-300" />
+                        )}
+                      </div>
+                      <p className="text-[11px] text-amber-800/80 dark:text-amber-300/80">
+                        Indique manualmente em qual parada o caminhão está agora. O mapa exibirá o
+                        marcador de caminhão sobre ela.
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-1.5 shrink-0 flex-wrap">
+                      {/* Botão Anterior */}
+                      {(() => {
+                        const currentEscolaId = item.rota.caminhao_escola_id
+                        const currentIndex = item.paradasOrdenadas.findIndex(
+                          (p) => p.escolaId === currentEscolaId,
+                        )
+                        const hasPrev = currentIndex > 0
+                        const prevParada = hasPrev ? item.paradasOrdenadas[currentIndex - 1] : null
+
+                        return (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            disabled={
+                              !canEditRoutes ||
+                              !hasPrev ||
+                              item.paradasOrdenadas.length === 0 ||
+                              updatingTruckRotaId === item.rota.id
+                            }
+                            onClick={() => {
+                              if (prevParada) {
+                                handleChangeCaminhaoPosicao(
+                                  item.rota.id,
+                                  prevParada.escolaId,
+                                  item.paradasOrdenadas,
+                                )
+                              }
+                            }}
+                            className="h-8 px-2 text-xs bg-background"
+                            title={
+                              prevParada
+                                ? `Voltar caminhão para a Parada #${prevParada.ordem} (${prevParada.nome})`
+                                : 'Sem parada anterior'
+                            }
+                          >
+                            ◀ Anterior
+                          </Button>
+                        )
+                      })()}
+
+                      {/* Select de Parada */}
+                      <Select
+                        value={item.rota.caminhao_escola_id || 'nenhuma'}
+                        disabled={
+                          !canEditRoutes ||
+                          item.paradasOrdenadas.length === 0 ||
+                          updatingTruckRotaId === item.rota.id
+                        }
+                        onValueChange={(val) =>
+                          handleChangeCaminhaoPosicao(item.rota.id, val, item.paradasOrdenadas)
+                        }
+                      >
+                        <SelectTrigger className="h-8 w-[190px] text-xs bg-background">
+                          <SelectValue placeholder="Selecione a parada" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="nenhuma">
+                            <span className="text-muted-foreground">⚪ Nenhuma (Sem pino)</span>
+                          </SelectItem>
+                          {item.paradasOrdenadas.map((p) => (
+                            <SelectItem key={p.escolaId} value={p.escolaId}>
+                              <span className="font-semibold">Parada #{p.ordem}:</span>{' '}
+                              <span className="truncate">{p.nome}</span>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+
+                      {/* Botão Próxima */}
+                      {(() => {
+                        const currentEscolaId = item.rota.caminhao_escola_id
+                        const currentIndex = item.paradasOrdenadas.findIndex(
+                          (p) => p.escolaId === currentEscolaId,
+                        )
+                        const hasNext =
+                          currentIndex >= 0 && currentIndex < item.paradasOrdenadas.length - 1
+                        const canStart = !currentEscolaId && item.paradasOrdenadas.length > 0
+                        const nextParada = canStart
+                          ? item.paradasOrdenadas[0]
+                          : hasNext
+                            ? item.paradasOrdenadas[currentIndex + 1]
+                            : null
+
+                        return (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            disabled={
+                              !canEditRoutes ||
+                              (!hasNext && !canStart) ||
+                              item.paradasOrdenadas.length === 0 ||
+                              updatingTruckRotaId === item.rota.id
+                            }
+                            onClick={() => {
+                              if (nextParada) {
+                                handleChangeCaminhaoPosicao(
+                                  item.rota.id,
+                                  nextParada.escolaId,
+                                  item.paradasOrdenadas,
+                                )
+                              }
+                            }}
+                            className="h-8 px-2 text-xs bg-background"
+                            title={
+                              nextParada
+                                ? `Avançar caminhão para a Parada #${nextParada.ordem} (${nextParada.nome})`
+                                : 'Já está na última parada'
+                            }
+                          >
+                            Próxima ▶
+                          </Button>
+                        )
+                      })()}
+
+                      {/* Botão Limpar / Nenhuma */}
+                      {item.rota.caminhao_escola_id && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          disabled={!canEditRoutes || updatingTruckRotaId === item.rota.id}
+                          onClick={() =>
+                            handleChangeCaminhaoPosicao(
+                              item.rota.id,
+                              'nenhuma',
+                              item.paradasOrdenadas,
+                            )
+                          }
+                          className="h-8 px-2 text-xs text-muted-foreground hover:text-destructive"
+                          title="Remover o pino do caminhão desta rota"
+                        >
+                          Limpar
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+
                   {/* Lista de Paradas com Sequenciamento Drag-and-Drop */}
                   <div>
                     <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
@@ -1591,6 +1785,7 @@ export default function DeliveryRoutes() {
                             {item.paradasOrdenadas.map((parada) => {
                               const isOver = dragOverEscolaId === parada.escolaId
                               const isBeingDragged = draggedEscolaId === parada.escolaId
+                              const isTruckHere = item.rota.caminhao_escola_id === parada.escolaId
 
                               return (
                                 <div
@@ -1614,19 +1809,25 @@ export default function DeliveryRoutes() {
                                       })),
                                     )
                                   }
-                                  className={`p-2.5 rounded-lg border bg-card text-xs space-y-2 shadow-xs transition-all cursor-grab active:cursor-grabbing select-none ${
+                                  className={`p-2.5 rounded-lg border text-xs space-y-2 shadow-xs transition-all cursor-grab active:cursor-grabbing select-none ${
                                     isBeingDragged
-                                      ? 'opacity-40 border-dashed border-primary scale-[0.98]'
+                                      ? 'opacity-40 border-dashed border-primary scale-[0.98] bg-card'
                                       : isOver
                                         ? 'border-primary border-2 bg-primary/10 shadow-sm'
-                                        : 'hover:border-primary/50 hover:shadow-xs'
+                                        : isTruckHere
+                                          ? 'border-amber-500/80 bg-amber-500/10 dark:bg-amber-950/20 shadow-sm ring-1 ring-amber-400'
+                                          : 'bg-card hover:border-primary/50 hover:shadow-xs'
                                   }`}
                                 >
                                   <div className="flex items-center justify-between gap-2">
                                     <div className="flex items-center gap-2 min-w-0">
                                       <GripVertical className="h-4 w-4 text-muted-foreground/60 shrink-0" />
                                       <span
-                                        className="flex h-5 w-5 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground shrink-0"
+                                        className={`flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold shrink-0 ${
+                                          isTruckHere
+                                            ? 'bg-amber-600 text-white ring-2 ring-amber-300'
+                                            : 'bg-primary text-primary-foreground'
+                                        }`}
                                         title={`Parada #${parada.ordem} na ${item.rota.nome}`}
                                       >
                                         {parada.ordem}
@@ -1636,6 +1837,15 @@ export default function DeliveryRoutes() {
                                           <p className="font-semibold text-foreground truncate">
                                             {parada.nome}
                                           </p>
+                                          {isTruckHere && (
+                                            <Badge
+                                              className="bg-amber-600 hover:bg-amber-600 text-white text-[10px] px-1.5 py-0 gap-1 font-semibold animate-pulse shrink-0"
+                                              title="Caminhão de entrega está nesta parada agora"
+                                            >
+                                              <span>🚚</span>
+                                              <span>Entrega aqui agora</span>
+                                            </Badge>
+                                          )}
                                           {parada.contratoNumero && (
                                             <Badge
                                               variant="outline"
@@ -1652,7 +1862,7 @@ export default function DeliveryRoutes() {
                                       </div>
                                     </div>
 
-                                    {/* Referência de Volume e Ação Mobile */}
+                                    {/* Referência de Volume, Ação de marcar caminhão rápido e Ação Mobile */}
                                     <div className="flex items-center gap-1.5 shrink-0">
                                       {parada.alunos !== undefined && parada.alunos !== null && (
                                         <Badge
@@ -1662,6 +1872,36 @@ export default function DeliveryRoutes() {
                                         >
                                           {parada.alunos} alunos
                                         </Badge>
+                                      )}
+                                      {canEditRoutes && (
+                                        <Button
+                                          type="button"
+                                          variant={isTruckHere ? 'default' : 'ghost'}
+                                          size="sm"
+                                          className={`h-6 px-1.5 text-[10px] gap-1 ${
+                                            isTruckHere
+                                              ? 'bg-amber-600 hover:bg-amber-700 text-white font-semibold'
+                                              : 'text-muted-foreground hover:text-amber-700 dark:hover:text-amber-300'
+                                          }`}
+                                          title={
+                                            isTruckHere
+                                              ? 'Caminhão já está aqui (clique para limpar)'
+                                              : `Marcar caminhão na Parada #${parada.ordem}`
+                                          }
+                                          onClick={(e) => {
+                                            e.stopPropagation()
+                                            handleChangeCaminhaoPosicao(
+                                              item.rota.id,
+                                              isTruckHere ? 'nenhuma' : parada.escolaId,
+                                              item.paradasOrdenadas,
+                                            )
+                                          }}
+                                        >
+                                          <span>🚚</span>
+                                          <span className="hidden sm:inline">
+                                            {isTruckHere ? 'Aqui' : 'Marcar'}
+                                          </span>
+                                        </Button>
                                       )}
                                       <Badge variant="outline" className="text-[10px]">
                                         {parada.pedidos.length} ped.
@@ -1771,6 +2011,7 @@ export default function DeliveryRoutes() {
                               pedidosCount: p.pedidos.length,
                             }))}
                             deposito={depositoConfig}
+                            caminhaoEscolaId={item.rota.caminhao_escola_id}
                             height={viewMode === 'ambos' ? 380 : 420}
                           />
                         )
