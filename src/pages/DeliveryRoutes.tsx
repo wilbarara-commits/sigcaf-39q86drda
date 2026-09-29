@@ -57,8 +57,11 @@ import {
   Upload,
   PhoneCall,
   Navigation,
+  MapPin,
+  ListOrdered,
 } from 'lucide-react'
 import { Input } from '@/components/ui/input'
+import { RouteMapView } from '@/components/RouteMapView'
 import { Textarea } from '@/components/ui/textarea'
 import { toast } from 'sonner'
 import { matchPastedSchoolLine } from '@/lib/excelImporter'
@@ -274,6 +277,11 @@ export default function DeliveryRoutes() {
     origemRotaNome: string
   } | null>(null)
   const [targetRotaIdMobile, setTargetRotaIdMobile] = useState<string>('')
+
+  // Estado de modo de visualização por rota: 'lista' | 'mapa' | 'ambos' (mapa persistido por rotaId)
+  const [routeViewModeMap, setRouteViewModeMap] = useState<
+    Record<string, 'ambos' | 'mapa' | 'lista'>
+  >({})
 
   // Estado para sugestão de rota otimizada (cálculo cliente haversine + vizinho mais próximo + 2-opt)
   const [optimizationDialogOpen, setOptimizationDialogOpen] = useState(false)
@@ -1407,67 +1415,127 @@ export default function DeliveryRoutes() {
                         </span>
                       </div>
 
-                      {/* Botão de Sugestão de Rota Otimizada */}
-                      {item.paradasOrdenadas.length > 0 &&
-                        (() => {
-                          const paradas = item.paradasOrdenadas
-                          const menosDe3 = paradas.length < 3
-                          const temAlgumaCoord = paradas.some(
-                            (p) => extrairCoordenadas(p.latitude, p.longitude) !== null,
-                          )
-                          const desabilitado = menosDe3 || !temAlgumaCoord
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        {/* Seletor de visualização Lista / Mapa / Ambos */}
+                        <div className="inline-flex items-center rounded-md border bg-muted/30 p-0.5 text-xs">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className={`h-6 px-2 text-[11px] gap-1 rounded-xs ${
+                              (routeViewModeMap[item.rota.id] || 'ambos') === 'ambos'
+                                ? 'bg-background shadow-xs text-foreground font-semibold'
+                                : 'text-muted-foreground hover:text-foreground'
+                            }`}
+                            onClick={() =>
+                              setRouteViewModeMap((prev) => ({ ...prev, [item.rota.id]: 'ambos' }))
+                            }
+                            title="Exibir lista de paradas e mapa lado a lado"
+                          >
+                            Ambos
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className={`h-6 px-2 text-[11px] gap-1 rounded-xs ${
+                              routeViewModeMap[item.rota.id] === 'lista'
+                                ? 'bg-background shadow-xs text-foreground font-semibold'
+                                : 'text-muted-foreground hover:text-foreground'
+                            }`}
+                            onClick={() =>
+                              setRouteViewModeMap((prev) => ({ ...prev, [item.rota.id]: 'lista' }))
+                            }
+                            title="Exibir somente lista de paradas"
+                          >
+                            <ListOrdered className="h-3 w-3" />
+                            Lista
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className={`h-6 px-2 text-[11px] gap-1 rounded-xs ${
+                              routeViewModeMap[item.rota.id] === 'mapa'
+                                ? 'bg-background shadow-xs text-foreground font-semibold'
+                                : 'text-muted-foreground hover:text-foreground'
+                            }`}
+                            onClick={() =>
+                              setRouteViewModeMap((prev) => ({ ...prev, [item.rota.id]: 'mapa' }))
+                            }
+                            title="Exibir mapa da rota em destaque"
+                          >
+                            <MapPin className="h-3 w-3 text-primary" />
+                            Mapa
+                          </Button>
+                        </div>
 
-                          let tooltipText =
-                            'Sugerir ordem ótima de visita por coordenadas geográficas (vizinho mais próximo + 2-opt)'
-                          if (menosDe3) {
-                            tooltipText = 'A otimização de rota faz sentido a partir de 3 paradas.'
-                          } else if (!temAlgumaCoord) {
-                            tooltipText =
-                              'Nenhuma escola desta rota possui coordenadas geográficas cadastradas.'
-                          }
+                        {/* Botão de Sugestão de Rota Otimizada */}
+                        {item.paradasOrdenadas.length > 0 &&
+                          (() => {
+                            const paradas = item.paradasOrdenadas
+                            const menosDe3 = paradas.length < 3
+                            const temAlgumaCoord = paradas.some(
+                              (p) => extrairCoordenadas(p.latitude, p.longitude) !== null,
+                            )
+                            const desabilitado = menosDe3 || !temAlgumaCoord
 
-                          const buttonNode = (
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              disabled={desabilitado}
-                              className="h-7 text-xs gap-1.5 text-primary border-primary/30 hover:bg-primary/5 hover:border-primary"
-                              onClick={() => handleOpenOptimizationDialog(item.rota, paradas)}
-                            >
-                              <Navigation className="h-3.5 w-3.5" />
-                              <span>Sugerir rota otimizada</span>
-                            </Button>
-                          )
+                            let tooltipText =
+                              'Sugerir ordem ótima de visita por coordenadas geográficas (vizinho mais próximo + 2-opt)'
+                            if (menosDe3) {
+                              tooltipText =
+                                'A otimização de rota faz sentido a partir de 3 paradas.'
+                            } else if (!temAlgumaCoord) {
+                              tooltipText =
+                                'Nenhuma escola desta rota possui coordenadas geográficas cadastradas.'
+                            }
 
-                          if (desabilitado) {
+                            const buttonNode = (
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                disabled={desabilitado}
+                                className="h-7 text-xs gap-1.5 text-primary border-primary/30 hover:bg-primary/5 hover:border-primary"
+                                onClick={() => handleOpenOptimizationDialog(item.rota, paradas)}
+                              >
+                                <Navigation className="h-3.5 w-3.5" />
+                                <span>Sugerir rota otimizada</span>
+                              </Button>
+                            )
+
+                            if (desabilitado) {
+                              return (
+                                <TooltipProvider>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <span
+                                        tabIndex={0}
+                                        className="inline-block cursor-not-allowed"
+                                      >
+                                        {buttonNode}
+                                      </span>
+                                    </TooltipTrigger>
+                                    <TooltipContent side="top" className="text-xs max-w-xs">
+                                      {tooltipText}
+                                    </TooltipContent>
+                                  </Tooltip>
+                                </TooltipProvider>
+                              )
+                            }
+
                             return (
                               <TooltipProvider>
                                 <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <span tabIndex={0} className="inline-block cursor-not-allowed">
-                                      {buttonNode}
-                                    </span>
-                                  </TooltipTrigger>
+                                  <TooltipTrigger asChild>{buttonNode}</TooltipTrigger>
                                   <TooltipContent side="top" className="text-xs max-w-xs">
                                     {tooltipText}
                                   </TooltipContent>
                                 </Tooltip>
                               </TooltipProvider>
                             )
-                          }
-
-                          return (
-                            <TooltipProvider>
-                              <Tooltip>
-                                <TooltipTrigger asChild>{buttonNode}</TooltipTrigger>
-                                <TooltipContent side="top" className="text-xs max-w-xs">
-                                  {tooltipText}
-                                </TooltipContent>
-                              </Tooltip>
-                            </TooltipProvider>
-                          )
-                        })()}
+                          })()}
+                      </div>
                     </div>
 
                     <p className="text-[11px] text-muted-foreground mb-2">
@@ -1507,173 +1575,222 @@ export default function DeliveryRoutes() {
                         </div>
                       </div>
                     ) : (
-                      <div
-                        className="space-y-2 max-h-[380px] overflow-y-auto pr-1"
-                        onDragOver={(e) => handleDragOverRota(e, item.rota.id)}
-                        onDrop={(e) => handleDropOnRota(e, item.rota.id)}
-                      >
-                        {item.paradasOrdenadas.map((parada) => {
-                          const isOver = dragOverEscolaId === parada.escolaId
-                          const isBeingDragged = draggedEscolaId === parada.escolaId
+                      (() => {
+                        const viewMode = routeViewModeMap[item.rota.id] || 'ambos'
+                        const depositoConfig = resolverDepositoCentral(config)
 
-                          return (
-                            <div
-                              key={parada.escolaId}
-                              draggable
-                              onDragStart={(e) => handleDragStart(e, parada.escolaId, item.rota.id)}
-                              onDragEnd={handleDragEnd}
-                              onDragOver={(e) =>
-                                handleDragOverParada(e, parada.escolaId, item.rota.id)
-                              }
-                              onDrop={(e) =>
-                                handleDropOnParada(
-                                  e,
-                                  parada.escolaId,
-                                  item.rota.id,
-                                  item.paradasOrdenadas.map((p) => ({
-                                    escolaId: p.escolaId,
-                                    ordem: p.ordem,
-                                  })),
-                                )
-                              }
-                              className={`p-2.5 rounded-lg border bg-card text-xs space-y-2 shadow-xs transition-all cursor-grab active:cursor-grabbing select-none ${
-                                isBeingDragged
-                                  ? 'opacity-40 border-dashed border-primary scale-[0.98]'
-                                  : isOver
-                                    ? 'border-primary border-2 bg-primary/10 shadow-sm'
-                                    : 'hover:border-primary/50 hover:shadow-xs'
-                              }`}
-                            >
-                              <div className="flex items-center justify-between gap-2">
-                                <div className="flex items-center gap-2 min-w-0">
-                                  <GripVertical className="h-4 w-4 text-muted-foreground/60 shrink-0" />
-                                  <span
-                                    className="flex h-5 w-5 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground shrink-0"
-                                    title={`Parada #${parada.ordem} na ${item.rota.nome}`}
-                                  >
-                                    {parada.ordem}
-                                  </span>
-                                  <div className="min-w-0">
-                                    <div className="flex items-center gap-1.5 flex-wrap">
-                                      <p className="font-semibold text-foreground truncate">
-                                        {parada.nome}
-                                      </p>
-                                      {parada.contratoNumero && (
-                                        <Badge
-                                          variant="outline"
-                                          className="text-[9px] px-1 py-0 border-primary/30 text-primary font-mono shrink-0"
-                                          title={`Escola vinculada ao Contrato ${parada.contratoNumero}`}
-                                        >
-                                          {parada.contratoNumero}
-                                        </Badge>
-                                      )}
-                                    </div>
-                                    <p className="text-[10px] text-muted-foreground truncate">
-                                      {parada.endereco || 'Endereço não informado'}
-                                    </p>
-                                  </div>
-                                </div>
+                        // Renderizador da Lista de Paradas reordenável
+                        const renderParadasList = (
+                          <div
+                            className={`space-y-2 overflow-y-auto pr-1 ${
+                              viewMode === 'ambos' ? 'max-h-[390px]' : 'max-h-[460px]'
+                            }`}
+                            onDragOver={(e) => handleDragOverRota(e, item.rota.id)}
+                            onDrop={(e) => handleDropOnRota(e, item.rota.id)}
+                          >
+                            {item.paradasOrdenadas.map((parada) => {
+                              const isOver = dragOverEscolaId === parada.escolaId
+                              const isBeingDragged = draggedEscolaId === parada.escolaId
 
-                                {/* Referência de Volume e Ação Mobile */}
-                                <div className="flex items-center gap-1.5 shrink-0">
-                                  {parada.alunos !== undefined && parada.alunos !== null && (
-                                    <Badge
-                                      variant="secondary"
-                                      className="text-[10px] font-mono font-medium hidden sm:inline-flex"
-                                      title="Número de alunos matriculados como referência de volume da escola"
-                                    >
-                                      {parada.alunos} alunos
-                                    </Badge>
-                                  )}
-                                  <Badge variant="outline" className="text-[10px]">
-                                    {parada.pedidos.length} ped.
-                                  </Badge>
-
-                                  {/* Botão de transferir rota para mobile / facilidade com clique */}
-                                  {filteredRotasLogisticas.length > 1 && (
-                                    <Button
-                                      variant="ghost"
-                                      size="icon"
-                                      className="h-6 w-6 text-muted-foreground hover:text-primary shrink-0"
-                                      title="Mover escola para outra rota"
-                                      onClick={(e) => {
-                                        e.stopPropagation()
-                                        handleOpenMobileMove(
-                                          parada.escolaId,
-                                          parada.nome,
-                                          item.rota.id,
-                                          item.rota.nome,
-                                        )
-                                      }}
-                                    >
-                                      <ArrowUpDown className="h-3 w-3" />
-                                    </Button>
-                                  )}
-                                </div>
-                              </div>
-
-                              {/* Pedidos vinculados a esta parada */}
-                              {parada.pedidos.length > 0 && (
-                                <div className="space-y-1.5 pl-7 border-l-2 border-primary/20 ml-2">
-                                  {parada.pedidos.map((ped) => (
-                                    <div
-                                      key={ped.id}
-                                      className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2 rounded bg-muted/20 border text-xs"
-                                    >
-                                      <div>
-                                        <div className="flex items-center gap-1.5">
-                                          <span className="font-bold text-primary">
-                                            {ped.numero}
-                                          </span>
-                                          {ped.id.startsWith('temp-') && (
-                                            <span
-                                              className="inline-flex items-center text-[9px] text-amber-600 dark:text-amber-400 gap-0.5"
-                                              title="Sincronizando com o servidor"
+                              return (
+                                <div
+                                  key={parada.escolaId}
+                                  draggable
+                                  onDragStart={(e) =>
+                                    handleDragStart(e, parada.escolaId, item.rota.id)
+                                  }
+                                  onDragEnd={handleDragEnd}
+                                  onDragOver={(e) =>
+                                    handleDragOverParada(e, parada.escolaId, item.rota.id)
+                                  }
+                                  onDrop={(e) =>
+                                    handleDropOnParada(
+                                      e,
+                                      parada.escolaId,
+                                      item.rota.id,
+                                      item.paradasOrdenadas.map((p) => ({
+                                        escolaId: p.escolaId,
+                                        ordem: p.ordem,
+                                      })),
+                                    )
+                                  }
+                                  className={`p-2.5 rounded-lg border bg-card text-xs space-y-2 shadow-xs transition-all cursor-grab active:cursor-grabbing select-none ${
+                                    isBeingDragged
+                                      ? 'opacity-40 border-dashed border-primary scale-[0.98]'
+                                      : isOver
+                                        ? 'border-primary border-2 bg-primary/10 shadow-sm'
+                                        : 'hover:border-primary/50 hover:shadow-xs'
+                                  }`}
+                                >
+                                  <div className="flex items-center justify-between gap-2">
+                                    <div className="flex items-center gap-2 min-w-0">
+                                      <GripVertical className="h-4 w-4 text-muted-foreground/60 shrink-0" />
+                                      <span
+                                        className="flex h-5 w-5 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground shrink-0"
+                                        title={`Parada #${parada.ordem} na ${item.rota.nome}`}
+                                      >
+                                        {parada.ordem}
+                                      </span>
+                                      <div className="min-w-0">
+                                        <div className="flex items-center gap-1.5 flex-wrap">
+                                          <p className="font-semibold text-foreground truncate">
+                                            {parada.nome}
+                                          </p>
+                                          {parada.contratoNumero && (
+                                            <Badge
+                                              variant="outline"
+                                              className="text-[9px] px-1 py-0 border-primary/30 text-primary font-mono shrink-0"
+                                              title={`Escola vinculada ao Contrato ${parada.contratoNumero}`}
                                             >
-                                              <Loader2 className="h-2.5 w-2.5 animate-spin" />
-                                            </span>
+                                              {parada.contratoNumero}
+                                            </Badge>
                                           )}
-                                          <Badge
-                                            className={`text-[9px] px-1.5 py-0 ${
-                                              ped.status === 'Em Rota'
-                                                ? 'bg-amber-600'
-                                                : ped.status === 'Entregue'
-                                                  ? 'bg-emerald-600'
-                                                  : ped.status === 'Cancelado'
-                                                    ? 'bg-destructive'
-                                                    : 'bg-blue-600'
-                                            }`}
-                                          >
-                                            {ped.status}
-                                          </Badge>
                                         </div>
-                                        <p className="text-[10px] text-muted-foreground">
-                                          {ped.items.length} produto(s) • R$ {ped.total.toFixed(2)}
+                                        <p className="text-[10px] text-muted-foreground truncate">
+                                          {parada.endereco || 'Endereço não informado'}
                                         </p>
                                       </div>
-
-                                      {/* Ações no pedido: se estiver Em Rota e motorista não entregou */}
-                                      <div className="flex items-center gap-1.5 shrink-0">
-                                        {ped.status === 'Em Rota' && (
-                                          <Button
-                                            size="sm"
-                                            variant="destructive"
-                                            className="h-6 text-[10px] px-2 gap-1"
-                                            onClick={() => handleOpenUndelivered(ped)}
-                                            title="Motorista não entregou este pedido: cancela definitivamente por motivo logístico"
-                                          >
-                                            <XCircle className="h-3 w-3" /> Não entregue
-                                          </Button>
-                                        )}
-                                      </div>
                                     </div>
-                                  ))}
+
+                                    {/* Referência de Volume e Ação Mobile */}
+                                    <div className="flex items-center gap-1.5 shrink-0">
+                                      {parada.alunos !== undefined && parada.alunos !== null && (
+                                        <Badge
+                                          variant="secondary"
+                                          className="text-[10px] font-mono font-medium hidden sm:inline-flex"
+                                          title="Número de alunos matriculados como referência de volume da escola"
+                                        >
+                                          {parada.alunos} alunos
+                                        </Badge>
+                                      )}
+                                      <Badge variant="outline" className="text-[10px]">
+                                        {parada.pedidos.length} ped.
+                                      </Badge>
+
+                                      {/* Botão de transferir rota para mobile / facilidade com clique */}
+                                      {filteredRotasLogisticas.length > 1 && (
+                                        <Button
+                                          variant="ghost"
+                                          size="icon"
+                                          className="h-6 w-6 text-muted-foreground hover:text-primary shrink-0"
+                                          title="Mover escola para outra rota"
+                                          onClick={(e) => {
+                                            e.stopPropagation()
+                                            handleOpenMobileMove(
+                                              parada.escolaId,
+                                              parada.nome,
+                                              item.rota.id,
+                                              item.rota.nome,
+                                            )
+                                          }}
+                                        >
+                                          <ArrowUpDown className="h-3 w-3" />
+                                        </Button>
+                                      )}
+                                    </div>
+                                  </div>
+
+                                  {/* Pedidos vinculados a esta parada */}
+                                  {parada.pedidos.length > 0 && (
+                                    <div className="space-y-1.5 pl-7 border-l-2 border-primary/20 ml-2">
+                                      {parada.pedidos.map((ped) => (
+                                        <div
+                                          key={ped.id}
+                                          className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2 rounded bg-muted/20 border text-xs"
+                                        >
+                                          <div>
+                                            <div className="flex items-center gap-1.5">
+                                              <span className="font-bold text-primary">
+                                                {ped.numero}
+                                              </span>
+                                              {ped.id.startsWith('temp-') && (
+                                                <span
+                                                  className="inline-flex items-center text-[9px] text-amber-600 dark:text-amber-400 gap-0.5"
+                                                  title="Sincronizando com o servidor"
+                                                >
+                                                  <Loader2 className="h-2.5 w-2.5 animate-spin" />
+                                                </span>
+                                              )}
+                                              <Badge
+                                                className={`text-[9px] px-1.5 py-0 ${
+                                                  ped.status === 'Em Rota'
+                                                    ? 'bg-amber-600'
+                                                    : ped.status === 'Entregue'
+                                                      ? 'bg-emerald-600'
+                                                      : ped.status === 'Cancelado'
+                                                        ? 'bg-destructive'
+                                                        : 'bg-blue-600'
+                                                }`}
+                                              >
+                                                {ped.status}
+                                              </Badge>
+                                            </div>
+                                            <p className="text-[10px] text-muted-foreground">
+                                              {ped.items.length} produto(s) • R${' '}
+                                              {ped.total.toFixed(2)}
+                                            </p>
+                                          </div>
+
+                                          {/* Ações no pedido: se estiver Em Rota e motorista não entregou */}
+                                          <div className="flex items-center gap-1.5 shrink-0">
+                                            {ped.status === 'Em Rota' && (
+                                              <Button
+                                                size="sm"
+                                                variant="destructive"
+                                                className="h-6 text-[10px] px-2 gap-1"
+                                                onClick={() => handleOpenUndelivered(ped)}
+                                                title="Motorista não entregou este pedido: cancela definitivamente por motivo logístico"
+                                              >
+                                                <XCircle className="h-3 w-3" /> Não entregue
+                                              </Button>
+                                            )}
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
                                 </div>
-                              )}
-                            </div>
-                          )
-                        })}
-                      </div>
+                              )
+                            })}
+                          </div>
+                        )
+
+                        // Renderizador do Mapa da Rota
+                        const renderMapa = (
+                          <RouteMapView
+                            rotaNome={item.rota.nome}
+                            paradas={item.paradasOrdenadas.map((p) => ({
+                              escolaId: p.escolaId,
+                              nome: p.nome,
+                              endereco: p.endereco,
+                              alunos: p.alunos,
+                              ordem: p.ordem,
+                              contratoNumero: p.contratoNumero,
+                              latitude: p.latitude,
+                              longitude: p.longitude,
+                              pedidosCount: p.pedidos.length,
+                            }))}
+                            deposito={depositoConfig}
+                            height={viewMode === 'ambos' ? 380 : 420}
+                          />
+                        )
+
+                        if (viewMode === 'lista') {
+                          return renderParadasList
+                        }
+
+                        if (viewMode === 'mapa') {
+                          return renderMapa
+                        }
+
+                        // Modo 'ambos': exibe Lista e Mapa integrados verticalmente com design limpo
+                        return (
+                          <div className="space-y-3">
+                            {renderParadasList}
+                            {renderMapa}
+                          </div>
+                        )
+                      })()
                     )}
                   </div>
                 </CardContent>
