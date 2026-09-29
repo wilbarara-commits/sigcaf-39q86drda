@@ -361,7 +361,9 @@ export const DesvincularEscolaDialog: React.FC<DesvincularEscolaDialogProps> = (
           // Opção B: Remover a escola da rota em que está e depois desvincular do contrato
           for (const rotaInfo of rotasAtivas) {
             try {
-              if (rotaInfo.paradaId) {
+              if (rotaInfo.rotaId && escolaId) {
+                await rotasService.removerParadaDaRota(rotaInfo.rotaId, escolaId)
+              } else if (rotaInfo.paradaId) {
                 await rotasService.removerParada(rotaInfo.paradaId)
               }
             } catch (err) {

@@ -152,7 +152,77 @@ export const rotasService = {
   },
 
   async removerParada(id: string): Promise<boolean> {
-    return await pb.collection('paradas_rota').delete(id)
+    // Buscar a parada antes da exclusão para descobrir a rota vinculada
+    let rotaId = ''
+    try {
+      const parada = await pb.collection('paradas_rota').getOne<ParadaRotaRecord>(id)
+      rotaId = parada.rota_id || (parada as any).rota_logistica_id || ''
+    } catch {
+      // Se não encontrou ou erro, prossegue com delete
+    }
+
+    const deleted = await pb.collection('paradas_rota').delete(id)
+
+    // Se temos a rota, renumera sequencialmente (1, 2, 3...) as paradas restantes
+    if (rotaId) {
+      await this.renumerarParadasDaRota(rotaId)
+    }
+
+    return deleted
+  },
+
+  async removerParadaDaRota(rotaId: string, escolaId: string): Promise<boolean> {
+    const filter = `(rota_id = "${rotaId}" || rota_logistica_id = "${rotaId}") && escola_id = "${escolaId}"`
+    const records = await pb.collection('paradas_rota').getFullList<ParadaRotaRecord>({
+      filter,
+    })
+
+    for (const rec of records) {
+      await pb.collection('paradas_rota').delete(rec.id)
+    }
+
+    // Buscar paradas restantes daquela rota e atualizar cada uma com ordem sequencial 1..N
+    const restantes = await pb.collection('paradas_rota').getFullList<ParadaRotaRecord>({
+      filter: `rota_id = "${rotaId}" || rota_logistica_id = "${rotaId}"`,
+      sort: 'ordem',
+    })
+
+    for (let i = 0; i < restantes.length; i++) {
+      const p = restantes[i]
+      const novaOrdem = i + 1
+      if (p.ordem !== novaOrdem) {
+        await pb.collection('paradas_rota').update<ParadaRotaRecord>(p.id, { ordem: novaOrdem })
+      }
+    }
+
+    return true
+  },
+
+  async renumerarParadasDaRota(rotaId: string): Promise<ParadaRotaRecord[]> {
+    try {
+      const restantes = await pb.collection('paradas_rota').getFullList<ParadaRotaRecord>({
+        filter: `rota_id = "${rotaId}" || rota_logistica_id = "${rotaId}"`,
+        sort: 'ordem,created',
+      })
+
+      const atualizadas: ParadaRotaRecord[] = []
+      for (let index = 0; index < restantes.length; index++) {
+        const parada = restantes[index]
+        const novaOrdem = index + 1
+        if (parada.ordem !== novaOrdem) {
+          const updated = await pb.collection('paradas_rota').update<ParadaRotaRecord>(parada.id, {
+            ordem: novaOrdem,
+          })
+          atualizadas.push(updated)
+        } else {
+          atualizadas.push(parada)
+        }
+      }
+      return atualizadas
+    } catch (err) {
+      console.error(`Erro ao renumerar paradas da rota ${rotaId}:`, err)
+      return []
+    }
   },
 
   async moverEscolaEntreRotas(data: {

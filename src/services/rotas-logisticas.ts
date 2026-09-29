@@ -93,6 +93,14 @@ export const rotasLogisticasService = {
     return await rotasService.removerParada(id)
   },
 
+  async removerParadaDaRota(rotaId: string, escolaId: string): Promise<boolean> {
+    return await rotasService.removerParadaDaRota(rotaId, escolaId)
+  },
+
+  async renumerarParadasDaRota(rotaId: string): Promise<ParadaRotaRecord[]> {
+    return await rotasService.renumerarParadasDaRota(rotaId)
+  },
+
   async moverEscolaEntreRotas(data: {
     escola_id: string
     origem_rota_id?: string
