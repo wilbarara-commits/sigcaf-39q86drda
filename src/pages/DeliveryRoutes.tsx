@@ -2012,6 +2012,7 @@ export default function DeliveryRoutes() {
                             }))}
                             deposito={depositoConfig}
                             caminhaoEscolaId={item.rota.caminhao_escola_id}
+                            isEmRota={hasEmRota}
                             height={viewMode === 'ambos' ? 380 : 420}
                           />
                         )

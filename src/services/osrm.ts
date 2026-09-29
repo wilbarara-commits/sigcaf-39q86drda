@@ -36,8 +36,28 @@ export interface OsrmRouteResult {
   viaEstrada: true
 }
 
+export interface OsrmEmRotaResult {
+  // Trechos geométricos [lat, lng]
+  trechoConcluido: [number, number][] // Depósito -> paradas anteriores até a posição do caminhão
+  trechoAtivoVermelho: [number, number][] // Caminhão -> Próxima parada (destaque VERMELHO)
+  trechoRetornoDeposito: [number, number][] // Última parada -> Depósito Central
+  // Distâncias em km
+  distanciaConcluidaKm: number
+  distanciaAtivaKm: number
+  distanciaRetornoKm: number
+  distanciaTotalPercursoKm: number // Todo o circuito: depósito -> paradas -> retorno ao depósito
+  distanciaRestanteKm: number // trechoAtivo + trechos intermediários (se houver) + retorno
+  // Durações
+  duracaoEstimadaMinutos: number
+  duracaoRestanteMinutos: number
+  proximaParadaIndex: number // 0-based nas paradasComCoord
+  caminhaoParadaIndex: number // -1 se o caminhão não foi localizado nas coordenadas
+  viaEstrada: true
+}
+
 // Cache em memória persistente durante a sessão do navegador
 const routeCache = new Map<string, OsrmRouteResult>()
+const routeEmRotaCache = new Map<string, OsrmEmRotaResult>()
 
 /**
  * Gera chave de cache determinística com 5 casas decimais (~1 metro de precisão).
@@ -118,6 +138,139 @@ async function fetchOsrmDrivingRoute(
  * Caso a rota tenha apenas o depósito e 1 parada, o trecho 1 cobre todo o percurso.
  * Caso a consulta OSRM falhe ou dê timeout, retorna null para acionar o fallback imediato.
  */
+/**
+ * Obtém o traçado e métricas detalhadas para o modo "EM ROTA" via estradas reais (OSRM).
+ *
+ * Cenário operacional:
+ * - Origem da rota: Depósito Central.
+ * - Destino final: Retorno ao Depósito Central (após a última parada).
+ * - Posição do caminhão: parada atual (ou partida se não marcada).
+ * - Próxima parada: a parada subsequente à do caminhão (se não marcada, a 1ª parada).
+ * - Trecho em VERMELHO: percurso do caminhão até a próxima parada.
+ * - Trecho concluído: depósito até a posição atual do caminhão (verde contínuo / neutro).
+ * - Trecho de retorno: última parada de volta ao Depósito Central.
+ * - Trechos após a próxima: ocultos/atenuados conforme especificado ("o mapa só mostra a rota entre o caminhão e a próxima parada").
+ */
+export async function obterRotaEstradaEmRotaOSRM(
+  deposito: LatLngCoord,
+  paradas: LatLngCoord[],
+  caminhaoIndex: number, // -1 se não definido, ou índice 0..paradas.length-1
+  options?: { timeoutMs?: number },
+): Promise<OsrmEmRotaResult | null> {
+  if (paradas.length === 0) return null
+
+  const timeoutMs = options?.timeoutMs ?? 8000
+  // Índice da próxima parada: se caminhaoIndex < 0 => 0; senão caminhaoIndex + 1 (clamp até paradas.length - 1)
+  const proximaIndex = caminhaoIndex < 0 ? 0 : Math.min(caminhaoIndex + 1, paradas.length - 1)
+
+  // Chave de cache inclui depósito, todas as paradas e os índices
+  const cacheKey = `em-rota:${caminhaoIndex}:${proximaIndex};${buildCacheKey([deposito, ...paradas])}`
+  const cached = routeEmRotaCache.get(cacheKey)
+  if (cached) {
+    return cached
+  }
+
+  try {
+    // 1. Ponto de partida do caminhão
+    const pontoCaminhao: LatLngCoord =
+      caminhaoIndex >= 0 && caminhaoIndex < paradas.length ? paradas[caminhaoIndex] : deposito
+
+    // 2. Próxima parada
+    const pontoProxima: LatLngCoord = paradas[proximaIndex]
+
+    // 3. Última parada
+    const pontoUltima: LatLngCoord = paradas[paradas.length - 1]
+
+    // Promessas a executar em paralelo:
+    // A) Trecho concluído (se caminhaoIndex >= 0): Depósito -> Paradas[0..caminhaoIndex]
+    const pontosConcluidos: LatLngCoord[] =
+      caminhaoIndex >= 0 ? [deposito, ...paradas.slice(0, caminhaoIndex + 1)] : []
+
+    const promisseConcluido =
+      pontosConcluidos.length >= 2
+        ? fetchOsrmDrivingRoute(pontosConcluidos, timeoutMs)
+        : Promise.resolve(null)
+
+    // B) Trecho Ativo em VERMELHO: do Caminhão até a Próxima Parada
+    const promisseAtivo = fetchOsrmDrivingRoute([pontoCaminhao, pontoProxima], timeoutMs)
+
+    // C) Trecho de Retorno: da Última parada de volta ao Depósito Central
+    const promisseRetorno = fetchOsrmDrivingRoute([pontoUltima, deposito], timeoutMs)
+
+    // D) Trecho restante intermediário (se houver paradas entre a próxima e a última):
+    // Próxima -> ... -> Última
+    const pontosRestantesIntermediarios: LatLngCoord[] =
+      proximaIndex < paradas.length - 1 ? paradas.slice(proximaIndex) : []
+
+    const promisseRestanteIntermediario =
+      pontosRestantesIntermediarios.length >= 2
+        ? fetchOsrmDrivingRoute(pontosRestantesIntermediarios, timeoutMs)
+        : Promise.resolve(null)
+
+    const [resConcluido, resAtivo, resRetorno, resIntermediario] = await Promise.all([
+      promisseConcluido,
+      promisseAtivo,
+      promisseRetorno,
+      promisseRestanteIntermediario,
+    ])
+
+    // Se o trecho ativo ou o retorno falharem completamente, podemos tentar buscar a rota completa
+    // mas se resAtivo for nulo, fallback
+    const coordsConcluido = resConcluido?.coordinates || []
+    const distConcluidoKm = (resConcluido?.distanceMeters || 0) / 1000
+    const durConcluidoSec = resConcluido?.durationSeconds || 0
+
+    const coordsAtivo = resAtivo?.coordinates || [
+      [pontoCaminhao.latitude, pontoCaminhao.longitude],
+      [pontoProxima.latitude, pontoProxima.longitude],
+    ]
+    const distAtivoKm = (resAtivo?.distanceMeters || 0) / 1000
+    const durAtivoSec = resAtivo?.durationSeconds || 0
+
+    const coordsRetorno = resRetorno?.coordinates || [
+      [pontoUltima.latitude, pontoUltima.longitude],
+      [deposito.latitude, deposito.longitude],
+    ]
+    const distRetornoKm = (resRetorno?.distanceMeters || 0) / 1000
+    const durRetornoSec = resRetorno?.durationSeconds || 0
+
+    const distIntermediarioKm = (resIntermediario?.distanceMeters || 0) / 1000
+    const durIntermediarioSec = resIntermediario?.durationSeconds || 0
+
+    // Distância restante: do caminhão até a próxima (ativo) + trecho restante até a última + retorno ao depósito
+    const distRestanteKm = distAtivoKm + distIntermediarioKm + distRetornoKm
+    const durRestanteMin = Math.round((durAtivoSec + durIntermediarioSec + durRetornoSec) / 60)
+
+    // Distância total do percurso completo (circuito fechado: depósito -> todas paradas -> depósito)
+    // Se temos trechoConcluido + trechoAtivo + intermediario + retorno
+    const distTotalCircuitoKm = distConcluidoKm + distAtivoKm + distIntermediarioKm + distRetornoKm
+    const durTotalMin = Math.round(
+      (durConcluidoSec + durAtivoSec + durIntermediarioSec + durRetornoSec) / 60,
+    )
+
+    const result: OsrmEmRotaResult = {
+      trechoConcluido: coordsConcluido,
+      trechoAtivoVermelho: coordsAtivo,
+      trechoRetornoDeposito: coordsRetorno,
+      distanciaConcluidaKm: distConcluidoKm,
+      distanciaAtivaKm: distAtivoKm,
+      distanciaRetornoKm: distRetornoKm,
+      distanciaTotalPercursoKm: distTotalCircuitoKm,
+      distanciaRestanteKm: distRestanteKm,
+      duracaoEstimadaMinutos: durTotalMin,
+      duracaoRestanteMinutos: durRestanteMin,
+      proximaParadaIndex: proximaIndex,
+      caminhaoParadaIndex: caminhaoIndex,
+      viaEstrada: true,
+    }
+
+    routeEmRotaCache.set(cacheKey, result)
+    return result
+  } catch {
+    return null
+  }
+}
+
 export async function obterRotaEstradaOSRM(
   deposito: LatLngCoord,
   paradas: LatLngCoord[],
@@ -224,4 +377,5 @@ export async function obterRotaEstradaOSRM(
  */
 export function limparCacheRotasOSRM(): void {
   routeCache.clear()
+  routeEmRotaCache.clear()
 }

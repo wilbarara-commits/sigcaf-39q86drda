@@ -4,7 +4,12 @@ import L from 'leaflet'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { extrairCoordenadas, calcularDistanciaTotalCaminho } from '@/lib/routeOptimization'
-import { obterRotaEstradaOSRM, OsrmRouteResult } from '@/services/osrm'
+import {
+  obterRotaEstradaOSRM,
+  obterRotaEstradaEmRotaOSRM,
+  OsrmRouteResult,
+  OsrmEmRotaResult,
+} from '@/services/osrm'
 import {
   MapPin,
   Building2,
@@ -38,6 +43,7 @@ export interface RouteMapViewProps {
     longitude: number
   }
   caminhaoEscolaId?: string | null
+  isEmRota?: boolean
   height?: string | number
   className?: string
 }
@@ -220,11 +226,13 @@ export function RouteMapView({
   paradas,
   deposito,
   caminhaoEscolaId,
+  isEmRota = false,
   height = 420,
   className = '',
 }: RouteMapViewProps) {
   const [, setMapReady] = useState(false)
   const [osrmResult, setOsrmResult] = useState<OsrmRouteResult | null>(null)
+  const [osrmEmRotaResult, setOsrmEmRotaResult] = useState<OsrmEmRotaResult | null>(null)
   const [loadingRoute, setLoadingRoute] = useState(false)
   const [osrmFailed, setOsrmFailed] = useState(false)
 
@@ -281,12 +289,33 @@ export function RouteMapView({
     return L.latLngBounds(points)
   }, [depositoCoords, paradasComCoord])
 
-  // Efeito para buscar a rota por estradas reais via OSRM sempre que paradas/depósito mudarem
+  // Índice da parada onde o caminhão está (-1 se não estiver em nenhuma com coordenada)
+  const caminhaoCoordIndex = useMemo(() => {
+    if (!caminhaoEscolaId) return -1
+    return paradasComCoord.findIndex((p) => p.parada.escolaId === caminhaoEscolaId)
+  }, [caminhaoEscolaId, paradasComCoord])
+
+  // Índice da próxima parada quando EM ROTA
+  const proximaParadaCoordIndex = useMemo(() => {
+    if (paradasComCoord.length === 0) return -1
+    if (caminhaoCoordIndex < 0) return 0
+    return Math.min(caminhaoCoordIndex + 1, paradasComCoord.length - 1)
+  }, [caminhaoCoordIndex, paradasComCoord.length])
+
+  // Próxima parada (objeto ParadaMapaItem)
+  const proximaParada = useMemo(() => {
+    if (proximaParadaCoordIndex < 0 || proximaParadaCoordIndex >= paradasComCoord.length)
+      return null
+    return paradasComCoord[proximaParadaCoordIndex]
+  }, [proximaParadaCoordIndex, paradasComCoord])
+
+  // Efeito para buscar a rota por estradas reais via OSRM sempre que paradas/depósito/modo/caminhão mudarem
   useEffect(() => {
     let active = true
 
     if (paradasComCoord.length === 0) {
       setOsrmResult(null)
+      setOsrmEmRotaResult(null)
       setLoadingRoute(false)
       setOsrmFailed(false)
       return
@@ -300,44 +329,86 @@ export function RouteMapView({
       longitude: p.lng,
     }))
 
-    obterRotaEstradaOSRM(depositoCoords, coordsArray, { timeoutMs: 8000 })
-      .then((res) => {
-        if (!active) return
-        setLoadingRoute(false)
-        if (res) {
-          setOsrmResult(res)
-          setOsrmFailed(false)
-        } else {
+    if (isEmRota) {
+      // Modo EM ROTA: trecho concluído, trecho em vermelho caminhão -> próxima, e retorno ao depósito
+      obterRotaEstradaEmRotaOSRM(depositoCoords, coordsArray, caminhaoCoordIndex, {
+        timeoutMs: 8000,
+      })
+        .then((res) => {
+          if (!active) return
+          setLoadingRoute(false)
+          if (res) {
+            setOsrmEmRotaResult(res)
+            setOsrmResult(null)
+            setOsrmFailed(false)
+          } else {
+            setOsrmEmRotaResult(null)
+            setOsrmResult(null)
+            setOsrmFailed(true)
+          }
+        })
+        .catch(() => {
+          if (!active) return
+          setLoadingRoute(false)
+          setOsrmEmRotaResult(null)
           setOsrmResult(null)
           setOsrmFailed(true)
-        }
-      })
-      .catch(() => {
-        if (!active) return
-        setLoadingRoute(false)
-        setOsrmResult(null)
-        setOsrmFailed(true)
-      })
+        })
+    } else {
+      // Modo NÃO DESPACHADA: preserva comportamento 100% idêntico
+      obterRotaEstradaOSRM(depositoCoords, coordsArray, { timeoutMs: 8000 })
+        .then((res) => {
+          if (!active) return
+          setLoadingRoute(false)
+          if (res) {
+            setOsrmResult(res)
+            setOsrmEmRotaResult(null)
+            setOsrmFailed(false)
+          } else {
+            setOsrmResult(null)
+            setOsrmEmRotaResult(null)
+            setOsrmFailed(true)
+          }
+        })
+        .catch(() => {
+          if (!active) return
+          setLoadingRoute(false)
+          setOsrmResult(null)
+          setOsrmEmRotaResult(null)
+          setOsrmFailed(true)
+        })
+    }
 
     return () => {
       active = false
     }
-  }, [depositoCoords, paradasComCoord])
+  }, [depositoCoords, paradasComCoord, isEmRota, caminhaoCoordIndex])
 
   // Estimativa em linha reta (fallback e comparativo)
   const distanciaLinhaRetaKm = useMemo(() => {
     if (paradasComCoord.length === 0) return 0
+    if (isEmRota) {
+      // Quando EM ROTA: Depósito -> Todas paradas -> Retorno ao depósito
+      const pontos = [
+        depositoCoords,
+        ...paradasComCoord.map((p) => ({ latitude: p.lat, longitude: p.lng })),
+        depositoCoords,
+      ]
+      return calcularDistanciaTotalCaminho(pontos)
+    }
+    // Não despachada: Depósito -> Paradas (sem retorno)
     const pontos = [
       depositoCoords,
       ...paradasComCoord.map((p) => ({ latitude: p.lat, longitude: p.lng })),
     ]
     return calcularDistanciaTotalCaminho(pontos)
-  }, [depositoCoords, paradasComCoord])
+  }, [depositoCoords, paradasComCoord, isEmRota])
 
+  // =================== LINHAS PARA MODO NÃO DESPACHADA ===================
   // Trecho 1: Depósito -> Primeira parada (se existir)
   // Se OSRM respondeu, usa o caminho da estrada; senão linha reta
   const trechoOrigem = useMemo<[number, number][] | null>(() => {
-    if (paradasComCoord.length === 0) return null
+    if (isEmRota || paradasComCoord.length === 0) return null
 
     if (osrmResult?.trechoOrigem && osrmResult.trechoOrigem.length > 0) {
       return osrmResult.trechoOrigem
@@ -349,12 +420,12 @@ export function RouteMapView({
       [depositoCoords.latitude, depositoCoords.longitude],
       [first.lat, first.lng],
     ]
-  }, [depositoCoords, paradasComCoord, osrmResult])
+  }, [depositoCoords, paradasComCoord, osrmResult, isEmRota])
 
   // Trecho 2: Entre as paradas sequenciais (parada 1 -> parada 2 -> ...)
   // Se OSRM respondeu, usa as curvas reais das estradas; senão linha reta
   const trechoParadas = useMemo<[number, number][]>(() => {
-    if (paradasComCoord.length <= 1) return []
+    if (isEmRota || paradasComCoord.length <= 1) return []
 
     if (osrmResult?.trechoParadas && osrmResult.trechoParadas.length > 0) {
       return osrmResult.trechoParadas
@@ -362,7 +433,71 @@ export function RouteMapView({
 
     // Fallback: linhas retas entre as paradas
     return paradasComCoord.map((p) => [p.lat, p.lng])
-  }, [paradasComCoord, osrmResult])
+  }, [paradasComCoord, osrmResult, isEmRota])
+
+  // =================== LINHAS PARA MODO EM ROTA ===================
+  // 1. Trecho Concluído: Depósito Central até a parada atual do caminhão (se caminhaoCoordIndex >= 0)
+  const trechoEmRotaConcluido = useMemo<[number, number][]>(() => {
+    if (!isEmRota || caminhaoCoordIndex < 0 || paradasComCoord.length === 0) return []
+
+    if (osrmEmRotaResult?.trechoConcluido && osrmEmRotaResult.trechoConcluido.length > 0) {
+      return osrmEmRotaResult.trechoConcluido
+    }
+
+    // Fallback linha reta: Depósito -> paradas[0..caminhaoCoordIndex]
+    const pontos: [number, number][] = [[depositoCoords.latitude, depositoCoords.longitude]]
+    for (let i = 0; i <= caminhaoCoordIndex; i++) {
+      pontos.push([paradasComCoord[i].lat, paradasComCoord[i].lng])
+    }
+    return pontos
+  }, [isEmRota, caminhaoCoordIndex, paradasComCoord, osrmEmRotaResult, depositoCoords])
+
+  // 2. Trecho em VERMELHO: Da posição do caminhão (ou Depósito se não marcado) até a PRÓXIMA parada
+  const trechoEmRotaAtivoVermelho = useMemo<[number, number][]>(() => {
+    if (!isEmRota || paradasComCoord.length === 0 || proximaParadaCoordIndex < 0) return []
+
+    if (osrmEmRotaResult?.trechoAtivoVermelho && osrmEmRotaResult.trechoAtivoVermelho.length > 0) {
+      return osrmEmRotaResult.trechoAtivoVermelho
+    }
+
+    // Fallback linha reta: Caminhão (ou depósito se não marcado) -> Próxima
+    const startLat =
+      caminhaoCoordIndex >= 0 ? paradasComCoord[caminhaoCoordIndex].lat : depositoCoords.latitude
+    const startLng =
+      caminhaoCoordIndex >= 0 ? paradasComCoord[caminhaoCoordIndex].lng : depositoCoords.longitude
+
+    const prox = paradasComCoord[proximaParadaCoordIndex]
+    return [
+      [startLat, startLng],
+      [prox.lat, prox.lng],
+    ]
+  }, [
+    isEmRota,
+    paradasComCoord,
+    proximaParadaCoordIndex,
+    caminhaoCoordIndex,
+    osrmEmRotaResult,
+    depositoCoords,
+  ])
+
+  // 3. Trecho Retorno ao Depósito Central: da última parada até o Depósito Central
+  const trechoEmRotaRetorno = useMemo<[number, number][]>(() => {
+    if (!isEmRota || paradasComCoord.length === 0) return []
+
+    if (
+      osrmEmRotaResult?.trechoRetornoDeposito &&
+      osrmEmRotaResult.trechoRetornoDeposito.length > 0
+    ) {
+      return osrmEmRotaResult.trechoRetornoDeposito
+    }
+
+    // Fallback linha reta: Última parada -> Depósito
+    const last = paradasComCoord[paradasComCoord.length - 1]
+    return [
+      [last.lat, last.lng],
+      [depositoCoords.latitude, depositoCoords.longitude],
+    ]
+  }, [isEmRota, paradasComCoord, osrmEmRotaResult, depositoCoords])
 
   // Centro padrão inicial: ou a média das coordenadas, ou o depósito
   const defaultCenter = useMemo<[number, number]>(() => {
@@ -394,6 +529,14 @@ export function RouteMapView({
         </div>
 
         <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+          {isEmRota && (
+            <Badge
+              variant="destructive"
+              className="text-[10px] uppercase font-bold tracking-wider py-0 px-1.5"
+            >
+              EM ROTA
+            </Badge>
+          )}
           <span className="inline-flex items-center gap-1">
             <span className="inline-block w-2.5 h-2.5 rounded-full bg-slate-900 border border-sky-400"></span>
             Depósito
@@ -406,6 +549,12 @@ export function RouteMapView({
             <span className="inline-flex items-center gap-1 font-semibold text-amber-600 dark:text-amber-400">
               <span className="inline-block">🚚</span>
               Caminhão na Parada #{paradaCaminhao.ordem}
+            </span>
+          )}
+          {isEmRota && proximaParada && (
+            <span className="inline-flex items-center gap-1 font-semibold text-red-600 dark:text-red-400">
+              <span className="inline-block w-2 h-2 rounded-full bg-red-600 animate-pulse"></span>
+              Próxima: #{proximaParada.ordem}
             </span>
           )}
         </div>
@@ -444,7 +593,7 @@ export function RouteMapView({
                   <span>{deposito.nome || 'Depósito Central'}</span>
                 </div>
                 <p className="text-[11px] text-slate-600">
-                  Ponto de partida oficial da cooperativa para esta rota de entrega.
+                  Ponto de partida oficial da cooperativa e retorno final da rota.
                 </p>
                 <div className="text-[10px] font-mono text-slate-500 pt-0.5">
                   {depositoCoords.latitude.toFixed(6)}, {depositoCoords.longitude.toFixed(6)}
@@ -453,9 +602,10 @@ export function RouteMapView({
             </Popup>
           </Marker>
 
-          {/* Marcadores das Paradas numeradas */}
+          {/* Marcadores das Paradas numeradas (todas visíveis) */}
           {paradasComCoord.map((item) => {
             const p = item.parada
+            const isProx = isEmRota && proximaParada?.parada.escolaId === p.escolaId
             const icon = createNumberedStopIcon(item.ordem, item.isFirst)
 
             return (
@@ -469,6 +619,11 @@ export function RouteMapView({
                         </span>
                         <span className="font-bold text-slate-900 leading-tight">{p.nome}</span>
                       </div>
+                      {isProx && (
+                        <Badge variant="destructive" className="text-[9px] py-0 px-1">
+                          Próxima Parada
+                        </Badge>
+                      )}
                     </div>
 
                     <div className="flex flex-wrap gap-1 items-center">
@@ -540,8 +695,8 @@ export function RouteMapView({
             </Marker>
           )}
 
-          {/* Trecho 1: Depósito -> Primeira parada (Tracejado) */}
-          {trechoOrigem && (
+          {/* ================= DESENHO DE LINHAS: ROTA NÃO DESPACHADA ================= */}
+          {!isEmRota && trechoOrigem && (
             <Polyline
               positions={trechoOrigem}
               pathOptions={{
@@ -553,8 +708,7 @@ export function RouteMapView({
             />
           )}
 
-          {/* Trecho 2: Parada 1 -> Parada 2 -> ... (Linha contínua) */}
-          {trechoParadas.length > 1 && (
+          {!isEmRota && trechoParadas.length > 1 && (
             <Polyline
               positions={trechoParadas}
               pathOptions={{
@@ -564,15 +718,53 @@ export function RouteMapView({
               }}
             />
           )}
+
+          {/* ================= DESENHO DE LINHAS: ROTA EM ROTA ================= */}
+          {/* 1. Trecho Concluído: Depósito Central até a posição do caminhão (verde contínuo) */}
+          {isEmRota && trechoEmRotaConcluido.length > 1 && (
+            <Polyline
+              positions={trechoEmRotaConcluido}
+              pathOptions={{
+                color: '#059669', // emerald-600
+                weight: 3.5,
+                opacity: 0.75,
+              }}
+            />
+          )}
+
+          {/* 2. Trecho em VERMELHO: do caminhão até a próxima parada */}
+          {isEmRota && trechoEmRotaAtivoVermelho.length > 1 && (
+            <Polyline
+              positions={trechoEmRotaAtivoVermelho}
+              pathOptions={{
+                color: '#dc2626', // red-600
+                weight: 5,
+                opacity: 0.95,
+              }}
+            />
+          )}
+
+          {/* 3. Trecho de Retorno ao Depósito Central: da última parada ao depósito (verde neutro contínuo) */}
+          {isEmRota && trechoEmRotaRetorno.length > 1 && (
+            <Polyline
+              positions={trechoEmRotaRetorno}
+              pathOptions={{
+                color: '#0284c7', // sky blue
+                weight: 3,
+                opacity: 0.8,
+                dashArray: '6, 6',
+              }}
+            />
+          )}
         </MapContainer>
 
         {/* Legenda flutuante sobre o mapa */}
-        <div className="absolute bottom-2 right-2 z-[400] bg-background/95 backdrop-blur-xs border border-border/80 rounded-md p-2 text-[10px] shadow-md space-y-1 pointer-events-auto max-w-[230px]">
+        <div className="absolute bottom-2 right-2 z-[400] bg-background/95 backdrop-blur-xs border border-border/80 rounded-md p-2 text-[10px] shadow-md space-y-1 pointer-events-auto max-w-[245px]">
           <div className="font-semibold text-foreground flex items-center justify-between gap-1">
             <span className="flex items-center gap-1">
               <Layers className="h-3 w-3 text-primary" /> Legenda do Trajeto
             </span>
-            {osrmResult ? (
+            {(isEmRota ? osrmEmRotaResult : osrmResult) ? (
               <span className="text-[9px] px-1 py-0.2 rounded bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 font-medium">
                 Pela estrada
               </span>
@@ -582,30 +774,81 @@ export function RouteMapView({
               </span>
             ) : null}
           </div>
-          <div className="flex items-center gap-1.5 text-muted-foreground">
-            <span className="w-5 h-0.5 border-t-2 border-dashed border-sky-600 inline-block shrink-0"></span>
-            <span>Saída do Depósito Central</span>
-          </div>
-          <div className="flex items-center gap-1.5 text-muted-foreground">
-            <span className="w-5 h-1 bg-emerald-700 inline-block rounded-xs shrink-0"></span>
-            <span>Sequência de Entrega (1 → {paradasComCoord.length})</span>
-          </div>
-          {paradaCaminhao && (
-            <div className="flex items-center gap-1.5 text-amber-700 dark:text-amber-300 font-medium">
-              <span className="inline-block text-xs">🚚</span>
-              <span>Caminhão: Parada #{paradaCaminhao.ordem}</span>
-            </div>
-          )}
-          {osrmResult && (
-            <div className="pt-1 border-t border-border/60 flex items-center justify-between text-[9px] text-muted-foreground">
-              <span className="flex items-center gap-1 text-foreground font-medium">
-                <Navigation className="h-2.5 w-2.5 text-emerald-600" />
-                Estrada: {osrmResult.distanciaTotalKm.toFixed(1).replace('.', ',')} km
-              </span>
-              {osrmResult.duracaoEstimadaMinutos > 0 && (
-                <span>~{osrmResult.duracaoEstimadaMinutos} min</span>
+
+          {/* Itens da Legenda conforme modo */}
+          {isEmRota ? (
+            <>
+              {caminhaoCoordIndex >= 0 && (
+                <div className="flex items-center gap-1.5 text-muted-foreground">
+                  <span className="w-5 h-1 bg-emerald-600 inline-block rounded-xs shrink-0"></span>
+                  <span>Percurso Concluído (Depósito → #{caminhaoCoordIndex + 1})</span>
+                </div>
               )}
-            </div>
+              <div className="flex items-center gap-1.5 text-red-600 dark:text-red-400 font-semibold">
+                <span className="w-5 h-1 bg-red-600 inline-block rounded-xs shrink-0"></span>
+                <span>
+                  Trecho Ativo ({caminhaoCoordIndex >= 0 ? `Caminhão` : 'Depósito'} → Próxima #
+                  {proximaParadaCoordIndex + 1})
+                </span>
+              </div>
+              <div className="flex items-center gap-1.5 text-muted-foreground">
+                <span className="w-5 h-0.5 border-t-2 border-dashed border-sky-600 inline-block shrink-0"></span>
+                <span>Retorno ao Depósito (após #{paradasComCoord.length})</span>
+              </div>
+              {osrmEmRotaResult && (
+                <div className="pt-1 border-t border-border/60 space-y-0.5 text-[9px] text-muted-foreground">
+                  <div className="flex items-center justify-between font-medium text-foreground">
+                    <span className="flex items-center gap-1 text-red-600 dark:text-red-400">
+                      <Navigation className="h-2.5 w-2.5" />
+                      Trecho Ativo:
+                    </span>
+                    <span>{osrmEmRotaResult.distanciaAtivaKm.toFixed(1).replace('.', ',')} km</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span>Circuito total:</span>
+                    <span>
+                      {osrmEmRotaResult.distanciaTotalPercursoKm.toFixed(1).replace('.', ',')} km
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span>Restante da rota:</span>
+                    <span className="font-semibold text-foreground">
+                      {osrmEmRotaResult.distanciaRestanteKm.toFixed(1).replace('.', ',')} km
+                      {osrmEmRotaResult.duracaoRestanteMinutos > 0 &&
+                        ` (~${osrmEmRotaResult.duracaoRestanteMinutos} min)`}
+                    </span>
+                  </div>
+                </div>
+              )}
+            </>
+          ) : (
+            <>
+              <div className="flex items-center gap-1.5 text-muted-foreground">
+                <span className="w-5 h-0.5 border-t-2 border-dashed border-sky-600 inline-block shrink-0"></span>
+                <span>Saída do Depósito Central</span>
+              </div>
+              <div className="flex items-center gap-1.5 text-muted-foreground">
+                <span className="w-5 h-1 bg-emerald-700 inline-block rounded-xs shrink-0"></span>
+                <span>Sequência de Entrega (1 → {paradasComCoord.length})</span>
+              </div>
+              {paradaCaminhao && (
+                <div className="flex items-center gap-1.5 text-amber-700 dark:text-amber-300 font-medium">
+                  <span className="inline-block text-xs">🚚</span>
+                  <span>Caminhão: Parada #{paradaCaminhao.ordem}</span>
+                </div>
+              )}
+              {osrmResult && (
+                <div className="pt-1 border-t border-border/60 flex items-center justify-between text-[9px] text-muted-foreground">
+                  <span className="flex items-center gap-1 text-foreground font-medium">
+                    <Navigation className="h-2.5 w-2.5 text-emerald-600" />
+                    Estrada: {osrmResult.distanciaTotalKm.toFixed(1).replace('.', ',')} km
+                  </span>
+                  {osrmResult.duracaoEstimadaMinutos > 0 && (
+                    <span>~{osrmResult.duracaoEstimadaMinutos} min</span>
+                  )}
+                </div>
+              )}
+            </>
           )}
         </div>
       </div>
@@ -616,8 +859,9 @@ export function RouteMapView({
           <span className="flex items-center gap-1.5">
             <Info className="h-3.5 w-3.5 text-primary shrink-0" />
             <span>
-              Os números nos pinos refletem a ordem atual de entrega. Reordene arrastando na lista
-              ao lado.
+              {isEmRota
+                ? 'Em rota: traçado em vermelho destaca o trecho ativo do caminhão até a próxima parada com retorno ao Depósito Central.'
+                : 'Os números nos pinos refletem a ordem atual de entrega. Reordene arrastando na lista ao lado.'}
             </span>
           </span>
 
@@ -628,7 +872,37 @@ export function RouteMapView({
             </span>
           )}
 
-          {osrmResult && !loadingRoute && (
+          {/* Rodapé de Distâncias para Modo EM ROTA */}
+          {isEmRota && osrmEmRotaResult && !loadingRoute && (
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="inline-flex items-center gap-1 text-red-700 dark:text-red-400 text-[10px] bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 px-2 py-0.5 rounded-full font-semibold">
+                <Navigation className="h-3 w-3" />
+                Trecho até Próxima Parada:{' '}
+                <strong>{osrmEmRotaResult.distanciaAtivaKm.toFixed(1).replace('.', ',')} km</strong>
+              </span>
+
+              <span className="inline-flex items-center gap-1 text-emerald-700 dark:text-emerald-400 text-[10px] bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 px-2 py-0.5 rounded-full font-medium">
+                Percurso real com retorno:{' '}
+                <strong>
+                  {osrmEmRotaResult.distanciaTotalPercursoKm.toFixed(1).replace('.', ',')} km
+                </strong>
+                {osrmEmRotaResult.duracaoEstimadaMinutos > 0 &&
+                  ` (~${osrmEmRotaResult.duracaoEstimadaMinutos} min total)`}
+              </span>
+
+              <span className="inline-flex items-center gap-1 text-slate-700 dark:text-slate-300 text-[10px] bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-2 py-0.5 rounded-full font-medium">
+                Restante até retornar:{' '}
+                <strong>
+                  {osrmEmRotaResult.distanciaRestanteKm.toFixed(1).replace('.', ',')} km
+                </strong>
+                {osrmEmRotaResult.duracaoRestanteMinutos > 0 &&
+                  ` (~${osrmEmRotaResult.duracaoRestanteMinutos} min)`}
+              </span>
+            </div>
+          )}
+
+          {/* Rodapé de Distâncias para Modo NÃO DESPACHADA */}
+          {!isEmRota && osrmResult && !loadingRoute && (
             <span className="inline-flex items-center gap-1 text-emerald-700 dark:text-emerald-400 text-[10px] bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 px-2 py-0.5 rounded-full font-medium">
               <Navigation className="h-3 w-3" />
               Percurso real por estradas:{' '}
