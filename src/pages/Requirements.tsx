@@ -154,6 +154,7 @@ const MODULES: ModuleSpec[] = [
     route: '/rotas',
     goal: 'Rotas criadas no nível da Chamada, agrupando escolas de todos os contratos vinculados em uma mesma rota integrada, sequenciamento drag-and-drop de paradas, otimização geográfica partindo do Depósito Central e despacho por rota inteira.',
     details: [
+      'Consistência de Métricas e Remoção de Contrato Ref no Card (0.0.97): remoção definitiva do rótulo "Contrato ref" do cabeçalho dos cards de rota (a rota pertence à Chamada e reúne escolas de múltiplos contratos, com badge individual por parada). Unificação do cálculo de Volume Total e Valor Total para computar exclusivamente pedidos ativos/em trânsito (Pendente e Em Rota), eliminando contradição entre "Pedidos Ativos: 0" e contagem legada de itens cancelados.',
       'Rotas no Nível da Chamada: A coleção `rotas` opera primariamente associada a `chamada_id` (com `contrato_id` preservado para legado). Em uma rota, a cooperativa pode agrupar escolas de diferentes contratos vinculados à mesma chamada pública.',
       'Catálogo Unificado de Escolas da Chamada: Na montagem do roteamento, o sistema carrega os vínculos `contrato_escolas` de todos os contratos com aquele `chamada_id`, disponibilizando uma visão unificada para seleção e distribuição nas rotas.',
       'Identificação Visual do Contrato de Origem: Na listagem de paradas e pedidos, cada escola exibe um badge sutil com o número do contrato de origem (ex.: "C-2026-01"), preservando a clareza institucional.',

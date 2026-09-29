@@ -429,7 +429,9 @@ export default function DeliveryRoutes() {
 
       paradasCadastradas.forEach((p, idx) => {
         const sch = schools.find((s) => s.id === p.escola_id)
-        const peds = pedidosDaRota.filter((o) => o.schoolId === p.escola_id)
+        const peds = pedidosDaRota.filter(
+          (o) => o.schoolId === p.escola_id && o.status !== 'Cancelado',
+        )
         const contratoOrigem = escolaContratoOrigemMap.get(p.escola_id)
 
         paradasOrdenadas.push({
@@ -452,11 +454,16 @@ export default function DeliveryRoutes() {
           (a, b) => new Date(b.data_despacho).getTime() - new Date(a.data_despacho).getTime(),
         )[0]
 
-      const volumeTotal = pedidosDaRota.reduce(
-        (acc, p) => acc + p.items.reduce((sum, it) => sum + it.quantity, 0),
+      // Considerar apenas pedidos ativos/em trânsito (Pendente e Em Rota) para métricas ativas da rota
+      const pedidosAtivosDaRota = pedidosDaRota.filter(
+        (o) => o.status === 'Pendente' || o.status === 'Em Rota',
+      )
+
+      const volumeTotal = pedidosAtivosDaRota.reduce(
+        (acc, p) => acc + p.items.reduce((sum, it) => sum + (Number(it.quantity) || 0), 0),
         0,
       )
-      const valorTotal = pedidosDaRota.reduce((acc, p) => acc + p.total, 0)
+      const valorTotal = pedidosAtivosDaRota.reduce((acc, p) => acc + (Number(p.total) || 0), 0)
 
       return {
         rota,
@@ -1272,11 +1279,6 @@ export default function DeliveryRoutes() {
                         <span>
                           Chamada: <strong className="text-foreground">{item.chamadaNome}</strong>
                         </span>
-                        {item.contratoNumero && (
-                          <span className="text-muted-foreground">
-                            • Contrato ref: {item.contratoNumero}
-                          </span>
-                        )}
                         <span>
                           • Modalidade: <span className="capitalize">{item.modalidade}</span>
                         </span>
