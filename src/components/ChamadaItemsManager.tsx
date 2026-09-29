@@ -854,12 +854,12 @@ export function ChamadaItemsManager({
   }
 
   return (
-    <div className="space-y-3 pt-1">
+    <div className="space-y-2.5 pt-0.5">
       {/* Barra Superior de Ações */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-1 border-b">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-1.5 border-b">
         <div>
           <div className="flex items-center gap-2">
-            <Label className="text-sm font-semibold flex items-center gap-1.5">
+            <Label className="text-xs sm:text-sm font-semibold flex items-center gap-1.5">
               <Package className="h-4 w-4 text-primary" />
               Produtos, Preços e Quantidades da Chamada ({items.length})
             </Label>
@@ -876,13 +876,13 @@ export function ChamadaItemsManager({
               </Badge>
             )}
           </div>
-          <p className="text-xs text-muted-foreground mt-0.5">
+          <p className="text-[11px] text-muted-foreground mt-0.5">
             Cadastre os produtos, seus apelidos (AKA) e preços unitários oficiais desta chamada. A
             quantidade é a soma automática dos contratos vinculados.
           </p>
         </div>
 
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex items-center gap-1.5 flex-wrap">
           {items.length === 0 ? (
             <TooltipProvider delayDuration={200}>
               <Tooltip>
@@ -892,7 +892,7 @@ export function ChamadaItemsManager({
                       type="button"
                       variant="outline"
                       size="sm"
-                      className="h-8 text-xs gap-1.5 opacity-60 cursor-not-allowed"
+                      className="h-7 text-xs gap-1.5 opacity-60 cursor-not-allowed"
                       disabled
                     >
                       <Download className="h-3.5 w-3.5 text-muted-foreground" />
@@ -912,7 +912,7 @@ export function ChamadaItemsManager({
                   type="button"
                   variant="outline"
                   size="sm"
-                  className="h-8 text-xs gap-1.5 text-foreground hover:text-primary hover:border-primary/50"
+                  className="h-7 text-xs gap-1.5 text-foreground hover:text-primary hover:border-primary/50"
                   title="Exportar itens da chamada"
                 >
                   <Download className="h-3.5 w-3.5 text-primary" />
@@ -942,7 +942,7 @@ export function ChamadaItemsManager({
             type="button"
             variant="outline"
             size="sm"
-            className="h-8 text-xs gap-1.5"
+            className="h-7 text-xs gap-1.5"
             onClick={() => setFileModalOpen(true)}
           >
             <Upload className="h-3.5 w-3.5 text-muted-foreground" />
@@ -953,7 +953,7 @@ export function ChamadaItemsManager({
             type="button"
             variant="outline"
             size="sm"
-            className="h-8 text-xs gap-1.5"
+            className="h-7 text-xs gap-1.5"
             onClick={() => {
               setPasteText('')
               setPastePreview(null)
@@ -967,7 +967,7 @@ export function ChamadaItemsManager({
           <Button
             type="button"
             size="sm"
-            className="h-8 text-xs gap-1.5"
+            className="h-7 text-xs gap-1.5"
             onClick={handleOpenBatchModal}
           >
             <Plus className="h-3.5 w-3.5" />
@@ -978,13 +978,13 @@ export function ChamadaItemsManager({
 
       {/* Tabela de Itens */}
       {items.length === 0 ? (
-        <div className="py-10 text-center border rounded-lg bg-muted/10 space-y-3">
-          <Package className="h-8 w-8 text-muted-foreground/50 mx-auto" />
+        <div className="py-8 text-center border rounded-lg bg-muted/10 space-y-2.5">
+          <Package className="h-7 w-7 text-muted-foreground/50 mx-auto" />
           <div className="space-y-1">
-            <p className="text-sm font-medium text-foreground">
+            <p className="text-xs sm:text-sm font-medium text-foreground">
               Nenhum produto associado a esta chamada pública
             </p>
-            <p className="text-xs text-muted-foreground max-w-md mx-auto">
+            <p className="text-[11px] text-muted-foreground max-w-md mx-auto">
               Clique em <strong>"Selecionar Produtos"</strong> para marcar itens do catálogo ou use{' '}
               <strong>"Importar Planilha / CSV"</strong> para carregar os produtos, AKAs e preços de
               uma vez.
@@ -995,7 +995,7 @@ export function ChamadaItemsManager({
               type="button"
               variant="outline"
               size="sm"
-              className="h-8 text-xs gap-1.5"
+              className="h-7 text-xs gap-1.5"
               onClick={handleOpenBatchModal}
             >
               <Plus className="h-3.5 w-3.5" />
@@ -1005,7 +1005,7 @@ export function ChamadaItemsManager({
               type="button"
               variant="outline"
               size="sm"
-              className="h-8 text-xs gap-1.5"
+              className="h-7 text-xs gap-1.5"
               onClick={() => setFileModalOpen(true)}
             >
               <Upload className="h-3.5 w-3.5" />
@@ -1015,27 +1015,31 @@ export function ChamadaItemsManager({
         </div>
       ) : (
         <div className="space-y-2">
-          <div className="rounded-md border max-h-[420px] overflow-y-auto">
+          <div className="rounded-md border max-h-[380px] overflow-y-auto">
             <Table>
-              <TableHeader className="bg-muted/30 sticky top-0 z-10 backdrop-blur-xs">
-                <TableRow className="text-xs h-9">
-                  <TableHead className="min-w-[200px] w-[32%] py-1.5 px-2.5">
+              <TableHeader className="bg-muted/40 sticky top-0 z-10 backdrop-blur-xs">
+                <TableRow className="text-xs h-8">
+                  <TableHead className="min-w-[240px] w-[34%] py-1 px-2.5 font-semibold">
                     Nome do Produto
                   </TableHead>
-                  <TableHead className="min-w-[180px] w-[26%] py-1.5 px-2.5">
+                  <TableHead className="min-w-[200px] w-[26%] py-1 px-2.5 font-semibold">
                     AKA / Apelido na Planilha
                   </TableHead>
-                  <TableHead className="w-[90px] text-center py-1.5 px-2">Unidade</TableHead>
-                  <TableHead className="min-w-[110px] w-[14%] py-1.5 px-2.5">
+                  <TableHead className="w-[75px] min-w-[70px] text-center py-1 px-1.5 font-semibold">
+                    Unidade
+                  </TableHead>
+                  <TableHead className="min-w-[130px] w-[15%] py-1 px-2 font-semibold">
                     Preço Unit. (R$)
                   </TableHead>
-                  <TableHead className="min-w-[100px] w-[12%] text-right py-1.5 px-2">
+                  <TableHead className="min-w-[95px] w-[11%] text-right py-1 px-2 font-semibold">
                     Qtd. Chamada
                   </TableHead>
-                  <TableHead className="min-w-[100px] w-[11%] text-right py-1.5 px-2">
+                  <TableHead className="min-w-[95px] w-[11%] text-right py-1 px-2 font-semibold">
                     Valor Total
                   </TableHead>
-                  <TableHead className="w-[45px] text-center py-1.5 px-1">Ações</TableHead>
+                  <TableHead className="w-[40px] text-center py-1 px-1 font-semibold">
+                    Ações
+                  </TableHead>
                 </TableRow>
               </TableHeader>{' '}
               <TableBody>
@@ -1058,41 +1062,41 @@ export function ChamadaItemsManager({
                       className="text-xs hover:bg-muted/10"
                     >
                       {/* Produto */}
-                      <TableCell className="py-2">
+                      <TableCell className="py-1 px-2">
                         <Input
                           value={item.produto}
                           onChange={(e) => handleProdutoChange(index, e.target.value)}
                           placeholder="Nome do produto na chamada"
-                          className="h-7 text-xs font-semibold text-foreground"
+                          className="h-7 text-xs font-semibold text-foreground w-full"
                           title="Nome do produto na chamada pública"
                         />
                       </TableCell>
 
                       {/* AKA/Apelido */}
-                      <TableCell className="py-2">
+                      <TableCell className="py-1 px-2">
                         <Input
                           value={item.aka || ''}
                           onChange={(e) => handleAkaChange(index, e.target.value)}
                           placeholder="AKA na planilha (ex: BANANA, MAÇÃ)"
-                          className="h-7 text-xs font-mono text-muted-foreground"
+                          className="h-7 text-xs font-mono text-muted-foreground w-full"
                           title="Apelido na planilha da secretaria para cruzamento automático"
                         />
                       </TableCell>
 
                       {/* Unidade */}
-                      <TableCell className="py-2 text-center">
+                      <TableCell className="py-1 px-1 text-center">
                         <Input
                           value={item.unidade || 'Kg'}
                           onChange={(e) => handleUnidadeChange(index, e.target.value)}
                           placeholder="Kg"
-                          className="h-7 text-xs text-center font-mono w-16 mx-auto"
+                          className="h-7 text-xs text-center font-mono w-14 mx-auto px-1"
                         />
                       </TableCell>
 
                       {/* Preço Unitário */}
-                      <TableCell className="py-2">
-                        <div className="space-y-1">
-                          <div className="relative max-w-[120px]">
+                      <TableCell className="py-1 px-2">
+                        <div className="space-y-0.5">
+                          <div className="relative w-full max-w-[130px]">
                             <span className="absolute left-2 top-1.5 text-[11px] text-muted-foreground pointer-events-none font-medium">
                               R$
                             </span>
@@ -1119,7 +1123,7 @@ export function ChamadaItemsManager({
                                 type="button"
                                 onClick={() => handleResetToCatalogPrice(index)}
                                 title="Restaurar preço base do catálogo"
-                                className="text-muted-foreground hover:text-foreground inline-flex items-center gap-0.5 underline text-[9px] ml-1"
+                                className="text-muted-foreground hover:text-foreground inline-flex items-center gap-0.5 underline text-[9px] ml-0.5"
                               >
                                 <RotateCcw className="h-2.5 w-2.5" />
                                 restaurar
@@ -1130,7 +1134,7 @@ export function ChamadaItemsManager({
                       </TableCell>
 
                       {/* Quantidade da Chamada (somente leitura - soma dos contratos) */}
-                      <TableCell className="py-2 text-right">
+                      <TableCell className="py-1 px-2 text-right">
                         {item.quantidadeAgregada !== undefined &&
                         item.quantidadeAgregada !== null &&
                         item.quantidadeAgregada > 0 ? (
@@ -1151,9 +1155,9 @@ export function ChamadaItemsManager({
                       </TableCell>
 
                       {/* Subtotal */}
-                      <TableCell className="text-right py-2 font-mono font-semibold">
+                      <TableCell className="text-right py-1 px-2 font-mono font-semibold">
                         {qty > 0 ? (
-                          <span className="text-foreground">
+                          <span className="text-foreground text-xs">
                             R${' '}
                             {subtotal.toLocaleString('pt-BR', {
                               minimumFractionDigits: 2,
@@ -1166,16 +1170,16 @@ export function ChamadaItemsManager({
                       </TableCell>
 
                       {/* Ações */}
-                      <TableCell className="text-right py-2">
+                      <TableCell className="text-center py-1 px-1">
                         <Button
                           type="button"
                           variant="ghost"
                           size="icon"
-                          className="h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                          className="h-6 w-6 text-muted-foreground hover:text-destructive hover:bg-destructive/10 mx-auto"
                           title="Remover produto da chamada"
                           onClick={() => setItemToDeleteIndex(index)}
                         >
-                          <Trash2 className="h-3.5 w-3.5" />
+                          <Trash2 className="h-3 w-3" />
                         </Button>
                       </TableCell>
                     </TableRow>
@@ -1186,9 +1190,9 @@ export function ChamadaItemsManager({
           </div>
 
           {/* Rodapé com Totais */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 rounded-lg border bg-primary/5 border-primary/20">
-            <div className="flex items-center gap-3">
-              <div className="flex items-center gap-2">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2.5 rounded-lg border bg-primary/5 border-primary/20">
+            <div className="flex items-center gap-2.5">
+              <div className="flex items-center gap-1.5 flex-wrap">
                 <span className="text-xs text-muted-foreground">
                   Produtos cadastrados: <strong className="text-foreground">{items.length}</strong>
                 </span>
@@ -1204,18 +1208,18 @@ export function ChamadaItemsManager({
                   variant="ghost"
                   size="sm"
                   onClick={handleClearAll}
-                  className="h-6 text-[11px] text-destructive hover:bg-destructive/10 px-2"
+                  className="h-5 text-[10px] text-destructive hover:bg-destructive/10 px-1.5"
                 >
                   Limpar lista
                 </Button>
               )}
             </div>
 
-            <div className="flex items-baseline justify-between sm:justify-end gap-3 text-right">
-              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+            <div className="flex items-baseline justify-between sm:justify-end gap-2 text-right">
+              <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
                 Valor Total da Chamada:
               </span>
-              <span className="text-base sm:text-lg font-bold font-mono text-primary">
+              <span className="text-sm sm:text-base font-bold font-mono text-primary">
                 R${' '}
                 {totalChamadaCalculado.toLocaleString('pt-BR', {
                   minimumFractionDigits: 2,

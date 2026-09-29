@@ -542,8 +542,8 @@ export default function Producao() {
 
       {/* Modal de Criação / Edição de Chamada */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-[96vw] sm:max-w-5xl xl:max-w-6xl max-h-[92vh] overflow-y-auto p-4 sm:p-6">
-          <DialogHeader className="pb-1 sm:pb-2">
+        <DialogContent className="max-w-[96vw] sm:max-w-5xl md:max-w-6xl max-h-[92vh] p-4 sm:p-5 overflow-y-auto">
+          <DialogHeader className="pb-1 space-y-1">
             <DialogTitle className="flex items-center gap-2 text-base sm:text-lg">
               <Sparkles className="h-5 w-5 text-primary" />
               {editingChamada
@@ -593,19 +593,25 @@ export default function Producao() {
                   onValueChange={(v) => setActiveTab(v as any)}
                   className="w-full"
                 >
-                  <TabsList className="grid grid-cols-4 w-full">
-                    <TabsTrigger value="geral">Dados Gerais</TabsTrigger>
-                    <TabsTrigger value="itens">Itens & Preços ({formItems.length})</TabsTrigger>
-                    <TabsTrigger value="rotas">Rotas ({chamadaRotas.length})</TabsTrigger>
-                    <TabsTrigger value="contratos">
+                  <TabsList className="grid grid-cols-4 w-full h-9">
+                    <TabsTrigger value="geral" className="text-xs py-1.5">
+                      Dados Gerais
+                    </TabsTrigger>
+                    <TabsTrigger value="itens" className="text-xs py-1.5">
+                      Itens & Preços ({formItems.length})
+                    </TabsTrigger>
+                    <TabsTrigger value="rotas" className="text-xs py-1.5">
+                      Rotas ({chamadaRotas.length})
+                    </TabsTrigger>
+                    <TabsTrigger value="contratos" className="text-xs py-1.5">
                       Contratos ({contratosDestaChamada.length})
                     </TabsTrigger>
                   </TabsList>
 
-                  <TabsContent value="geral" className="space-y-4 pt-2">
-                    <form onSubmit={handleSubmit} className="space-y-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="ch-nome">
+                  <TabsContent value="geral" className="space-y-3 pt-2">
+                    <form onSubmit={handleSubmit} className="space-y-3">
+                      <div className="space-y-1.5">
+                        <Label htmlFor="ch-nome" className="text-xs font-semibold">
                           {MODULO_CHAMADA_SINGULAR} <span className="text-destructive">*</span>
                         </Label>
                         <Input
@@ -615,70 +621,93 @@ export default function Producao() {
                           onChange={(e) => setFormChamada(e.target.value)}
                           required
                           autoFocus
+                          className="h-8 text-xs"
                         />
                         <p className="text-[11px] text-muted-foreground">
                           Identificador ou número oficial da chamada pública.
                         </p>
                       </div>
 
-                      <div className="space-y-2">
-                        <Label htmlFor="ch-prog">Programa</Label>
+                      <div className="space-y-1.5">
+                        <Label htmlFor="ch-prog" className="text-xs font-semibold">
+                          Programa
+                        </Label>
                         <Select value={formPrograma} onValueChange={setFormPrograma}>
-                          <SelectTrigger id="ch-prog">
+                          <SelectTrigger id="ch-prog" className="h-8 text-xs">
                             <SelectValue placeholder="Selecione o programa" />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="PNAE">PNAE (Alimentação Escolar)</SelectItem>
-                            <SelectItem value="PAA">PAA (Aquisição de Alimentos)</SelectItem>
-                            <SelectItem value="Municipal">Municipal / Direto</SelectItem>
-                            <SelectItem value="Outro">Outro</SelectItem>
+                            <SelectItem value="PNAE" className="text-xs">
+                              PNAE (Alimentação Escolar)
+                            </SelectItem>
+                            <SelectItem value="PAA" className="text-xs">
+                              PAA (Aquisição de Alimentos)
+                            </SelectItem>
+                            <SelectItem value="Municipal" className="text-xs">
+                              Municipal / Direto
+                            </SelectItem>
+                            <SelectItem value="Outro" className="text-xs">
+                              Outro
+                            </SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
 
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                          <Label htmlFor="ch-mod">Modalidade</Label>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div className="space-y-1.5">
+                          <Label htmlFor="ch-mod" className="text-xs font-semibold">
+                            Modalidade
+                          </Label>
                           <Select
                             value={formModalidade}
                             onValueChange={(v) => setFormModalidade(v as ChamadaModalidade)}
                           >
-                            <SelectTrigger id="ch-mod">
+                            <SelectTrigger id="ch-mod" className="h-8 text-xs">
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="individualizado">
+                              <SelectItem value="individualizado" className="text-xs">
                                 Individualizado (Pedido por Escola via WhatsApp/Manual)
                               </SelectItem>
-                              <SelectItem value="centralizado">
+                              <SelectItem value="centralizado" className="text-xs">
                                 Centralizado (Consolidado por Importação de Planilha)
                               </SelectItem>
                             </SelectContent>
                           </Select>
                         </div>
 
-                        <div className="space-y-2">
-                          <Label htmlFor="ch-status">Status</Label>
+                        <div className="space-y-1.5">
+                          <Label htmlFor="ch-status" className="text-xs font-semibold">
+                            Status
+                          </Label>
                           <Select
                             value={formStatus}
                             onValueChange={(v) => setFormStatus(v as ChamadaStatus)}
                           >
-                            <SelectTrigger id="ch-status">
+                            <SelectTrigger id="ch-status" className="h-8 text-xs">
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="Ativo">Ativo</SelectItem>
-                              <SelectItem value="Pendente">Pendente</SelectItem>
-                              <SelectItem value="Encerrado">Encerrado</SelectItem>
-                              <SelectItem value="Cancelado">Cancelado</SelectItem>
+                              <SelectItem value="Ativo" className="text-xs">
+                                Ativo
+                              </SelectItem>
+                              <SelectItem value="Pendente" className="text-xs">
+                                Pendente
+                              </SelectItem>
+                              <SelectItem value="Encerrado" className="text-xs">
+                                Encerrado
+                              </SelectItem>
+                              <SelectItem value="Cancelado" className="text-xs">
+                                Cancelado
+                              </SelectItem>
                             </SelectContent>
                           </Select>
                         </div>
                       </div>
 
                       {/* Contador de Escolas Agregadas (somente leitura) */}
-                      <div className="p-3 rounded-lg border bg-muted/40 space-y-2">
-                        <div className="flex items-center justify-between gap-4">
+                      <div className="p-2.5 rounded-lg border bg-muted/40 space-y-1">
+                        <div className="flex items-center justify-between gap-3">
                           <div>
                             <Label
                               htmlFor="ch-escolas-agregadas"
@@ -692,32 +721,39 @@ export default function Producao() {
                               vínculo e edição de escolas é feito nos contratos.
                             </p>
                           </div>
-                          <div className="w-24">
+                          <div className="w-20">
                             <Input
                               id="ch-escolas-agregadas"
                               readOnly
                               tabIndex={-1}
                               aria-readonly="true"
-                              className="h-8 font-bold text-center bg-background cursor-default select-all"
+                              className="h-7 text-xs font-bold text-center bg-background cursor-default select-all"
                               value={totalEscolasAgregadas}
                             />
                           </div>
                         </div>
                       </div>
 
-                      <DialogFooter className="pt-4 gap-2">
+                      <DialogFooter className="pt-2 gap-2">
                         <Button
                           type="button"
                           variant="outline"
+                          size="sm"
                           onClick={() => setDialogOpen(false)}
                           disabled={isSubmitting}
+                          className="h-8 text-xs"
                         >
                           Cancelar
                         </Button>
-                        <Button type="submit" disabled={isSubmitting}>
+                        <Button
+                          type="submit"
+                          size="sm"
+                          disabled={isSubmitting}
+                          className="h-8 text-xs"
+                        >
                           {isSubmitting ? (
                             <>
-                              <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Salvando...
+                              <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" /> Salvando...
                             </>
                           ) : (
                             'Salvar Alterações'
@@ -728,7 +764,7 @@ export default function Producao() {
                   </TabsContent>
 
                   {/* Aba Itens & Preços da Chamada */}
-                  <TabsContent value="itens" className="space-y-4 pt-2">
+                  <TabsContent value="itens" className="space-y-3 pt-1">
                     <ChamadaItemsManager
                       chamadaId={editingChamada.id}
                       chamadaNumero={editingChamada.chamada}
@@ -737,19 +773,27 @@ export default function Producao() {
                       catalogProducts={products}
                     />
 
-                    <DialogFooter className="pt-4 gap-2 border-t">
+                    <DialogFooter className="pt-2 gap-2 border-t">
                       <Button
                         type="button"
                         variant="outline"
+                        size="sm"
                         onClick={() => setDialogOpen(false)}
                         disabled={isSubmitting}
+                        className="h-8 text-xs"
                       >
                         Fechar
                       </Button>
-                      <Button type="button" onClick={handleSubmit} disabled={isSubmitting}>
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={handleSubmit}
+                        disabled={isSubmitting}
+                        className="h-8 text-xs"
+                      >
                         {isSubmitting ? (
                           <>
-                            <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Salvando...
+                            <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" /> Salvando...
                           </>
                         ) : (
                           'Salvar Chamada & Itens'
@@ -759,8 +803,8 @@ export default function Producao() {
                   </TabsContent>
 
                   {/* Aba Rotas Logísticas da Chamada */}
-                  <TabsContent value="rotas" className="space-y-4 pt-2">
-                    <div className="space-y-3 p-4 rounded-lg border bg-card">
+                  <TabsContent value="rotas" className="space-y-3 pt-1">
+                    <div className="space-y-2.5 p-3 rounded-lg border bg-card">
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                         <div>
                           <Label className="text-sm font-bold flex items-center gap-2 text-primary">
@@ -790,7 +834,7 @@ export default function Producao() {
                       </div>
 
                       {chamadaRotas.length === 0 ? (
-                        <div className="py-8 text-center border rounded-lg bg-muted/20 text-xs text-muted-foreground space-y-2">
+                        <div className="py-6 text-center border rounded-lg bg-muted/20 text-xs text-muted-foreground space-y-2">
                           <p className="font-medium text-foreground">
                             Nenhuma rota logística configurada para esta chamada ainda.
                           </p>
@@ -801,7 +845,7 @@ export default function Producao() {
                           <Button
                             type="button"
                             size="sm"
-                            className="text-xs gap-1 mt-2 bg-amber-500 hover:bg-amber-600 text-amber-950 font-semibold shadow-sm"
+                            className="text-xs gap-1 mt-1 bg-amber-500 hover:bg-amber-600 text-amber-950 font-semibold shadow-sm"
                             onClick={() => {
                               setDialogOpen(false)
                               navigate(`/rotas?chamadaId=${editingChamada.id}`)
@@ -812,8 +856,8 @@ export default function Producao() {
                           </Button>
                         </div>
                       ) : (
-                        <div className="space-y-3">
-                          <div className="space-y-2 max-h-[240px] overflow-y-auto">
+                        <div className="space-y-2.5">
+                          <div className="space-y-1.5 max-h-[220px] overflow-y-auto">
                             {chamadaRotas.map((r, idx) => {
                               const paradasCount = paradasRota.filter(
                                 (p) => (p.rota_id || (p as any).rota_logistica_id) === r.id,
@@ -821,9 +865,9 @@ export default function Producao() {
                               return (
                                 <div
                                   key={r.id}
-                                  className="flex items-center justify-between p-2.5 rounded border bg-muted/20 text-xs"
+                                  className="flex items-center justify-between p-2 rounded border bg-muted/20 text-xs"
                                 >
-                                  <div className="flex items-center gap-2.5">
+                                  <div className="flex items-center gap-2">
                                     <Badge variant="outline" className="font-mono text-[10px]">
                                       {idx + 1}ª
                                     </Badge>
@@ -839,7 +883,7 @@ export default function Producao() {
                             })}
                           </div>
 
-                          <div className="flex justify-end pt-2">
+                          <div className="flex justify-end pt-1">
                             <Button
                               type="button"
                               size="sm"
@@ -857,46 +901,52 @@ export default function Producao() {
                       )}
                     </div>
 
-                    <DialogFooter className="pt-2">
-                      <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>
+                    <DialogFooter className="pt-1">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setDialogOpen(false)}
+                        className="h-8 text-xs"
+                      >
                         Fechar
                       </Button>
                     </DialogFooter>
                   </TabsContent>
 
                   {/* Aba Contratos Vinculados (padrão Escolas Participantes de Contratos) */}
-                  <TabsContent value="contratos" className="space-y-4 pt-2">
+                  <TabsContent value="contratos" className="space-y-3 pt-1">
                     {/* Card de Sumário no Topo da aba Contratos */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <div className="p-3 rounded-lg border bg-card flex items-center justify-between">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                      <div className="p-2.5 rounded-lg border bg-card flex items-center justify-between">
                         <div className="space-y-0.5">
                           <p className="text-xs font-medium text-muted-foreground">
                             Total de Contratos vinculados
                           </p>
-                          <p className="text-xl font-bold text-foreground">
+                          <p className="text-lg font-bold text-foreground">
                             {contratosDestaChamada.length}
                           </p>
                         </div>
-                        <div className="h-9 w-9 rounded-full bg-primary/10 flex items-center justify-center text-primary">
-                          <FileText className="h-5 w-5" />
+                        <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center text-primary">
+                          <FileText className="h-4 w-4" />
                         </div>
                       </div>
-                      <div className="p-3 rounded-lg border bg-card flex items-center justify-between">
+                      <div className="p-2.5 rounded-lg border bg-card flex items-center justify-between">
                         <div className="space-y-0.5">
                           <p className="text-xs font-medium text-muted-foreground">
                             Total de Escolas Vinculadas à Chamada
                           </p>
-                          <p className="text-xl font-bold text-foreground">
+                          <p className="text-lg font-bold text-foreground">
                             {totalEscolasAgregadas}
                           </p>
                         </div>
-                        <div className="h-9 w-9 rounded-full bg-primary/10 flex items-center justify-center text-primary">
-                          <School className="h-5 w-5" />
+                        <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center text-primary">
+                          <School className="h-4 w-4" />
                         </div>
                       </div>
                     </div>
 
-                    <div className="rounded-lg border p-3 bg-muted/20 space-y-3">
+                    <div className="rounded-lg border p-2.5 bg-muted/20 space-y-2.5">
                       <div className="flex items-center justify-between">
                         <div>
                           <h4 className="text-sm font-semibold flex items-center gap-1.5">
@@ -912,7 +962,7 @@ export default function Producao() {
                           type="button"
                           size="sm"
                           variant="outline"
-                          className="gap-1.5 text-xs"
+                          className="gap-1.5 text-xs h-7"
                           onClick={() => {
                             setDialogOpen(false)
                             navigate('/contratos')
@@ -928,14 +978,14 @@ export default function Producao() {
                         )
                         if (contratosDesta.length === 0) {
                           return (
-                            <div className="text-center py-6 text-xs text-muted-foreground border border-dashed rounded-md bg-background">
+                            <div className="text-center py-5 text-xs text-muted-foreground border border-dashed rounded-md bg-background">
                               Nenhum contrato vinculado a esta chamada pública ainda.
-                              <div className="mt-2">
+                              <div className="mt-1.5">
                                 <Button
                                   type="button"
                                   variant="link"
                                   size="sm"
-                                  className="text-xs text-primary"
+                                  className="text-xs text-primary h-auto p-0"
                                   onClick={() => {
                                     setDialogOpen(false)
                                     navigate('/contratos')
@@ -949,15 +999,15 @@ export default function Producao() {
                         }
 
                         return (
-                          <div className="space-y-2">
+                          <div className="space-y-1.5 max-h-[220px] overflow-y-auto">
                             {contratosDesta.map((c) => (
                               <div
                                 key={c.id}
-                                className="flex items-center justify-between p-2.5 rounded-md border bg-background hover:bg-muted/40 transition-colors"
+                                className="flex items-center justify-between p-2 rounded-md border bg-background hover:bg-muted/40 transition-colors"
                               >
-                                <div className="space-y-1">
+                                <div className="space-y-0.5">
                                   <div className="flex items-center gap-2">
-                                    <span className="font-bold text-sm text-foreground">
+                                    <span className="font-bold text-xs sm:text-sm text-foreground">
                                       {c.numero}
                                     </span>
                                     <Badge variant="outline" className="text-[10px]">
@@ -973,7 +1023,7 @@ export default function Producao() {
                                       {c.status}
                                     </Badge>
                                   </div>
-                                  <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                                  <div className="flex items-center gap-3 text-[11px] text-muted-foreground">
                                     <span className="flex items-center gap-1">
                                       <DollarSign className="h-3 w-3" />
                                       R${' '}
@@ -991,7 +1041,7 @@ export default function Producao() {
                                   type="button"
                                   variant="ghost"
                                   size="sm"
-                                  className="gap-1 text-xs text-primary hover:bg-primary/10"
+                                  className="gap-1 text-xs text-primary hover:bg-primary/10 h-7"
                                   onClick={() => {
                                     setDialogOpen(false)
                                     navigate('/contratos')
@@ -1007,8 +1057,14 @@ export default function Producao() {
                       })()}
                     </div>
 
-                    <DialogFooter className="pt-2">
-                      <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>
+                    <DialogFooter className="pt-1">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setDialogOpen(false)}
+                        className="h-8 text-xs"
+                      >
                         Fechar
                       </Button>
                     </DialogFooter>
@@ -1022,15 +1078,19 @@ export default function Producao() {
               onValueChange={(v) => setActiveTab(v as any)}
               className="w-full"
             >
-              <TabsList className="grid grid-cols-2 w-full">
-                <TabsTrigger value="geral">Dados Gerais</TabsTrigger>
-                <TabsTrigger value="itens">Itens & Preços ({formItems.length})</TabsTrigger>
+              <TabsList className="grid grid-cols-2 w-full h-9">
+                <TabsTrigger value="geral" className="text-xs py-1.5">
+                  Dados Gerais
+                </TabsTrigger>
+                <TabsTrigger value="itens" className="text-xs py-1.5">
+                  Itens & Preços ({formItems.length})
+                </TabsTrigger>
               </TabsList>
 
-              <TabsContent value="geral" className="space-y-4 pt-2">
-                <form onSubmit={handleSubmit} className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="ch-nome">
+              <TabsContent value="geral" className="space-y-3 pt-2">
+                <form onSubmit={handleSubmit} className="space-y-3">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="ch-nome" className="text-xs font-semibold">
                       {MODULO_CHAMADA_SINGULAR} <span className="text-destructive">*</span>
                     </Label>
                     <Input
@@ -1040,80 +1100,105 @@ export default function Producao() {
                       onChange={(e) => setFormChamada(e.target.value)}
                       required
                       autoFocus
+                      className="h-8 text-xs"
                     />
                     <p className="text-[11px] text-muted-foreground">
                       Identificador ou número oficial da chamada pública.
                     </p>
                   </div>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="ch-prog">Programa</Label>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="ch-prog" className="text-xs font-semibold">
+                      Programa
+                    </Label>
                     <Select value={formPrograma} onValueChange={setFormPrograma}>
-                      <SelectTrigger id="ch-prog">
+                      <SelectTrigger id="ch-prog" className="h-8 text-xs">
                         <SelectValue placeholder="Selecione o programa" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="PNAE">PNAE (Alimentação Escolar)</SelectItem>
-                        <SelectItem value="PAA">PAA (Aquisição de Alimentos)</SelectItem>
-                        <SelectItem value="Municipal">Municipal / Direto</SelectItem>
-                        <SelectItem value="Outro">Outro</SelectItem>
+                        <SelectItem value="PNAE" className="text-xs">
+                          PNAE (Alimentação Escolar)
+                        </SelectItem>
+                        <SelectItem value="PAA" className="text-xs">
+                          PAA (Aquisição de Alimentos)
+                        </SelectItem>
+                        <SelectItem value="Municipal" className="text-xs">
+                          Municipal / Direto
+                        </SelectItem>
+                        <SelectItem value="Outro" className="text-xs">
+                          Outro
+                        </SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="ch-mod">Modalidade</Label>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="ch-mod" className="text-xs font-semibold">
+                        Modalidade
+                      </Label>
                       <Select
                         value={formModalidade}
                         onValueChange={(v) => setFormModalidade(v as ChamadaModalidade)}
                       >
-                        <SelectTrigger id="ch-mod">
+                        <SelectTrigger id="ch-mod" className="h-8 text-xs">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="individualizado">
+                          <SelectItem value="individualizado" className="text-xs">
                             Individualizado (Pedido por Escola via WhatsApp/Manual)
                           </SelectItem>
-                          <SelectItem value="centralizado">
+                          <SelectItem value="centralizado" className="text-xs">
                             Centralizado (Consolidado por Importação de Planilha)
                           </SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
 
-                    <div className="space-y-2">
-                      <Label htmlFor="ch-status">Status</Label>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="ch-status" className="text-xs font-semibold">
+                        Status
+                      </Label>
                       <Select
                         value={formStatus}
                         onValueChange={(v) => setFormStatus(v as ChamadaStatus)}
                       >
-                        <SelectTrigger id="ch-status">
+                        <SelectTrigger id="ch-status" className="h-8 text-xs">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="Ativo">Ativo</SelectItem>
-                          <SelectItem value="Pendente">Pendente</SelectItem>
-                          <SelectItem value="Encerrado">Encerrado</SelectItem>
-                          <SelectItem value="Cancelado">Cancelado</SelectItem>
+                          <SelectItem value="Ativo" className="text-xs">
+                            Ativo
+                          </SelectItem>
+                          <SelectItem value="Pendente" className="text-xs">
+                            Pendente
+                          </SelectItem>
+                          <SelectItem value="Encerrado" className="text-xs">
+                            Encerrado
+                          </SelectItem>
+                          <SelectItem value="Cancelado" className="text-xs">
+                            Cancelado
+                          </SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
                   </div>
 
-                  <DialogFooter className="pt-4 gap-2">
+                  <DialogFooter className="pt-2 gap-2">
                     <Button
                       type="button"
                       variant="outline"
+                      size="sm"
                       onClick={() => setDialogOpen(false)}
                       disabled={isSubmitting}
+                      className="h-8 text-xs"
                     >
                       Cancelar
                     </Button>
-                    <Button type="submit" disabled={isSubmitting}>
+                    <Button type="submit" size="sm" disabled={isSubmitting} className="h-8 text-xs">
                       {isSubmitting ? (
                         <>
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Salvando...
+                          <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" /> Salvando...
                         </>
                       ) : (
                         `Cadastrar ${MODULO_CHAMADA_SINGULAR}`
@@ -1123,26 +1208,34 @@ export default function Producao() {
                 </form>
               </TabsContent>
 
-              <TabsContent value="itens" className="space-y-4 pt-2">
+              <TabsContent value="itens" className="space-y-3 pt-1">
                 <ChamadaItemsManager
                   items={formItems}
                   onChange={setFormItems}
                   catalogProducts={products}
                 />
 
-                <DialogFooter className="pt-4 gap-2 border-t">
+                <DialogFooter className="pt-2 gap-2 border-t">
                   <Button
                     type="button"
                     variant="outline"
+                    size="sm"
                     onClick={() => setDialogOpen(false)}
                     disabled={isSubmitting}
+                    className="h-8 text-xs"
                   >
                     Cancelar
                   </Button>
-                  <Button type="button" onClick={handleSubmit} disabled={isSubmitting}>
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={handleSubmit}
+                    disabled={isSubmitting}
+                    className="h-8 text-xs"
+                  >
                     {isSubmitting ? (
                       <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Salvando...
+                        <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" /> Salvando...
                       </>
                     ) : (
                       `Cadastrar ${MODULO_CHAMADA_SINGULAR} & Itens`
