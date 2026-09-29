@@ -3,8 +3,19 @@ import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-
 import L from 'leaflet'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { extrairCoordenadas } from '@/lib/routeOptimization'
-import { MapPin, Building2, Warehouse, AlertTriangle, ZoomIn, Layers, Info } from 'lucide-react'
+import { extrairCoordenadas, calcularDistanciaTotalCaminho } from '@/lib/routeOptimization'
+import { obterRotaEstradaOSRM, OsrmRouteResult } from '@/services/osrm'
+import {
+  MapPin,
+  Building2,
+  Warehouse,
+  AlertTriangle,
+  ZoomIn,
+  Layers,
+  Info,
+  Navigation,
+  Loader2,
+} from 'lucide-react'
 
 export interface ParadaMapaItem {
   escolaId: string
@@ -212,7 +223,10 @@ export function RouteMapView({
   height = 420,
   className = '',
 }: RouteMapViewProps) {
-  const [mapReady, setMapReady] = useState(false)
+  const [, setMapReady] = useState(false)
+  const [osrmResult, setOsrmResult] = useState<OsrmRouteResult | null>(null)
+  const [loadingRoute, setLoadingRoute] = useState(false)
+  const [osrmFailed, setOsrmFailed] = useState(false)
 
   // Extrair coordenadas válidas das paradas na ordem atual
   const paradasComCoord = useMemo(() => {
@@ -267,21 +281,88 @@ export function RouteMapView({
     return L.latLngBounds(points)
   }, [depositoCoords, paradasComCoord])
 
-  // Trecho 1: Depósito -> Primeira parada (se existir) — desenhado tracejado
+  // Efeito para buscar a rota por estradas reais via OSRM sempre que paradas/depósito mudarem
+  useEffect(() => {
+    let active = true
+
+    if (paradasComCoord.length === 0) {
+      setOsrmResult(null)
+      setLoadingRoute(false)
+      setOsrmFailed(false)
+      return
+    }
+
+    setLoadingRoute(true)
+    setOsrmFailed(false)
+
+    const coordsArray = paradasComCoord.map((p) => ({
+      latitude: p.lat,
+      longitude: p.lng,
+    }))
+
+    obterRotaEstradaOSRM(depositoCoords, coordsArray, { timeoutMs: 8000 })
+      .then((res) => {
+        if (!active) return
+        setLoadingRoute(false)
+        if (res) {
+          setOsrmResult(res)
+          setOsrmFailed(false)
+        } else {
+          setOsrmResult(null)
+          setOsrmFailed(true)
+        }
+      })
+      .catch(() => {
+        if (!active) return
+        setLoadingRoute(false)
+        setOsrmResult(null)
+        setOsrmFailed(true)
+      })
+
+    return () => {
+      active = false
+    }
+  }, [depositoCoords, paradasComCoord])
+
+  // Estimativa em linha reta (fallback e comparativo)
+  const distanciaLinhaRetaKm = useMemo(() => {
+    if (paradasComCoord.length === 0) return 0
+    const pontos = [
+      depositoCoords,
+      ...paradasComCoord.map((p) => ({ latitude: p.lat, longitude: p.lng })),
+    ]
+    return calcularDistanciaTotalCaminho(pontos)
+  }, [depositoCoords, paradasComCoord])
+
+  // Trecho 1: Depósito -> Primeira parada (se existir)
+  // Se OSRM respondeu, usa o caminho da estrada; senão linha reta
   const trechoOrigem = useMemo<[number, number][] | null>(() => {
     if (paradasComCoord.length === 0) return null
+
+    if (osrmResult?.trechoOrigem && osrmResult.trechoOrigem.length > 0) {
+      return osrmResult.trechoOrigem
+    }
+
+    // Fallback: linha reta
     const first = paradasComCoord[0]
     return [
       [depositoCoords.latitude, depositoCoords.longitude],
       [first.lat, first.lng],
     ]
-  }, [depositoCoords, paradasComCoord])
+  }, [depositoCoords, paradasComCoord, osrmResult])
 
-  // Trecho 2: Entre as paradas sequenciais (parada 1 -> parada 2 -> ...) — linha contínua
+  // Trecho 2: Entre as paradas sequenciais (parada 1 -> parada 2 -> ...)
+  // Se OSRM respondeu, usa as curvas reais das estradas; senão linha reta
   const trechoParadas = useMemo<[number, number][]>(() => {
     if (paradasComCoord.length <= 1) return []
+
+    if (osrmResult?.trechoParadas && osrmResult.trechoParadas.length > 0) {
+      return osrmResult.trechoParadas
+    }
+
+    // Fallback: linhas retas entre as paradas
     return paradasComCoord.map((p) => [p.lat, p.lng])
-  }, [paradasComCoord])
+  }, [paradasComCoord, osrmResult])
 
   // Centro padrão inicial: ou a média das coordenadas, ou o depósito
   const defaultCenter = useMemo<[number, number]>(() => {
@@ -486,16 +567,27 @@ export function RouteMapView({
         </MapContainer>
 
         {/* Legenda flutuante sobre o mapa */}
-        <div className="absolute bottom-2 right-2 z-[400] bg-background/95 backdrop-blur-xs border border-border/80 rounded-md p-2 text-[10px] shadow-md space-y-1 pointer-events-auto">
-          <div className="font-semibold text-foreground flex items-center gap-1">
-            <Layers className="h-3 w-3 text-primary" /> Legenda do Trajeto
+        <div className="absolute bottom-2 right-2 z-[400] bg-background/95 backdrop-blur-xs border border-border/80 rounded-md p-2 text-[10px] shadow-md space-y-1 pointer-events-auto max-w-[230px]">
+          <div className="font-semibold text-foreground flex items-center justify-between gap-1">
+            <span className="flex items-center gap-1">
+              <Layers className="h-3 w-3 text-primary" /> Legenda do Trajeto
+            </span>
+            {osrmResult ? (
+              <span className="text-[9px] px-1 py-0.2 rounded bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 font-medium">
+                Pela estrada
+              </span>
+            ) : osrmFailed ? (
+              <span className="text-[9px] px-1 py-0.2 rounded bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 font-medium">
+                Linha reta
+              </span>
+            ) : null}
           </div>
           <div className="flex items-center gap-1.5 text-muted-foreground">
-            <span className="w-5 h-0.5 border-t-2 border-dashed border-sky-600 inline-block"></span>
+            <span className="w-5 h-0.5 border-t-2 border-dashed border-sky-600 inline-block shrink-0"></span>
             <span>Saída do Depósito Central</span>
           </div>
           <div className="flex items-center gap-1.5 text-muted-foreground">
-            <span className="w-5 h-1 bg-emerald-700 inline-block rounded-xs"></span>
+            <span className="w-5 h-1 bg-emerald-700 inline-block rounded-xs shrink-0"></span>
             <span>Sequência de Entrega (1 → {paradasComCoord.length})</span>
           </div>
           {paradaCaminhao && (
@@ -504,17 +596,57 @@ export function RouteMapView({
               <span>Caminhão: Parada #{paradaCaminhao.ordem}</span>
             </div>
           )}
+          {osrmResult && (
+            <div className="pt-1 border-t border-border/60 flex items-center justify-between text-[9px] text-muted-foreground">
+              <span className="flex items-center gap-1 text-foreground font-medium">
+                <Navigation className="h-2.5 w-2.5 text-emerald-600" />
+                Estrada: {osrmResult.distanciaTotalKm.toFixed(1).replace('.', ',')} km
+              </span>
+              {osrmResult.duracaoEstimadaMinutos > 0 && (
+                <span>~{osrmResult.duracaoEstimadaMinutos} min</span>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
       {/* Rodapé informativo discreto */}
       <div className="px-3 py-2 bg-muted/20 border-t flex flex-wrap items-center justify-between gap-2 text-xs">
-        <div className="flex items-center gap-1.5 text-muted-foreground text-[11px]">
-          <Info className="h-3.5 w-3.5 text-primary shrink-0" />
-          <span>
-            Os números nos pinos refletem a ordem atual de entrega. Reordene arrastando na lista ao
-            lado.
+        <div className="flex flex-wrap items-center gap-2 text-muted-foreground text-[11px]">
+          <span className="flex items-center gap-1.5">
+            <Info className="h-3.5 w-3.5 text-primary shrink-0" />
+            <span>
+              Os números nos pinos refletem a ordem atual de entrega. Reordene arrastando na lista
+              ao lado.
+            </span>
           </span>
+
+          {loadingRoute && (
+            <span className="inline-flex items-center gap-1 text-primary text-[10px] bg-primary/10 px-2 py-0.5 rounded-full font-medium">
+              <Loader2 className="h-3 w-3 animate-spin" />
+              Calculando percurso rodoviário...
+            </span>
+          )}
+
+          {osrmResult && !loadingRoute && (
+            <span className="inline-flex items-center gap-1 text-emerald-700 dark:text-emerald-400 text-[10px] bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 px-2 py-0.5 rounded-full font-medium">
+              <Navigation className="h-3 w-3" />
+              Percurso real por estradas:{' '}
+              <strong>{osrmResult.distanciaTotalKm.toFixed(1).replace('.', ',')} km</strong>
+              {osrmResult.duracaoEstimadaMinutos > 0 &&
+                ` (~${osrmResult.duracaoEstimadaMinutos} min de viagem)`}
+            </span>
+          )}
+
+          {osrmFailed && !loadingRoute && distanciaLinhaRetaKm > 0 && (
+            <span
+              className="inline-flex items-center gap-1 text-slate-600 dark:text-slate-400 text-[10px] bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-full"
+              title="O serviço OSRM não respondeu a tempo; o mapa exibe as linhas retas estimadas para manter a operação"
+            >
+              Percurso por estrada indisponível no momento (exibindo linha reta: ~
+              {distanciaLinhaRetaKm.toFixed(1).replace('.', ',')} km)
+            </span>
+          )}
         </div>
 
         {escolasSemCoordCount > 0 && (
