@@ -454,16 +454,22 @@ export default function DeliveryRoutes() {
           (a, b) => new Date(b.data_despacho).getTime() - new Date(a.data_despacho).getTime(),
         )[0]
 
-      // Considerar apenas pedidos ativos/em trânsito (Pendente e Em Rota) para métricas ativas da rota
+      // Considerar apenas pedidos ativos/em trânsito (Pendente e Em Rota) para métricas ativas da rota (exclui Cancelado e Entregue)
       const pedidosAtivosDaRota = pedidosDaRota.filter(
         (o) => o.status === 'Pendente' || o.status === 'Em Rota',
       )
 
-      const volumeTotal = pedidosAtivosDaRota.reduce(
-        (acc, p) => acc + p.items.reduce((sum, it) => sum + (Number(it.quantity) || 0), 0),
-        0,
-      )
-      const valorTotal = pedidosAtivosDaRota.reduce((acc, p) => acc + (Number(p.total) || 0), 0)
+      const volumeTotal =
+        pedidosAtivosDaRota.length === 0
+          ? 0
+          : pedidosAtivosDaRota.reduce(
+              (acc, p) => acc + p.items.reduce((sum, it) => sum + (Number(it.quantity) || 0), 0),
+              0,
+            )
+      const valorTotal =
+        pedidosAtivosDaRota.length === 0
+          ? 0
+          : pedidosAtivosDaRota.reduce((acc, p) => acc + (Number(p.total) || 0), 0)
 
       return {
         rota,
@@ -1282,6 +1288,7 @@ export default function DeliveryRoutes() {
                         <span>
                           • Modalidade: <span className="capitalize">{item.modalidade}</span>
                         </span>
+                        {/* Contrato ref legado removido: a rota pertence à Chamada e cada parada possui seu badge de contrato de origem */}
                       </CardDescription>
                     </div>
                     <div className="flex items-center gap-1.5 shrink-0">
@@ -1363,11 +1370,10 @@ export default function DeliveryRoutes() {
                     <div className="text-right">
                       <span className="text-muted-foreground block text-[11px]">Volume Total:</span>
                       <p className="font-mono font-bold text-sm text-foreground">
-                        {item.volumeTotal} itens
+                        {totalEmTransito === 0 ? '0 itens' : `${item.volumeTotal} itens`}
                       </p>
                     </div>
                   </div>
-
                   {/* Ações de Despacho e Entrega por Rota Inteira */}
                   <div className="flex items-center justify-between p-2.5 rounded-lg border bg-primary/5 gap-2">
                     <div className="text-xs">

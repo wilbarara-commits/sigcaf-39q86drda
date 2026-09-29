@@ -1015,19 +1015,29 @@ export function ChamadaItemsManager({
         </div>
       ) : (
         <div className="space-y-2">
-          <div className="rounded-md border max-h-[380px] overflow-y-auto">
+          <div className="rounded-md border max-h-[420px] overflow-y-auto">
             <Table>
               <TableHeader className="bg-muted/30 sticky top-0 z-10 backdrop-blur-xs">
-                <TableRow className="text-xs">
-                  <TableHead className="w-[30%]">Produto</TableHead>
-                  <TableHead className="w-[24%]">AKA/Apelido na Planilha</TableHead>
-                  <TableHead className="w-[10%] text-center">Unidade</TableHead>
-                  <TableHead className="w-[14%]">Preço Unit. (R$)</TableHead>
-                  <TableHead className="w-[12%] text-right">Qtd. Chamada</TableHead>
-                  <TableHead className="w-[10%] text-right">Valor Total</TableHead>
-                  <TableHead className="w-[4%] text-right"></TableHead>
+                <TableRow className="text-xs h-9">
+                  <TableHead className="min-w-[200px] w-[32%] py-1.5 px-2.5">
+                    Nome do Produto
+                  </TableHead>
+                  <TableHead className="min-w-[180px] w-[26%] py-1.5 px-2.5">
+                    AKA / Apelido na Planilha
+                  </TableHead>
+                  <TableHead className="w-[90px] text-center py-1.5 px-2">Unidade</TableHead>
+                  <TableHead className="min-w-[110px] w-[14%] py-1.5 px-2.5">
+                    Preço Unit. (R$)
+                  </TableHead>
+                  <TableHead className="min-w-[100px] w-[12%] text-right py-1.5 px-2">
+                    Qtd. Chamada
+                  </TableHead>
+                  <TableHead className="min-w-[100px] w-[11%] text-right py-1.5 px-2">
+                    Valor Total
+                  </TableHead>
+                  <TableHead className="w-[45px] text-center py-1.5 px-1">Ações</TableHead>
                 </TableRow>
-              </TableHeader>
+              </TableHeader>{' '}
               <TableBody>
                 {items.map((item, index) => {
                   const prod = item.productId ? productById.get(item.productId) : undefined

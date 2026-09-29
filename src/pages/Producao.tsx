@@ -542,21 +542,20 @@ export default function Producao() {
 
       {/* Modal de Criação / Edição de Chamada */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="sm:max-w-[650px] max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
+        <DialogContent className="max-w-[96vw] sm:max-w-5xl xl:max-w-6xl max-h-[92vh] overflow-y-auto p-4 sm:p-6">
+          <DialogHeader className="pb-1 sm:pb-2">
+            <DialogTitle className="flex items-center gap-2 text-base sm:text-lg">
               <Sparkles className="h-5 w-5 text-primary" />
               {editingChamada
                 ? `Editar ${MODULO_CHAMADA_SINGULAR} ${editingChamada.chamada}`
                 : `Cadastrar Nova ${MODULO_CHAMADA_SINGULAR}`}
             </DialogTitle>
-            <DialogDescription>
+            <DialogDescription className="text-xs">
               {editingChamada
-                ? `Atualize os dados e parâmetros da ${MODULO_CHAMADA_SINGULAR.toLowerCase()} pública e visualize os contratos vinculados.`
-                : `Preencha os campos para cadastrar uma nova ${MODULO_CHAMADA_SINGULAR.toLowerCase()} no módulo de ${MODULO_CHAMADAS_LABEL.toLowerCase()}.`}
+                ? `Atualize os dados e configurações desta ${MODULO_CHAMADA_SINGULAR.toLowerCase()}.`
+                : `Preencha as informações para cadastrar uma nova ${MODULO_CHAMADA_SINGULAR.toLowerCase()}.`}
             </DialogDescription>
           </DialogHeader>
-
           {editingChamada ? (
             (() => {
               const contratosDestaChamada = contracts.filter(
