@@ -59,6 +59,8 @@ import {
   Navigation,
   MapPin,
   ListOrdered,
+  ChevronDown,
+  ChevronRight,
 } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { RouteMapView } from '@/components/RouteMapView'
@@ -284,6 +286,23 @@ export default function DeliveryRoutes() {
   const [routeViewModeMap, setRouteViewModeMap] = useState<
     Record<string, 'ambos' | 'mapa' | 'lista'>
   >({})
+
+  // Estado de expansão dos pedidos de cada escola na Sequência de Paradas
+  // Chave: `${item.rota.id}:${parada.escolaId}` (ou apenas parada.escolaId)
+  // Padrão: tudo fechado (Set vazio)
+  const [expandedParadasPedidos, setExpandedParadasPedidos] = useState<Set<string>>(() => new Set())
+
+  const toggleParadaPedidos = (key: string) => {
+    setExpandedParadasPedidos((prev) => {
+      const next = new Set(prev)
+      if (next.has(key)) {
+        next.delete(key)
+      } else {
+        next.add(key)
+      }
+      return next
+    })
+  }
 
   // Estado para controle de salvamento de posição do caminhão por rota
   const [updatingTruckRotaId, setUpdatingTruckRotaId] = useState<string | null>(null)
@@ -1912,9 +1931,50 @@ export default function DeliveryRoutes() {
                                           </span>
                                         </Button>
                                       )}
-                                      <Badge variant="outline" className="text-[10px]">
-                                        {parada.pedidos.length} ped.
-                                      </Badge>
+                                      {parada.pedidos.length > 0 ? (
+                                        <button
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.stopPropagation()
+                                            toggleParadaPedidos(
+                                              `${item.rota.id}:${parada.escolaId}`,
+                                            )
+                                          }}
+                                          title={
+                                            expandedParadasPedidos.has(
+                                              `${item.rota.id}:${parada.escolaId}`,
+                                            )
+                                              ? 'Recolher lista de pedidos desta escola'
+                                              : 'Expandir lista de pedidos desta escola'
+                                          }
+                                          className={`inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-md border font-medium transition-colors cursor-pointer ${
+                                            expandedParadasPedidos.has(
+                                              `${item.rota.id}:${parada.escolaId}`,
+                                            )
+                                              ? 'bg-primary/10 border-primary text-primary font-semibold shadow-xs'
+                                              : 'bg-background hover:bg-muted border-input text-foreground hover:border-primary/50'
+                                          }`}
+                                        >
+                                          <span>
+                                            {parada.pedidos.length}{' '}
+                                            {parada.pedidos.length === 1 ? 'pedido' : 'pedidos'}
+                                          </span>
+                                          {expandedParadasPedidos.has(
+                                            `${item.rota.id}:${parada.escolaId}`,
+                                          ) ? (
+                                            <ChevronDown className="h-3 w-3 shrink-0 text-primary" />
+                                          ) : (
+                                            <ChevronRight className="h-3 w-3 shrink-0 text-muted-foreground" />
+                                          )}
+                                        </button>
+                                      ) : (
+                                        <Badge
+                                          variant="outline"
+                                          className="text-[10px] text-muted-foreground opacity-70"
+                                        >
+                                          0 pedidos
+                                        </Badge>
+                                      )}
 
                                       {/* Botão de transferir rota para mobile / facilidade com clique */}
                                       {filteredRotasLogisticas.length > 1 && (
@@ -1939,65 +1999,68 @@ export default function DeliveryRoutes() {
                                     </div>
                                   </div>
 
-                                  {/* Pedidos vinculados a esta parada */}
-                                  {parada.pedidos.length > 0 && (
-                                    <div className="space-y-1.5 pl-7 border-l-2 border-primary/20 ml-2">
-                                      {parada.pedidos.map((ped) => (
-                                        <div
-                                          key={ped.id}
-                                          className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2 rounded bg-muted/20 border text-xs"
-                                        >
-                                          <div>
-                                            <div className="flex items-center gap-1.5">
-                                              <span className="font-bold text-primary">
-                                                {ped.numero}
-                                              </span>
-                                              {ped.id.startsWith('temp-') && (
-                                                <span
-                                                  className="inline-flex items-center text-[9px] text-amber-600 dark:text-amber-400 gap-0.5"
-                                                  title="Sincronizando com o servidor"
-                                                >
-                                                  <Loader2 className="h-2.5 w-2.5 animate-spin" />
+                                  {/* Pedidos vinculados a esta parada (exibidos apenas quando expandido pelo usuário ao clicar no número de pedidos) */}
+                                  {parada.pedidos.length > 0 &&
+                                    expandedParadasPedidos.has(
+                                      `${item.rota.id}:${parada.escolaId}`,
+                                    ) && (
+                                      <div className="space-y-1.5 pl-7 border-l-2 border-primary/40 ml-2 pt-1 animate-in fade-in-50 duration-150">
+                                        {parada.pedidos.map((ped) => (
+                                          <div
+                                            key={ped.id}
+                                            className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2 rounded bg-muted/20 border text-xs"
+                                          >
+                                            <div>
+                                              <div className="flex items-center gap-1.5">
+                                                <span className="font-bold text-primary">
+                                                  {ped.numero}
                                                 </span>
-                                              )}
-                                              <Badge
-                                                className={`text-[9px] px-1.5 py-0 ${
-                                                  ped.status === 'Em Rota'
-                                                    ? 'bg-amber-600'
-                                                    : ped.status === 'Entregue'
-                                                      ? 'bg-emerald-600'
-                                                      : ped.status === 'Cancelado'
-                                                        ? 'bg-destructive'
-                                                        : 'bg-blue-600'
-                                                }`}
-                                              >
-                                                {ped.status}
-                                              </Badge>
+                                                {ped.id.startsWith('temp-') && (
+                                                  <span
+                                                    className="inline-flex items-center text-[9px] text-amber-600 dark:text-amber-400 gap-0.5"
+                                                    title="Sincronizando com o servidor"
+                                                  >
+                                                    <Loader2 className="h-2.5 w-2.5 animate-spin" />
+                                                  </span>
+                                                )}
+                                                <Badge
+                                                  className={`text-[9px] px-1.5 py-0 ${
+                                                    ped.status === 'Em Rota'
+                                                      ? 'bg-amber-600'
+                                                      : ped.status === 'Entregue'
+                                                        ? 'bg-emerald-600'
+                                                        : ped.status === 'Cancelado'
+                                                          ? 'bg-destructive'
+                                                          : 'bg-blue-600'
+                                                  }`}
+                                                >
+                                                  {ped.status}
+                                                </Badge>
+                                              </div>
+                                              <p className="text-[10px] text-muted-foreground">
+                                                {ped.items.length} produto(s) • R${' '}
+                                                {ped.total.toFixed(2)}
+                                              </p>
                                             </div>
-                                            <p className="text-[10px] text-muted-foreground">
-                                              {ped.items.length} produto(s) • R${' '}
-                                              {ped.total.toFixed(2)}
-                                            </p>
-                                          </div>
 
-                                          {/* Ações no pedido: se estiver Em Rota e motorista não entregou */}
-                                          <div className="flex items-center gap-1.5 shrink-0">
-                                            {ped.status === 'Em Rota' && (
-                                              <Button
-                                                size="sm"
-                                                variant="destructive"
-                                                className="h-6 text-[10px] px-2 gap-1"
-                                                onClick={() => handleOpenUndelivered(ped)}
-                                                title="Motorista não entregou este pedido: cancela definitivamente por motivo logístico"
-                                              >
-                                                <XCircle className="h-3 w-3" /> Não entregue
-                                              </Button>
-                                            )}
+                                            {/* Ações no pedido: se estiver Em Rota e motorista não entregou */}
+                                            <div className="flex items-center gap-1.5 shrink-0">
+                                              {ped.status === 'Em Rota' && (
+                                                <Button
+                                                  size="sm"
+                                                  variant="destructive"
+                                                  className="h-6 text-[10px] px-2 gap-1"
+                                                  onClick={() => handleOpenUndelivered(ped)}
+                                                  title="Motorista não entregou este pedido: cancela definitivamente por motivo logístico"
+                                                >
+                                                  <XCircle className="h-3 w-3" /> Não entregue
+                                                </Button>
+                                              )}
+                                            </div>
                                           </div>
-                                        </div>
-                                      ))}
-                                    </div>
-                                  )}
+                                        ))}
+                                      </div>
+                                    )}
                                 </div>
                               )
                             })}
