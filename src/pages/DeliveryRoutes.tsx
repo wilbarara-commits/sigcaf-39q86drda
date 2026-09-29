@@ -56,12 +56,21 @@ import {
   Check,
   Upload,
   PhoneCall,
+  Navigation,
 } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { toast } from 'sonner'
 import { matchPastedSchoolLine } from '@/lib/excelImporter'
 import { RouteSchoolBatchImportModal } from '@/components/RouteSchoolBatchImportModal'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import {
+  otimizarSequenciaParadas,
+  extrairCoordenadas,
+  type ParadaOtimizavel,
+  type ResultadoOtimizacaoRota,
+} from '@/lib/routeOptimization'
+import { RouteOptimizationDialog } from '@/components/RouteOptimizationDialog'
 import {
   MOTIVOS_LOGISTICOS_CANCELAMENTO,
   type MotivoLogisticoCancelamento,
@@ -264,6 +273,15 @@ export default function DeliveryRoutes() {
   } | null>(null)
   const [targetRotaIdMobile, setTargetRotaIdMobile] = useState<string>('')
 
+  // Estado para sugestão de rota otimizada (cálculo cliente haversine + vizinho mais próximo + 2-opt)
+  const [optimizationDialogOpen, setOptimizationDialogOpen] = useState(false)
+  const [optimizingRota, setOptimizingRota] = useState<RotaLogisticaRecord | null>(null)
+  const [optimizationOriginalParadas, setOptimizationOriginalParadas] = useState<
+    ParadaOtimizavel[]
+  >([])
+  const [optimizationResult, setOptimizationResult] = useState<ResultadoOtimizacaoRota | null>(null)
+  const [isApplyingOptimization, setIsApplyingOptimization] = useState(false)
+
   // Rotas logísticas filtradas pela Chamada (ou contrato legado se houver vínculo direto)
   const filteredRotasLogisticas = useMemo(() => {
     let list = rotasLogisticas
@@ -338,6 +356,8 @@ export default function DeliveryRoutes() {
         ordem: number
         contratoNumero?: string
         pedidos: Order[]
+        latitude?: number | string | null
+        longitude?: number | string | null
       }> = []
 
       paradasCadastradas.forEach((p, idx) => {
@@ -353,6 +373,8 @@ export default function DeliveryRoutes() {
           ordem: idx + 1,
           contratoNumero: contratoOrigem?.contratoNumero,
           pedidos: peds,
+          latitude: sch?.latitude,
+          longitude: sch?.longitude,
         })
       })
 
@@ -957,6 +979,68 @@ export default function DeliveryRoutes() {
     }
   }
 
+  // Otimização de Rota: Calcular e abrir diálogo de sugestão
+  const handleOpenOptimizationDialog = (
+    rota: RotaLogisticaRecord,
+    paradas: Array<{
+      escolaId: string
+      nome: string
+      endereco: string
+      alunos?: number
+      ordem: number
+      contratoNumero?: string
+      latitude?: string | number | null
+      longitude?: string | number | null
+    }>,
+  ) => {
+    const paradasParaOtimizar: ParadaOtimizavel[] = paradas.map((p) => {
+      const coords = extrairCoordenadas(p.latitude, p.longitude)
+      return {
+        escolaId: p.escolaId,
+        nome: p.nome,
+        endereco: p.endereco,
+        alunos: p.alunos,
+        ordem: p.ordem,
+        contratoNumero: p.contratoNumero,
+        latitude: coords ? coords.latitude : null,
+        longitude: coords ? coords.longitude : null,
+      }
+    })
+
+    const resultado = otimizarSequenciaParadas(paradasParaOtimizar)
+
+    if (!resultado.podeOtimizar && resultado.motivoNaoOtimizavel) {
+      toast.error(resultado.motivoNaoOtimizavel)
+      return
+    }
+
+    setOptimizingRota(rota)
+    setOptimizationOriginalParadas(paradasParaOtimizar)
+    setOptimizationResult(resultado)
+    setOptimizationDialogOpen(true)
+  }
+
+  // Otimização de Rota: Aplicar sugestão aceita pelo usuário
+  const handleApplyOptimization = async (
+    paradasReordenadas: Array<{ escola_id: string; ordem: number }>,
+  ) => {
+    if (!optimizingRota) return
+    setIsApplyingOptimization(true)
+    try {
+      const ok = await salvarSequenciamentoParadas(optimizingRota.id, paradasReordenadas)
+      if (ok) {
+        toast.success(
+          `Rota "${optimizingRota.nome}" atualizada com sucesso com a sequência otimizada!`,
+        )
+        setOptimizationDialogOpen(false)
+        setOptimizingRota(null)
+        setOptimizationResult(null)
+      }
+    } finally {
+      setIsApplyingOptimization(false)
+    }
+  }
+
   return (
     <div className="space-y-6">
       {/* Header e Seleção de Chamada */}
@@ -1310,13 +1394,77 @@ export default function DeliveryRoutes() {
 
                   {/* Lista de Paradas com Sequenciamento Drag-and-Drop */}
                   <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
-                        <ArrowUpDown className="h-3.5 w-3.5" /> Sequência de Paradas
-                      </h4>
-                      <span className="text-[10px] text-muted-foreground">
-                        {item.paradasOrdenadas.length} escola(s) atendida(s)
-                      </span>
+                    <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+                      <div className="flex items-center gap-2">
+                        <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+                          <ArrowUpDown className="h-3.5 w-3.5" /> Sequência de Paradas
+                        </h4>
+                        <span className="text-[10px] text-muted-foreground">
+                          ({item.paradasOrdenadas.length} escola(s) atendida(s))
+                        </span>
+                      </div>
+
+                      {/* Botão de Sugestão de Rota Otimizada */}
+                      {item.paradasOrdenadas.length > 0 &&
+                        (() => {
+                          const paradas = item.paradasOrdenadas
+                          const menosDe3 = paradas.length < 3
+                          const temAlgumaCoord = paradas.some(
+                            (p) => extrairCoordenadas(p.latitude, p.longitude) !== null,
+                          )
+                          const desabilitado = menosDe3 || !temAlgumaCoord
+
+                          let tooltipText =
+                            'Sugerir ordem ótima de visita por coordenadas geográficas (vizinho mais próximo + 2-opt)'
+                          if (menosDe3) {
+                            tooltipText = 'A otimização de rota faz sentido a partir de 3 paradas.'
+                          } else if (!temAlgumaCoord) {
+                            tooltipText =
+                              'Nenhuma escola desta rota possui coordenadas geográficas cadastradas.'
+                          }
+
+                          const buttonNode = (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              disabled={desabilitado}
+                              className="h-7 text-xs gap-1.5 text-primary border-primary/30 hover:bg-primary/5 hover:border-primary"
+                              onClick={() => handleOpenOptimizationDialog(item.rota, paradas)}
+                            >
+                              <Navigation className="h-3.5 w-3.5" />
+                              <span>Sugerir rota otimizada</span>
+                            </Button>
+                          )
+
+                          if (desabilitado) {
+                            return (
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <span tabIndex={0} className="inline-block cursor-not-allowed">
+                                      {buttonNode}
+                                    </span>
+                                  </TooltipTrigger>
+                                  <TooltipContent side="top" className="text-xs max-w-xs">
+                                    {tooltipText}
+                                  </TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                            )
+                          }
+
+                          return (
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>{buttonNode}</TooltipTrigger>
+                                <TooltipContent side="top" className="text-xs max-w-xs">
+                                  {tooltipText}
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          )
+                        })()}
                     </div>
 
                     <p className="text-[11px] text-muted-foreground mb-2">
@@ -2231,6 +2379,24 @@ Ou apenas o nome da escola copiado do Excel/Word`}
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* MODAL: Sugestão de Otimização de Rota por Coordenadas */}
+      <RouteOptimizationDialog
+        open={optimizationDialogOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            setOptimizingRota(null)
+            setOptimizationOriginalParadas([])
+            setOptimizationResult(null)
+          }
+          setOptimizationDialogOpen(open)
+        }}
+        rotaNome={optimizingRota?.nome || 'Rota'}
+        paradasOriginais={optimizationOriginalParadas}
+        resultado={optimizationResult}
+        onApply={handleApplyOptimization}
+        isApplying={isApplyingOptimization}
+      />
     </div>
   )
 }
