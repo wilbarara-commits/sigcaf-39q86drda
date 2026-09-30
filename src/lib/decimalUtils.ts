@@ -164,3 +164,64 @@ export function formatQuantityOnBlur(val: string): string {
 
   return normalized
 }
+
+/**
+ * Converte um valor numérico (ou string numérica) para exibição pt-BR sempre com DUAS casas decimais e vírgula.
+ * Ex.: 12.5 -> "12,50" | 5 -> "5,00" | 0 -> "0,00" | 0.05 -> "0,05"
+ */
+export function formatPriceTwoDecimals(val: number | string | null | undefined): string {
+  if (val === null || val === undefined || val === '') return '0,00'
+  const num =
+    typeof val === 'number' ? val : parseFloat(String(val).replace(/\./g, '').replace(',', '.'))
+  if (isNaN(num)) return '0,00'
+  return num.toLocaleString('pt-BR', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })
+}
+
+/**
+ * Normaliza a digitação de preço com suporte a vírgula pt-BR e até 2 casas decimais:
+ * - Converte ponto em vírgula
+ * - Remove caracteres não numéricos exceto vírgula
+ * - Garante no máximo uma vírgula
+ * - Limita a no máximo 2 casas decimais
+ */
+export function normalizePriceTyping(rawInput: string): string {
+  if (!rawInput) return ''
+  let val = rawInput.replace(/\./g, ',')
+  val = val.replace(/[^\d,]/g, '')
+  const parts = val.split(',')
+  if (parts.length > 2) {
+    val = parts[0] + ',' + parts.slice(1).join('')
+  }
+  const currentParts = val.split(',')
+  if (currentParts.length === 2 && currentParts[1].length > 2) {
+    val = currentParts[0] + ',' + currentParts[1].slice(0, 2)
+  }
+  return val
+}
+
+/**
+ * Formata o preço ao sair do campo (onBlur):
+ * Ex.: "12" -> "12,00" | "12," -> "12,00" | "12,5" -> "12,50" | ",5" -> "0,50"
+ */
+export function formatPriceOnBlur(val: string): string {
+  const trimmed = val.trim()
+  if (!trimmed) return ''
+
+  let normalized = trimmed.replace(/\./g, ',')
+  if (normalized.startsWith(',')) {
+    normalized = '0' + normalized
+  }
+  if (normalized.endsWith(',')) {
+    normalized = normalized.slice(0, -1)
+  }
+
+  const parts = normalized.split(',')
+  const intPart = parseInt(parts[0], 10)
+  if (isNaN(intPart)) return ''
+
+  const decPart = (parts[1] || '').padEnd(2, '0').slice(0, 2)
+  return `${intPart},${decPart}`
+}

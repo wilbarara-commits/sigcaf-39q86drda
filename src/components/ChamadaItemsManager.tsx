@@ -49,7 +49,12 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
-import { formatQuantityOneDecimal } from '@/lib/decimalUtils'
+import {
+  formatQuantityOneDecimal,
+  formatPriceTwoDecimals,
+  normalizePriceTyping,
+  formatPriceOnBlur,
+} from '@/lib/decimalUtils'
 import { normalizeName } from '@/lib/excelImporter'
 import {
   parseContractItemsFile,
@@ -1020,15 +1025,15 @@ export function ChamadaItemsManager({
               <TableHeader className="bg-muted/40 sticky top-0 z-10 backdrop-blur-xs">
                 <TableRow className="text-xs h-8">
                   <TableHead className="min-w-[240px] w-[34%] py-1 px-2.5 font-semibold">
-                    Nome do Produto
+                    Nome no Contrato/AKA
                   </TableHead>
                   <TableHead className="min-w-[200px] w-[26%] py-1 px-2.5 font-semibold">
-                    AKA / Apelido na Planilha
+                    Nome do Produto
                   </TableHead>
                   <TableHead className="w-[75px] min-w-[70px] text-center py-1 px-1.5 font-semibold">
                     Unidade
                   </TableHead>
-                  <TableHead className="min-w-[130px] w-[15%] py-1 px-2 font-semibold">
+                  <TableHead className="min-w-[130px] w-[15%] text-right py-1 px-2 font-semibold">
                     Preço Unit. (R$)
                   </TableHead>
                   <TableHead className="min-w-[95px] w-[11%] text-right py-1 px-2 font-semibold">
@@ -1061,25 +1066,25 @@ export function ChamadaItemsManager({
                       key={item.id || item.productId || index}
                       className="text-xs hover:bg-muted/10"
                     >
-                      {/* Produto */}
+                      {/* 1. Nome no Contrato/AKA */}
                       <TableCell className="py-1 px-2">
                         <Input
-                          value={item.produto}
-                          onChange={(e) => handleProdutoChange(index, e.target.value)}
-                          placeholder="Nome do produto na chamada"
-                          className="h-7 text-xs font-semibold text-foreground w-full"
-                          title="Nome do produto na chamada pública"
+                          value={item.aka ?? ''}
+                          onChange={(e) => handleAkaChange(index, e.target.value)}
+                          placeholder={item.produto || 'AKA na planilha (ex: BANANA, MAÇÃ)'}
+                          className="h-7 text-xs font-mono text-foreground w-full font-semibold"
+                          title="Nome no Contrato/AKA na planilha da secretaria para cruzamento automático"
                         />
                       </TableCell>
 
-                      {/* AKA/Apelido */}
+                      {/* 2. Nome do Produto (Catálogo / Arquivo Central) */}
                       <TableCell className="py-1 px-2">
                         <Input
-                          value={item.aka || ''}
-                          onChange={(e) => handleAkaChange(index, e.target.value)}
-                          placeholder="AKA na planilha (ex: BANANA, MAÇÃ)"
-                          className="h-7 text-xs font-mono text-muted-foreground w-full"
-                          title="Apelido na planilha da secretaria para cruzamento automático"
+                          value={item.produto || ''}
+                          onChange={(e) => handleProdutoChange(index, e.target.value)}
+                          placeholder="Nome do produto conforme catálogo / arquivo central"
+                          className="h-7 text-xs text-foreground w-full"
+                          title="Nome oficial do produto no arquivo central / catálogo"
                         />
                       </TableCell>
 
@@ -1093,22 +1098,38 @@ export function ChamadaItemsManager({
                         />
                       </TableCell>
 
-                      {/* Preço Unitário */}
-                      <TableCell className="py-1 px-2">
-                        <div className="space-y-0.5">
+                      {/* Preço Unitário (alinhado à direita, duas casas decimais com vírgula) */}
+                      <TableCell className="py-1 px-2 text-right">
+                        <div className="space-y-0.5 flex flex-col items-end">
                           <div className="relative w-full max-w-[130px]">
                             <span className="absolute left-2 top-1.5 text-[11px] text-muted-foreground pointer-events-none font-medium">
                               R$
                             </span>
                             <Input
-                              type="number"
-                              step="0.01"
-                              min="0"
-                              value={item.preco ?? ''}
-                              onChange={(e) =>
-                                handlePriceChange(index, parseFloat(e.target.value) || 0)
+                              type="text"
+                              inputMode="decimal"
+                              value={
+                                item.preco !== undefined && item.preco !== null
+                                  ? formatPriceTwoDecimals(item.preco)
+                                  : '0,00'
                               }
-                              className={`h-7 pl-7 pr-2 text-xs font-mono font-medium ${
+                              onChange={(e) => {
+                                const raw = e.target.value
+                                const norm = normalizePriceTyping(raw)
+                                const parsed = parseFloat(norm.replace(',', '.'))
+                                handlePriceChange(index, isNaN(parsed) ? 0 : parsed)
+                              }}
+                              onBlur={(e) => {
+                                const raw = e.target.value.trim()
+                                if (!raw) {
+                                  handlePriceChange(index, 0)
+                                  return
+                                }
+                                const formatted = formatPriceOnBlur(raw)
+                                const parsed = parseFloat(formatted.replace(',', '.'))
+                                handlePriceChange(index, isNaN(parsed) ? 0 : parsed)
+                              }}
+                              className={`h-7 pl-7 pr-2 text-xs font-mono font-medium text-right ${
                                 isDiff
                                   ? 'border-amber-500/70 bg-amber-50/40 dark:bg-amber-950/20 focus-visible:ring-amber-500'
                                   : ''
@@ -1117,8 +1138,8 @@ export function ChamadaItemsManager({
                           </div>
 
                           {isDiff && (
-                            <div className="flex items-center gap-1 text-[10px] text-amber-700 dark:text-amber-400 font-medium">
-                              <span>catálogo: R$ {catalogPrice.toFixed(2)}</span>
+                            <div className="flex items-center justify-end gap-1 text-[10px] text-amber-700 dark:text-amber-400 font-medium">
+                              <span>catálogo: R$ {formatPriceTwoDecimals(catalogPrice)}</span>
                               <button
                                 type="button"
                                 onClick={() => handleResetToCatalogPrice(index)}
