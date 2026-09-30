@@ -563,6 +563,15 @@ export function ContractItemsManager({
             apelidos: it.apelidos || undefined,
           })),
         )
+        // Se houver quantidades nos itens, recalcula e sobrepõe o valor_total do contrato
+        const itemsComQtd = finalItemsList.filter((i) => (i.quantity || 0) > 0)
+        if (itemsComQtd.length > 0) {
+          const totalRecalculado = finalItemsList.reduce(
+            (acc, it) => acc + (it.price || 0) * (it.quantity || 0),
+            0,
+          )
+          await contratosService.update(contractId, { valor_total: totalRecalculado })
+        }
         await refreshData()
         toast.success(
           `Itens colados e salvos no contrato com sucesso: ${addedCount} adicionado(s), ${updatedCount} atualizado(s)!`,
@@ -933,6 +942,15 @@ export function ContractItemsManager({
             apelidos: it.apelidos || undefined,
           })),
         )
+        // Se houver quantidades nos itens, recalcula e sobrepõe o valor_total do contrato
+        const itemsComQtd = finalItemsList.filter((i) => (i.quantity || 0) > 0)
+        if (itemsComQtd.length > 0) {
+          const totalRecalculado = finalItemsList.reduce(
+            (acc, it) => acc + (it.price || 0) * (it.quantity || 0),
+            0,
+          )
+          await contratosService.update(contractId, { valor_total: totalRecalculado })
+        }
         await refreshData()
         toast.success(
           `Planilha importada e gravada no contrato com sucesso: ${addedCount} produto(s) adicionado(s), ${updatedCount} atualizado(s)!`,

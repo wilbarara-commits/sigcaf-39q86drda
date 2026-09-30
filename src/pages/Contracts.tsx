@@ -693,15 +693,14 @@ export default function Contracts() {
       return
     }
 
-    const rawVal = parseFloat((valorTotal || '0').replace(',', '.'))
-    const val = isNaN(rawVal) ? 0 : Math.max(0, rawVal)
-
-    // Se não informou valor total e também não há itens acordados cadastrados/importados
-    if (val <= 0 && contractItems.length === 0) {
-      toast.error(
-        'Informe um valor total válido ou importe/adicione os itens acordados do contrato.',
-      )
-      return
+    // Se houver itens com quantidades cadastradas, o valor total é recalculado e sobreposto
+    const itemsComQtd = contractItems.filter((i) => (i.quantity || 0) > 0)
+    let val = 0
+    if (itemsComQtd.length > 0) {
+      val = contractItems.reduce((acc, it) => acc + (it.price || 0) * (it.quantity || 0), 0)
+    } else {
+      const rawVal = parseFloat((valorTotal || '0').replace(',', '.'))
+      val = isNaN(rawVal) ? 0 : Math.max(0, rawVal)
     }
 
     // Validação da regra da modalidade centralizada
@@ -1530,12 +1529,15 @@ export default function Contracts() {
                         className="font-semibold text-foreground flex items-center gap-2"
                       >
                         <DollarSign className="h-4 w-4 text-primary" />
-                        Valor Total do Contrato (R$) <span className="text-destructive">*</span>
+                        Valor Total do Contrato (R$){' '}
+                        <span className="text-xs font-normal text-muted-foreground">
+                          (opcional na criação)
+                        </span>
                       </Label>
                       <p className="text-xs text-muted-foreground mt-0.5">
                         {contractItems.some((it) => (it.quantity || 0) > 0)
-                          ? 'Recalculado automaticamente pela soma dos itens (preço unitário × quantidade contratada).'
-                          : 'Quando os itens não possuem quantidades contratadas, informe o valor global diretamente.'}
+                          ? 'Recalculado automaticamente pela soma dos itens (preço unitário × quantidade contratada). O valor anterior é sobreposto.'
+                          : 'Opcional na criação. Pode ser 0 ou deixado em branco; se quantidades forem informadas posteriormente nos itens, o valor total será recalculado e sobreposto.'}
                       </p>
                     </div>
 
@@ -1549,7 +1551,7 @@ export default function Contracts() {
                         </Badge>
                       ) : (
                         <Badge variant="outline" className="text-muted-foreground font-medium">
-                          Total informado diretamente
+                          Total manual / inicial (0 ou vazio permitido)
                         </Badge>
                       )}
                     </div>
@@ -1562,7 +1564,7 @@ export default function Contracts() {
                       type="number"
                       step="0.01"
                       min="0"
-                      placeholder="Ex: 50000.00"
+                      placeholder="0.00 (opcional na criação)"
                       className={`pl-9 font-mono text-sm font-semibold ${
                         contractItems.some((it) => (it.quantity || 0) > 0)
                           ? 'bg-muted/50 cursor-not-allowed border-dashed'
@@ -1571,7 +1573,6 @@ export default function Contracts() {
                       readOnly={contractItems.some((it) => (it.quantity || 0) > 0)}
                       value={valorTotal}
                       onChange={(e) => setValorTotal(e.target.value)}
-                      required
                     />
                   </div>
 
@@ -2087,11 +2088,11 @@ export default function Contracts() {
                     items={contractItems}
                     onChange={(newItems) => {
                       setContractItems(newItems)
-                      // Recalcula total se houver quantidades
+                      // Recalcula total se houver quantidades e sobrepõe qualquer valor anterior
                       const comQtd = newItems.filter((i) => (i.quantity || 0) > 0)
                       if (comQtd.length > 0) {
                         const totalCalc = newItems.reduce(
-                          (acc, it) => acc + it.price * (it.quantity || 0),
+                          (acc, it) => acc + (it.price || 0) * (it.quantity || 0),
                           0,
                         )
                         setValorTotal(totalCalc.toFixed(2))
