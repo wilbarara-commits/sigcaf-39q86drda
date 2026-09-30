@@ -205,6 +205,82 @@ export default function Contracts() {
   const [isLoadingItems, setIsLoadingItems] = useState(false)
   const [viewingItems, setViewingItems] = useState<ContratoItemRecord[]>([])
 
+  // Carrega itens da chamada selecionada preservando quantidades já digitadas por produto_id
+  const loadItemsForChamada = async (
+    chId: string,
+    existingItems: ContractItemForm[] = [],
+    contractDbItems: ContratoItemRecord[] = [],
+  ) => {
+    if (!chId) {
+      setContractItems([])
+      return
+    }
+    setIsLoadingItems(true)
+    try {
+      const chamadaItens = await chamadasService.getItems(chId).catch(() => [])
+
+      // Monta mapa de quantidade contratada anterior por produto_id
+      // Prioridade: existingItems no estado do formulário > contractDbItems vindos do banco
+      const qtdByProdId = new Map<string, number | undefined>()
+      const idByProdId = new Map<string, string | undefined>()
+
+      for (const dbi of contractDbItems) {
+        if (dbi.produto_id) {
+          idByProdId.set(dbi.produto_id, dbi.id)
+          const q = dbi.quantidade_contratada ? Number(dbi.quantidade_contratada) : undefined
+          if (q !== undefined) qtdByProdId.set(dbi.produto_id, q)
+        }
+      }
+
+      for (const formItem of existingItems) {
+        if (formItem.productId) {
+          if (formItem.id) idByProdId.set(formItem.productId, formItem.id)
+          if (formItem.quantity !== undefined) {
+            qtdByProdId.set(formItem.productId, formItem.quantity)
+          }
+        }
+      }
+
+      const mapped: ContractItemForm[] = chamadaItens.map((ci) => {
+        const prod = products.find((p) => p.id === ci.produto_id)
+        const effectivePrice = Number(ci.preco) || 0
+        const effectiveNome = ci.produto || prod?.name || 'Produto'
+        const effectiveAka = ci.aka || ''
+        const effectiveUnidade = ci.unidade || prod?.unit || 'Kg'
+        const preservedQtd = ci.produto_id ? qtdByProdId.get(ci.produto_id) : undefined
+        const preservedId = ci.produto_id ? idByProdId.get(ci.produto_id) : undefined
+
+        return {
+          id: preservedId,
+          productId: ci.produto_id,
+          price: effectivePrice,
+          quantity: preservedQtd,
+          nomeContrato: effectiveAka || effectiveNome, // Nome no Contrato / AKA
+          apelidos: effectiveAka,
+          unidade: effectiveUnidade,
+          produtoNome: effectiveNome,
+        }
+      })
+
+      setContractItems(mapped)
+
+      // Se há produtos com quantidade contratada informada > 0, sincroniza e sobrepõe o total automaticamente
+      const somaContratada = mapped.reduce(
+        (acc, it) => acc + (it.price || 0) * (it.quantity || 0),
+        0,
+      )
+      const temQtd = mapped.some((it) => (it.quantity || 0) > 0)
+      if (temQtd && somaContratada > 0) {
+        setValorTotal(somaContratada.toFixed(2))
+      }
+    } catch (err) {
+      console.error('Erro ao carregar itens da chamada:', err)
+      setContractItems([])
+    } finally {
+      setIsLoadingItems(false)
+    }
+  }
+
   const handleOpenCreate = () => {
     setEditingContract(null)
     setNumero('')
@@ -257,48 +333,52 @@ export default function Contracts() {
     setDialogOpen(true)
     setIsLoadingItems(true)
     try {
-      const [items, chamadaItens] = await Promise.all([
+      const [dbContractItems, chamadaItens] = await Promise.all([
         contratosService.getItems(contract.id),
         contract.chamada_id
           ? chamadasService.getItems(contract.chamada_id).catch(() => [])
           : Promise.resolve([]),
       ])
 
-      const chamadaItemMap = new Map<string, any>()
-      for (const ci of chamadaItens) {
-        if (ci.produto_id) chamadaItemMap.set(ci.produto_id, ci)
-        const normNome = (ci.produto || '').trim().toLowerCase()
-        if (normNome && !chamadaItemMap.has(normNome)) chamadaItemMap.set(normNome, ci)
+      // Mapa de itens do contrato por produto_id
+      const contratoItemByProdId = new Map<string, ContratoItemRecord>()
+      for (const it of dbContractItems) {
+        if (it.produto_id) {
+          contratoItemByProdId.set(it.produto_id, it)
+        }
       }
 
-      const mapped = items.map((it) => {
-        const prod = products.find((p) => p.id === it.produto_id)
-        const chItem =
-          chamadaItemMap.get(it.produto_id) ||
-          (prod?.name ? chamadaItemMap.get(prod.name.trim().toLowerCase()) : undefined)
-
-        // Preço e AKA espelhados da chamada quando presentes
-        const effectivePrice =
-          chItem?.preco !== undefined ? Number(chItem.preco) : Number(it.preco) || 0
-        const effectiveAka = chItem?.aka !== undefined ? chItem.aka : it.apelidos || ''
-        const effectiveNome =
-          chItem?.produto || it.nome_contrato || it.expand?.produto_id?.nome || ''
-
-        const rawQtd = it.quantidade_contratada ? Number(it.quantidade_contratada) : undefined
+      // Exibe TODOS os itens da chamada selecionada (herdados), cruzando com contratosService.getItems
+      // para preservar quantidade_contratada por produto_id
+      const mapped: ContractItemForm[] = chamadaItens.map((ci) => {
+        const prod = products.find((p) => p.id === ci.produto_id)
+        const contratoItem = ci.produto_id ? contratoItemByProdId.get(ci.produto_id) : undefined
+        const effectivePrice = Number(ci.preco) || 0
+        const effectiveNome = ci.produto || prod?.name || 'Produto'
+        const effectiveAka = ci.aka || ''
+        const effectiveUnidade = ci.unidade || prod?.unit || 'Kg'
+        const rawQtd = contratoItem?.quantidade_contratada
+          ? Number(contratoItem.quantidade_contratada)
+          : undefined
 
         return {
-          id: it.id,
-          productId: it.produto_id,
+          id: contratoItem?.id,
+          productId: ci.produto_id,
           price: effectivePrice,
           quantity: rawQtd,
-          nomeContrato: effectiveNome,
+          nomeContrato: effectiveAka || effectiveNome,
           apelidos: effectiveAka,
+          unidade: effectiveUnidade,
+          produtoNome: effectiveNome,
         }
       })
       setContractItems(mapped)
 
       // Se há produtos com quantidade contratada informada > 0, sincroniza o total automaticamente
-      const somaContratada = mapped.reduce((acc, it) => acc + it.price * (it.quantity || 0), 0)
+      const somaContratada = mapped.reduce(
+        (acc, it) => acc + (it.price || 0) * (it.quantity || 0),
+        0,
+      )
       const temQtd = mapped.some((it) => (it.quantity || 0) > 0)
       if (temQtd && somaContratada > 0) {
         setValorTotal(somaContratada.toFixed(2))
@@ -847,23 +927,22 @@ export default function Contracts() {
           })
         }
 
-        // 3. Sincronizar itens, preços, quantidades contratadas, nome_contrato e apelidos acordados
-        const validItems = contractItems.filter((i) => i.productId && Number(i.price) >= 0)
+        // 3. Sincronizar itens do contrato: grava só contrato_id, produto_id e quantidade_contratada
+        // Apenas itens com productId válido e quantidade_contratada informada > 0 são persistidos
+        const itemsToSave = contractItems.filter(
+          (i) =>
+            i.productId &&
+            i.quantity !== undefined &&
+            i.quantity !== null &&
+            !isNaN(i.quantity) &&
+            i.quantity > 0,
+        )
         await contratosService.syncItems(
           contractId,
-          validItems.map((it) => ({
+          itemsToSave.map((it) => ({
             id: it.id,
             produto_id: it.productId,
-            preco: it.price,
-            quantidade_contratada:
-              it.quantity !== undefined &&
-              it.quantity !== null &&
-              !isNaN(it.quantity) &&
-              it.quantity > 0
-                ? it.quantity
-                : undefined,
-            nome_contrato: it.nomeContrato || undefined,
-            apelidos: it.apelidos || undefined,
+            quantidade_contratada: it.quantity,
           })),
         )
       }
@@ -1296,6 +1375,8 @@ export default function Contracts() {
                           if (ch.programa) setTipo(ch.programa)
                           if (ch.modalidade) setModalidade(ch.modalidade)
                         }
+                        // Ao trocar chamada: recarregar itens preservando quantidades por produto_id
+                        loadItemsForChamada(val, contractItems)
                       }}
                       required
                     >
