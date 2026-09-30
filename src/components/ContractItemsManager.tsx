@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef } from 'react'
+import { useState, useMemo, useRef, useCallback } from 'react'
 import type { Product, DisponibilidadeProduto } from '@/lib/types'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -59,6 +59,7 @@ import {
   matchCatalogProduct,
   matchCatalogProductDetailed,
   parseBRLNumber,
+  parseContractIntegerQuantity,
   parseContractItemsFile,
   type ContractItemsFileParseResult,
   type ParsedContractItemRow,
@@ -205,6 +206,20 @@ export function ContractItemsManager({
     }
     return map
   }, [itensDestaChamada])
+
+  // Helper para obter o preço soberano da chamada para um produto (com fallback para o catálogo mestre)
+  const getSovereignPrice = useCallback(
+    (product: Product): number => {
+      const ci =
+        chamadaItemByProductId.get(product.id) ||
+        (product.name ? chamadaItemByProductId.get(product.name.trim().toLowerCase()) : undefined)
+      if (ci?.preco !== undefined && ci.preco !== null && ci.preco >= 0) {
+        return ci.preco
+      }
+      return product.price || 0
+    },
+    [chamadaItemByProductId],
+  )
 
   // IDs já inclusos no contrato
   const includedProductIds = useMemo(() => {
@@ -444,22 +459,18 @@ export function ContractItemsManager({
       const rawParts = line.split(sep).map((p) => p.trim())
 
       let namePart = ''
-      let pricePart = ''
       let qtyPart = ''
 
       if (rawParts.length >= 3) {
-        // 3 colunas: Produto, Preço, Quantidade (ou Produto, Quantidade, Preço)
+        // Colunas esperadas: Produto, [Preço descartado], Quantidade
+        // Se a segunda coluna for a quantidade e a terceira preço, ou padrão Produto, Preço, Quantidade:
+        // Pelo padrão: coluna 0 = Produto, coluna 2 = Quantidade
         namePart = rawParts[0]
-        const p1 = parseBRLNumber(rawParts[1])
-        const p2 = parseBRLNumber(rawParts[2])
-
-        // Tentar discernir preço e quantidade: geralmente preço tem casas decimais ou moeda
-        // Mas o padrão pedido é "produto, preço, quantidade"
-        pricePart = rawParts[1]
         qtyPart = rawParts[2]
       } else if (rawParts.length === 2) {
+        // Se 2 colunas: pode ser Produto + Quantidade (ou Produto + Preço)
         namePart = rawParts[0]
-        pricePart = rawParts[1]
+        qtyPart = rawParts[1]
       } else {
         namePart = line.trim()
       }
@@ -473,19 +484,14 @@ export function ContractItemsManager({
         continue
       }
 
-      // Preço
-      let price = found.price || 0
-      if (pricePart) {
-        const parsed = parseBRLNumber(pricePart)
-        if (parsed.isValid && parsed.value >= 0) {
-          price = parsed.value
-        }
-      }
+      // MUDANÇA v0.0.109: Preço é estritamente soberano da chamada (chamada_itens.preco)
+      // Qualquer preço vindo da colagem/arquivo é ignorado.
+      const price = getSovereignPrice(found)
 
-      // Quantidade
+      // Quantidade: capturar apenas como inteiro >= 0 (descartar vírgula/ponto — regra v0.0.108/v0.0.109; vazio = não contratado / 0)
       let quantity = 0
       if (qtyPart) {
-        const parsedQ = parseBRLNumber(qtyPart)
+        const parsedQ = parseContractIntegerQuantity(qtyPart)
         if (parsedQ.isValid && parsedQ.value >= 0) {
           quantity = parsedQ.value
         }
@@ -509,7 +515,7 @@ export function ContractItemsManager({
   const handleApplyPastedItems = async () => {
     if (!pastePreview || pastePreview.matched.length === 0) return
 
-    // Mesclar: se já existe o produto, atualiza o preço e quantidade; se não existe, adiciona
+    // Mesclar: preço vem SEMPRE da chamada (soberano). Apenas quantidade e identificadores são aplicados.
     const currentMap = new Map<string, ContractItemForm>()
     for (const it of items) {
       currentMap.set(it.productId, { ...it })
@@ -519,9 +525,11 @@ export function ContractItemsManager({
     let updatedCount = 0
 
     for (const match of pastePreview.matched) {
+      const sovereignPrice = getSovereignPrice(match.product)
+
       if (currentMap.has(match.product.id)) {
         const existing = currentMap.get(match.product.id)!
-        existing.price = match.price
+        existing.price = sovereignPrice // Mantém o preço soberano da chamada
         if (match.quantity > 0) {
           existing.quantity = match.quantity
         }
@@ -532,8 +540,8 @@ export function ContractItemsManager({
       } else {
         currentMap.set(match.product.id, {
           productId: match.product.id,
-          price: match.price,
-          quantity: match.quantity,
+          price: sovereignPrice, // Mantém o preço soberano da chamada
+          quantity: match.quantity > 0 ? match.quantity : undefined,
           nomeContrato: match.product.name,
           apelidos: '',
         })
@@ -594,8 +602,31 @@ export function ContractItemsManager({
 
     setIsParsingFile(true)
     try {
-      const res = await parseContractItemsFile(file, allAvailableProducts, items)
-      setFileParseResult(res)
+      const parsedRes = await parseContractItemsFile(file, allAvailableProducts, items)
+
+      // MUDANÇA v0.0.109: Forçar o preço soberano da chamada em todas as linhas válidas/resolvidas
+      const normalizedAllRows = parsedRes.allRows.map((r) => {
+        if (!r.product) return r
+        const sovereignPrice = getSovereignPrice(r.product)
+        const subtotal = sovereignPrice * r.quantity
+        return {
+          ...r,
+          price: sovereignPrice,
+          subtotal,
+        }
+      })
+
+      const validRows = normalizedAllRows.filter(
+        (r) => r.status === 'valid' || r.status === 'warning',
+      )
+      const totalCalculado = validRows.reduce((acc, r) => acc + r.subtotal, 0)
+
+      setFileParseResult({
+        ...parsedRes,
+        allRows: normalizedAllRows,
+        validRows,
+        totalCalculado,
+      })
     } catch (err: any) {
       console.error('Erro ao processar arquivo:', err)
       toast.error(err?.message || 'Falha ao ler planilha/CSV.')
@@ -709,14 +740,9 @@ export function ContractItemsManager({
       }
 
       // Atualiza a linha no resultado da planilha
-      // Garante price definido, usando o preço da planilha quando existir, senão catálogo, senão 0
-      const finalPrice =
-        resolvingRow.price !== undefined &&
-        resolvingRow.price !== null &&
-        !isNaN(resolvingRow.price)
-          ? resolvingRow.price
-          : linkedProduct.price || 0
-      const subtotal = finalPrice * resolvingRow.quantity
+      // MUDANÇA v0.0.109: Preço soberano da chamada para o produto vinculado
+      const sovereignPrice = getSovereignPrice(linkedProduct)
+      const subtotal = sovereignPrice * resolvingRow.quantity
 
       const updatedAllRows = fileParseResult.allRows.map((r) => {
         if (r.index !== resolvingRow.index) return r
@@ -725,7 +751,7 @@ export function ContractItemsManager({
           product: linkedProduct,
           nomeContrato: resolvingRow.rawProduct,
           apelidos: trimmedAka,
-          price: finalPrice,
+          price: sovereignPrice,
           subtotal,
           status: 'valid' as const,
           statusReason: `Vinculado a "${linkedProduct.name}" com AKA "${trimmedAka}"`,
@@ -799,16 +825,9 @@ export function ContractItemsManager({
         })
 
         // Atualiza a linha com o novo produto criado
-        // Garante que o item fique com price definido (usar o preço da planilha quando existir)
-        const finalPrice =
-          resolvingRow.price !== undefined &&
-          resolvingRow.price !== null &&
-          !isNaN(resolvingRow.price)
-            ? resolvingRow.price
-            : parsedInitialPrice >= 0
-              ? parsedInitialPrice
-              : 0
-        const subtotal = finalPrice * resolvingRow.quantity
+        // MUDANÇA v0.0.109: Preço soberano da chamada para o produto recém-criado
+        const sovereignPrice = getSovereignPrice(newProductUi)
+        const subtotal = sovereignPrice * resolvingRow.quantity
 
         const updatedAllRows = fileParseResult.allRows.map((r) => {
           if (r.index !== resolvingRow.index) return r
@@ -817,7 +836,7 @@ export function ContractItemsManager({
             product: newProductUi,
             nomeContrato: resolvingRow.rawProduct,
             apelidos: trimmedAka,
-            price: finalPrice,
+            price: sovereignPrice,
             subtotal,
             status: 'valid' as const,
             statusReason: `Novo produto mestre criado: "${newProductUi.name}"`,
@@ -890,11 +909,13 @@ export function ContractItemsManager({
       const importedNomeContrato = row.nomeContrato || row.rawProduct || row.product.name
       const importedApelido =
         row.apelidos || (row.rawProduct !== row.product.name ? row.rawProduct : '')
+      // MUDANÇA v0.0.109: Preço da chamada é estritamente soberano, ignorando o preço da planilha
+      const sovereignPrice = getSovereignPrice(row.product)
 
       if (currentMap.has(row.product.id)) {
         const existing = currentMap.get(row.product.id)!
-        existing.price = row.price
-        existing.quantity = row.quantity
+        existing.price = sovereignPrice
+        existing.quantity = row.quantity > 0 ? row.quantity : undefined
         if (importedNomeContrato) {
           existing.nomeContrato = importedNomeContrato
         }
@@ -910,8 +931,8 @@ export function ContractItemsManager({
       } else {
         currentMap.set(row.product.id, {
           productId: row.product.id,
-          price: row.price,
-          quantity: row.quantity,
+          price: sovereignPrice,
+          quantity: row.quantity > 0 ? row.quantity : undefined,
           nomeContrato: importedNomeContrato,
           apelidos: importedApelido,
         })
@@ -1695,12 +1716,13 @@ export function ContractItemsManager({
           <DialogHeader className="shrink-0">
             <DialogTitle className="flex items-center gap-2">
               <ClipboardPaste className="h-5 w-5 text-primary" />
-              Colar Produtos, Preços e Quantidades
+              Colar Produtos e Quantidades
             </DialogTitle>
             <DialogDescription>
               Copie células do Excel e cole abaixo. Aceita as colunas:{' '}
-              <strong>Produto [tab] Preço [tab] Quantidade</strong> ou{' '}
-              <strong>Produto; Preço; Quantidade</strong>.
+              <strong>Produto [tab] Quantidade</strong> ou <strong>Produto; Quantidade</strong> (ou
+              formato legado com coluna de preço). Preços herdados da chamada; valores do arquivo
+              são ignorados.
             </DialogDescription>
           </DialogHeader>
 
@@ -1759,34 +1781,72 @@ export function ContractItemsManager({
 
                 {/* Lista de itens identificados */}
                 {pastePreview.matched.length > 0 && (
-                  <div className="max-h-[160px] overflow-y-auto space-y-1 pr-1 overscroll-contain">
-                    {pastePreview.matched.map((m, i) => (
-                      <div
-                        key={i}
-                        className="flex items-center justify-between p-1.5 rounded bg-card border text-[11px]"
-                      >
-                        <div className="truncate mr-2">
-                          <span className="font-semibold">{m.product.name}</span>
-                          <span className="text-muted-foreground ml-1">({m.product.unit})</span>
-                          {m.matchedViaAlias && (
-                            <span className="text-[10px] text-primary block">
-                              ✓ Casado via apelido "{m.matchedViaAlias}"
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between text-[11px] text-muted-foreground bg-muted/40 px-2 py-1 rounded">
+                      <span className="font-medium">Produto Identificado</span>
+                      <span className="font-medium">
+                        Preço da Chamada (Soberano) × Qtd = Subtotal
+                      </span>
+                    </div>
+                    <div className="max-h-[160px] overflow-y-auto space-y-1 pr-1 overscroll-contain">
+                      {pastePreview.matched.map((m, i) => (
+                        <div
+                          key={i}
+                          className="flex items-center justify-between p-1.5 rounded bg-card border text-[11px]"
+                        >
+                          <div className="truncate mr-2">
+                            <span className="font-semibold">{m.product.name}</span>
+                            <span className="text-muted-foreground ml-1">({m.product.unit})</span>
+                            {m.matchedViaAlias && (
+                              <span className="text-[10px] text-primary block">
+                                ✓ Casado via apelido "{m.matchedViaAlias}"
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2 font-mono shrink-0 text-right">
+                            <span
+                              className="text-muted-foreground"
+                              title="Preço da Chamada (Soberano)"
+                            >
+                              R${' '}
+                              {m.price.toLocaleString('pt-BR', {
+                                minimumFractionDigits: 2,
+                                maximumFractionDigits: 2,
+                              })}
                             </span>
-                          )}
+                            <span className="text-muted-foreground">×</span>
+                            <span className="text-primary font-semibold">
+                              {m.quantity} {m.product.unit}
+                            </span>
+                            <span className="text-muted-foreground">=</span>
+                            <span className="font-bold text-foreground">
+                              R${' '}
+                              {m.subtotal.toLocaleString('pt-BR', {
+                                minimumFractionDigits: 2,
+                                maximumFractionDigits: 2,
+                              })}
+                            </span>
+                          </div>
                         </div>
-                        <div className="flex items-center gap-3 font-mono shrink-0">
-                          <span className="text-muted-foreground">R$ {m.price.toFixed(2)}</span>
-                          <span>×</span>
-                          <span className="text-primary font-semibold">
-                            {m.quantity} {m.product.unit}
-                          </span>
-                          <span>=</span>
-                          <span className="font-bold text-foreground">
-                            R$ {m.subtotal.toFixed(2)}
-                          </span>
-                        </div>
+                      ))}
+                    </div>
+                    <div className="flex items-center justify-between pt-1 border-t text-[11px]">
+                      <p className="text-[10px] text-muted-foreground italic">
+                        Preços herdados da chamada; valores do arquivo são ignorados.
+                      </p>
+                      <div className="font-mono text-xs">
+                        <span className="text-muted-foreground mr-1">Total:</span>
+                        <strong className="text-primary font-bold">
+                          R${' '}
+                          {pastePreview.matched
+                            .reduce((acc, m) => acc + m.subtotal, 0)
+                            .toLocaleString('pt-BR', {
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 2,
+                            })}
+                        </strong>
                       </div>
-                    ))}
+                    </div>
                   </div>
                 )}
 
@@ -1871,8 +1931,9 @@ export function ContractItemsManager({
               Importação em Massa de Itens do Contrato (Excel / CSV)
             </DialogTitle>
             <DialogDescription>
-              Faça upload de uma planilha (.xlsx ou .csv) contendo os produtos, preços e quantidades
-              contratadas. O sistema valida os itens contra o catálogo cadastrado.
+              Faça upload de uma planilha (.xlsx ou .csv) contendo os produtos e quantidades
+              contratadas. O sistema valida os itens contra o catálogo cadastrado. Preços herdados
+              da chamada; valores do arquivo são ignorados.
             </DialogDescription>
           </DialogHeader>
 
@@ -1884,8 +1945,8 @@ export function ContractItemsManager({
                   Selecione seu arquivo de planilha (.xlsx, .xls ou .csv)
                 </p>
                 <p className="text-[11px] text-muted-foreground">
-                  Colunas esperadas: <strong>Produto</strong>, <strong>Preço Unitário</strong> e{' '}
-                  <strong>Quantidade Contratada</strong>.
+                  Colunas esperadas: <strong>Produto</strong> e{' '}
+                  <strong>Quantidade Contratada</strong> (coluna de preço opcional e ignorada).
                 </p>
               </div>
 
@@ -1950,7 +2011,7 @@ export function ContractItemsManager({
 
                   <div className="text-right">
                     <span className="text-[10px] text-muted-foreground uppercase font-semibold block">
-                      Total da Planilha:
+                      Total do Contrato:
                     </span>
                     <span className="font-mono font-bold text-sm text-primary">
                       R${' '}
@@ -1958,6 +2019,9 @@ export function ContractItemsManager({
                         minimumFractionDigits: 2,
                         maximumFractionDigits: 2,
                       })}
+                    </span>
+                    <span className="text-[9px] text-muted-foreground block">
+                      Preços herdados da chamada; valores do arquivo são ignorados.
                     </span>
                   </div>
                 </div>
@@ -1967,20 +2031,20 @@ export function ContractItemsManager({
                   <Table className="border-collapse">
                     <TableHeader className="bg-muted sticky top-0 z-20 text-xs shadow-xs">
                       <TableRow>
-                        <TableHead className="w-[6%] bg-muted font-semibold">Linha</TableHead>
-                        <TableHead className="w-[30%] bg-muted font-semibold">
+                        <TableHead className="w-[5%] bg-muted font-semibold">Linha</TableHead>
+                        <TableHead className="w-[28%] bg-muted font-semibold">
                           Produto da Planilha & Correspondência
                         </TableHead>
-                        <TableHead className="w-[18%] bg-muted font-semibold">
+                        <TableHead className="w-[17%] bg-muted font-semibold">
                           Status & AKA no Contrato
                         </TableHead>
-                        <TableHead className="w-[12%] text-right bg-muted font-semibold">
-                          Preço
+                        <TableHead className="w-[18%] text-right bg-muted font-semibold">
+                          Preço da Chamada (Soberano)
                         </TableHead>
-                        <TableHead className="w-[12%] text-right bg-muted font-semibold">
+                        <TableHead className="w-[11%] text-right bg-muted font-semibold">
                           Qtd. Contratada
                         </TableHead>
-                        <TableHead className="w-[12%] text-right bg-muted font-semibold">
+                        <TableHead className="w-[11%] text-right bg-muted font-semibold">
                           Subtotal
                         </TableHead>
                         <TableHead className="w-[10%] text-right bg-muted font-semibold">
@@ -2107,9 +2171,13 @@ export function ContractItemsManager({
                               )}
                             </TableCell>
 
-                            {/* Preço */}
-                            <TableCell className="text-right font-mono">
-                              R$ {r.price.toFixed(2)}
+                            {/* Preço da Chamada (Soberano) - somente leitura, formato R$ 0,00 à direita */}
+                            <TableCell className="text-right font-mono text-muted-foreground">
+                              R${' '}
+                              {r.price.toLocaleString('pt-BR', {
+                                minimumFractionDigits: 2,
+                                maximumFractionDigits: 2,
+                              })}
                             </TableCell>
 
                             {/* Quantidade */}
@@ -2117,9 +2185,13 @@ export function ContractItemsManager({
                               {r.quantity} {r.product?.unit || r.rawUnidade || ''}
                             </TableCell>
 
-                            {/* Subtotal */}
+                            {/* Subtotal = quantidade × preço da chamada */}
                             <TableCell className="text-right font-mono font-bold">
-                              R$ {r.subtotal.toFixed(2)}
+                              R${' '}
+                              {r.subtotal.toLocaleString('pt-BR', {
+                                minimumFractionDigits: 2,
+                                maximumFractionDigits: 2,
+                              })}
                             </TableCell>
 
                             {/* Ações por linha */}

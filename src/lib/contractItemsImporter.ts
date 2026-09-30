@@ -57,6 +57,31 @@ export function parseBRLNumber(val: any): { value: number; isValid: boolean } {
 }
 
 /**
+ * Faz o parse estrito de quantidade para contratos (regra v0.0.108/v0.0.109).
+ * Captura apenas números inteiros >= 0, descartando qualquer fração/ponto/vírgula.
+ * Vazio ou valor não preenchido indica não contratado (retorna undefined / 0 com isValid: false).
+ */
+export function parseContractIntegerQuantity(val: any): { value: number; isValid: boolean } {
+  if (val === undefined || val === null) {
+    return { value: 0, isValid: false }
+  }
+  const str = String(val).trim()
+  if (str === '') {
+    return { value: 0, isValid: false }
+  }
+  // Extrai apenas os dígitos decimais (descarta vírgulas, pontos e frações)
+  const cleaned = str.replace(/\D/g, '')
+  if (!cleaned) {
+    return { value: 0, isValid: false }
+  }
+  const parsed = parseInt(cleaned, 10)
+  if (isNaN(parsed) || parsed < 0) {
+    return { value: 0, isValid: false }
+  }
+  return { value: parsed, isValid: true }
+}
+
+/**
  * Encontra o produto mais compatível no catálogo mestre.
  * Produtos mestre não possuem apelidos (apelidos residem exclusivamente em contrato_itens).
  */
@@ -291,11 +316,11 @@ export async function parseContractItemsFile(
 
     let parsedQuantityVal = 0
     if (rawQuantity) {
-      const parsedQty = parseBRLNumber(rawQuantity)
+      const parsedQty = parseContractIntegerQuantity(rawQuantity)
       if (parsedQty.isValid && parsedQty.value >= 0) {
         parsedQuantityVal = parsedQty.value
       } else {
-        warnings.push(`Quantidade "${rawQuantity}" não numérica; assumido 0`)
+        warnings.push(`Quantidade "${rawQuantity}" inválida para contrato; assumido 0`)
       }
     }
 
