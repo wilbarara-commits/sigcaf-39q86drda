@@ -778,6 +778,64 @@ export function Requirements() {
         ))}
       </ul>
 
+      {/* 7. Registro de Manutenção e Limpeza de Dados de Teste */}
+      <SectionTitle>7. Registro de Manutenção & Higienização do Banco de Dados</SectionTitle>
+      <div className="rounded-lg border border-border bg-card p-5 space-y-4">
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <div className="flex items-center gap-2">
+            <Badge variant="outline" className="text-primary border-primary/30">
+              Migration 0094
+            </Badge>
+            <span className="font-semibold text-foreground">
+              Limpeza Autorizada de Dados de Teste (Preparação Operacional)
+            </span>
+          </div>
+          <span className="text-xs text-muted-foreground">Executado em 30/09/2026 (v0.0.102)</span>
+        </div>
+        <p className="text-sm text-foreground/90 leading-relaxed">
+          Execução de rotina idempotente de higienização de registros artificiais de teste criados
+          durante as fases de desenvolvimento e homologação das rotinas de importação, roteirização
+          e emissão de atestos.
+        </p>
+        <div className="grid sm:grid-cols-2 gap-4 text-sm">
+          <div className="rounded-md border border-border/60 bg-muted/20 p-3 space-y-1.5">
+            <span className="font-medium text-destructive">Registros Removidos:</span>
+            <ul className="space-y-1 text-xs text-muted-foreground">
+              <li>• Ciclo de teste 38/2026 e seus vínculos operacionais</li>
+              <li>
+                • 37 pedidos centralizados de teste (IMP-8407-*, IMP-8408-*, FOR-*, ORD-*) e 297
+                itens
+              </li>
+              <li>• 20 atestos de homologação gerados em teste</li>
+              <li>• 3 despachos de teste do ciclo 38/2026</li>
+              <li>• 3 tokens públicos de teste para formulário individualizado</li>
+              <li>• 11 contratos de teste C-07/2025-01 a C-07/2025-11 (R$ 1,00) e 2 itens</li>
+              <li>• Contrato cancelado C-2026-02 (redefinido) e 12 vínculos contrato_escolas</li>
+              <li>
+                • Rota legada individualizada &quot;A&quot; (11 paradas) do contrato C-2026-02
+              </li>
+              <li>• Contatos provisórios contendo &quot;(TESTE)&quot; em 46 escolas zerados</li>
+            </ul>
+          </div>
+          <div className="rounded-md border border-primary/30 bg-primary/5 p-3 space-y-1.5">
+            <span className="font-medium text-primary">Ativos Reais Preservados:</span>
+            <ul className="space-y-1 text-xs text-foreground/80">
+              <li>• Contrato C-2026-01: R$ 1.722.603,60 com 19 itens e quantidades intactas</li>
+              <li>
+                • Chamada 01/2025 (centralizado) e Chamada 07/2025 (individualizado): 19 itens cada
+              </li>
+              <li>
+                • Rotas operacionais ativas: ROTA A (37 paradas), ROTA B (24 paradas), ROTA C (23
+                paradas)
+              </li>
+              <li>• 84 escolas municipais com CEP e coordenadas geográficas preservadas</li>
+              <li>• Catálogo completo de 38 produtos cadastrados</li>
+              <li>• Parâmetros institucionais e Depósito Central em Configurações</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
       <div className="mt-12 pt-6 border-t border-border text-center text-xs text-muted-foreground">
         Documento de Requisitos do Sistema — SIGCAF • Conectado ao Skip Cloud (PocketBase)
       </div>
