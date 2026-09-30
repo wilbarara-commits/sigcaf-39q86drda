@@ -66,11 +66,7 @@ import {
 import { produtosService } from '@/services/produtos'
 import { contratosService } from '@/services/contratos'
 import { DEFAULT_PRODUCT_UNIT } from '@/lib/productCsvImporter'
-import {
-  formatQuantityOneDecimal,
-  normalizeDecimalTyping,
-  formatQuantityOnBlur,
-} from '@/lib/decimalUtils'
+import { formatPriceTwoDecimals, formatQuantityOneDecimal } from '@/lib/decimalUtils'
 import { useApp } from '@/context/app-context'
 import { toast } from 'sonner'
 import * as XLSX from 'xlsx'
@@ -1334,21 +1330,22 @@ export function ContractItemsManager({
             <Table>
               <TableHeader className="bg-muted/30 sticky top-0 z-10 backdrop-blur-xs">
                 <TableRow className="text-xs">
-                  <TableHead className="w-[32%]">Nome no Contrato & AKA</TableHead>
-                  <TableHead className="w-[18%]">Produto Mestre / Catálogo</TableHead>
-                  <TableHead className="w-[8%] text-center">Unidade</TableHead>
-                  <TableHead className="w-[16%]">Preço Unit. (R$)</TableHead>
-                  <TableHead className="w-[14%]">Qtd. Contratada</TableHead>
-                  <TableHead className="w-[8%] text-right">Subtotal</TableHead>
-                  <TableHead className="w-[4%] text-right"></TableHead>
+                  <TableHead className="min-w-[240px] w-[30%]">Nome no Contrato & AKA</TableHead>
+                  <TableHead className="min-w-[170px] w-[20%]">Produto Mestre / Catálogo</TableHead>
+                  <TableHead className="w-[70px] text-center">Unidade</TableHead>
+                  <TableHead className="min-w-[140px] w-[15%] text-right">
+                    Preço Unit. (R$)
+                  </TableHead>
+                  <TableHead className="min-w-[130px] w-[15%] text-right">
+                    Qtd. Contratada
+                  </TableHead>
+                  <TableHead className="min-w-[120px] w-[15%] text-right">Subtotal</TableHead>
+                  <TableHead className="w-[45px] text-right"></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {items.map((item, index) => {
                   const prod = productById.get(item.productId)
-                  const catalogPrice = prod?.price ?? 0
-                  const isDiff =
-                    catalogPrice > 0 && Math.abs((item.price || 0) - catalogPrice) > 0.009
                   const qty =
                     item.quantity !== undefined && item.quantity !== null ? item.quantity : 0
                   const subtotal = (item.price || 0) * qty
@@ -1411,58 +1408,25 @@ export function ContractItemsManager({
                         {prod?.unit || 'Kg'}
                       </TableCell>
 
-                      {/* Preço editável inline */}
-                      <TableCell className="py-2">
-                        <div className="space-y-1">
-                          <div className="relative max-w-[120px]">
-                            <span className="absolute left-2 top-1.5 text-[11px] text-muted-foreground pointer-events-none font-medium">
-                              R$
-                            </span>
-                            <Input
-                              type="number"
-                              step="0.01"
-                              min="0"
-                              value={item.price ?? ''}
-                              onChange={(e) =>
-                                handlePriceChange(index, parseFloat(e.target.value) || 0)
-                              }
-                              className={`h-7 pl-7 pr-2 text-xs font-mono font-medium ${
-                                isDiff
-                                  ? 'border-amber-500/70 bg-amber-50/40 dark:bg-amber-950/20 focus-visible:ring-amber-500'
-                                  : ''
-                              }`}
-                            />
-                          </div>
-
-                          {/* Destaque visual quando difere do catálogo */}
-                          {isDiff && (
-                            <div className="flex items-center gap-1 text-[10px] text-amber-700 dark:text-amber-400 font-medium">
-                              <span>catálogo: R$ {catalogPrice.toFixed(2)}</span>
-                              <button
-                                type="button"
-                                onClick={() => handleResetToCatalogPrice(index)}
-                                title="Restaurar preço do catálogo"
-                                className="text-muted-foreground hover:text-foreground inline-flex items-center gap-0.5 underline text-[9px] ml-1"
-                              >
-                                <RotateCcw className="h-2.5 w-2.5" />
-                                restaurar
-                              </button>
-                            </div>
-                          )}
+                      {/* Preço Unitário (somente leitura) */}
+                      <TableCell className="py-2 text-right font-mono font-medium text-foreground">
+                        <div className="w-full max-w-[135px] ml-auto text-right">
+                          R$ {formatPriceTwoDecimals(item.price)}
                         </div>
                       </TableCell>
 
-                      {/* Quantidade contratada inline (em branco aceita) */}
-                      <TableCell className="py-2">
-                        <div className="relative max-w-[120px]">
+                      {/* Quantidade contratada inline (em branco aceita, somente inteiros) */}
+                      <TableCell className="py-2 text-right">
+                        <div className="w-full max-w-[135px] ml-auto">
                           <Input
                             type="text"
-                            inputMode="decimal"
+                            inputMode="numeric"
+                            pattern="[0-9]*"
                             placeholder="em branco"
                             value={
                               item.quantity === undefined || item.quantity === null
                                 ? ''
-                                : formatQuantityOneDecimal(item.quantity)
+                                : item.quantity.toString()
                             }
                             onChange={(e) => {
                               const raw = e.target.value
@@ -1470,8 +1434,12 @@ export function ContractItemsManager({
                                 handleQuantityChange(index, undefined)
                                 return
                               }
-                              const norm = normalizeDecimalTyping(raw)
-                              const parsed = parseFloat(norm.replace(',', '.'))
+                              const cleaned = raw.replace(/\D/g, '')
+                              if (!cleaned) {
+                                handleQuantityChange(index, undefined)
+                                return
+                              }
+                              const parsed = parseInt(cleaned, 10)
                               handleQuantityChange(index, isNaN(parsed) ? undefined : parsed)
                             }}
                             onBlur={(e) => {
@@ -1480,11 +1448,19 @@ export function ContractItemsManager({
                                 handleQuantityChange(index, undefined)
                                 return
                               }
-                              const formatted = formatQuantityOnBlur(raw)
-                              const parsed = parseFloat(formatted.replace(',', '.'))
-                              handleQuantityChange(index, isNaN(parsed) ? undefined : parsed)
+                              const cleaned = raw.replace(/\D/g, '')
+                              if (!cleaned) {
+                                handleQuantityChange(index, undefined)
+                                return
+                              }
+                              const parsed = parseInt(cleaned, 10)
+                              if (isNaN(parsed) || parsed < 0) {
+                                handleQuantityChange(index, undefined)
+                              } else {
+                                handleQuantityChange(index, parsed)
+                              }
                             }}
-                            className={`h-7 px-2 text-xs font-mono font-medium ${
+                            className={`h-7 px-2 text-xs font-mono text-right font-medium ${
                               qty > 0
                                 ? 'border-primary/50 bg-primary/5 font-semibold text-primary'
                                 : 'text-muted-foreground placeholder:italic'

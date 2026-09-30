@@ -942,7 +942,10 @@ export default function Contracts() {
           itemsToSave.map((it) => ({
             id: it.id,
             produto_id: it.productId,
+            preco: it.price || 0,
             quantidade_contratada: it.quantity,
+            nome_contrato: it.nomeContrato,
+            apelidos: it.apelidos,
           })),
         )
       }
@@ -1324,7 +1327,7 @@ export default function Contracts() {
 
       {/* DIALOG DE CADASTRO / EDIÇÃO DE CONTRATO (COM N ESCOLAS E ROTAS) */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="sm:max-w-[780px] max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-[96vw] sm:max-w-5xl md:max-w-6xl max-h-[92vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
               {editingContract
