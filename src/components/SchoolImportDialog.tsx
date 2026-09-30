@@ -189,18 +189,20 @@ export function SchoolImportDialog({
         'cmei.maria@educacao.gov.br',
       ],
       [
-        'CC LAR VOVÔ MIGUEL',
-        'CRECHE',
-        '47',
-        '(21) 99887-1122',
-        'Bairro Novo',
-        'Av. Brasil, 450',
-        'Coordenadora Maria',
-        'creche.miguel@educacao.gov.br',
+        'CMEI MARIA TEREZA PRIES DE ABREU',
+        'CMEI',
+        'Municipal',
+        '125',
+        '(21) 98765-4321',
+        'BOM RETIRO',
+        'Rua Tenente Luiz Meireles, 1 189',
+        'Diretora Ana',
+        'educacao@teresopolis.rj.gov.br',
       ],
       [
         'EM ALICE SALDANHA',
         'FUNDAMENTAL',
+        'Municipal',
         '171',
         '(21) 97766-3344',
         'São Pedro',
@@ -211,10 +213,20 @@ export function SchoolImportDialog({
     ]
     const ws = XLSX.utils.aoa_to_sheet(wsData)
     const wb = XLSX.utils.book_new()
+    ws['!cols'] = [
+      { wch: 38 },
+      { wch: 16 },
+      { wch: 28 },
+      { wch: 12 },
+      { wch: 18 },
+      { wch: 20 },
+      { wch: 35 },
+      { wch: 20 },
+      { wch: 32 },
+    ]
     XLSX.utils.book_append_sheet(wb, ws, 'Escolas')
     XLSX.writeFile(wb, 'modelo_importacao_escolas.xlsx')
   }
-
   const handleConfirmImport = async () => {
     if (!parseResult) return
     const processableRows = parseResult.allRows.filter(

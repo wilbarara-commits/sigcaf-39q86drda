@@ -10,6 +10,7 @@ export interface ParsedCoordRow {
   rawLatitude: string
   rawLongitude: string
   rawCodigoInep?: string
+  rawDependencia?: string
 
   // Normalizados
   normalizedEscola: string
@@ -17,6 +18,7 @@ export interface ParsedCoordRow {
   latitude: string
   longitude: string
   codigoInep?: string
+  dependenciaAdministrativa?: string
 
   // Matching
   matchedSchoolId?: string
@@ -41,7 +43,40 @@ export interface CoordsImportResult {
     latCol: string
     longCol: string
     inepCol?: string
+    dependenciaCol?: string
   }
+}
+
+/**
+ * Normaliza o valor de Dependência Administrativa para uma das 4 opções aceitas:
+ * "Federal", "Estadual", "Municipal", "Privada".
+ * Retorna undefined se o valor for desconhecido ou vazio.
+ */
+export function normalizeDependenciaAdministrativa(val: unknown): {
+  value?: 'Federal' | 'Estadual' | 'Municipal' | 'Privada'
+  unknown?: boolean
+} {
+  if (val === null || val === undefined) return {}
+  const raw = String(val).trim()
+  if (!raw) return {}
+
+  const norm = normalizeName(raw)
+  if (!norm) return {}
+
+  if (norm === 'federal' || norm.startsWith('fed')) {
+    return { value: 'Federal' }
+  }
+  if (norm === 'estadual' || norm.startsWith('est')) {
+    return { value: 'Estadual' }
+  }
+  if (norm === 'municipal' || norm.startsWith('mun')) {
+    return { value: 'Municipal' }
+  }
+  if (norm === 'privada' || norm === 'particular' || norm.startsWith('priv')) {
+    return { value: 'Privada' }
+  }
+
+  return { unknown: true }
 }
 
 /**
@@ -316,23 +351,41 @@ export function detectCoordColumns(headerRow: string[]): {
   latIdx: number
   longIdx: number
   inepIdx: number
+  depIdx: number
   escolaColName: string
   cepColName: string
   latColName: string
   longColName: string
   inepColName?: string
+  depColName?: string
 } {
   let escolaIdx = -1
   let cepIdx = -1
   let latIdx = -1
   let longIdx = -1
   let inepIdx = -1
+  let depIdx = -1
 
   headerRow.forEach((col, idx) => {
     const norm = normalizeName(col)
     if (!norm) return
 
-    // 0. Código INEP
+    // 0. Dependência Administrativa
+    // Variações aceitas: "Dependência Administrativa", "Dependencia Administrativa", "Dependência", "Dependencia", "Dep. Adm.", "Dep Adm"
+    if (
+      depIdx === -1 &&
+      (norm.includes('dependencia') ||
+        norm.includes('dep adm') ||
+        norm === 'dep' ||
+        norm === 'dependencia administrativa' ||
+        norm === 'rede' ||
+        norm === 'esfera')
+    ) {
+      depIdx = idx
+      return
+    }
+
+    // 0.5. Código INEP
     if (
       inepIdx === -1 &&
       (norm.includes('inep') || norm === 'codigo inep' || norm === 'cod inep' || norm === 'inep')
@@ -397,11 +450,13 @@ export function detectCoordColumns(headerRow: string[]): {
     latIdx,
     longIdx,
     inepIdx,
+    depIdx,
     escolaColName: escolaIdx >= 0 ? headerRow[escolaIdx] : 'Não detectada',
     cepColName: cepIdx >= 0 ? headerRow[cepIdx] : 'Não detectada',
     latColName: latIdx >= 0 ? headerRow[latIdx] : 'Não detectada',
     longColName: longIdx >= 0 ? headerRow[longIdx] : 'Não detectada',
     inepColName: inepIdx >= 0 ? headerRow[inepIdx] : undefined,
+    depColName: depIdx >= 0 ? headerRow[depIdx] : undefined,
   }
 }
 
@@ -501,6 +556,7 @@ export function processCoordsMatrix(
     const rawLat = cols.latIdx >= 0 ? (row[cols.latIdx] || '').trim() : ''
     const rawLong = cols.longIdx >= 0 ? (row[cols.longIdx] || '').trim() : ''
     const rawCodigoInep = cols.inepIdx >= 0 ? (row[cols.inepIdx] || '').trim() : ''
+    const rawDependencia = cols.depIdx >= 0 ? (row[cols.depIdx] || '').trim() : ''
 
     const normalizedEscola = cleanSchoolNameForMatching(rawEscola)
     const cep = normalizeCep(rawCep)
@@ -510,9 +566,17 @@ export function processCoordsMatrix(
       ? rawCodigoInep.replace(/[^\d\w-]/g, '').trim() || rawCodigoInep
       : undefined
 
+    const depResult = normalizeDependenciaAdministrativa(rawDependencia)
+    const dependenciaAdministrativa = depResult.value
+
     const issues: string[] = []
     if (rawLat && !latitude) issues.push('Latitude inválida')
     if (rawLong && !longitude) issues.push('Longitude inválida')
+    if (depResult.unknown && rawDependencia) {
+      issues.push(
+        `Dependência "${rawDependencia}" desconhecida (deve ser Federal, Estadual, Municipal ou Privada)`,
+      )
+    }
 
     // Tentar matching no banco
     const match = findBestSchoolMatch(rawEscola, schools)
@@ -535,11 +599,13 @@ export function processCoordsMatrix(
       rawLatitude: rawLat,
       rawLongitude: rawLong,
       rawCodigoInep,
+      rawDependencia,
       normalizedEscola,
       cep,
       latitude,
       longitude,
       codigoInep,
+      dependenciaAdministrativa,
       matchedSchoolId: match.school?.id,
       matchedSchoolName: match.school?.name,
       matchType,
@@ -561,6 +627,7 @@ export function processCoordsMatrix(
       latCol: cols.latColName,
       longCol: cols.longColName,
       inepCol: cols.inepColName,
+      dependenciaCol: cols.depColName,
     },
   }
 }

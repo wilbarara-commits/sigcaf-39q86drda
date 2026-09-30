@@ -353,6 +353,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         latitude: s.latitude || '',
         longitude: s.longitude || '',
         codigo_inep: s.codigo_inep || '',
+        dependencia_administrativa: s.dependencia_administrativa || '',
       }))
       setSchools(mappedSchools)
 
@@ -477,6 +478,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
             escolaLatitude: ce.expand?.escola_id?.latitude || sch?.latitude || '',
             escolaLongitude: ce.expand?.escola_id?.longitude || sch?.longitude || '',
             escolaCodigoInep: ce.expand?.escola_id?.codigo_inep || sch?.codigo_inep || '',
+            escolaDependenciaAdministrativa:
+              ce.expand?.escola_id?.dependencia_administrativa ||
+              sch?.dependencia_administrativa ||
+              '',
             rotaNome: rotaPlanilhaNome,
             coleta_por: ce.coleta_por || 'padrao',
             encerrado_em: ce.encerrado_em,
@@ -805,6 +810,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
             longitude: s.longitude !== undefined ? s.longitude : copy[existingIdx].longitude,
             codigo_inep:
               s.codigo_inep !== undefined ? s.codigo_inep : copy[existingIdx].codigo_inep,
+            dependencia_administrativa:
+              s.dependencia_administrativa !== undefined
+                ? s.dependencia_administrativa
+                : copy[existingIdx].dependencia_administrativa,
           }
           return copy
         }
@@ -817,6 +826,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           route: '',
           email: s.email || '',
           tipo: s.tipo || '',
+          dependencia_administrativa: s.dependencia_administrativa || '',
           alunos: s.alunos !== undefined && s.alunos !== null ? Number(s.alunos) : undefined,
           bairro: s.bairro || '',
           contatoResponsavel: s.contato || '',
@@ -1098,6 +1108,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
               escolaLatitude: ce.expand?.escola_id?.latitude || sch?.latitude || '',
               escolaLongitude: ce.expand?.escola_id?.longitude || sch?.longitude || '',
               escolaCodigoInep: ce.expand?.escola_id?.codigo_inep || sch?.codigo_inep || '',
+              escolaDependenciaAdministrativa:
+                ce.expand?.escola_id?.dependencia_administrativa ||
+                sch?.dependencia_administrativa ||
+                '',
               rotaNome: rotaPlanilhaNome,
               coleta_por: ce.coleta_por || 'padrao',
               encerrado_em: ce.encerrado_em,

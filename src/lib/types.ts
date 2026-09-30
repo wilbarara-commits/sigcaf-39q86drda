@@ -14,6 +14,15 @@ export interface ProdutoRecord {
 
 export type EscolaTipo = 'CMEI' | 'CRECHE' | 'INTEGRAL' | 'FUNDAMENTAL' | 'Médio' | 'Técnico'
 
+export type DependenciaAdministrativa = 'Federal' | 'Estadual' | 'Municipal' | 'Privada'
+
+export const DEPENDENCIAS_ADMINISTRATIVAS: readonly DependenciaAdministrativa[] = [
+  'Federal',
+  'Estadual',
+  'Municipal',
+  'Privada',
+] as const
+
 export interface EscolaRecord {
   id: string
   nome: string
@@ -22,6 +31,7 @@ export interface EscolaRecord {
   rota?: string
   email?: string
   tipo?: EscolaTipo | string
+  dependencia_administrativa?: DependenciaAdministrativa | string
   alunos?: number
   bairro?: string
   contato?: string
@@ -335,6 +345,7 @@ export interface School {
   route: string
   email?: string
   tipo?: EscolaTipo | string
+  dependencia_administrativa?: DependenciaAdministrativa | string
   alunos?: number
   bairro?: string
   contatoResponsavel?: string
@@ -368,6 +379,7 @@ export interface ContractSchoolLink {
   escolaLatitude?: string
   escolaLongitude?: string
   escolaCodigoInep?: string
+  escolaDependenciaAdministrativa?: string
 }
 
 export interface Contract {
