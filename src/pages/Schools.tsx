@@ -71,6 +71,7 @@ import { useState, useMemo } from 'react'
 import { toast } from 'sonner'
 import { escolasService } from '@/services/escolas'
 import { SchoolImportDialog } from '@/components/SchoolImportDialog'
+import { SchoolCoordsImportDialog } from '@/components/SchoolCoordsImportDialog'
 import type { School, EscolaTipo } from '@/lib/types'
 
 const ESCOLA_TIPOS: EscolaTipo[] = ['CMEI', 'CRECHE', 'INTEGRAL', 'FUNDAMENTAL', 'Médio', 'Técnico']
@@ -92,6 +93,7 @@ export default function Schools() {
   // Form dialog state
   const [dialogOpen, setDialogOpen] = useState(false)
   const [importDialogOpen, setImportDialogOpen] = useState(false)
+  const [coordsImportDialogOpen, setCoordsImportDialogOpen] = useState(false)
   const [editingSchool, setEditingSchool] = useState<School | null>(null)
   const [name, setName] = useState('')
   const [address, setAddress] = useState('')
@@ -441,6 +443,14 @@ export default function Schools() {
 
           {isAdmin && (
             <>
+              <Button
+                variant="outline"
+                onClick={() => setCoordsImportDialogOpen(true)}
+                className="gap-1.5 border-emerald-500/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/30"
+              >
+                <MapPin className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                Importar Coordenadas (XLSX/CSV)
+              </Button>
               <Button
                 variant="outline"
                 onClick={() => setImportDialogOpen(true)}
@@ -1190,6 +1200,16 @@ export default function Schools() {
       <SchoolImportDialog
         open={importDialogOpen}
         onOpenChange={setImportDialogOpen}
+        schools={schools}
+        onSuccess={async () => {
+          await refreshData()
+        }}
+      />
+
+      {/* Modal de Importação de Coordenadas & CEP (XLSX/CSV) */}
+      <SchoolCoordsImportDialog
+        open={coordsImportDialogOpen}
+        onOpenChange={setCoordsImportDialogOpen}
         schools={schools}
         onSuccess={async () => {
           await refreshData()

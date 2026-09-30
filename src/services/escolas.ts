@@ -213,6 +213,50 @@ export const escolasService = {
     return await pb.collection('escolas').update<EscolaRecord>(id, data)
   },
 
+  async updateCoordsBatch(
+    items: Array<{
+      escolaId: string
+      cep?: string
+      latitude?: string
+      longitude?: string
+    }>,
+    onProgress?: (processed: number, total: number) => void,
+  ): Promise<{
+    updated: number
+    errors: Array<{ id: string; error: string }>
+  }> {
+    let updated = 0
+    const errors: Array<{ id: string; error: string }> = []
+
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i]
+      try {
+        const payload: Partial<EscolaRecord> = {}
+        if (item.cep !== undefined && item.cep !== '') {
+          payload.cep = item.cep
+        }
+        if (item.latitude !== undefined && item.latitude !== '') {
+          payload.latitude = item.latitude
+        }
+        if (item.longitude !== undefined && item.longitude !== '') {
+          payload.longitude = item.longitude
+        }
+
+        if (Object.keys(payload).length > 0) {
+          await pb.collection('escolas').update<EscolaRecord>(item.escolaId, payload)
+          updated++
+        }
+      } catch (err: any) {
+        console.error(`Erro ao atualizar coordenadas da escola [id=${item.escolaId}]:`, err)
+        const msg = err?.response?.message || err?.message || 'Falha ao atualizar'
+        errors.push({ id: item.escolaId, error: msg })
+      }
+      onProgress?.(i + 1, items.length)
+    }
+
+    return { updated, errors }
+  },
+
   async findByNameNormalized(nome: string): Promise<EscolaRecord | null> {
     const all = await this.getAll()
     const norm = (str: string) =>
