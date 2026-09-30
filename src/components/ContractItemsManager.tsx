@@ -34,12 +34,10 @@ import { Textarea } from '@/components/ui/textarea'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import {
   Search,
-  Plus,
   Trash2,
   ClipboardPaste,
   Check,
   AlertCircle,
-  RotateCcw,
   Sparkles,
   Package,
   Upload,
@@ -108,11 +106,6 @@ export function ContractItemsManager({
   chamadaId,
 }: ContractItemsManagerProps) {
   const { chamadaItems } = useApp()
-  // Modal de Seleção em Lote do Catálogo
-  const [batchModalOpen, setBatchModalOpen] = useState(false)
-  const [batchSearchQuery, setBatchSearchQuery] = useState('')
-  const [selectedProductIds, setSelectedProductIds] = useState<Set<string>>(new Set())
-
   // Modal de Colar em Massa
   const [pasteModalOpen, setPasteModalOpen] = useState(false)
   const [pasteText, setPasteText] = useState('')
@@ -253,99 +246,6 @@ export function ContractItemsManager({
     }
   }, [totalContratadoCalculado, totalItensComQtd, onTotalCalculadoChange])
 
-  // Produtos disponíveis para seleção em lote (com filtro de busca)
-  const filteredCatalogForBatch = useMemo(() => {
-    const q = batchSearchQuery.trim().toLowerCase()
-    return allAvailableProducts.filter((p) => {
-      if (!q) return true
-      return p.name.toLowerCase().includes(q) || (p.unit && p.unit.toLowerCase().includes(q))
-    })
-  }, [allAvailableProducts, batchSearchQuery])
-
-  // Abertura do modal de lote
-  const handleOpenBatchModal = () => {
-    setBatchSearchQuery('')
-    setSelectedProductIds(new Set())
-    setBatchModalOpen(true)
-  }
-
-  const handleToggleSelectProduct = (productId: string) => {
-    setSelectedProductIds((prev) => {
-      const next = new Set(prev)
-      if (next.has(productId)) {
-        next.delete(productId)
-      } else {
-        next.add(productId)
-      }
-      return next
-    })
-  }
-
-  const handleSelectAllVisible = () => {
-    const availableVisible = filteredCatalogForBatch.filter((p) => !includedProductIds.has(p.id))
-    const allSelected = availableVisible.every((p) => selectedProductIds.has(p.id))
-
-    setSelectedProductIds((prev) => {
-      const next = new Set(prev)
-      if (allSelected) {
-        for (const p of availableVisible) {
-          next.delete(p.id)
-        }
-      } else {
-        for (const p of availableVisible) {
-          next.add(p.id)
-        }
-      }
-      return next
-    })
-  }
-
-  const handleConfirmBatchAdd = () => {
-    if (selectedProductIds.size === 0) {
-      toast.warning('Selecione pelo menos um produto.')
-      return
-    }
-
-    const newItems: ContractItemForm[] = []
-    let addedCount = 0
-
-    for (const prodId of selectedProductIds) {
-      if (!includedProductIds.has(prodId)) {
-        const prod = productById.get(prodId)
-        const ci =
-          chamadaItemByProductId.get(prodId) ||
-          (prod?.name ? chamadaItemByProductId.get(prod.name.trim().toLowerCase()) : undefined)
-        const effectivePrice = ci?.preco !== undefined ? ci.preco : prod?.price || 0
-        const effectiveAka = ci?.aka || ''
-
-        newItems.push({
-          productId: prodId,
-          price: effectivePrice,
-          quantity: undefined,
-          nomeContrato: ci?.produto || prod?.name || '',
-          apelidos: effectiveAka,
-        })
-        addedCount++
-      }
-    }
-
-    onChange([...items, ...newItems])
-    toast.success(`${addedCount} produto(s) adicionado(s) ao contrato!`)
-    setBatchModalOpen(false)
-  }
-
-  // Edição inline de preço
-  const handlePriceChange = (index: number, newPrice: number) => {
-    const updated = items.map((it, idx) => {
-      if (idx !== index) return it
-      return {
-        ...it,
-        price: isNaN(newPrice) ? 0 : Math.max(0, newPrice),
-      }
-    })
-    onChange(updated)
-  }
-
   // Edição inline de quantidade contratada (podendo ficar em branco/indefinida)
   const handleQuantityChange = (index: number, newQuantity: number | undefined) => {
     const updated = items.map((it, idx) => {
@@ -381,23 +281,6 @@ export function ContractItemsManager({
       }
     })
     onChange(updated)
-  }
-
-  // Restaurar preço da chamada (ou catálogo)
-  const handleResetToCatalogPrice = (index: number) => {
-    const it = items[index]
-    const prod = productById.get(it.productId)
-    const ci =
-      chamadaItemByProductId.get(it.productId) ||
-      (prod?.name ? chamadaItemByProductId.get(prod.name.trim().toLowerCase()) : undefined)
-    const targetPrice = ci?.preco !== undefined ? ci.preco : prod?.price
-
-    if (targetPrice === undefined || targetPrice === null || targetPrice < 0) {
-      toast.warning('Este produto não possui preço na chamada nem no catálogo.')
-      return
-    }
-    handlePriceChange(index, targetPrice)
-    toast.info(`Preço redefinido para o valor da chamada (R$ ${targetPrice.toFixed(2)})`)
   }
 
   // Exclusão de item com confirmação
@@ -1270,16 +1153,6 @@ export function ContractItemsManager({
             <ClipboardPaste className="h-3.5 w-3.5 text-muted-foreground" />
             Colar em Massa
           </Button>
-
-          <Button
-            type="button"
-            size="sm"
-            className="h-8 text-xs gap-1.5"
-            onClick={handleOpenBatchModal}
-          >
-            <Plus className="h-3.5 w-3.5" />
-            Selecionar Produtos
-          </Button>
         </div>
       </div>
 
@@ -1315,22 +1188,12 @@ export function ContractItemsManager({
               Nenhum produto associado a este contrato
             </p>
             <p className="text-xs text-muted-foreground max-w-md mx-auto">
-              Clique em <strong>"Selecionar Produtos"</strong> para marcar itens do catálogo, ou
-              utilize <strong>"Importar Planilha / CSV"</strong> para carregar produto, preço e
-              quantidade contratada de uma vez.
+              Os itens e preços são herdados automaticamente da Chamada Pública vinculada. Utilize{' '}
+              <strong>"Importar Planilha / CSV"</strong> ou <strong>"Colar em Massa"</strong> para
+              preencher as quantidades contratadas.
             </p>
           </div>
           <div className="flex items-center justify-center gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="h-8 text-xs gap-1.5"
-              onClick={handleOpenBatchModal}
-            >
-              <Plus className="h-3.5 w-3.5" />
-              Abrir Catálogo de Produtos
-            </Button>
             <Button
               type="button"
               variant="outline"
@@ -1341,7 +1204,21 @@ export function ContractItemsManager({
               }}
             >
               <Upload className="h-3.5 w-3.5" />
-              Carregar Planilha (.xlsx/.csv)
+              Importar Planilha / CSV
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-8 text-xs gap-1.5"
+              onClick={() => {
+                setPasteText('')
+                setPastePreview(null)
+                setPasteModalOpen(true)
+              }}
+            >
+              <ClipboardPaste className="h-3.5 w-3.5" />
+              Colar em Massa
             </Button>
           </div>
         </div>
@@ -1566,149 +1443,6 @@ export function ContractItemsManager({
           </div>
         </div>
       )}
-
-      {/* MODAL 1: SELEÇÃO EM LOTE COM CHECKBOX E BUSCA */}
-      <Dialog open={batchModalOpen} onOpenChange={setBatchModalOpen}>
-        <DialogContent className="sm:max-w-[620px] max-h-[85vh] flex flex-col overflow-hidden">
-          <DialogHeader className="shrink-0">
-            <DialogTitle className="flex items-center gap-2">
-              <Package className="h-5 w-5 text-primary" />
-              Selecionar Produtos do Catálogo
-            </DialogTitle>
-            <DialogDescription>
-              Marque os produtos que deseja incluir no contrato. Os preços virão pré-preenchidos com
-              o valor cadastrado e poderão ser ajustados junto com as quantidades contratadas.
-            </DialogDescription>
-          </DialogHeader>
-
-          {/* Campo de Busca no Catálogo */}
-          <div className="shrink-0 space-y-2 pt-2">
-            <div className="relative">
-              <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
-              <Input
-                placeholder="Buscar por nome ou unidade..."
-                value={batchSearchQuery}
-                onChange={(e) => setBatchSearchQuery(e.target.value)}
-                className="pl-8 h-8 text-xs"
-              />
-            </div>
-
-            <div className="flex items-center justify-between text-xs text-muted-foreground px-1">
-              <span>
-                <strong>{selectedProductIds.size}</strong> novo(s) produto(s) selecionado(s)
-              </span>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={handleSelectAllVisible}
-                className="h-6 text-[11px] p-0 text-primary hover:underline"
-              >
-                Marcar / Desmarcar todos visíveis
-              </Button>
-            </div>
-          </div>
-
-          {/* Lista com Checkboxes */}
-          <div className="flex-1 min-h-[200px] max-h-[45vh] overflow-y-auto border rounded-md divide-y divide-border overscroll-contain">
-            {filteredCatalogForBatch.length === 0 ? (
-              <div className="py-8 text-center text-xs text-muted-foreground">
-                Nenhum produto encontrado no catálogo.
-              </div>
-            ) : (
-              filteredCatalogForBatch.map((p) => {
-                const isAlreadyInContract = includedProductIds.has(p.id)
-                const isSelected = selectedProductIds.has(p.id)
-
-                return (
-                  <div
-                    key={p.id}
-                    onClick={() => {
-                      if (!isAlreadyInContract) {
-                        handleToggleSelectProduct(p.id)
-                      }
-                    }}
-                    className={`flex items-center justify-between p-2.5 text-xs transition-colors cursor-pointer select-none ${
-                      isAlreadyInContract
-                        ? 'bg-muted/40 opacity-60 cursor-not-allowed'
-                        : isSelected
-                          ? 'bg-primary/10 border-l-2 border-l-primary'
-                          : 'hover:bg-muted/20'
-                    }`}
-                  >
-                    <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                      <input
-                        type="checkbox"
-                        checked={isAlreadyInContract || isSelected}
-                        disabled={isAlreadyInContract}
-                        onChange={() => {
-                          if (!isAlreadyInContract) {
-                            handleToggleSelectProduct(p.id)
-                          }
-                        }}
-                        className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary shrink-0"
-                      />
-
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-1.5">
-                          <span className="font-semibold text-foreground truncate">{p.name}</span>
-                          {isAlreadyInContract && (
-                            <Badge
-                              variant="secondary"
-                              className="text-[9px] py-0 px-1 shrink-0 text-muted-foreground"
-                            >
-                              Já no contrato
-                            </Badge>
-                          )}
-                        </div>
-                        <p className="text-[11px] text-muted-foreground truncate">
-                          Unidade: {p.unit}
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="text-right shrink-0 pl-2">
-                      {p.price !== undefined && p.price !== null && p.price > 0 ? (
-                        <>
-                          <span className="font-mono font-medium text-foreground block">
-                            R$ {p.price.toFixed(2)}
-                          </span>
-                          <span className="text-[10px] text-muted-foreground">preço base</span>
-                        </>
-                      ) : (
-                        <span className="text-[11px] text-muted-foreground italic block">
-                          Preço a definir no contrato
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                )
-              })
-            )}
-          </div>
-
-          <DialogFooter className="shrink-0 pt-3 border-t mt-auto">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => setBatchModalOpen(false)}
-            >
-              Cancelar
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              onClick={handleConfirmBatchAdd}
-              disabled={selectedProductIds.size === 0}
-              className="gap-1.5"
-            >
-              <Check className="h-3.5 w-3.5" />
-              Adicionar {selectedProductIds.size} selecionado(s)
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       {/* MODAL 2: COLAR EM MASSA (PRODUTO, PREÇO, QUANTIDADE) */}
       <Dialog open={pasteModalOpen} onOpenChange={setPasteModalOpen}>
