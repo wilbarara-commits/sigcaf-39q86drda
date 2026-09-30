@@ -352,6 +352,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         cep: s.cep || '',
         latitude: s.latitude || '',
         longitude: s.longitude || '',
+        codigo_inep: s.codigo_inep || '',
       }))
       setSchools(mappedSchools)
 
@@ -475,6 +476,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
             escolaCep: ce.expand?.escola_id?.cep || sch?.cep || '',
             escolaLatitude: ce.expand?.escola_id?.latitude || sch?.latitude || '',
             escolaLongitude: ce.expand?.escola_id?.longitude || sch?.longitude || '',
+            escolaCodigoInep: ce.expand?.escola_id?.codigo_inep || sch?.codigo_inep || '',
             rotaNome: rotaPlanilhaNome,
             coleta_por: ce.coleta_por || 'padrao',
             encerrado_em: ce.encerrado_em,
@@ -801,6 +803,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
             cep: s.cep !== undefined ? s.cep : copy[existingIdx].cep,
             latitude: s.latitude !== undefined ? s.latitude : copy[existingIdx].latitude,
             longitude: s.longitude !== undefined ? s.longitude : copy[existingIdx].longitude,
+            codigo_inep:
+              s.codigo_inep !== undefined ? s.codigo_inep : copy[existingIdx].codigo_inep,
           }
           return copy
         }
@@ -819,6 +823,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           cep: s.cep || '',
           latitude: s.latitude || '',
           longitude: s.longitude || '',
+          codigo_inep: s.codigo_inep || '',
         }
         return [...prev, mapped]
       })
@@ -1092,6 +1097,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
               escolaCep: ce.expand?.escola_id?.cep || sch?.cep || '',
               escolaLatitude: ce.expand?.escola_id?.latitude || sch?.latitude || '',
               escolaLongitude: ce.expand?.escola_id?.longitude || sch?.longitude || '',
+              escolaCodigoInep: ce.expand?.escola_id?.codigo_inep || sch?.codigo_inep || '',
               rotaNome: rotaPlanilhaNome,
               coleta_por: ce.coleta_por || 'padrao',
               encerrado_em: ce.encerrado_em,

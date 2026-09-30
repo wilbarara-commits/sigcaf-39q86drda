@@ -106,6 +106,7 @@ export default function Schools() {
   const [cep, setCep] = useState('')
   const [latitude, setLatitude] = useState('')
   const [longitude, setLongitude] = useState('')
+  const [codigoInep, setCodigoInep] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   // Delete dialog state
@@ -123,10 +124,11 @@ export default function Schools() {
     return schools.filter((s) => {
       const searchLower = search.trim().toLowerCase()
 
-      // Textual search: matches name, address, email, tipo, bairro, contact
+      // Textual search: matches name, address, email, tipo, bairro, contact, codigo_inep
       const matchesSearch =
         !searchLower ||
         s.name.toLowerCase().includes(searchLower) ||
+        (s.codigo_inep && s.codigo_inep.toLowerCase().includes(searchLower)) ||
         (s.address && s.address.toLowerCase().includes(searchLower)) ||
         (s.email && s.email.toLowerCase().includes(searchLower)) ||
         (s.tipo && s.tipo.toLowerCase().includes(searchLower)) ||
@@ -177,6 +179,7 @@ export default function Schools() {
     setCep('')
     setLatitude('')
     setLongitude('')
+    setCodigoInep('')
     setDialogOpen(true)
   }
 
@@ -193,6 +196,7 @@ export default function Schools() {
     setCep(school.cep || '')
     setLatitude(school.latitude || '')
     setLongitude(school.longitude || '')
+    setCodigoInep(school.codigo_inep || '')
     setDialogOpen(true)
   }
 
@@ -200,6 +204,7 @@ export default function Schools() {
   const getPreparedSchoolExportRows = () => {
     return schools.map((sch) => ({
       nome: sch.name || '',
+      codigo_inep: sch.codigo_inep || '',
       cep: sch.cep || '',
       latitude: sch.latitude || '',
       longitude: sch.longitude || '',
@@ -214,7 +219,7 @@ export default function Schools() {
     }
 
     const preparedRows = getPreparedSchoolExportRows()
-    const headers = ['Nome da Escola', 'CEP', 'Latitude', 'Longitude']
+    const headers = ['Nome da Escola', 'Código INEP', 'CEP', 'Latitude', 'Longitude']
 
     const escapeCsvField = (field: string) => {
       const str = String(field ?? '')
@@ -228,7 +233,9 @@ export default function Schools() {
     lines.push(headers.map(escapeCsvField).join(';'))
 
     for (const r of preparedRows) {
-      lines.push([r.nome, r.cep, r.latitude, r.longitude].map(escapeCsvField).join(';'))
+      lines.push(
+        [r.nome, r.codigo_inep, r.cep, r.latitude, r.longitude].map(escapeCsvField).join(';'),
+      )
     }
 
     const csvContent = '\uFEFF' + lines.join('\r\n')
@@ -255,10 +262,10 @@ export default function Schools() {
     const preparedRows = getPreparedSchoolExportRows()
     const wsData: any[][] = []
 
-    wsData.push(['Nome da Escola', 'CEP', 'Latitude', 'Longitude'])
+    wsData.push(['Nome da Escola', 'Código INEP', 'CEP', 'Latitude', 'Longitude'])
 
     for (const r of preparedRows) {
-      wsData.push([r.nome, r.cep, r.latitude, r.longitude])
+      wsData.push([r.nome, r.codigo_inep, r.cep, r.latitude, r.longitude])
     }
 
     const wb = XLSX.utils.book_new()
@@ -266,6 +273,7 @@ export default function Schools() {
 
     ws['!cols'] = [
       { wch: 40 }, // Nome da Escola
+      { wch: 16 }, // Código INEP
       { wch: 14 }, // CEP
       { wch: 16 }, // Latitude
       { wch: 16 }, // Longitude
@@ -313,6 +321,7 @@ export default function Schools() {
           cep: cep.trim() || undefined,
           latitude: latitude.trim() || undefined,
           longitude: longitude.trim() || undefined,
+          codigo_inep: codigoInep.trim() || undefined,
         })
         toast.success(`Escola "${trimmedName}" atualizada com sucesso!`)
       } else {
@@ -338,6 +347,7 @@ export default function Schools() {
           cep: cep.trim() || undefined,
           latitude: latitude.trim() || undefined,
           longitude: longitude.trim() || undefined,
+          codigo_inep: codigoInep.trim() || undefined,
         })
         toast.success(`Escola "${trimmedName}" cadastrada no cadastro mestre global!`)
       }
@@ -477,7 +487,7 @@ export default function Schools() {
               <div className="relative">
                 <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                 <Input
-                  placeholder="Nome, endereço, bairro, telefone, contato..."
+                  placeholder="Nome, código INEP, endereço, bairro, telefone, contato..."
                   className="pl-9 h-9 text-xs bg-background"
                   value={search}
                   onChange={(e) => {
@@ -575,8 +585,11 @@ export default function Schools() {
             <Table>
               <TableHeader>
                 <TableRow className="bg-muted/40 hover:bg-muted/40">
-                  <TableHead className="w-[260px] font-semibold text-foreground">
+                  <TableHead className="w-[240px] font-semibold text-foreground">
                     Escola / Instituição
+                  </TableHead>
+                  <TableHead className="w-[110px] font-semibold text-foreground">
+                    Cód. INEP
                   </TableHead>
                   <TableHead className="w-[100px] font-semibold text-foreground">Tipo</TableHead>
                   <TableHead className="w-[80px] text-right font-semibold text-foreground">
@@ -624,13 +637,24 @@ export default function Schools() {
                           </div>
                           <div className="min-w-0">
                             <span
-                              className="font-semibold text-foreground block truncate max-w-[230px]"
+                              className="font-semibold text-foreground block truncate max-w-[210px]"
                               title={school.name}
                             >
                               {school.name}
                             </span>
                           </div>
                         </div>
+                      </TableCell>
+
+                      {/* 1.5 Código INEP */}
+                      <TableCell className="align-middle text-xs font-mono">
+                        {school.codigo_inep ? (
+                          <span className="font-semibold text-foreground/90 bg-muted/60 px-1.5 py-0.5 rounded border border-border/50">
+                            {school.codigo_inep}
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground/40 italic">—</span>
+                        )}
                       </TableCell>
 
                       {/* 2. Tipo */}
@@ -762,7 +786,7 @@ export default function Schools() {
 
                 {filteredSchools.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={8} className="py-12 text-center text-muted-foreground">
+                    <TableCell colSpan={9} className="py-12 text-center text-muted-foreground">
                       <div className="space-y-2">
                         <p className="text-sm">
                           {hasActiveFilters
@@ -858,6 +882,11 @@ export default function Schools() {
                       {detailsSchool.alunos} alunos matriculados
                     </Badge>
                   )}
+                  {detailsSchool.codigo_inep && (
+                    <Badge variant="outline" className="text-xs gap-1 font-mono border-primary/30">
+                      INEP: {detailsSchool.codigo_inep}
+                    </Badge>
+                  )}
                 </div>
 
                 {/* Bloco de Informações Cadastrais */}
@@ -914,13 +943,20 @@ export default function Schools() {
                     </div>
 
                     <div className="space-y-1">
+                      <span className="text-xs text-muted-foreground block">Código INEP</span>
+                      <p className="font-mono text-xs text-foreground/90 font-semibold">
+                        {detailsSchool.codigo_inep || 'Não informado'}
+                      </p>
+                    </div>
+
+                    <div className="space-y-1">
                       <span className="text-xs text-muted-foreground block">CEP</span>
                       <p className="font-mono text-xs text-foreground/90">
                         {detailsSchool.cep || 'CEP não informado'}
                       </p>
                     </div>
 
-                    <div className="space-y-1">
+                    <div className="space-y-1 sm:col-span-2">
                       <span className="text-xs text-muted-foreground block">
                         Coordenadas (Lat / Long)
                       </span>
@@ -969,21 +1005,33 @@ export default function Schools() {
           </DialogHeader>
 
           <form onSubmit={handleSubmit} className="space-y-4 pt-2">
-            <div className="space-y-2">
-              <Label htmlFor="school-name">
-                Nome da Instituição Escolar <span className="text-destructive">*</span>
-              </Label>
-              <Input
-                id="school-name"
-                placeholder="Ex: E.M. Darcy Ribeiro"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                required
-              />
-              <p className="text-[11px] text-muted-foreground">
-                O nome é normalizado para evitar duplicidades no cadastro mestre global.
-              </p>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="space-y-2 sm:col-span-2">
+                <Label htmlFor="school-name">
+                  Nome da Instituição Escolar <span className="text-destructive">*</span>
+                </Label>
+                <Input
+                  id="school-name"
+                  placeholder="Ex: E.M. Darcy Ribeiro"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  required
+                />
+              </div>
+
+              <div className="space-y-2 sm:col-span-1">
+                <Label htmlFor="school-inep">Código INEP</Label>
+                <Input
+                  id="school-inep"
+                  placeholder="Ex: 33051010"
+                  value={codigoInep}
+                  onChange={(e) => setCodigoInep(e.target.value)}
+                />
+              </div>
             </div>
+            <p className="text-[11px] text-muted-foreground -mt-2">
+              O nome é normalizado para evitar duplicidades no cadastro mestre global.
+            </p>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div className="space-y-2 sm:col-span-1">

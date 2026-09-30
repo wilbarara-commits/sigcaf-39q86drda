@@ -28,6 +28,7 @@ export interface EscolaRecord {
   cep?: string
   latitude?: string
   longitude?: string
+  codigo_inep?: string
   created?: string
   updated?: string
 }
@@ -340,6 +341,7 @@ export interface School {
   cep?: string
   latitude?: string
   longitude?: string
+  codigo_inep?: string
 }
 
 export interface ContractSchoolLink {
@@ -365,6 +367,7 @@ export interface ContractSchoolLink {
   escolaCep?: string
   escolaLatitude?: string
   escolaLongitude?: string
+  escolaCodigoInep?: string
 }
 
 export interface Contract {

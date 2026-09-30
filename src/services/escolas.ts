@@ -219,6 +219,7 @@ export const escolasService = {
       cep?: string
       latitude?: string
       longitude?: string
+      codigo_inep?: string
     }>,
     onProgress?: (processed: number, total: number) => void,
   ): Promise<{
@@ -241,13 +242,16 @@ export const escolasService = {
         if (item.longitude !== undefined && item.longitude !== '') {
           payload.longitude = item.longitude
         }
+        if (item.codigo_inep !== undefined && item.codigo_inep !== '') {
+          payload.codigo_inep = item.codigo_inep
+        }
 
         if (Object.keys(payload).length > 0) {
           await pb.collection('escolas').update<EscolaRecord>(item.escolaId, payload)
           updated++
         }
       } catch (err: any) {
-        console.error(`Erro ao atualizar coordenadas da escola [id=${item.escolaId}]:`, err)
+        console.error(`Erro ao atualizar coordenadas/INEP da escola [id=${item.escolaId}]:`, err)
         const msg = err?.response?.message || err?.message || 'Falha ao atualizar'
         errors.push({ id: item.escolaId, error: msg })
       }

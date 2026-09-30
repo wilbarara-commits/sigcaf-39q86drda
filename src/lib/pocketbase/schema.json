@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-30T03:47:58.488Z",
+  "generatedAt": "2026-09-30T04:11:24.221Z",
   "collections": [
     {
       "name": "users",
@@ -216,6 +216,12 @@
         },
         {
           "name": "longitude",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "codigo_inep",
           "type": "text",
           "required": false,
           "system": false

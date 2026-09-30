@@ -194,6 +194,7 @@ export function SchoolCoordsImportDialog({
         cep: r.cep || undefined,
         latitude: r.latitude || undefined,
         longitude: r.longitude || undefined,
+        codigo_inep: r.codigoInep || undefined,
       }))
 
       const { updated, errors } = await escolasService.updateCoordsBatch(
@@ -251,7 +252,8 @@ export function SchoolCoordsImportDialog({
         const matchRaw = r.rawEscola.toLowerCase().includes(query)
         const matchDb = r.matchedSchoolName?.toLowerCase().includes(query)
         const matchCep = r.cep.includes(query)
-        return matchRaw || matchDb || matchCep
+        const matchInep = r.codigoInep?.toLowerCase().includes(query)
+        return matchRaw || matchDb || matchCep || Boolean(matchInep)
       }
 
       return true
@@ -272,12 +274,12 @@ export function SchoolCoordsImportDialog({
         <DialogHeader className="shrink-0">
           <DialogTitle className="flex items-center gap-2 text-xl">
             <MapPin className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
-            Importar Coordenadas & CEP (XLSX / CSV)
+            Importar Coordenadas, CEP & Código INEP (XLSX / CSV)
           </DialogTitle>
           <DialogDescription className="text-xs">
-            Importe dados geográficos de uma planilha para atualizar{' '}
-            <strong>exclusivamente CEP, Latitude e Longitude</strong> das escolas no cadastro
-            mestre. Nomes, endereços e demais dados cadastrais não serão alterados.
+            Importe dados geográficos e institucionais de uma planilha para atualizar{' '}
+            <strong>CEP, Latitude, Longitude e Código INEP</strong> das escolas no cadastro mestre.
+            Nomes, endereços e demais dados cadastrais não serão alterados.
           </DialogDescription>
         </DialogHeader>
 
@@ -314,7 +316,9 @@ export function SchoolCoordsImportDialog({
 
               <div className="text-[11px] text-muted-foreground flex items-center gap-1">
                 <HelpCircle className="h-3.5 w-3.5" />
-                <span>Colunas detectadas por cabeçalho (Escola, CEP, Latitude, Longitude)</span>
+                <span>
+                  Colunas detectadas por cabeçalho (Escola, CEP, Latitude, Longitude, INEP)
+                </span>
               </div>
             </div>
 
@@ -372,7 +376,7 @@ export function SchoolCoordsImportDialog({
             ) : (
               <div className="space-y-2 flex-1 flex flex-col">
                 <Textarea
-                  placeholder={`Cole as linhas da planilha com cabeçalho aqui...\nExemplo:\nEscola\tCEP\tLatitude\tLongitude\nCMEIA Mariana Martuchelli\t25995-630\t-22.22293373\t-42.74465013\nCM Profª Alayde Ferreira da Silva\t25990-110\t-22.37182850\t-42.87150070`}
+                  placeholder={`Cole as linhas da planilha com cabeçalho aqui...\nExemplo:\nEscola\tCódigo INEP\tCEP\tLatitude\tLongitude\nCMEIA Mariana Martuchelli\t33051010\t25995-630\t-22.22293373\t-42.74465013\nCM Profª Alayde Ferreira da Silva\t33051028\t25990-110\t-22.37182850\t-42.87150070`}
                   value={pastedText}
                   onChange={(e) => setPastedText(e.target.value)}
                   className="flex-1 min-h-[200px] text-xs font-mono resize-none"
@@ -557,6 +561,7 @@ export function SchoolCoordsImportDialog({
                     <th className="py-2.5 px-3 bg-muted font-semibold min-w-[210px]">
                       Escola no Cadastro Mestre
                     </th>
+                    <th className="py-2.5 px-3 bg-muted font-semibold w-28">Cód. INEP</th>
                     <th className="py-2.5 px-3 bg-muted font-semibold w-24">CEP</th>
                     <th className="py-2.5 px-3 bg-muted font-semibold w-28">Latitude</th>
                     <th className="py-2.5 px-3 bg-muted font-semibold w-28">Longitude</th>
@@ -613,6 +618,17 @@ export function SchoolCoordsImportDialog({
                             <span className="text-[10px] text-blue-600 dark:text-blue-400 block pt-0.5">
                               Casamento manual selecionado
                             </span>
+                          )}
+                        </td>
+
+                        {/* Código INEP */}
+                        <td className="py-2 px-3 font-mono">
+                          {row.codigoInep ? (
+                            <span className="font-semibold text-foreground/90">
+                              {row.codigoInep}
+                            </span>
+                          ) : (
+                            <span className="text-muted-foreground/50 italic">—</span>
                           )}
                         </td>
 
@@ -674,7 +690,7 @@ export function SchoolCoordsImportDialog({
 
                   {displayRows.length === 0 && (
                     <tr>
-                      <td colSpan={7} className="py-8 text-center text-muted-foreground text-xs">
+                      <td colSpan={8} className="py-8 text-center text-muted-foreground text-xs">
                         Nenhuma linha encontrada para o filtro atual.
                       </td>
                     </tr>
@@ -689,7 +705,10 @@ export function SchoolCoordsImportDialog({
                 <strong className="text-foreground">{totalMatchedCount}</strong> de{' '}
                 <strong>{rows.length}</strong>
               </span>
-              <span>Apenas os campos CEP, latitude e longitude serão gravados.</span>
+              <span>
+                Apenas os campos CEP, latitude, longitude e Código INEP serão gravados (sem apagar
+                dados existentes se a célula estiver vazia).
+              </span>
             </div>
           </div>
         )}

@@ -9,12 +9,14 @@ export interface ParsedCoordRow {
   rawCep: string
   rawLatitude: string
   rawLongitude: string
+  rawCodigoInep?: string
 
   // Normalizados
   normalizedEscola: string
   cep: string
   latitude: string
   longitude: string
+  codigoInep?: string
 
   // Matching
   matchedSchoolId?: string
@@ -38,6 +40,7 @@ export interface CoordsImportResult {
     cepCol: string
     latCol: string
     longCol: string
+    inepCol?: string
   }
 }
 
@@ -312,19 +315,31 @@ export function detectCoordColumns(headerRow: string[]): {
   cepIdx: number
   latIdx: number
   longIdx: number
+  inepIdx: number
   escolaColName: string
   cepColName: string
   latColName: string
   longColName: string
+  inepColName?: string
 } {
   let escolaIdx = -1
   let cepIdx = -1
   let latIdx = -1
   let longIdx = -1
+  let inepIdx = -1
 
   headerRow.forEach((col, idx) => {
     const norm = normalizeName(col)
     if (!norm) return
+
+    // 0. Código INEP
+    if (
+      inepIdx === -1 &&
+      (norm.includes('inep') || norm === 'codigo inep' || norm === 'cod inep' || norm === 'inep')
+    ) {
+      inepIdx = idx
+      return
+    }
 
     // 1. Latitude
     if (latIdx === -1 && (norm === 'latitude' || norm === 'lat' || norm.startsWith('lat'))) {
@@ -381,10 +396,12 @@ export function detectCoordColumns(headerRow: string[]): {
     cepIdx,
     latIdx,
     longIdx,
+    inepIdx,
     escolaColName: escolaIdx >= 0 ? headerRow[escolaIdx] : 'Não detectada',
     cepColName: cepIdx >= 0 ? headerRow[cepIdx] : 'Não detectada',
     latColName: latIdx >= 0 ? headerRow[latIdx] : 'Não detectada',
     longColName: longIdx >= 0 ? headerRow[longIdx] : 'Não detectada',
+    inepColName: inepIdx >= 0 ? headerRow[inepIdx] : undefined,
   }
 }
 
@@ -483,11 +500,15 @@ export function processCoordsMatrix(
     const rawCep = cols.cepIdx >= 0 ? (row[cols.cepIdx] || '').trim() : ''
     const rawLat = cols.latIdx >= 0 ? (row[cols.latIdx] || '').trim() : ''
     const rawLong = cols.longIdx >= 0 ? (row[cols.longIdx] || '').trim() : ''
+    const rawCodigoInep = cols.inepIdx >= 0 ? (row[cols.inepIdx] || '').trim() : ''
 
     const normalizedEscola = cleanSchoolNameForMatching(rawEscola)
     const cep = normalizeCep(rawCep)
     const latitude = normalizeCoordinate(rawLat)
     const longitude = normalizeCoordinate(rawLong)
+    const codigoInep = rawCodigoInep
+      ? rawCodigoInep.replace(/[^\d\w-]/g, '').trim() || rawCodigoInep
+      : undefined
 
     const issues: string[] = []
     if (rawLat && !latitude) issues.push('Latitude inválida')
@@ -513,10 +534,12 @@ export function processCoordsMatrix(
       rawCep,
       rawLatitude: rawLat,
       rawLongitude: rawLong,
+      rawCodigoInep,
       normalizedEscola,
       cep,
       latitude,
       longitude,
+      codigoInep,
       matchedSchoolId: match.school?.id,
       matchedSchoolName: match.school?.name,
       matchType,
@@ -537,6 +560,7 @@ export function processCoordsMatrix(
       cepCol: cols.cepColName,
       latCol: cols.latColName,
       longCol: cols.longColName,
+      inepCol: cols.inepColName,
     },
   }
 }
