@@ -195,6 +195,7 @@ export function SchoolCoordsImportDialog({
         latitude: r.latitude || undefined,
         longitude: r.longitude || undefined,
         codigo_inep: r.codigoInep || undefined,
+        dependencia_administrativa: r.dependenciaAdministrativa || undefined,
       }))
 
       const { updated, errors } = await escolasService.updateCoordsBatch(
@@ -253,7 +254,8 @@ export function SchoolCoordsImportDialog({
         const matchDb = r.matchedSchoolName?.toLowerCase().includes(query)
         const matchCep = r.cep.includes(query)
         const matchInep = r.codigoInep?.toLowerCase().includes(query)
-        return matchRaw || matchDb || matchCep || Boolean(matchInep)
+        const matchDep = r.dependenciaAdministrativa?.toLowerCase().includes(query)
+        return matchRaw || matchDb || matchCep || Boolean(matchInep) || Boolean(matchDep)
       }
 
       return true
@@ -551,7 +553,7 @@ export function SchoolCoordsImportDialog({
 
             {/* Tabela de Preview */}
             <div className="flex-1 min-h-[260px] max-h-[48vh] overflow-y-auto overflow-x-auto border rounded-lg bg-card shadow-inner overscroll-contain">
-              <table className="w-full text-xs text-left border-collapse min-w-[760px]">
+              <table className="w-full text-xs text-left border-collapse min-w-[860px]">
                 <thead className="bg-muted text-muted-foreground uppercase sticky top-0 z-20 border-b shadow-xs">
                   <tr>
                     <th className="py-2.5 px-3 w-8 bg-muted font-semibold">#</th>
@@ -562,6 +564,7 @@ export function SchoolCoordsImportDialog({
                       Escola no Cadastro Mestre
                     </th>
                     <th className="py-2.5 px-3 bg-muted font-semibold w-28">Cód. INEP</th>
+                    <th className="py-2.5 px-3 bg-muted font-semibold w-28">Dependência</th>
                     <th className="py-2.5 px-3 bg-muted font-semibold w-24">CEP</th>
                     <th className="py-2.5 px-3 bg-muted font-semibold w-28">Latitude</th>
                     <th className="py-2.5 px-3 bg-muted font-semibold w-28">Longitude</th>
@@ -632,6 +635,20 @@ export function SchoolCoordsImportDialog({
                           )}
                         </td>
 
+                        {/* Dependência Administrativa */}
+                        <td className="py-2 px-3">
+                          {row.dependenciaAdministrativa ? (
+                            <Badge
+                              variant="outline"
+                              className="text-[10px] font-normal border-border/70 whitespace-nowrap"
+                            >
+                              {row.dependenciaAdministrativa}
+                            </Badge>
+                          ) : (
+                            <span className="text-muted-foreground/50 italic">—</span>
+                          )}
+                        </td>
+
                         {/* CEP */}
                         <td className="py-2 px-3 font-mono">
                           {row.cep ? (
@@ -690,7 +707,7 @@ export function SchoolCoordsImportDialog({
 
                   {displayRows.length === 0 && (
                     <tr>
-                      <td colSpan={8} className="py-8 text-center text-muted-foreground text-xs">
+                      <td colSpan={9} className="py-8 text-center text-muted-foreground text-xs">
                         Nenhuma linha encontrada para o filtro atual.
                       </td>
                     </tr>
@@ -706,8 +723,8 @@ export function SchoolCoordsImportDialog({
                 <strong>{rows.length}</strong>
               </span>
               <span>
-                Apenas os campos CEP, latitude, longitude e Código INEP serão gravados (sem apagar
-                dados existentes se a célula estiver vazia).
+                Apenas os campos CEP, latitude, longitude, Código INEP e Dependência Administrativa
+                serão gravados (sem apagar dados existentes se a célula estiver vazia).
               </span>
             </div>
           </div>

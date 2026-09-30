@@ -72,7 +72,8 @@ import { toast } from 'sonner'
 import { escolasService } from '@/services/escolas'
 import { SchoolImportDialog } from '@/components/SchoolImportDialog'
 import { SchoolCoordsImportDialog } from '@/components/SchoolCoordsImportDialog'
-import type { School, EscolaTipo } from '@/lib/types'
+import type { School, EscolaTipo, DependenciaAdministrativa } from '@/lib/types'
+import { DEPENDENCIAS_ADMINISTRATIVAS } from '@/lib/types'
 
 const ESCOLA_TIPOS: EscolaTipo[] = ['CMEI', 'CRECHE', 'INTEGRAL', 'FUNDAMENTAL', 'Médio', 'Técnico']
 
@@ -102,6 +103,7 @@ export default function Schools() {
   const [bairro, setBairro] = useState('')
   const [contatoResponsavel, setContatoResponsavel] = useState('')
   const [tipo, setTipo] = useState<string>('')
+  const [dependenciaAdministrativa, setDependenciaAdministrativa] = useState<string>('')
   const [alunos, setAlunos] = useState<string>('')
   const [cep, setCep] = useState('')
   const [latitude, setLatitude] = useState('')
@@ -175,6 +177,7 @@ export default function Schools() {
     setBairro('')
     setContatoResponsavel('')
     setTipo('')
+    setDependenciaAdministrativa('')
     setAlunos('')
     setCep('')
     setLatitude('')
@@ -192,6 +195,7 @@ export default function Schools() {
     setBairro(school.bairro || '')
     setContatoResponsavel(school.contatoResponsavel || '')
     setTipo(school.tipo || '')
+    setDependenciaAdministrativa(school.dependencia_administrativa || '')
     setAlunos(school.alunos !== undefined ? String(school.alunos) : '')
     setCep(school.cep || '')
     setLatitude(school.latitude || '')
@@ -205,6 +209,7 @@ export default function Schools() {
     return schools.map((sch) => ({
       nome: sch.name || '',
       codigo_inep: sch.codigo_inep || '',
+      dependencia_administrativa: sch.dependencia_administrativa || '',
       cep: sch.cep || '',
       latitude: sch.latitude || '',
       longitude: sch.longitude || '',
@@ -219,7 +224,14 @@ export default function Schools() {
     }
 
     const preparedRows = getPreparedSchoolExportRows()
-    const headers = ['Nome da Escola', 'Código INEP', 'CEP', 'Latitude', 'Longitude']
+    const headers = [
+      'Nome da Escola',
+      'Código INEP',
+      'Dependência Administrativa',
+      'CEP',
+      'Latitude',
+      'Longitude',
+    ]
 
     const escapeCsvField = (field: string) => {
       const str = String(field ?? '')
@@ -234,7 +246,9 @@ export default function Schools() {
 
     for (const r of preparedRows) {
       lines.push(
-        [r.nome, r.codigo_inep, r.cep, r.latitude, r.longitude].map(escapeCsvField).join(';'),
+        [r.nome, r.codigo_inep, r.dependencia_administrativa, r.cep, r.latitude, r.longitude]
+          .map(escapeCsvField)
+          .join(';'),
       )
     }
 
@@ -262,10 +276,24 @@ export default function Schools() {
     const preparedRows = getPreparedSchoolExportRows()
     const wsData: any[][] = []
 
-    wsData.push(['Nome da Escola', 'Código INEP', 'CEP', 'Latitude', 'Longitude'])
+    wsData.push([
+      'Nome da Escola',
+      'Código INEP',
+      'Dependência Administrativa',
+      'CEP',
+      'Latitude',
+      'Longitude',
+    ])
 
     for (const r of preparedRows) {
-      wsData.push([r.nome, r.codigo_inep, r.cep, r.latitude, r.longitude])
+      wsData.push([
+        r.nome,
+        r.codigo_inep,
+        r.dependencia_administrativa,
+        r.cep,
+        r.latitude,
+        r.longitude,
+      ])
     }
 
     const wb = XLSX.utils.book_new()
@@ -274,6 +302,7 @@ export default function Schools() {
     ws['!cols'] = [
       { wch: 40 }, // Nome da Escola
       { wch: 16 }, // Código INEP
+      { wch: 26 }, // Dependência Administrativa
       { wch: 14 }, // CEP
       { wch: 16 }, // Latitude
       { wch: 16 }, // Longitude
@@ -317,6 +346,7 @@ export default function Schools() {
           bairro: bairro.trim() || undefined,
           contato: contatoResponsavel.trim() || undefined,
           tipo: tipo || undefined,
+          dependencia_administrativa: dependenciaAdministrativa || undefined,
           alunos: parsedAlunos,
           cep: cep.trim() || undefined,
           latitude: latitude.trim() || undefined,
@@ -343,6 +373,7 @@ export default function Schools() {
           bairro: bairro.trim() || undefined,
           contato: contatoResponsavel.trim() || undefined,
           tipo: tipo || undefined,
+          dependencia_administrativa: dependenciaAdministrativa || undefined,
           alunos: parsedAlunos,
           cep: cep.trim() || undefined,
           latitude: latitude.trim() || undefined,
@@ -591,7 +622,10 @@ export default function Schools() {
                   <TableHead className="w-[110px] font-semibold text-foreground">
                     Cód. INEP
                   </TableHead>
-                  <TableHead className="w-[100px] font-semibold text-foreground">Tipo</TableHead>
+                  <TableHead className="w-[110px] font-semibold text-foreground">
+                    Dependência
+                  </TableHead>
+                  <TableHead className="w-[95px] font-semibold text-foreground">Tipo</TableHead>
                   <TableHead className="w-[80px] text-right font-semibold text-foreground">
                     Alunos
                   </TableHead>
@@ -654,6 +688,20 @@ export default function Schools() {
                           </span>
                         ) : (
                           <span className="text-muted-foreground/40 italic">—</span>
+                        )}
+                      </TableCell>
+
+                      {/* 1.8 Dependência Administrativa */}
+                      <TableCell className="align-middle text-xs">
+                        {school.dependencia_administrativa ? (
+                          <Badge
+                            variant="outline"
+                            className="text-[11px] font-normal border-border/70 whitespace-nowrap"
+                          >
+                            {school.dependencia_administrativa}
+                          </Badge>
+                        ) : (
+                          <span className="text-xs text-muted-foreground/40 italic">—</span>
                         )}
                       </TableCell>
 
@@ -786,7 +834,7 @@ export default function Schools() {
 
                 {filteredSchools.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={9} className="py-12 text-center text-muted-foreground">
+                    <TableCell colSpan={10} className="py-12 text-center text-muted-foreground">
                       <div className="space-y-2">
                         <p className="text-sm">
                           {hasActiveFilters
@@ -887,6 +935,11 @@ export default function Schools() {
                       INEP: {detailsSchool.codigo_inep}
                     </Badge>
                   )}
+                  {detailsSchool.dependencia_administrativa && (
+                    <Badge variant="outline" className="text-xs border-border/80">
+                      Dependência: {detailsSchool.dependencia_administrativa}
+                    </Badge>
+                  )}
                 </div>
 
                 {/* Bloco de Informações Cadastrais */}
@@ -946,6 +999,15 @@ export default function Schools() {
                       <span className="text-xs text-muted-foreground block">Código INEP</span>
                       <p className="font-mono text-xs text-foreground/90 font-semibold">
                         {detailsSchool.codigo_inep || 'Não informado'}
+                      </p>
+                    </div>
+
+                    <div className="space-y-1">
+                      <span className="text-xs text-muted-foreground block">
+                        Dependência Administrativa
+                      </span>
+                      <p className="text-xs text-foreground/90 font-medium">
+                        {detailsSchool.dependencia_administrativa || '—'}
                       </p>
                     </div>
 
@@ -1033,18 +1095,18 @@ export default function Schools() {
               O nome é normalizado para evitar duplicidades no cadastro mestre global.
             </p>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <div className="space-y-2 sm:col-span-1">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              <div className="space-y-2">
                 <Label htmlFor="school-tipo">Tipo</Label>
                 <Select
                   value={tipo || 'none'}
                   onValueChange={(val) => setTipo(val === 'none' ? '' : val)}
                 >
                   <SelectTrigger id="school-tipo">
-                    <SelectValue placeholder="Selecione o tipo (opcional)" />
+                    <SelectValue placeholder="Selecione o tipo" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="none">Nenhum (Vazio)</SelectItem>
+                    <SelectItem value="none">— (Vazio)</SelectItem>
                     {ESCOLA_TIPOS.map((t) => (
                       <SelectItem key={t} value={t}>
                         {t}
@@ -1054,7 +1116,27 @@ export default function Schools() {
                 </Select>
               </div>
 
-              <div className="space-y-2 sm:col-span-1">
+              <div className="space-y-2">
+                <Label htmlFor="school-dependencia">Dependência Administrativa</Label>
+                <Select
+                  value={dependenciaAdministrativa || 'none'}
+                  onValueChange={(val) => setDependenciaAdministrativa(val === 'none' ? '' : val)}
+                >
+                  <SelectTrigger id="school-dependencia">
+                    <SelectValue placeholder="Selecione a dependência" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">—</SelectItem>
+                    {DEPENDENCIAS_ADMINISTRATIVAS.map((dep) => (
+                      <SelectItem key={dep} value={dep}>
+                        {dep}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
                 <Label htmlFor="school-alunos">Nº de Alunos</Label>
                 <Input
                   id="school-alunos"
@@ -1066,7 +1148,7 @@ export default function Schools() {
                 />
               </div>
 
-              <div className="space-y-2 sm:col-span-1">
+              <div className="space-y-2">
                 <Label htmlFor="school-contact">Telefone / WhatsApp</Label>
                 <Input
                   id="school-contact"
