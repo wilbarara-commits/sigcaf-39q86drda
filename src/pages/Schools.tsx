@@ -949,20 +949,33 @@ export default function Schools() {
                   </h4>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
-                    <div className="space-y-1">
+                    {/* Endereço em 2 linhas: 1ª linha logradouro/número, 2ª linha Bairro e CEP */}
+                    <div className="space-y-1 sm:col-span-2">
                       <span className="text-xs text-muted-foreground block">Endereço</span>
-                      <p className="flex items-start gap-1.5 text-foreground/90">
+                      <div className="flex items-start gap-1.5 text-foreground/90">
                         <MapPin className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
-                        <span>{detailsSchool.address || 'Endereço não informado'}</span>
-                      </p>
-                    </div>
-
-                    <div className="space-y-1">
-                      <span className="text-xs text-muted-foreground block">Bairro</span>
-                      <p className="flex items-center gap-1.5 text-foreground/90">
-                        <MapPin className="h-4 w-4 text-muted-foreground shrink-0" />
-                        <span>{detailsSchool.bairro || 'Bairro não informado'}</span>
-                      </p>
+                        <div className="space-y-0.5 min-w-0">
+                          <div>{detailsSchool.address?.trim() || 'Endereço não informado'}</div>
+                          {detailsSchool.bairro?.trim() || detailsSchool.cep?.trim() ? (
+                            <div className="text-xs text-muted-foreground">
+                              {[
+                                detailsSchool.bairro?.trim()
+                                  ? `Bairro: ${detailsSchool.bairro.trim()}`
+                                  : null,
+                                detailsSchool.cep?.trim()
+                                  ? `CEP: ${detailsSchool.cep.trim()}`
+                                  : null,
+                              ]
+                                .filter(Boolean)
+                                .join(' — ')}
+                            </div>
+                          ) : !detailsSchool.address?.trim() ? null : (
+                            <div className="text-xs text-muted-foreground/60 italic">
+                              Bairro e CEP não informados
+                            </div>
+                          )}
+                        </div>
+                      </div>
                     </div>
 
                     <div className="space-y-1">
@@ -1008,13 +1021,6 @@ export default function Schools() {
                       </span>
                       <p className="text-xs text-foreground/90 font-medium">
                         {detailsSchool.dependencia_administrativa || '—'}
-                      </p>
-                    </div>
-
-                    <div className="space-y-1">
-                      <span className="text-xs text-muted-foreground block">CEP</span>
-                      <p className="font-mono text-xs text-foreground/90">
-                        {detailsSchool.cep || 'CEP não informado'}
                       </p>
                     </div>
 
