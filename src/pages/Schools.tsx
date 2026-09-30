@@ -949,13 +949,15 @@ export default function Schools() {
                   </h4>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
-                    {/* Endereço em 2 linhas: 1ª linha logradouro/número, 2ª linha Bairro e CEP */}
+                    {/* Endereço na mesma coluna/bloco empilhado: Linha 1 = logradouro/número, Linha 2 = Bairro e CEP */}
                     <div className="space-y-1 sm:col-span-2">
                       <span className="text-xs text-muted-foreground block">Endereço</span>
                       <div className="flex items-start gap-1.5 text-foreground/90">
                         <MapPin className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
-                        <div className="space-y-0.5 min-w-0">
-                          <div>{detailsSchool.address?.trim() || 'Endereço não informado'}</div>
+                        <div className="space-y-0.5 min-w-0 flex-1">
+                          <div className="font-medium text-foreground">
+                            {detailsSchool.address?.trim() || 'Endereço não informado'}
+                          </div>
                           {detailsSchool.bairro?.trim() || detailsSchool.cep?.trim() ? (
                             <div className="text-xs text-muted-foreground">
                               {[
@@ -969,33 +971,27 @@ export default function Schools() {
                                 .filter(Boolean)
                                 .join(' — ')}
                             </div>
-                          ) : !detailsSchool.address?.trim() ? null : (
-                            <div className="text-xs text-muted-foreground/60 italic">
-                              Bairro e CEP não informados
-                            </div>
-                          )}
+                          ) : null}
                         </div>
                       </div>
                     </div>
 
+                    {/* Telefone / Contato na mesma coluna empilhados (sem prefixo 'Contato:') */}
                     <div className="space-y-1">
                       <span className="text-xs text-muted-foreground block">
-                        Telefone / WhatsApp
+                        Telefone / Contato
                       </span>
-                      <p className="flex items-center gap-1.5 text-foreground/90">
-                        <Phone className="h-4 w-4 text-muted-foreground shrink-0" />
-                        <span>{detailsSchool.contact || 'Telefone não informado'}</span>
-                      </p>
-                    </div>
-
-                    <div className="space-y-1">
-                      <span className="text-xs text-muted-foreground block">
-                        Pessoa de Contato / Responsável
-                      </span>
-                      <p className="flex items-center gap-1.5 text-foreground/90">
-                        <Users className="h-4 w-4 text-muted-foreground shrink-0" />
-                        <span>{detailsSchool.contatoResponsavel || 'Contato não informado'}</span>
-                      </p>
+                      <div className="flex items-start gap-1.5 text-foreground/90">
+                        <Phone className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
+                        <div className="space-y-0.5 min-w-0 flex-1">
+                          <div>{detailsSchool.contact?.trim() || 'Telefone não informado'}</div>
+                          {detailsSchool.contatoResponsavel?.trim() && (
+                            <div className="text-xs text-muted-foreground">
+                              {detailsSchool.contatoResponsavel.trim()}
+                            </div>
+                          )}
+                        </div>
+                      </div>
                     </div>
 
                     <div className="space-y-1 sm:col-span-2">
