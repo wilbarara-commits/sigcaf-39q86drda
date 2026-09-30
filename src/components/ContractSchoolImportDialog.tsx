@@ -1,4 +1,4 @@
-import { useState, useRef, useId, useMemo } from 'react'
+import { useState, useRef, useId } from 'react'
 import {
   Dialog,
   DialogContent,
@@ -9,7 +9,6 @@ import {
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { ScrollArea } from '@/components/ui/scroll-area'
 import { Progress } from '@/components/ui/progress'
 import {
   Upload,
@@ -25,18 +24,9 @@ import {
   ClipboardPaste,
   ShieldAlert,
   Download,
-  Link2,
 } from 'lucide-react'
 import { toast } from 'sonner'
-import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
 import {
   parseContractSchoolsMatrix,
   type ContractSchoolParseResult,
@@ -44,14 +34,13 @@ import {
 } from '@/lib/contractSchoolCsvImporter'
 import { escolasService } from '@/services/escolas'
 import { contratosService } from '@/services/contratos'
-import { rotasService } from '@/services/rotas'
 import type { School, Contract } from '@/lib/types'
 import * as XLSX from 'xlsx'
 
 export interface ImportedSchoolLinkResult {
   escolaId: string
   escolaNome: string
-  rotaPlanilha: string
+  rotaPlanilha?: string
   rotaId?: string
 }
 
@@ -59,7 +48,7 @@ interface ContractSchoolImportDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   contractId?: string
-  contractRotas: Array<{ id?: string; nome: string; ordem?: number }>
+  contractRotas?: Array<{ id?: string; nome: string; ordem?: number }>
   masterSchools: School[]
   allContracts: Contract[]
   currentLinkedSchoolIds: Set<string>
@@ -84,7 +73,6 @@ export function ContractSchoolImportDialog({
   const [sourceMode, setSourceMode] = useState<'upload' | 'paste'>('upload')
   const [file, setFile] = useState<File | null>(null)
   const [pastedText, setPastedText] = useState('')
-  const [selectedRota, setSelectedRota] = useState<string>('')
 
   const [isParsing, setIsParsing] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
@@ -107,13 +95,6 @@ export function ContractSchoolImportDialog({
 
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  // Selecionar rota automaticamente se só houver uma
-  useMemo(() => {
-    if (!selectedRota && contractRotas.length === 1) {
-      setSelectedRota(contractRotas[0].nome)
-    }
-  }, [contractRotas, selectedRota])
-
   const runParse = async (input: File | string, fileName?: string) => {
     setIsParsing(true)
     setImportSummary(null)
@@ -122,7 +103,6 @@ export function ContractSchoolImportDialog({
       const res = await parseContractSchoolsMatrix({
         fileOrText: input,
         fileName,
-        selectedRota,
         contractRotas,
         currentContractId: contractId,
         currentContractSchoolIds: currentLinkedSchoolIds,
@@ -141,13 +121,6 @@ export function ContractSchoolImportDialog({
       if (res.conflictOtherContractRows.length > 0) {
         toast.warning(
           `${res.conflictOtherContractRows.length} escola(s) vinculada(s) a outro contrato foram bloqueadas e não serão vinculadas.`,
-        )
-      }
-
-      const invalidRotasCount = res.allRows.filter((r) => r.status === 'invalid_rota').length
-      if (invalidRotasCount > 0) {
-        toast.error(
-          `${invalidRotasCount} escola(s) com rota não cadastrada no contrato bloqueadas no preview.`,
         )
       }
     } catch (err: any) {
@@ -192,15 +165,11 @@ export function ContractSchoolImportDialog({
   }
 
   const handleDownloadModel = () => {
-    const sampleRota1 = contractRotas[0]?.nome || 'ROTA A'
-    const sampleRota2 = contractRotas[1]?.nome || sampleRota1
-
     const wsData = [
-      ['Nome da Escola', 'Tipo', 'Rota', 'Nº Alunos', 'Telefone / WhatsApp', 'E-mail', 'Endereço'],
+      ['Nome da Escola', 'Tipo', 'Nº Alunos', 'Telefone / WhatsApp', 'E-mail', 'Endereço'],
       [
         'CMEI MARIA TEREZA PRIES DE ABREU',
         'CMEI',
-        sampleRota1,
         '125',
         '(21) 98765-4321',
         'cmei.maria@educacao.gov.br',
@@ -209,7 +178,6 @@ export function ContractSchoolImportDialog({
       [
         'CC LAR VOVÔ MIGUEL',
         'CRECHE',
-        sampleRota1,
         '47',
         '(21) 99887-1122',
         'creche.miguel@educacao.gov.br',
@@ -218,7 +186,6 @@ export function ContractSchoolImportDialog({
       [
         'EM ALICE SALDANHA',
         'FUNDAMENTAL',
-        sampleRota2,
         '171',
         '(21) 97766-3344',
         'em.alice@educacao.gov.br',
@@ -227,7 +194,6 @@ export function ContractSchoolImportDialog({
       [
         'CE ROSE DALMASO (CEDAL)',
         'INTEGRAL',
-        sampleRota2,
         '275',
         '(21) 96655-2211',
         'cedal@educacao.gov.br',
@@ -254,14 +220,6 @@ export function ContractSchoolImportDialog({
       const linksToForm: ImportedSchoolLinkResult[] = []
       const failedSchoolErrors: Array<{ nome: string; motivo: string }> = []
 
-      // Mapa local de rotaName -> rotaId para evitar queries duplicadas
-      const rotaIdCache = new Map<string, string>()
-      for (const cr of contractRotas) {
-        if (cr.id && cr.nome) {
-          rotaIdCache.set(cr.nome.toUpperCase().trim(), cr.id)
-        }
-      }
-
       // Processar em lote com progresso
       for (let i = 0; i < processable.length; i++) {
         const row = processable[i]
@@ -269,23 +227,10 @@ export function ContractSchoolImportDialog({
         try {
           let escolaId = row.existingSchoolId
           let escolaNome = row.existingSchoolName || row.nome
-          const rowAssignedRota = row.assignedRota || selectedRota || ''
-
-          let rowRotaId =
-            row.resolvedRotaId || rotaIdCache.get(rowAssignedRota.toUpperCase().trim())
-          if (!rowRotaId && contractId && rowAssignedRota) {
-            try {
-              const rotaRecord = await rotasService.findOrCreate(contractId, rowAssignedRota)
-              rowRotaId = rotaRecord.id
-              rotaIdCache.set(rowAssignedRota.toUpperCase().trim(), rowRotaId)
-            } catch (rotaErr: any) {
-              console.error(`Erro ao buscar ou criar rota [${rowAssignedRota}]:`, rotaErr)
-            }
-          }
 
           if (row.status === 'create_and_link') {
             // 1. Criar escola no cadastro mestre global
-            // Rota no mestre global fica vazia (a rota da planilha é gravada estritamente no vínculo do contrato)
+            // Rota no contrato não é atribuída (rotas pertencem à chamada)
             const created = await escolasService.create({
               nome: row.nome,
               tipo: row.tipo || undefined,
@@ -328,13 +273,11 @@ export function ContractSchoolImportDialog({
           }
 
           // Se contractId existir (edição de contrato existente no banco):
-          // Persistência direta e atômica do vínculo em contrato_escolas com a rota específica da escola
+          // Persistência direta do vínculo em contrato_escolas (sem exigência de rota)
           if (contractId && escolaId) {
             await contratosService.linkEscola({
               contrato_id: contractId,
               escola_id: escolaId,
-              rota_id: rowRotaId,
-              rota: rowAssignedRota,
             })
           }
 
@@ -342,8 +285,6 @@ export function ContractSchoolImportDialog({
             linksToForm.push({
               escolaId,
               escolaNome,
-              rotaPlanilha: rowAssignedRota,
-              rotaId: rowRotaId,
             })
           }
         } catch (subErr: any) {
@@ -383,7 +324,7 @@ export function ContractSchoolImportDialog({
           )
         } else {
           toast.info(
-            `${linksToForm.length} escola(s) preparadas com suas respectivas rotas. Clique em "Cadastrar Contrato" para gravar os vínculos.`,
+            `${linksToForm.length} escola(s) preparadas para o contrato. Clique em "Cadastrar Contrato" para gravar os vínculos.`,
           )
         }
       } else if (linksToForm.length > 0) {
@@ -416,10 +357,7 @@ export function ContractSchoolImportDialog({
       if (filterTab === 'updated')
         return row.status === 'update_and_link' || row.status === 'update_current_link'
       if (filterTab === 'conflicts') return row.status === 'conflict_other_contract'
-      if (filterTab === 'errors')
-        return (
-          row.status === 'error' || row.status === 'duplicate_file' || row.status === 'invalid_rota'
-        )
+      if (filterTab === 'errors') return row.status === 'error' || row.status === 'duplicate_file'
       return true
     }) || []
 
@@ -440,58 +378,11 @@ export function ContractSchoolImportDialog({
             Importar Escolas para o Contrato (CSV / Planilha)
           </DialogTitle>
           <DialogDescription>
-            Importe uma relação de escolas para associar à Aba da Planilha selecionada deste
-            contrato. Escolas novas serão cadastradas no mestre global e as já existentes terão seus
-            vínculos atualizados.
-          </DialogDescription>{' '}
+            Importe uma relação de escolas vinculadas a este contrato. Escolas novas serão
+            cadastradas no mestre global e as já existentes serão vinculadas diretamente (rotas
+            pertencem às chamadas).
+          </DialogDescription>
         </DialogHeader>
-
-        {/* SELETOR OBRIGATÓRIO DE ABA DA PLANILHA */}
-        <div className="shrink-0 p-3 bg-muted/40 rounded-lg border flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div className="space-y-0.5">
-            <Label className="text-xs font-semibold flex items-center gap-1.5 text-foreground">
-              <Link2 className="h-4 w-4 text-primary" />
-              1. Aba da Planilha (padrão / fallback)
-            </Label>
-            <p className="text-[11px] text-muted-foreground">
-              Se a planilha tiver a coluna <strong>Aba</strong> ou <strong>Rota</strong>, a aba
-              individual de cada escola prevalece. Caso a planilha não tenha essa coluna, esta aba
-              selecionada será aplicada.
-            </p>
-          </div>
-
-          <div className="w-full sm:w-64 shrink-0">
-            {contractRotas.length === 0 ? (
-              <div className="p-2 border border-destructive/40 bg-destructive/10 rounded text-[11px] text-destructive">
-                Nenhuma aba cadastrada neste contrato. Cadastre abas no contrato antes de importar.
-              </div>
-            ) : (
-              <Select
-                value={selectedRota}
-                onValueChange={(val) => {
-                  setSelectedRota(val)
-                  if (parseResult) {
-                    toast.info(
-                      `Aba padrão alterada para "${val}". Processe novamente se desejar atualizar.`,
-                    )
-                  }
-                }}
-                disabled={isSaving}
-              >
-                <SelectTrigger className="h-8 text-xs bg-background font-medium">
-                  <SelectValue placeholder="Selecione a Aba padrão..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {contractRotas.map((cr, idx) => (
-                    <SelectItem key={idx} value={cr.nome} className="text-xs font-medium">
-                      {cr.nome}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
-          </div>
-        </div>
 
         {/* SELEÇÃO DO MÉTODO: ARQUIVO OU COLAR */}
         {!parseResult && !importSummary && (
@@ -557,8 +448,8 @@ export function ContractSchoolImportDialog({
                   </p>
                   <p className="text-xs text-muted-foreground">
                     Colunas aceitas: <strong>Nome da Escola</strong>, <strong>Tipo</strong>,{' '}
-                    <strong>Rota</strong>, <strong>Alunos</strong>, <strong>Telefone</strong>,{' '}
-                    <strong>E-mail</strong>, <strong>Endereço</strong>
+                    <strong>Alunos</strong>, <strong>Telefone</strong>, <strong>E-mail</strong>,{' '}
+                    <strong>Endereço</strong>
                   </p>
                 </div>
 
@@ -586,12 +477,6 @@ export function ContractSchoolImportDialog({
                 >
                   Selecionar Arquivo do Computador
                 </Button>
-                {!selectedRota && (
-                  <p className="text-[11px] text-muted-foreground">
-                    * Dica: Se o arquivo não tiver a coluna Aba ou Rota, selecione uma Aba da
-                    Planilha acima como padrão.
-                  </p>
-                )}
               </div>
             ) : (
               <div className="space-y-2 flex-1 flex flex-col">
@@ -642,8 +527,8 @@ export function ContractSchoolImportDialog({
                   </h3>
                   <p className="text-sm text-muted-foreground">
                     {importSummary.isDirectPersistence
-                      ? `As escolas foram integradas e gravadas diretamente no contrato com a Aba da Planilha "${selectedRota}".`
-                      : `As escolas foram preparadas no formulário com a Aba da Planilha "${selectedRota}". Atenção: os vínculos só serão persistidos ao clicar em "Cadastrar Contrato".`}
+                      ? 'As escolas foram integradas e vinculadas diretamente ao contrato.'
+                      : 'As escolas foram preparadas no formulário. Atenção: os vínculos só serão persistidos ao clicar em "Cadastrar Contrato".'}
                   </p>
                 </div>
               </div>
@@ -771,9 +656,6 @@ export function ContractSchoolImportDialog({
                 <Badge variant="outline" className="text-[11px]">
                   {parseResult.totalRows} linhas
                 </Badge>
-                <Badge variant="secondary" className="text-[11px]">
-                  Rota: {parseResult.selectedRota}
-                </Badge>
               </div>
 
               <div className="flex items-center gap-1.5 flex-wrap">
@@ -825,10 +707,7 @@ export function ContractSchoolImportDialog({
                   </Button>
                 )}
                 {parseResult.allRows.some(
-                  (r) =>
-                    r.status === 'error' ||
-                    r.status === 'duplicate_file' ||
-                    r.status === 'invalid_rota',
+                  (r) => r.status === 'error' || r.status === 'duplicate_file',
                 ) && (
                   <Button
                     size="sm"
@@ -840,10 +719,7 @@ export function ContractSchoolImportDialog({
                     Pendências/Erros (
                     {
                       parseResult.allRows.filter(
-                        (r) =>
-                          r.status === 'error' ||
-                          r.status === 'duplicate_file' ||
-                          r.status === 'invalid_rota',
+                        (r) => r.status === 'error' || r.status === 'duplicate_file',
                       ).length
                     }
                     )
@@ -884,7 +760,6 @@ export function ContractSchoolImportDialog({
                     <th className="py-2.5 px-3 bg-muted font-semibold">Escola</th>
                     <th className="py-2.5 px-3 bg-muted font-semibold">Tipo</th>
                     <th className="py-2.5 px-3 bg-muted font-semibold">Alunos</th>
-                    <th className="py-2.5 px-3 bg-muted font-semibold">Rota a Atribuir</th>
                     <th className="py-2.5 px-3 bg-muted font-semibold">Situação & Ação Prevista</th>
                   </tr>
                 </thead>
@@ -892,7 +767,6 @@ export function ContractSchoolImportDialog({
                   {displayRows.map((row: ParsedContractSchoolRow) => {
                     const isConflictOther = row.status === 'conflict_other_contract'
                     const isError = row.status === 'error'
-                    const isInvalidRota = row.status === 'invalid_rota'
                     const isDuplicateFile = row.status === 'duplicate_file'
                     const isCreate = row.status === 'create_and_link'
                     const isUpdateAndLink = row.status === 'update_and_link'
@@ -904,7 +778,7 @@ export function ContractSchoolImportDialog({
                         className={
                           isConflictOther
                             ? 'bg-amber-500/10 hover:bg-amber-500/15'
-                            : isError || isInvalidRota
+                            : isError
                               ? 'bg-destructive/10 hover:bg-destructive/15'
                               : isDuplicateFile
                                 ? 'bg-amber-500/5'
@@ -946,11 +820,6 @@ export function ContractSchoolImportDialog({
                           ) : (
                             <span className="text-muted-foreground italic">-</span>
                           )}
-                        </td>
-                        <td className="py-2 px-3">
-                          <Badge variant="secondary" className="text-[10px] font-medium">
-                            {row.assignedRota}
-                          </Badge>
                         </td>
                         <td className="py-2 px-3">
                           {/* CONFLITO: VINCULADA A OUTRO CONTRATO */}
@@ -1011,12 +880,12 @@ export function ContractSchoolImportDialog({
                             </div>
                           )}
 
-                          {/* JÁ VINCULADA A ESTE CONTRATO: ATUALIZAR VÍNCULO E DADOS */}
+                          {/* JÁ VINCULADA A ESTE CONTRATO: ATUALIZAR DADOS */}
                           {isUpdateCurrent && (
                             <div className="space-y-1">
                               <span className="inline-flex items-center gap-1 text-purple-600 dark:text-purple-400 font-medium">
                                 <RefreshCw className="h-3 w-3 shrink-0" />
-                                Já Vinculada (Atualizar Dados & Rota)
+                                Já Vinculada (Atualizar Dados)
                               </span>
                               {row.fieldChanges.length > 0 && (
                                 <div className="flex flex-wrap gap-1">
@@ -1041,19 +910,6 @@ export function ContractSchoolImportDialog({
                             </span>
                           )}
 
-                          {/* ERRO DE ROTA INVÁLIDA (BLOQUEANTE) */}
-                          {isInvalidRota && (
-                            <div className="space-y-0.5">
-                              <span className="inline-flex items-center gap-1 text-destructive font-semibold">
-                                <XCircle className="h-3.5 w-3.5 shrink-0" />
-                                Rota não cadastrada no contrato
-                              </span>
-                              <span className="text-[10px] text-destructive/90 block">
-                                {row.statusReason}
-                              </span>
-                            </div>
-                          )}
-
                           {/* ERRO DE DADOS */}
                           {isError && (
                             <span className="inline-flex items-center gap-1 text-destructive font-medium">
@@ -1067,7 +923,7 @@ export function ContractSchoolImportDialog({
                   })}
                   {displayRows.length === 0 && (
                     <tr>
-                      <td colSpan={6} className="py-8 text-center text-muted-foreground text-xs">
+                      <td colSpan={5} className="py-8 text-center text-muted-foreground text-xs">
                         Nenhuma linha encontrada neste filtro.
                       </td>
                     </tr>
@@ -1117,8 +973,8 @@ export function ContractSchoolImportDialog({
                   ) : (
                     <>
                       <Sparkles className="h-4 w-4" />
-                      Confirmar Importação de {parseResult.processableRows.length} escola(s) para a
-                      Rota "{selectedRota}"
+                      Confirmar Importação de {parseResult.processableRows.length} escola(s) para o
+                      Contrato
                     </>
                   )}
                 </Button>

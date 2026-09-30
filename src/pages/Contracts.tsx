@@ -2244,38 +2244,19 @@ export default function Contracts() {
         allContracts={contracts}
         currentLinkedSchoolIds={new Set(contractSchoolsForm.map((s) => s.escolaId))}
         onSuccess={async (importedLinks: ImportedSchoolLinkResult[]) => {
-          // Atualiza a lista do formulário mantendo integridade e a rota da planilha atribuída
+          // Atualiza a lista de escolas do formulário
           setContractSchoolsForm((prev) => {
-            const map = new Map<string, string>() // escolaId -> rotaId
+            const map = new Map<string, string>() // escolaId -> rotaId (opcional/legado)
             for (const item of prev) {
-              map.set(item.escolaId, item.rotaId)
+              map.set(item.escolaId, item.rotaId || '')
             }
             for (const imp of importedLinks) {
-              map.set(imp.escolaId, imp.rotaPlanilha)
+              map.set(imp.escolaId, imp.rotaPlanilha || map.get(imp.escolaId) || '')
             }
             return Array.from(map.entries()).map(([escolaId, rotaId]) => ({
               escolaId,
               rotaId,
             }))
-          })
-
-          // Garantir que a rota importada também esteja na lista local de rotas do diálogo pai
-          const importedRotas = Array.from(
-            new Set(importedLinks.map((l) => l.rotaPlanilha).filter(Boolean)),
-          )
-          setContractRotas((prev) => {
-            const copy = [...prev]
-            for (const rNome of importedRotas) {
-              if (!copy.some((r) => r.nome.toLowerCase() === rNome.toLowerCase())) {
-                const linkWithId = importedLinks.find((l) => l.rotaPlanilha === rNome && l.rotaId)
-                copy.push({
-                  id: linkWithId?.rotaId,
-                  nome: rNome,
-                  ordem: copy.length + 1,
-                })
-              }
-            }
-            return copy
           })
 
           // Atualizar o contexto global de escolas, contratos e vínculos

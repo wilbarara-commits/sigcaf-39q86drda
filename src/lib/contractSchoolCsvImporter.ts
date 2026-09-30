@@ -29,8 +29,8 @@ export interface ParsedContractSchoolRow {
   telefone?: string
   email?: string
 
-  // Rota da planilha atribuída pelo importador para o vínculo
-  assignedRota: string
+  // Rota opcional da planilha (mantida apenas como referência informativa se presente)
+  assignedRota?: string
   resolvedRotaId?: string
 
   // Informações de casamento no cadastro mestre global
@@ -56,11 +56,10 @@ export interface ParsedContractSchoolRow {
 
   /**
    * Status da linha:
-   * - 'create_and_link': Escola nova no mestre global -> cria escola e vincula a este contrato com a rota
-   * - 'update_and_link': Escola já existe no mestre global e ainda não tem vínculo com nenhum contrato -> atualiza dados e vincula a este contrato com a rota
-   * - 'update_current_link': Escola já existe e já está vinculada a ESTE contrato -> atualiza dados da escola e rota do vínculo
+   * - 'create_and_link': Escola nova no mestre global -> cria escola e vincula a este contrato (sem exigência de rota)
+   * - 'update_and_link': Escola já existe no mestre global e ainda não tem vínculo com nenhum contrato -> atualiza dados e vincula a este contrato
+   * - 'update_current_link': Escola já existe e já está vinculada a ESTE contrato -> atualiza dados da escola no mestre
    * - 'conflict_other_contract': Escola já está vinculada a OUTRO contrato -> FALHA para essa escola, exige desvínculo prévio
-   * - 'invalid_rota': Rota informada na planilha não corresponde a nenhuma rota cadastrada no contrato
    * - 'duplicate_file': Escola repetida no mesmo arquivo CSV/planilha
    * - 'error': Nome inválido ou em branco
    */
@@ -69,7 +68,6 @@ export interface ParsedContractSchoolRow {
     | 'update_and_link'
     | 'update_current_link'
     | 'conflict_other_contract'
-    | 'invalid_rota'
     | 'duplicate_file'
     | 'error'
 
@@ -79,7 +77,7 @@ export interface ParsedContractSchoolRow {
 export interface ContractSchoolParseResult {
   fileName: string
   totalRows: number
-  selectedRota: string
+  selectedRota?: string
   hasRotaColumn: boolean
 
   createAndLinkRows: ParsedContractSchoolRow[]
@@ -188,11 +186,11 @@ export interface ParseContractSchoolsOptions {
   fileOrText: File | string
   fileName?: string
   /**
-   * Rota da Planilha deste contrato selecionada pelo usuário (usada como fallback quando a planilha não tiver coluna Rota)
+   * Rota da Planilha opcional (se informada)
    */
   selectedRota?: string
   /**
-   * Lista de rotas cadastradas no contrato atual (nome e id)
+   * Lista de rotas cadastradas no contrato atual (opcional)
    */
   contractRotas?: Array<{ id?: string; nome: string }>
   /**
@@ -214,14 +212,13 @@ export interface ParseContractSchoolsOptions {
 }
 
 /**
- * Analisa e valida uma matriz de dados de escolas para importação dentro do contrato,
- * aplicando com rigor as 6 regras solicitadas:
- * 1. Atribuir a Rota da Planilha escolhida no vínculo.
- * 2. Casar tolerante por nome normalizado contra o cadastro mestre e atualizar dados.
- * 3. A rota da planilha é gravada no VÍNCULO (contrato_escolas.rota), não na tabela escolas.
- * 4. Se a escola não existir no cadastro global: criá-la e vinculá-la ao contrato com a rota.
- * 5. Se já estiver vinculada a OUTRO contrato: FALHAR para essa escola com mensagem clara, mantendo as demais válidas no preview de pendências.
- * 6. Se já estiver vinculada a ESTE contrato: atualizar dados e rota da planilha do vínculo (sem duplicar vínculo).
+ * Analisa e valida uma matriz de dados de escolas para importação dentro do contrato:
+ * 1. Importação pura de escolas vinculadas ao contrato (sem exigência ou bloqueio de rota).
+ * 2. Casar tolerante por nome normalizado contra o cadastro mestre e atualizar dados cadastrais.
+ * 3. Se a escola não existir no cadastro global: criá-la e vinculá-la ao contrato.
+ * 4. Se já estiver vinculada a OUTRO contrato: FALHAR para essa escola com mensagem clara de desvínculo prévio.
+ * 5. Se já estiver vinculada a ESTE contrato: atualizar dados da escola no mestre sem duplicar vínculo.
+ * 6. Rota NÃO é exigida: coluna de rota é opcional e ignorada para fins de validação/bloqueio.
  */
 export async function parseContractSchoolsMatrix(
   options: ParseContractSchoolsOptions,
@@ -373,53 +370,12 @@ export async function parseContractSchoolsMatrix(
       return
     }
 
-    // 1.1 Resolução da ROTA escola a escola (Regra B):
-    // Se a planilha tem coluna Rota: o valor por escola prevalece e deve corresponder
-    // a uma rota cadastrada no contrato (comparação tolerante). Caso contrário, vira pendência bloqueante.
-    // Se não tem coluna Rota: usa selectedRota da aba.
-    let effectiveRota = ''
-    let matchedRotaRecord: { id?: string; nome: string } | undefined
-    let isInvalidRota = false
-
-    if (hasRotaColumn) {
-      if (!rawRota) {
-        // Coluna Rota existe na planilha mas veio em branco nesta linha
-        if (selectedRota) {
-          // Fallback para rota global selecionada se houver
-          effectiveRota = selectedRota
-          const matched = normRotaMap.get(normalizeName(selectedRota))
-          matchedRotaRecord = matched
-          warnings.push(
-            `Rota da linha vazia na planilha; foi utilizada a rota selecionada "${selectedRota}".`,
-          )
-        } else {
-          isInvalidRota = true
-          statusReason =
-            'Coluna Rota presente na planilha, mas vazia para esta escola e nenhuma rota selecionada.'
-        }
-      } else {
-        const normR = normalizeName(rawRota)
-        const matched = normRotaMap.get(normR)
-        if (matched) {
-          effectiveRota = matched.nome
-          matchedRotaRecord = matched
-        } else {
-          isInvalidRota = true
-          effectiveRota = rawRota
-          const rotasDisponiveis = contractRotas.map((r) => r.nome).join(', ')
-          statusReason = `Rota "${rawRota}" não corresponde a nenhuma rota cadastrada no contrato (rotas disponíveis: ${rotasDisponiveis || 'nenhuma'}).`
-        }
-      }
-    } else {
-      // Planilha sem coluna Rota -> usa o seletor da aba
-      effectiveRota = selectedRota
-      matchedRotaRecord = normRotaMap.get(normalizeName(selectedRota))
-      if (!effectiveRota) {
-        isInvalidRota = true
-        statusReason =
-          'Planilha sem coluna Rota e nenhuma Aba da Planilha foi selecionada no seletor.'
-      }
-    }
+    // Rota é estritamente opcional (contrato não tem rota, quem sabe de rota é chamada).
+    // Se a planilha contiver valor de rota ou selectedRota, mantemos apenas como anotação informativa.
+    let effectiveRota = rawRota || selectedRota || ''
+    const matchedRotaRecord = effectiveRota
+      ? normRotaMap.get(normalizeName(effectiveRota))
+      : undefined
 
     const normNome = normalizeName(rawNome)
 
@@ -451,32 +407,6 @@ export async function parseContractSchoolsMatrix(
       return
     } else {
       seenInFile.set(normNome, rowIdx + 2)
-    }
-
-    // Se a rota for inválida, status bloqueante 'invalid_rota'
-    if (isInvalidRota) {
-      allRows.push({
-        index: rowIdx + 2,
-        rawNome,
-        rawTipo,
-        rawRota,
-        rawAlunos,
-        rawEndereco,
-        rawTelefone,
-        rawEmail,
-        nome: rawNome,
-        tipo: normalizeEscolaTipo(rawTipo),
-        assignedRota: effectiveRota,
-        resolvedRotaId: matchedRotaRecord?.id,
-        fieldChanges: [],
-        linkedToCurrentContract: false,
-        linkedToOtherContract: false,
-        presentColumns,
-        status: 'invalid_rota',
-        statusReason,
-        warnings,
-      })
-      return
     }
 
     // 3. Normalização de campos
@@ -570,7 +500,8 @@ export async function parseContractSchoolsMatrix(
       if (isLinkedToCurrent) {
         linkedToCurrentContract = true
         status = 'update_current_link'
-        statusReason = `Já vinculada a este contrato. Os dados cadastrais da escola e a aba da planilha no vínculo serão atualizados para "${effectiveRota}".`
+        statusReason =
+          'Já vinculada a este contrato. Os dados cadastrais da escola serão atualizados.'
       } else {
         // B) Checar se está vinculada a OUTRO contrato
         const otherLink = schoolContractMap.get(existingMaster.id)
@@ -583,13 +514,14 @@ export async function parseContractSchoolsMatrix(
         } else {
           // C) Existe no mestre mas está livre (sem contrato ou vinculando agora)
           status = 'update_and_link'
-          statusReason = `Escola encontrada no cadastro mestre global. Os dados serão atualizados e a escola será vinculada a este contrato com a rota "${effectiveRota || 'Sem Rota'}".`
+          statusReason =
+            'Escola encontrada no cadastro mestre global. Os dados cadastrais serão atualizados e a escola será vinculada a este contrato.'
         }
       }
     } else {
       // Escola não existe no mestre global
       status = 'create_and_link'
-      statusReason = `Escola nova. Será criada no cadastro mestre global e vinculada a este contrato com a rota "${effectiveRota || 'Sem Rota'}".`
+      statusReason = 'Escola nova. Será cadastrada no mestre global e vinculada a este contrato.'
     }
 
     allRows.push({
@@ -628,7 +560,7 @@ export async function parseContractSchoolsMatrix(
   const updateCurrentLinkRows = allRows.filter((r) => r.status === 'update_current_link')
   const conflictOtherContractRows = allRows.filter((r) => r.status === 'conflict_other_contract')
   const duplicateFileRows = allRows.filter((r) => r.status === 'duplicate_file')
-  const errorRows = allRows.filter((r) => r.status === 'error' || r.status === 'invalid_rota')
+  const errorRows = allRows.filter((r) => r.status === 'error')
 
   // Linhas processáveis (que serão efetivamente gravadas / vinculadas)
   const processableRows = allRows.filter(
