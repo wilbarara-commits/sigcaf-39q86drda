@@ -629,12 +629,11 @@ export default function Schools() {
                   <TableHead className="w-[80px] text-right font-semibold text-foreground">
                     Alunos
                   </TableHead>
-                  <TableHead className="w-[130px] font-semibold text-foreground">
-                    Telefone
+                  <TableHead className="w-[160px] font-semibold text-foreground">
+                    Telefone / Contato
                   </TableHead>
                   <TableHead className="w-[170px] font-semibold text-foreground">E-mail</TableHead>
-                  <TableHead className="w-[140px] font-semibold text-foreground">Contato</TableHead>
-                  <TableHead className="min-w-[220px] font-semibold text-foreground">
+                  <TableHead className="min-w-[240px] font-semibold text-foreground">
                     Endereço & Bairro
                   </TableHead>
                   <TableHead className="w-[95px] text-right font-semibold text-foreground">
@@ -730,16 +729,30 @@ export default function Schools() {
                         )}
                       </TableCell>
 
-                      {/* 4. Telefone */}
+                      {/* 4. Telefone / Contato */}
                       <TableCell className="align-middle text-xs">
-                        {school.contact ? (
-                          <span className="flex items-center gap-1 text-foreground/90 whitespace-nowrap font-mono text-[11px]">
-                            <Phone className="h-3 w-3 text-muted-foreground shrink-0" />
-                            {school.contact}
-                          </span>
-                        ) : (
-                          <span className="text-muted-foreground/50 italic">—</span>
-                        )}
+                        <div className="flex items-start gap-1.5 text-foreground/90">
+                          <Phone className="h-3 w-3 text-muted-foreground shrink-0 mt-0.5" />
+                          <div className="space-y-0.5 min-w-0">
+                            <div>
+                              {school.contact?.trim() ? (
+                                <span className="font-mono text-[11px] text-foreground/90 whitespace-nowrap">
+                                  {school.contact.trim()}
+                                </span>
+                              ) : (
+                                <span className="text-muted-foreground/50 italic">—</span>
+                              )}
+                            </div>
+                            {school.contatoResponsavel?.trim() && (
+                              <div
+                                className="text-xs text-muted-foreground truncate max-w-[150px]"
+                                title={school.contatoResponsavel.trim()}
+                              >
+                                {school.contatoResponsavel.trim()}
+                              </div>
+                            )}
+                          </div>
+                        </div>
                       </TableCell>
 
                       {/* 5. E-mail */}
@@ -757,31 +770,47 @@ export default function Schools() {
                         )}
                       </TableCell>
 
-                      {/* 6. Contato / Responsável */}
+                      {/* 6. Endereço & Bairro */}
                       <TableCell className="align-middle text-xs">
-                        {school.contatoResponsavel ? (
-                          <span
-                            className="text-foreground/90 block truncate max-w-[135px]"
-                            title={school.contatoResponsavel}
-                          >
-                            {school.contatoResponsavel}
-                          </span>
-                        ) : (
-                          <span className="text-muted-foreground/50 italic">—</span>
-                        )}
-                      </TableCell>
-
-                      {/* 7. Endereço + Bairro */}
-                      <TableCell className="align-middle text-xs">
-                        {fullAddressDisplay ? (
-                          <div
-                            className="flex items-start gap-1 text-muted-foreground truncate max-w-[260px]"
-                            title={fullAddressDisplay}
-                          >
-                            <MapPin className="h-3 w-3 text-muted-foreground shrink-0 mt-0.5" />
-                            <span className="truncate text-foreground/90">
-                              {fullAddressDisplay}
-                            </span>
+                        {school.address?.trim() || school.bairro?.trim() || school.cep?.trim() ? (
+                          <div className="flex items-start gap-1.5 text-muted-foreground">
+                            <MapPin className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" />
+                            <div className="space-y-0.5 min-w-0 flex-1">
+                              {/* Linha 1: logradouro e número com destaque font-medium */}
+                              <div
+                                className="font-medium text-foreground truncate max-w-[280px]"
+                                title={school.address?.trim() || ''}
+                              >
+                                {school.address?.trim() || (
+                                  <span className="text-muted-foreground/50 italic font-normal">
+                                    Endereço não informado
+                                  </span>
+                                )}
+                              </div>
+                              {/* Linha 2: Bairro e CEP empilhados logo abaixo */}
+                              {school.bairro?.trim() || school.cep?.trim() ? (
+                                <div
+                                  className="text-xs text-muted-foreground truncate max-w-[280px]"
+                                  title={[
+                                    school.bairro?.trim()
+                                      ? `Bairro: ${school.bairro.trim()}`
+                                      : null,
+                                    school.cep?.trim() ? `CEP: ${school.cep.trim()}` : null,
+                                  ]
+                                    .filter(Boolean)
+                                    .join(' — ')}
+                                >
+                                  {[
+                                    school.bairro?.trim()
+                                      ? `Bairro: ${school.bairro.trim()}`
+                                      : null,
+                                    school.cep?.trim() ? `CEP: ${school.cep.trim()}` : null,
+                                  ]
+                                    .filter(Boolean)
+                                    .join(' — ')}
+                                </div>
+                              ) : null}
+                            </div>
                           </div>
                         ) : (
                           <span className="text-muted-foreground/50 italic">—</span>
@@ -834,7 +863,7 @@ export default function Schools() {
 
                 {filteredSchools.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={10} className="py-12 text-center text-muted-foreground">
+                    <TableCell colSpan={9} className="py-12 text-center text-muted-foreground">
                       <div className="space-y-2">
                         <p className="text-sm">
                           {hasActiveFilters
