@@ -158,17 +158,14 @@ export default function Reports() {
         const saldoRestante = Math.max(0, valorPactuado - totalEntregue)
         const percentExecucao = valorPactuado > 0 ? (totalEntregue / valorPactuado) * 100 : 0
 
-        const escolaNomes =
-          c.escolas.length > 0
-            ? c.escolas.map((e) => e.escolaNome).join(', ')
-            : 'Nenhuma escola vinculada'
+        const totalEscolas = c.escolas.length
 
         return {
           id: c.id,
           numero: c.numero,
           tipo: c.tipo || 'PNAE',
           escolaId: c.escolas[0]?.escolaId || '',
-          escolaNome: escolaNomes,
+          totalEscolas,
           status: c.status,
           valorPactuado,
           totalEntregue,
@@ -184,6 +181,7 @@ export default function Reports() {
     const entregue = faturamentoData.reduce((acc, row) => acc + row.totalEntregue, 0)
     const saldo = faturamentoData.reduce((acc, row) => acc + row.saldoRestante, 0)
     const mediaExecucao = pactuado > 0 ? (entregue / pactuado) * 100 : 0
+    const totalEscolas = faturamentoData.reduce((acc, row) => acc + row.totalEscolas, 0)
 
     return {
       pactuado,
@@ -191,6 +189,7 @@ export default function Reports() {
       saldo,
       mediaExecucao: Math.min(100, Math.round(mediaExecucao * 10) / 10),
       count: faturamentoData.length,
+      totalEscolas,
     }
   }, [faturamentoData])
 
@@ -380,7 +379,7 @@ export default function Reports() {
         const columns: TableExportColumn[] = [
           { header: 'Nº Contrato', key: 'numero', align: 'left', width: 14 },
           { header: 'Programa', key: 'tipo', align: 'center', width: 12 },
-          { header: 'Instituição / Escola', key: 'escolaNome', align: 'left', width: 30 },
+          { header: 'Total de Escolas', key: 'totalEscolas', align: 'right', width: 16 },
           { header: 'Status', key: 'status', align: 'center', width: 12 },
           { header: 'Valor Pactuado (R$)', key: 'valorPactuadoStr', align: 'right', width: 18 },
           { header: 'Total Entregue (R$)', key: 'totalEntregueStr', align: 'right', width: 18 },
@@ -391,7 +390,7 @@ export default function Reports() {
         const rows = faturamentoData.map((d) => ({
           numero: d.numero,
           tipo: d.tipo,
-          escolaNome: d.escolaNome,
+          totalEscolas: d.totalEscolas,
           status: d.status,
           valorPactuadoStr: formatCurrencyBRL(d.valorPactuado),
           totalEntregueStr: formatCurrencyBRL(d.totalEntregue),
@@ -402,8 +401,8 @@ export default function Reports() {
         const footerRows = [
           {
             numero: 'TOTAL CONSOLIDADO',
-            tipo: '',
-            escolaNome: `${faturamentoTotals.count} Contratos`,
+            tipo: `${faturamentoTotals.count} Contratos`,
+            totalEscolas: faturamentoTotals.totalEscolas,
             status: '',
             valorPactuadoStr: formatCurrencyBRL(faturamentoTotals.pactuado),
             totalEntregueStr: formatCurrencyBRL(faturamentoTotals.entregue),
@@ -536,7 +535,7 @@ export default function Reports() {
         const columns: TableExportColumn[] = [
           { header: 'Nº Contrato', key: 'numero', align: 'left' },
           { header: 'Programa', key: 'tipo', align: 'center' },
-          { header: 'Instituição / Escola', key: 'escolaNome', align: 'left' },
+          { header: 'Total de Escolas', key: 'totalEscolas', align: 'right' },
           { header: 'Status', key: 'status', align: 'center' },
           { header: 'Pactuado', key: 'valorPactuadoStr', align: 'right' },
           { header: 'Entregue', key: 'totalEntregueStr', align: 'right' },
@@ -547,7 +546,7 @@ export default function Reports() {
         const rows = faturamentoData.map((d) => ({
           numero: d.numero,
           tipo: d.tipo,
-          escolaNome: d.escolaNome,
+          totalEscolas: d.totalEscolas,
           status: d.status,
           valorPactuadoStr: formatCurrencyBRL(d.valorPactuado),
           totalEntregueStr: formatCurrencyBRL(d.totalEntregue),
@@ -558,8 +557,8 @@ export default function Reports() {
         const footerRows = [
           {
             numero: 'TOTAL CONSOLIDADO',
-            tipo: '',
-            escolaNome: `${faturamentoTotals.count} Contratos`,
+            tipo: `${faturamentoTotals.count} Contratos`,
+            totalEscolas: faturamentoTotals.totalEscolas,
             status: '',
             valorPactuadoStr: formatCurrencyBRL(faturamentoTotals.pactuado),
             totalEntregueStr: formatCurrencyBRL(faturamentoTotals.entregue),
@@ -977,7 +976,7 @@ export default function Reports() {
                     <TableRow className="bg-muted/40">
                       <TableHead>Contrato</TableHead>
                       <TableHead>Programa</TableHead>
-                      <TableHead>Instituição / Escola</TableHead>
+                      <TableHead className="text-right">Total de Escolas</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead className="text-right">Valor Pactuado</TableHead>
                       <TableHead className="text-right">Total Entregue</TableHead>
@@ -1002,7 +1001,9 @@ export default function Reports() {
                               {row.tipo}
                             </Badge>
                           </TableCell>
-                          <TableCell className="font-medium">{row.escolaNome}</TableCell>
+                          <TableCell className="text-right font-medium">
+                            {row.totalEscolas}
+                          </TableCell>
                           <TableCell>
                             <Badge
                               variant={row.status === 'Ativo' ? 'default' : 'secondary'}
@@ -1041,7 +1042,11 @@ export default function Reports() {
                   {faturamentoData.length > 0 && (
                     <TableFooter className="bg-muted/70 font-semibold">
                       <TableRow>
-                        <TableCell colSpan={4}>TOTAL GERAL CONSOLIDADO</TableCell>
+                        <TableCell colSpan={2}>TOTAL GERAL CONSOLIDADO</TableCell>
+                        <TableCell className="text-right font-bold">
+                          {faturamentoTotals.totalEscolas}
+                        </TableCell>
+                        <TableCell></TableCell>
                         <TableCell className="text-right">
                           {formatCurrencyBRL(faturamentoTotals.pactuado)}
                         </TableCell>

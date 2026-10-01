@@ -267,8 +267,8 @@ const MODULES: ModuleSpec[] = [
     route: '/relatorios',
     goal: 'Geração e exportação avançada de demonstrativos para fechamento mensal e prestação de contas.',
     details: [
-      'Demonstrativos por contrato, entregas por período e produtos faturados.',
-      'Exportação Excel (.xlsx) e PDF timbrado com jsPDF.',
+      'Demonstrativos por contrato (com coluna de Total de Escolas vinculadas, valores pactuados, faturados, saldo e % de execução), entregas por período e produtos faturados.',
+      'Exportação Excel (.xlsx) e PDF timbrado com jsPDF refletindo a contagem de escolas por contrato.',
     ],
   },
   {
