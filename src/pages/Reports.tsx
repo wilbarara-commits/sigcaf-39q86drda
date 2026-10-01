@@ -54,7 +54,7 @@ import { getMonthlyClosingStatus } from '@/lib/monthlyClosing'
 import { BASE_PRODUCT_CATEGORIES, areCategoriesEqual } from '@/lib/productCsvImporter'
 
 export default function Reports() {
-  const { contracts, orders, schools, products, isLoading, refreshData } = useApp()
+  const { contracts, orders, schools, products, chamadas, isLoading, refreshData } = useApp()
 
   const availableCategories = useMemo(() => {
     const set = new Map<string, string>()
@@ -83,6 +83,10 @@ export default function Reports() {
   // Report 1: Faturamento por Contrato specific filters
   const [filterPrograma, setFilterPrograma] = useState<string>('todos')
   const [filterStatusContrato, setFilterStatusContrato] = useState<string>('todos')
+  const [filterChamada, setFilterChamada] = useState<string>('todas')
+  const [modoExibicaoChamada, setModoExibicaoChamada] = useState<'todas' | 'somente_totais'>(
+    'todas',
+  )
   const [searchContrato, setSearchContrato] = useState<string>('')
 
   // Report 2: Entregas por Período specific filters
@@ -121,6 +125,25 @@ export default function Reports() {
   /* =========================================================================
    * 1. REPORT: FATURAMENTO POR CONTRATO (Entregado x Saldo x Execução)
    * ========================================================================= */
+  // Lista de chamadas únicas disponíveis nos contratos para o select de filtro
+  const availableChamadas = useMemo(() => {
+    const map = new Map<string, { id: string; label: string }>()
+    // Registra todas as chamadas conhecidas
+    chamadas.forEach((ch) => {
+      map.set(ch.id, { id: ch.id, label: ch.chamada || ch.id })
+    })
+    // Também extrai de contratos caso haja alguma chamada sem objeto correspondente
+    contracts.forEach((c) => {
+      if (c.chamada_id && !map.has(c.chamada_id)) {
+        map.set(c.chamada_id, {
+          id: c.chamada_id,
+          label: c.chamadaNumero || c.numero_chamada || c.chamada_id,
+        })
+      }
+    })
+    return Array.from(map.values()).sort((a, b) => a.label.localeCompare(b.label, 'pt-BR'))
+  }, [chamadas, contracts])
+
   const faturamentoData = useMemo(() => {
     return contracts
       .filter((c) => {
@@ -132,12 +155,25 @@ export default function Reports() {
         if (filterStatusContrato !== 'todos' && c.status !== filterStatusContrato) {
           return false
         }
+        // Filter chamada
+        if (filterChamada !== 'todas') {
+          const matchId = c.chamada_id === filterChamada
+          const chObj = chamadas.find((ch) => ch.id === filterChamada)
+          const matchLabel =
+            chObj && (c.chamadaNumero === chObj.chamada || c.numero_chamada === chObj.chamada)
+          if (!matchId && !matchLabel) {
+            return false
+          }
+        }
         // Search text
         if (searchContrato.trim()) {
           const q = searchContrato.toLowerCase()
           const matchNum = c.numero.toLowerCase().includes(q)
           const matchSchool = c.escolas.some((e) => (e.escolaNome || '').toLowerCase().includes(q))
-          if (!matchNum && !matchSchool) return false
+          const chObj = chamadas.find((ch) => ch.id === c.chamada_id)
+          const rotuloChamada = chObj?.chamada || c.chamadaNumero || c.numero_chamada || ''
+          const matchChamada = rotuloChamada.toLowerCase().includes(q)
+          if (!matchNum && !matchSchool && !matchChamada) return false
         }
         return true
       })
@@ -160,10 +196,19 @@ export default function Reports() {
 
         const totalEscolas = c.escolas.length
 
+        // Resolver rótulo da chamada vinculada
+        const chObj = chamadas.find((ch) => ch.id === c.chamada_id)
+        const chamadaIdentificador = chObj?.chamada || c.chamadaNumero || c.numero_chamada || '—'
+        const chamadaKey =
+          c.chamada_id || (chamadaIdentificador !== '—' ? chamadaIdentificador : '__sem_chamada__')
+
         return {
           id: c.id,
           numero: c.numero,
           tipo: c.tipo || 'PNAE',
+          chamadaId: c.chamada_id || '',
+          chamadaKey,
+          chamadaNumero: chamadaIdentificador,
           escolaId: c.escolas[0]?.escolaId || '',
           totalEscolas,
           status: c.status,
@@ -174,7 +219,62 @@ export default function Reports() {
           pedidosEntreguesCount: schoolOrders.length,
         }
       })
-  }, [contracts, orders, filterPrograma, filterStatusContrato, searchContrato, startDate, endDate])
+  }, [
+    contracts,
+    orders,
+    chamadas,
+    filterPrograma,
+    filterStatusContrato,
+    filterChamada,
+    searchContrato,
+    startDate,
+    endDate,
+  ])
+
+  // Totalizadores por Chamada
+  const faturamentoChamadaTotals = useMemo(() => {
+    const map = new Map<
+      string,
+      {
+        chamadaKey: string
+        chamadaNumero: string
+        contratosCount: number
+        totalEscolas: number
+        valorPactuado: number
+        totalEntregue: number
+        saldoRestante: number
+        percentExecucao: number
+      }
+    >()
+
+    for (const row of faturamentoData) {
+      const key = row.chamadaKey
+      const existing = map.get(key) || {
+        chamadaKey: key,
+        chamadaNumero: row.chamadaNumero,
+        contratosCount: 0,
+        totalEscolas: 0,
+        valorPactuado: 0,
+        totalEntregue: 0,
+        saldoRestante: 0,
+        percentExecucao: 0,
+      }
+      existing.contratosCount += 1
+      existing.totalEscolas += row.totalEscolas
+      existing.valorPactuado += row.valorPactuado
+      existing.totalEntregue += row.totalEntregue
+      existing.saldoRestante += row.saldoRestante
+      map.set(key, existing)
+    }
+
+    return Array.from(map.values()).map((tot) => {
+      const pct = tot.valorPactuado > 0 ? (tot.totalEntregue / tot.valorPactuado) * 100 : 0
+      return {
+        ...tot,
+        percentExecucao: Math.min(100, Math.round(pct * 10) / 10),
+      }
+    })
+  }, [faturamentoData])
 
   const faturamentoTotals = useMemo(() => {
     const pactuado = faturamentoData.reduce((acc, row) => acc + row.valorPactuado, 0)
@@ -348,9 +448,18 @@ export default function Reports() {
     }
 
     if (activeTab === 'faturamento') {
+      if (filterChamada !== 'todas') {
+        const ch = availableChamadas.find((c) => c.id === filterChamada)
+        list.push({ label: 'Chamada', value: ch?.label || filterChamada })
+      }
       if (filterPrograma !== 'todos') list.push({ label: 'Programa', value: filterPrograma })
       if (filterStatusContrato !== 'todos')
         list.push({ label: 'Status do Contrato', value: filterStatusContrato })
+      if (modoExibicaoChamada === 'somente_totais') {
+        list.push({ label: 'Modo de Exibição', value: 'Somente totais de Chamada' })
+      } else {
+        list.push({ label: 'Modo de Exibição', value: 'Todas as linhas' })
+      }
       if (searchContrato.trim())
         list.push({ label: 'Termo de Busca', value: searchContrato.trim() })
     } else if (activeTab === 'entregas') {
@@ -377,30 +486,64 @@ export default function Reports() {
 
       if (activeTab === 'faturamento') {
         const columns: TableExportColumn[] = [
-          { header: 'Nº Contrato', key: 'numero', align: 'left', width: 14 },
+          { header: 'Nº Contrato', key: 'numero', align: 'left', width: 28 },
+          { header: 'Chamada', key: 'chamadaNumero', align: 'center', width: 14 },
           { header: 'Programa', key: 'tipo', align: 'center', width: 12 },
           { header: 'Total de Escolas', key: 'totalEscolas', align: 'right', width: 16 },
           { header: 'Status', key: 'status', align: 'center', width: 12 },
-          { header: 'Valor Pactuado (R$)', key: 'valorPactuadoStr', align: 'right', width: 18 },
-          { header: 'Total Entregue (R$)', key: 'totalEntregueStr', align: 'right', width: 18 },
-          { header: 'Saldo Restante (R$)', key: 'saldoRestanteStr', align: 'right', width: 18 },
-          { header: '% Execução', key: 'percentExecucaoStr', align: 'right', width: 12 },
+          { header: 'Valor Pactuado (R$)', key: 'valorPactuadoStr', align: 'right', width: 20 },
+          { header: 'Total Entregue (R$)', key: 'totalEntregueStr', align: 'right', width: 20 },
+          { header: 'Saldo Restante (R$)', key: 'saldoRestanteStr', align: 'right', width: 20 },
+          { header: '% Execução', key: 'percentExecucaoStr', align: 'right', width: 14 },
         ]
 
-        const rows = faturamentoData.map((d) => ({
-          numero: d.numero,
-          tipo: d.tipo,
-          totalEscolas: d.totalEscolas,
-          status: d.status,
-          valorPactuadoStr: formatCurrencyBRL(d.valorPactuado),
-          totalEntregueStr: formatCurrencyBRL(d.totalEntregue),
-          saldoRestanteStr: formatCurrencyBRL(d.saldoRestante),
-          percentExecucaoStr: `${d.percentExecucao.toFixed(1)}%`,
-        }))
+        let rows: any[] = []
+
+        if (modoExibicaoChamada === 'somente_totais') {
+          rows = faturamentoChamadaTotals.map((tot) => ({
+            numero: `TOTAL Chamada ${tot.chamadaNumero}: ${formatCurrencyBRL(tot.valorPactuado)}`,
+            chamadaNumero: tot.chamadaNumero,
+            tipo: '—',
+            totalEscolas: tot.totalEscolas,
+            status: `${tot.contratosCount} contrato(s)`,
+            valorPactuadoStr: formatCurrencyBRL(tot.valorPactuado),
+            totalEntregueStr: formatCurrencyBRL(tot.totalEntregue),
+            saldoRestanteStr: formatCurrencyBRL(tot.saldoRestante),
+            percentExecucaoStr: `${tot.percentExecucao.toFixed(1)}%`,
+          }))
+        } else {
+          // Todas as linhas: contratos individuais + linhas de total por chamada
+          const contractRows = faturamentoData.map((d) => ({
+            numero: d.numero,
+            chamadaNumero: d.chamadaNumero,
+            tipo: d.tipo,
+            totalEscolas: d.totalEscolas,
+            status: d.status,
+            valorPactuadoStr: formatCurrencyBRL(d.valorPactuado),
+            totalEntregueStr: formatCurrencyBRL(d.totalEntregue),
+            saldoRestanteStr: formatCurrencyBRL(d.saldoRestante),
+            percentExecucaoStr: `${d.percentExecucao.toFixed(1)}%`,
+          }))
+
+          const totalChamadaRows = faturamentoChamadaTotals.map((tot) => ({
+            numero: `TOTAL Chamada ${tot.chamadaNumero}: ${formatCurrencyBRL(tot.valorPactuado)}`,
+            chamadaNumero: tot.chamadaNumero,
+            tipo: '—',
+            totalEscolas: tot.totalEscolas,
+            status: `${tot.contratosCount} contrato(s)`,
+            valorPactuadoStr: formatCurrencyBRL(tot.valorPactuado),
+            totalEntregueStr: formatCurrencyBRL(tot.totalEntregue),
+            saldoRestanteStr: formatCurrencyBRL(tot.saldoRestante),
+            percentExecucaoStr: `${tot.percentExecucao.toFixed(1)}%`,
+          }))
+
+          rows = [...contractRows, ...totalChamadaRows]
+        }
 
         const footerRows = [
           {
             numero: 'TOTAL CONSOLIDADO',
+            chamadaNumero: '',
             tipo: `${faturamentoTotals.count} Contratos`,
             totalEscolas: faturamentoTotals.totalEscolas,
             status: '',
@@ -412,9 +555,10 @@ export default function Reports() {
         ]
 
         exportToExcel({
-          title: 'Relatório Contábil — Faturamento por Contrato (PNAE/PAA)',
-          subtitle: 'Resumo de valores pactuados, faturados e saldos remanescentes',
-          filename: `relatorio-faturamento-contratos-${nowStr}`,
+          title: 'Relatório Contábil — Faturamento por Contrato e Chamada',
+          subtitle:
+            'Resumo de valores pactuados, faturados e saldos remanescentes por contrato e chamada',
+          filename: `relatorio-faturamento-contratos-chamada-${nowStr}`,
           filters,
           columns,
           rows,
@@ -533,9 +677,10 @@ export default function Reports() {
 
       if (activeTab === 'faturamento') {
         const columns: TableExportColumn[] = [
-          { header: 'Nº Contrato', key: 'numero', align: 'left' },
+          { header: 'Contrato', key: 'numero', align: 'left' },
+          { header: 'Chamada', key: 'chamadaNumero', align: 'center' },
           { header: 'Programa', key: 'tipo', align: 'center' },
-          { header: 'Total de Escolas', key: 'totalEscolas', align: 'right' },
+          { header: 'Total Escolas', key: 'totalEscolas', align: 'right' },
           { header: 'Status', key: 'status', align: 'center' },
           { header: 'Pactuado', key: 'valorPactuadoStr', align: 'right' },
           { header: 'Entregue', key: 'totalEntregueStr', align: 'right' },
@@ -543,20 +688,52 @@ export default function Reports() {
           { header: '% Exec.', key: 'percentExecucaoStr', align: 'right' },
         ]
 
-        const rows = faturamentoData.map((d) => ({
-          numero: d.numero,
-          tipo: d.tipo,
-          totalEscolas: d.totalEscolas,
-          status: d.status,
-          valorPactuadoStr: formatCurrencyBRL(d.valorPactuado),
-          totalEntregueStr: formatCurrencyBRL(d.totalEntregue),
-          saldoRestanteStr: formatCurrencyBRL(d.saldoRestante),
-          percentExecucaoStr: `${d.percentExecucao.toFixed(1)}%`,
-        }))
+        let rows: any[] = []
+
+        if (modoExibicaoChamada === 'somente_totais') {
+          rows = faturamentoChamadaTotals.map((tot) => ({
+            numero: `TOTAL Chamada ${tot.chamadaNumero}: ${formatCurrencyBRL(tot.valorPactuado)}`,
+            chamadaNumero: tot.chamadaNumero,
+            tipo: '—',
+            totalEscolas: tot.totalEscolas,
+            status: `${tot.contratosCount} contrato(s)`,
+            valorPactuadoStr: formatCurrencyBRL(tot.valorPactuado),
+            totalEntregueStr: formatCurrencyBRL(tot.totalEntregue),
+            saldoRestanteStr: formatCurrencyBRL(tot.saldoRestante),
+            percentExecucaoStr: `${tot.percentExecucao.toFixed(1)}%`,
+          }))
+        } else {
+          const contractRows = faturamentoData.map((d) => ({
+            numero: d.numero,
+            chamadaNumero: d.chamadaNumero,
+            tipo: d.tipo,
+            totalEscolas: d.totalEscolas,
+            status: d.status,
+            valorPactuadoStr: formatCurrencyBRL(d.valorPactuado),
+            totalEntregueStr: formatCurrencyBRL(d.totalEntregue),
+            saldoRestanteStr: formatCurrencyBRL(d.saldoRestante),
+            percentExecucaoStr: `${d.percentExecucao.toFixed(1)}%`,
+          }))
+
+          const totalChamadaRows = faturamentoChamadaTotals.map((tot) => ({
+            numero: `TOTAL Chamada ${tot.chamadaNumero}: ${formatCurrencyBRL(tot.valorPactuado)}`,
+            chamadaNumero: tot.chamadaNumero,
+            tipo: '—',
+            totalEscolas: tot.totalEscolas,
+            status: `${tot.contratosCount} contrato(s)`,
+            valorPactuadoStr: formatCurrencyBRL(tot.valorPactuado),
+            totalEntregueStr: formatCurrencyBRL(tot.totalEntregue),
+            saldoRestanteStr: formatCurrencyBRL(tot.saldoRestante),
+            percentExecucaoStr: `${tot.percentExecucao.toFixed(1)}%`,
+          }))
+
+          rows = [...contractRows, ...totalChamadaRows]
+        }
 
         const footerRows = [
           {
             numero: 'TOTAL CONSOLIDADO',
+            chamadaNumero: '',
             tipo: `${faturamentoTotals.count} Contratos`,
             totalEscolas: faturamentoTotals.totalEscolas,
             status: '',
@@ -568,9 +745,10 @@ export default function Reports() {
         ]
 
         exportToPdf({
-          title: 'Relatório Contábil — Faturamento por Contrato',
-          subtitle: 'Acompanhamento de saldo e execução orçamentária PNAE / PAA',
-          filename: `relatorio-faturamento-contratos-${nowStr}`,
+          title: 'Relatório Contábil — Faturamento por Contrato e Chamada',
+          subtitle:
+            'Acompanhamento de saldo e execução orçamentária por contrato e chamada pública',
+          filename: `relatorio-faturamento-contratos-chamada-${nowStr}`,
           filters,
           columns,
           rows,
@@ -901,18 +1079,60 @@ export default function Reports() {
             <CardHeader className="pb-3">
               <CardTitle className="text-base flex items-center gap-2">
                 <Filter className="h-4 w-4 text-primary" />
-                Filtros do Relatório de Contratos
+                Filtros do Relatório de Contratos e Chamadas
               </CardTitle>
               <CardDescription>
-                Refine a lista por programa governamental, status do contrato ou nome da escola.
+                Refine por chamada pública, programa governamental, status do contrato, modo de
+                exibição ou busca textual.
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
                 <div>
-                  <Label className="text-xs">Programa Institucional</Label>
+                  <Label htmlFor="filtro-chamada" className="text-xs">
+                    Chamada
+                  </Label>
+                  <Select value={filterChamada} onValueChange={setFilterChamada}>
+                    <SelectTrigger id="filtro-chamada" className="mt-1 h-9 text-xs">
+                      <SelectValue placeholder="Todas as chamadas" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="todas">Todas as chamadas</SelectItem>
+                      {availableChamadas.map((ch) => (
+                        <SelectItem key={ch.id} value={ch.id}>
+                          Chamada {ch.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div>
+                  <Label htmlFor="filtro-exibicao" className="text-xs">
+                    Exibição de Linhas
+                  </Label>
+                  <Select
+                    value={modoExibicaoChamada}
+                    onValueChange={(val) =>
+                      setModoExibicaoChamada(val as 'todas' | 'somente_totais')
+                    }
+                  >
+                    <SelectTrigger id="filtro-exibicao" className="mt-1 h-9 text-xs">
+                      <SelectValue placeholder="Modo de exibição" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="todas">Todas as linhas</SelectItem>
+                      <SelectItem value="somente_totais">Somente totais de Chamada</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div>
+                  <Label htmlFor="filtro-programa" className="text-xs">
+                    Programa Institucional
+                  </Label>
                   <Select value={filterPrograma} onValueChange={setFilterPrograma}>
-                    <SelectTrigger className="mt-1 h-9 text-xs">
+                    <SelectTrigger id="filtro-programa" className="mt-1 h-9 text-xs">
                       <SelectValue placeholder="Selecione o programa" />
                     </SelectTrigger>
                     <SelectContent>
@@ -926,9 +1146,11 @@ export default function Reports() {
                 </div>
 
                 <div>
-                  <Label className="text-xs">Status do Contrato</Label>
+                  <Label htmlFor="filtro-status-contrato" className="text-xs">
+                    Status do Contrato
+                  </Label>
                   <Select value={filterStatusContrato} onValueChange={setFilterStatusContrato}>
-                    <SelectTrigger className="mt-1 h-9 text-xs">
+                    <SelectTrigger id="filtro-status-contrato" className="mt-1 h-9 text-xs">
                       <SelectValue placeholder="Selecione o status" />
                     </SelectTrigger>
                     <SelectContent>
@@ -941,12 +1163,15 @@ export default function Reports() {
                 </div>
 
                 <div>
-                  <Label className="text-xs">Buscar Contrato ou Escola</Label>
+                  <Label htmlFor="busca-contrato" className="text-xs">
+                    Buscar Contrato, Chamada ou Escola
+                  </Label>
                   <div className="relative mt-1">
                     <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                     <Input
+                      id="busca-contrato"
                       type="text"
-                      placeholder="Ex: CT-2026-01 ou Monteiro..."
+                      placeholder="Ex: C-2026-01, 01/2025..."
                       value={searchContrato}
                       onChange={(e) => setSearchContrato(e.target.value)}
                       className="pl-8 h-9 text-xs"
@@ -962,10 +1187,22 @@ export default function Reports() {
             <CardHeader className="pb-3">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                 <div>
-                  <CardTitle className="text-base">Tabela de Faturamento por Contrato</CardTitle>
+                  <CardTitle className="text-base">Faturamento por Contrato e Chamada</CardTitle>
                   <CardDescription>
-                    Exibindo {faturamentoData.length} contrato(s) com cálculo em tempo real.
+                    {modoExibicaoChamada === 'somente_totais'
+                      ? `Exibindo ${faturamentoChamadaTotals.length} chamada(s) (modo: somente totais de Chamada).`
+                      : `Exibindo ${faturamentoData.length} contrato(s) com linhas de totalização por chamada.`}
                   </CardDescription>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Badge variant="outline" className="text-xs">
+                    Modo:{' '}
+                    <span className="font-semibold ml-1">
+                      {modoExibicaoChamada === 'somente_totais'
+                        ? 'Somente totais de Chamada'
+                        : 'Todas as linhas'}
+                    </span>
+                  </Badge>
                 </div>
               </div>
             </CardHeader>
@@ -975,6 +1212,7 @@ export default function Reports() {
                   <TableHeader>
                     <TableRow className="bg-muted/40">
                       <TableHead>Contrato</TableHead>
+                      <TableHead>Chamada</TableHead>
                       <TableHead>Programa</TableHead>
                       <TableHead className="text-right">Total de Escolas</TableHead>
                       <TableHead>Status</TableHead>
@@ -987,76 +1225,148 @@ export default function Reports() {
                   <TableBody>
                     {faturamentoData.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={8} className="text-center py-10 text-muted-foreground">
+                        <TableCell colSpan={9} className="text-center py-10 text-muted-foreground">
                           <AlertCircle className="h-6 w-6 mx-auto mb-2 text-muted-foreground/60" />
                           Nenhum contrato encontrado para os filtros selecionados.
                         </TableCell>
                       </TableRow>
                     ) : (
-                      faturamentoData.map((row) => (
-                        <TableRow key={row.id}>
-                          <TableCell className="font-semibold text-primary">{row.numero}</TableCell>
-                          <TableCell>
-                            <Badge variant="outline" className="text-xs font-normal">
-                              {row.tipo}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-right font-medium">
-                            {row.totalEscolas}
-                          </TableCell>
-                          <TableCell>
-                            <Badge
-                              variant={row.status === 'Ativo' ? 'default' : 'secondary'}
-                              className={
-                                row.status === 'Ativo'
-                                  ? 'bg-primary'
-                                  : row.status === 'Encerrado'
-                                    ? 'bg-muted-foreground'
-                                    : 'bg-amber-600'
-                              }
-                            >
-                              {row.status}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-right font-medium">
-                            {formatCurrencyBRL(row.valorPactuado)}
-                          </TableCell>
-                          <TableCell className="text-right font-medium text-emerald-600 dark:text-emerald-400">
-                            {formatCurrencyBRL(row.totalEntregue)}
-                          </TableCell>
-                          <TableCell className="text-right font-medium text-amber-600 dark:text-amber-400">
-                            {formatCurrencyBRL(row.saldoRestante)}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <div className="flex items-center justify-end gap-2">
-                              <span className="text-xs font-semibold">
-                                {row.percentExecucao.toFixed(1)}%
-                              </span>
-                              <Progress value={row.percentExecucao} className="w-16 h-2" />
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      ))
+                      <>
+                        {/* Linhas de Contrato Individuais (omitidas se modo "somente_totais") */}
+                        {modoExibicaoChamada !== 'somente_totais' &&
+                          faturamentoData.map((row) => (
+                            <TableRow key={row.id}>
+                              <TableCell className="font-semibold text-primary">
+                                {row.numero}
+                              </TableCell>
+                              <TableCell>
+                                {row.chamadaNumero !== '—' ? (
+                                  <Badge
+                                    variant="outline"
+                                    className="font-medium text-xs border-primary/30 bg-primary/5 text-primary"
+                                  >
+                                    {row.chamadaNumero}
+                                  </Badge>
+                                ) : (
+                                  <span className="text-xs text-muted-foreground">—</span>
+                                )}
+                              </TableCell>
+                              <TableCell>
+                                <Badge variant="outline" className="text-xs font-normal">
+                                  {row.tipo}
+                                </Badge>
+                              </TableCell>
+                              <TableCell className="text-right font-medium">
+                                {row.totalEscolas}
+                              </TableCell>
+                              <TableCell>
+                                <Badge
+                                  variant={row.status === 'Ativo' ? 'default' : 'secondary'}
+                                  className={
+                                    row.status === 'Ativo'
+                                      ? 'bg-primary'
+                                      : row.status === 'Encerrado'
+                                        ? 'bg-muted-foreground'
+                                        : 'bg-amber-600'
+                                  }
+                                >
+                                  {row.status}
+                                </Badge>
+                              </TableCell>
+                              <TableCell className="text-right font-medium">
+                                {formatCurrencyBRL(row.valorPactuado)}
+                              </TableCell>
+                              <TableCell className="text-right font-medium text-emerald-600 dark:text-emerald-400">
+                                {formatCurrencyBRL(row.totalEntregue)}
+                              </TableCell>
+                              <TableCell className="text-right font-medium text-amber-600 dark:text-amber-400">
+                                {formatCurrencyBRL(row.saldoRestante)}
+                              </TableCell>
+                              <TableCell className="text-right">
+                                <div className="flex items-center justify-end gap-2">
+                                  <span className="text-xs font-semibold">
+                                    {row.percentExecucao.toFixed(1)}%
+                                  </span>
+                                  <Progress value={row.percentExecucao} className="w-16 h-2" />
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+
+                        {/* Linhas de TOTAL POR CHAMADA (destacadas visualmente) */}
+                        {faturamentoChamadaTotals.map((tot) => (
+                          <TableRow
+                            key={`total-chamada-${tot.chamadaKey}`}
+                            className="bg-primary/10 hover:bg-primary/15 font-semibold border-t-2 border-primary/20 dark:bg-primary/15 dark:hover:bg-primary/20"
+                          >
+                            <TableCell className="font-bold text-primary">
+                              <div className="flex flex-col">
+                                <span>TOTAL Chamada {tot.chamadaNumero}</span>
+                                <span className="text-[11px] font-normal text-muted-foreground">
+                                  Valor total da chamada na coluna Contrato:{' '}
+                                  {formatCurrencyBRL(tot.valorPactuado)}
+                                </span>
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <Badge className="bg-primary text-primary-foreground font-bold text-xs">
+                                {tot.chamadaNumero}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-xs text-muted-foreground italic font-normal">
+                              {tot.contratosCount} contrato(s)
+                            </TableCell>
+                            <TableCell className="text-right font-bold text-foreground">
+                              {tot.totalEscolas}
+                            </TableCell>
+                            <TableCell>
+                              <Badge
+                                variant="outline"
+                                className="border-primary/40 text-primary text-[11px] font-semibold"
+                              >
+                                Total Chamada
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-right font-bold text-foreground">
+                              {formatCurrencyBRL(tot.valorPactuado)}
+                            </TableCell>
+                            <TableCell className="text-right font-bold text-emerald-600 dark:text-emerald-400">
+                              {formatCurrencyBRL(tot.totalEntregue)}
+                            </TableCell>
+                            <TableCell className="text-right font-bold text-amber-600 dark:text-amber-400">
+                              {formatCurrencyBRL(tot.saldoRestante)}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <div className="flex items-center justify-end gap-2">
+                                <span className="text-xs font-bold text-primary">
+                                  {tot.percentExecucao.toFixed(1)}%
+                                </span>
+                                <Progress value={tot.percentExecucao} className="w-16 h-2" />
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </>
                     )}
                   </TableBody>
                   {faturamentoData.length > 0 && (
                     <TableFooter className="bg-muted/70 font-semibold">
                       <TableRow>
-                        <TableCell colSpan={2}>TOTAL GERAL CONSOLIDADO</TableCell>
+                        <TableCell colSpan={3}>TOTAL GERAL CONSOLIDADO</TableCell>
                         <TableCell className="text-right font-bold">
                           {faturamentoTotals.totalEscolas}
                         </TableCell>
                         <TableCell></TableCell>
-                        <TableCell className="text-right">
+                        <TableCell className="text-right font-bold">
                           {formatCurrencyBRL(faturamentoTotals.pactuado)}
                         </TableCell>
-                        <TableCell className="text-right text-emerald-600 dark:text-emerald-400">
+                        <TableCell className="text-right font-bold text-emerald-600 dark:text-emerald-400">
                           {formatCurrencyBRL(faturamentoTotals.entregue)}
                         </TableCell>
-                        <TableCell className="text-right text-amber-600 dark:text-amber-400">
+                        <TableCell className="text-right font-bold text-amber-600 dark:text-amber-400">
                           {formatCurrencyBRL(faturamentoTotals.saldo)}
                         </TableCell>
-                        <TableCell className="text-right">
+                        <TableCell className="text-right font-bold">
                           {faturamentoTotals.mediaExecucao.toFixed(1)}%
                         </TableCell>
                       </TableRow>

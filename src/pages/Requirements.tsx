@@ -267,8 +267,11 @@ const MODULES: ModuleSpec[] = [
     route: '/relatorios',
     goal: 'Geração e exportação avançada de demonstrativos para fechamento mensal e prestação de contas.',
     details: [
-      'Demonstrativos por contrato (com coluna de Total de Escolas vinculadas, valores pactuados, faturados, saldo e % de execução), entregas por período e produtos faturados.',
-      'Exportação Excel (.xlsx) e PDF timbrado com jsPDF refletindo a contagem de escolas por contrato.',
+      'Demonstrativos por contrato e chamada (com coluna "Chamada" vinculada, coluna "Total de Escolas" vinculadas, valores pactuados, faturados, saldo e % de execução), entregas por período e produtos faturados.',
+      'Linhas de totalização por Chamada: após os contratos da respectiva chamada, exibição do valor TOTAL na coluna de Contrato, somatório de total de escolas, valores pactuados, faturados e saldos remanescentes com destaque visual.',
+      'Alternador de modo de exibição de linhas: opção entre "Todas as linhas" (contratos individuais + totais de chamada) e "Somente totais de Chamada" (visão executiva consolidada por chamada pública).',
+      'Filtro dedicado por Chamada: seleção de chamadas existentes ou "Todas as chamadas" combinada aos filtros de período, programa e status, com atualização reativa do relatório.',
+      'Exportação Excel (.xlsx) e PDF timbrado com jsPDF refletindo a coluna Chamada, contagem de escolas e linhas de total por chamada conforme o modo de exibição selecionado.',
     ],
   },
   {
