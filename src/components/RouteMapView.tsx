@@ -732,14 +732,15 @@ export function RouteMapView({
             />
           )}
 
-          {/* 2. Trecho em VERMELHO: do caminhão até a próxima parada */}
+          {/* 2. Trecho em VERMELHO: do caminhão até a próxima parada (OSRM e fallback em linha reta) */}
           {isEmRota && trechoEmRotaAtivoVermelho.length > 1 && (
             <Polyline
               positions={trechoEmRotaAtivoVermelho}
               pathOptions={{
-                color: '#dc2626', // red-600
-                weight: 5,
+                color: '#dc2626',
+                weight: 6,
                 opacity: 0.95,
+                dashArray: undefined,
               }}
             />
           )}
