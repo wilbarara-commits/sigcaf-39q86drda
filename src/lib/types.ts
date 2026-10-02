@@ -67,15 +67,42 @@ export interface CicloContratoRecord {
   updated?: string
 }
 
+export type DiaSemana = 'domingo' | 'segunda' | 'terca' | 'quarta' | 'quinta' | 'sexta' | 'sabado'
+
+export const DIAS_SEMANA_ORDEM: readonly DiaSemana[] = [
+  'domingo',
+  'segunda',
+  'terca',
+  'quarta',
+  'quinta',
+  'sexta',
+  'sabado',
+] as const
+
+export const DIAS_SEMANA_LABELS: Record<DiaSemana, string> = {
+  domingo: 'Domingo',
+  segunda: 'Segunda-feira',
+  terca: 'Terça-feira',
+  quarta: 'Quarta-feira',
+  quinta: 'Quinta-feira',
+  sexta: 'Sexta-feira',
+  sabado: 'Sábado',
+}
+
 export interface CicloRecord {
   id: string
   nome: string
+  chamada_id?: string
   data_inicio: string
   data_fim: string
+  data_despacho?: string
   status?: CicloStatus
   snapshot?: any
   motivo_cancelamento?: string
   data_cancelamento?: string
+  expand?: {
+    chamada_id?: ChamadaRecord
+  }
   created?: string
   updated?: string
 }
@@ -155,6 +182,9 @@ export interface ChamadaRecord {
   programa?: string
   modalidade?: ChamadaModalidade
   dependencia_administrativa?: DependenciaAdministrativa | string
+  dia_inicio_ciclo?: DiaSemana | string
+  dia_despacho_ciclo?: DiaSemana | string
+  dia_fim_ciclo?: DiaSemana | string
   status: ChamadaStatus
   created?: string
   updated?: string

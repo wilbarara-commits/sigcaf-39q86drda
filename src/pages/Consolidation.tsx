@@ -87,7 +87,7 @@ function formatNumber(value: number): string {
 }
 
 export default function Consolidation() {
-  const { products, schools, orders, ciclos, activeCiclo, contractItems } = useApp()
+  const { products, schools, orders, chamadas, ciclos, activeCiclo, contractItems } = useApp()
 
   const [selectedCicloId, setSelectedCicloId] = useState<string>(activeCiclo?.id || 'todos')
   const [tabAtiva, setTabAtiva] = useState<'produto' | 'escola'>('produto')
@@ -907,11 +907,15 @@ export default function Consolidation() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="todos">Todos os Ciclos</SelectItem>
-                    {ciclos.map((c) => (
-                      <SelectItem key={c.id} value={c.id}>
-                        {c.nome}
-                      </SelectItem>
-                    ))}
+                    {ciclos.map((c) => {
+                      const ch =
+                        c.expand?.chamada_id || chamadas.find((item) => item.id === c.chamada_id)
+                      return (
+                        <SelectItem key={c.id} value={c.id}>
+                          {c.nome} {ch ? `[${ch.chamada}]` : ''}
+                        </SelectItem>
+                      )
+                    })}
                   </SelectContent>
                 </Select>
               </div>

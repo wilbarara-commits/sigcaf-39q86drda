@@ -12,25 +12,48 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
-import { AlertTriangle, CalendarPlus, Loader2 } from 'lucide-react'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import { AlertTriangle, CalendarPlus, Loader2, Layers, Info } from 'lucide-react'
 import {
   sugerirProximoCiclo,
   isCicloNaoTerminal,
   derivarStatusCiclo,
   formatFaseAmigavel,
   isCicloNumeroAnoDuplicado,
+  calcularDatasCicloPorSemana,
+  validarAjusteManualDatasCiclo,
+  DIAS_SEMANA_LABELS,
+  normalizarDiaSemanaNum,
 } from '@/lib/cicloUtils'
+import type { DiaSemana } from '@/lib/types'
 import { toast } from 'sonner'
 
 interface AbrirCicloDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
+  chamadaIdInicial?: string
   onSuccess?: () => void
 }
 
-export function AbrirCicloDialog({ open, onOpenChange, onSuccess }: AbrirCicloDialogProps) {
-  const { ciclos, cicloContratos, createCiclo } = useApp()
+export function AbrirCicloDialog({
+  open,
+  onOpenChange,
+  chamadaIdInicial,
+  onSuccess,
+}: AbrirCicloDialogProps) {
+  const { ciclos, cicloContratos, chamadas, contracts, createCiclo } = useApp()
 
+  const chamadasAtivas = useMemo(() => {
+    return chamadas.filter((ch) => ch.status === 'Ativo')
+  }, [chamadas])
+
+  const [selectedChamadaId, setSelectedChamadaId] = useState<string>('')
   const [numeroCiclo, setNumeroCiclo] = useState<string>('')
   const [anoCiclo, setAnoCiclo] = useState<string>('')
   const [dataInicio, setDataInicio] = useState('')
@@ -39,54 +62,119 @@ export function AbrirCicloDialog({ open, onOpenChange, onSuccess }: AbrirCicloDi
   const [step, setStep] = useState<'form' | 'confirm'>('form')
   const [isSubmitting, setIsSubmitting] = useState(false)
 
-  // Ciclo não-terminal existente mais recente (se houver)
-  const cicloNaoTerminalExistente = ciclos.find((c) => {
-    const status = derivarStatusCiclo(c.id, cicloContratos, c.status)
-    return isCicloNaoTerminal(status)
-  })
+  // Armazena as referências originais calculadas para a semana atual selecionada (para ancoragem do ajuste manual)
+  const [semanaCalculadaRef, setSemanaCalculadaRef] = useState<{
+    inicioRef: string
+    fimRef: string
+  } | null>(null)
 
-  // Ao abrir o modal, pré-preencher com base na sugestão do próximo ciclo
+  // Chamada atualmente selecionada
+  const selectedChamada = useMemo(() => {
+    return chamadas.find((ch) => ch.id === selectedChamadaId) || null
+  }, [chamadas, selectedChamadaId])
+
+  // Regra de dias da chamada selecionada
+  const regraDiasChamada = useMemo(() => {
+    return {
+      diaInicio: (selectedChamada?.dia_inicio_ciclo as DiaSemana) || 'quarta',
+      diaDespacho: (selectedChamada?.dia_despacho_ciclo as DiaSemana) || 'segunda',
+      diaFim: (selectedChamada?.dia_fim_ciclo as DiaSemana) || 'terca',
+    }
+  }, [selectedChamada])
+
+  // Contratos da chamada selecionada
+  const contratosDaChamada = useMemo(() => {
+    if (!selectedChamadaId) return []
+    return contracts.filter((c) => c.chamada_id === selectedChamadaId && c.status === 'Ativo')
+  }, [contracts, selectedChamadaId])
+
+  // Ciclo não-terminal existente mais recente DA MESMA CHAMADA (regra de 1 ciclo ativo por chamada)
+  const cicloNaoTerminalExistenteNaChamada = useMemo(() => {
+    if (!selectedChamadaId) return null
+    return ciclos.find((c) => {
+      if (c.chamada_id !== selectedChamadaId) return false
+      const status = derivarStatusCiclo(c.id, cicloContratos, c.status)
+      return isCicloNaoTerminal(status)
+    })
+  }, [ciclos, selectedChamadaId, cicloContratos])
+
+  // Inicialização ao abrir o modal
   useEffect(() => {
     if (open) {
-      const info = sugerirProximoCiclo(ciclos, new Date())
-      setNumeroCiclo(String(info.numeroSemana))
-      setAnoCiclo(String(info.ano))
-      setDataInicio(info.dataInicioIso.split('T')[0])
-      setDataFim(info.dataFimIso.split('T')[0])
-      setDataDespacho(info.dataDespachoIso.split('T')[0])
+      // 1. Determinar chamada inicial
+      const targetChId =
+        chamadaIdInicial ||
+        (chamadasAtivas.length > 0 ? chamadasAtivas[0].id : chamadas[0]?.id || '')
+
+      setSelectedChamadaId(targetChId)
+
+      const targetCh = chamadas.find((c) => c.id === targetChId)
+      const regra = {
+        diaInicio: targetCh?.dia_inicio_ciclo || 'quarta',
+        diaDespacho: targetCh?.dia_despacho_ciclo || 'segunda',
+        diaFim: targetCh?.dia_fim_ciclo || 'terca',
+      }
+
+      // 2. Sugerir próximo ciclo com base nos ciclos existentes DESTA chamada
+      const info = sugerirProximoCiclo(ciclos, new Date(), targetChId, regra)
+      const semNum = info.numeroSemana
+      const anoNum = info.ano
+
+      setNumeroCiclo(String(semNum))
+      setAnoCiclo(String(anoNum))
+
+      const calc = calcularDatasCicloPorSemana(semNum, anoNum, regra)
+      const dIni = calc.dataInicioIso.split('T')[0]
+      const dFim = calc.dataFimIso.split('T')[0]
+      const dDesp = calc.dataDespachoIso.split('T')[0]
+
+      setDataInicio(dIni)
+      setDataFim(dFim)
+      setDataDespacho(dDesp)
+      setSemanaCalculadaRef({ inicioRef: dIni, fimRef: dFim })
       setStep('form')
     }
-  }, [open, ciclos])
+  }, [open, chamadaIdInicial, chamadas, chamadasAtivas, ciclos])
 
-  // Recalcular Fim (+6 dias = terça), Despacho (+5 dias = segunda) e ano coerente quando Início mudar
-  const handleDataInicioChange = (novoInicioStr: string) => {
-    setDataInicio(novoInicioStr)
-    if (!novoInicioStr) return
+  // Recalcular datas IMEDIATAMENTE quando o número da semana ou a chamada mudar
+  const handleRecalcularDatas = (novoNumSemanaStr: string, chId: string) => {
+    const numInt = parseInt(novoNumSemanaStr.trim(), 10)
+    const anoInt = parseInt(anoCiclo.trim() || String(new Date().getFullYear()), 10)
+    const ch = chamadas.find((c) => c.id === chId)
+    const regra = {
+      diaInicio: ch?.dia_inicio_ciclo || 'quarta',
+      diaDespacho: ch?.dia_despacho_ciclo || 'segunda',
+      diaFim: ch?.dia_fim_ciclo || 'terca',
+    }
 
-    // Normalizar a data informada (YYYY-MM-DD)
-    const match = novoInicioStr.match(/^(\d{4})-(\d{2})-(\d{2})/)
-    if (match) {
-      const ano = parseInt(match[1], 10)
-      const mes = parseInt(match[2], 10) - 1
-      const dia = parseInt(match[3], 10)
-
-      // Atualizar ano coerente com a data de início da quarta-feira
-      setAnoCiclo(String(ano))
-
-      // Fim = início + 6 dias (sempre terça-feira)
-      const tFim = new Date(Date.UTC(ano, mes, dia + 6, 0, 0, 0, 0))
-      // Despacho = início + 5 dias (sempre segunda-feira)
-      const tDesp = new Date(Date.UTC(ano, mes, dia + 5, 0, 0, 0, 0))
-
-      setDataFim(tFim.toISOString().split('T')[0])
-      setDataDespacho(tDesp.toISOString().split('T')[0])
+    if (!isNaN(numInt) && numInt > 0 && numInt <= 53) {
+      const calc = calcularDatasCicloPorSemana(numInt, anoInt, regra)
+      const dIni = calc.dataInicioIso.split('T')[0]
+      const dFim = calc.dataFimIso.split('T')[0]
+      const dDesp = calc.dataDespachoIso.split('T')[0]
+      setDataInicio(dIni)
+      setDataFim(dFim)
+      setDataDespacho(dDesp)
+      setSemanaCalculadaRef({ inicioRef: dIni, fimRef: dFim })
     }
   }
 
-  // Sanitizador do número do ciclo: apenas dígitos (remove não-dígitos)
+  // Mudança de chamada
+  const handleChamadaChange = (newChId: string) => {
+    setSelectedChamadaId(newChId)
+    // Se já tiver número, recalcula datas para a regra da nova chamada
+    if (numeroCiclo) {
+      handleRecalcularDatas(numeroCiclo, newChId)
+    }
+  }
+
+  // Sanitizador do número do ciclo: apenas dígitos
   const handleNumeroCicloChange = (valor: string) => {
     const limpo = valor.replace(/\D/g, '')
     setNumeroCiclo(limpo)
+    if (limpo && selectedChamadaId) {
+      handleRecalcularDatas(limpo, selectedChamadaId)
+    }
   }
 
   // Nome computado a partir do número e do ano
@@ -102,53 +190,71 @@ export function AbrirCicloDialog({ open, onOpenChange, onSuccess }: AbrirCicloDi
   const erroNumero = useMemo(() => {
     const trimmed = numeroCiclo.trim()
     if (!trimmed) {
-      return 'O número do ciclo é obrigatório.'
+      return 'O número do ciclo (semana do ano) é obrigatório.'
     }
     const n = parseInt(trimmed, 10)
-    if (isNaN(n) || n <= 0) {
-      return 'Informe um número de ciclo válido maior que zero.'
+    if (isNaN(n) || n <= 0 || n > 53) {
+      return 'Informe uma semana válida do ano (entre 1 e 53).'
     }
     return null
   }, [numeroCiclo])
 
-  // Validação: duplicidade de número + ano
+  // Validação: duplicidade de número + ano DENTRO DA MESMA CHAMADA
   const isDuplicado = useMemo(() => {
     const numTrim = numeroCiclo.trim()
     const anoTrim = anoCiclo.trim()
-    if (!numTrim || !anoTrim) return false
-    return (
-      isCicloNumeroAnoDuplicado(numTrim, anoTrim, ciclos) ||
-      ciclos.some(
-        (c) =>
-          c.nome.trim().toLowerCase() === nomeCicloFinal.toLowerCase() ||
-          c.nome.trim().toLowerCase() === `ciclo ${numTrim}/${anoTrim}`.toLowerCase(),
-      )
-    )
-  }, [numeroCiclo, anoCiclo, ciclos, nomeCicloFinal])
+    if (!numTrim || !anoTrim || !selectedChamadaId) return false
+    return isCicloNumeroAnoDuplicado(numTrim, anoTrim, ciclos, undefined, selectedChamadaId)
+  }, [numeroCiclo, anoCiclo, ciclos, selectedChamadaId])
 
-  const isFormValido = !erroNumero && !isDuplicado && !!dataInicio && !!dataFim && !!dataDespacho
+  // Validação das datas (ordem e âncora da semana)
+  const validacaoDatas = useMemo(() => {
+    if (!dataInicio || !dataDespacho || !dataFim) {
+      return { valido: false, erro: 'Preencha todas as datas do período.' }
+    }
+    return validarAjusteManualDatasCiclo(
+      dataInicio,
+      dataDespacho,
+      dataFim,
+      semanaCalculadaRef || undefined,
+    )
+  }, [dataInicio, dataDespacho, dataFim, semanaCalculadaRef])
+
+  const isFormValido =
+    !erroNumero &&
+    !isDuplicado &&
+    validacaoDatas.valido &&
+    !!selectedChamadaId &&
+    !!dataInicio &&
+    !!dataFim &&
+    !!dataDespacho
 
   const handleNextOrSubmit = async () => {
+    if (!selectedChamadaId) {
+      toast.error('Selecione a chamada a que o ciclo pertence.')
+      return
+    }
+
     if (erroNumero) {
       toast.error(erroNumero)
       return
     }
 
-    if (!dataInicio || !dataFim || !dataDespacho) {
-      toast.error('Preencha as datas do período operacional.')
+    if (!validacaoDatas.valido) {
+      toast.error(validacaoDatas.erro || 'Datas inválidas.')
       return
     }
 
-    // TRAVA: se o número+ano já existir, bloquear salvar com mensagem clara
+    // TRAVA: número+ano duplicado NA MESMA CHAMADA
     if (isDuplicado) {
       toast.error(
-        `Já existe um ciclo cadastrado com o número ${numeroCiclo}/${anoCiclo} (${nomeCicloFinal}). Escolha outra numeração.`,
+        `Já existe um ciclo com a semana ${numeroCiclo}/${anoCiclo} nesta chamada (${selectedChamada?.chamada}). Escolha outra semana.`,
       )
       return
     }
 
-    // TRAVA: se existir ciclo não-terminal, o modal abre em modo confirmação
-    if (cicloNaoTerminalExistente && step === 'form') {
+    // TRAVA: se existir ciclo anterior não-terminal NA MESMA CHAMADA, abrir modo confirmação
+    if (cicloNaoTerminalExistenteNaChamada && step === 'form') {
       setStep('confirm')
       return
     }
@@ -157,7 +263,7 @@ export function AbrirCicloDialog({ open, onOpenChange, onSuccess }: AbrirCicloDi
   }
 
   const executeCreate = async () => {
-    if (erroNumero || isDuplicado) {
+    if (erroNumero || isDuplicado || !validacaoDatas.valido || !selectedChamadaId) {
       toast.error('Corrija os erros do formulário antes de prosseguir.')
       return
     }
@@ -168,17 +274,26 @@ export function AbrirCicloDialog({ open, onOpenChange, onSuccess }: AbrirCicloDi
       const fimIso = `${dataFim}T23:59:59.999Z`
       const despachoIso = `${dataDespacho}T12:00:00.000Z`
 
+      // Contratos a vincular: estritamente os contratos DA CHAMADA do ciclo
+      const contratoIdsDaChamada = contratosDaChamada.map((c) => c.id)
+
       const created = await createCiclo({
         nome: nomeCicloFinal,
+        chamada_id: selectedChamadaId,
         data_inicio: inicioIso,
         data_fim: fimIso,
+        data_despacho: despachoIso,
         status: 'coletando',
         snapshot: {
-          regra_semanal: 'quarta_a_terca',
+          regra_semanal: `${regraDiasChamada.diaInicio}_a_${regraDiasChamada.diaFim}`,
           numero_ciclo: parseInt(numeroCiclo.trim(), 10),
           ano_ciclo: parseInt(anoCiclo.trim(), 10),
           despacho_previsto_segunda: despachoIso,
+          chamada_id: selectedChamadaId,
+          chamada_numero: selectedChamada?.chamada,
+          regra_dias: regraDiasChamada,
         },
+        contratoIds: contratoIdsDaChamada,
       })
 
       if (created) {
@@ -192,29 +307,78 @@ export function AbrirCicloDialog({ open, onOpenChange, onSuccess }: AbrirCicloDi
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[500px]">
+      <DialogContent className="sm:max-w-[540px]">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <CalendarPlus className="h-5 w-5 text-primary" /> Abrir Ciclo
+            <CalendarPlus className="h-5 w-5 text-primary" /> Abrir Ciclo Operacional
           </DialogTitle>
           <DialogDescription>
             {step === 'form'
-              ? 'Defina o número e o período semanal do novo ciclo operacional.'
-              : 'Confirmação necessária devido a ciclo anterior ainda em andamento.'}
+              ? 'Selecione a chamada e a semana do ano. As datas são calculadas automaticamente conforme a regra da chamada.'
+              : 'Confirmação necessária devido a ciclo anterior da mesma chamada ainda em andamento.'}
           </DialogDescription>
         </DialogHeader>
 
         {step === 'form' ? (
           <div className="space-y-4 py-2">
-            {cicloNaoTerminalExistente && (
+            {/* 1. SELEÇÃO DA CHAMADA */}
+            <div className="space-y-1.5">
+              <Label
+                htmlFor="ciclo-chamada"
+                className="text-xs font-semibold flex items-center gap-1.5"
+              >
+                <Layers className="h-3.5 w-3.5 text-primary" /> Chamada Pública{' '}
+                <span className="text-destructive">*</span>
+              </Label>
+              <Select value={selectedChamadaId} onValueChange={handleChamadaChange}>
+                <SelectTrigger id="ciclo-chamada" className="h-9 font-medium">
+                  <SelectValue placeholder="Selecione a chamada" />
+                </SelectTrigger>
+                <SelectContent>
+                  {chamadas.map((ch) => (
+                    <SelectItem key={ch.id} value={ch.id}>
+                      {ch.chamada} — {ch.programa || 'PNAE'}{' '}
+                      {ch.dependencia_administrativa ? `(${ch.dependencia_administrativa})` : ''}
+                      {ch.status !== 'Ativo' ? ` [${ch.status}]` : ''}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {selectedChamada && (
+                <div className="flex items-center justify-between text-[11px] text-muted-foreground bg-muted/40 px-2.5 py-1 rounded border">
+                  <span>
+                    Regra da chamada: Início{' '}
+                    <strong>
+                      {DIAS_SEMANA_LABELS[regraDiasChamada.diaInicio as DiaSemana] ||
+                        regraDiasChamada.diaInicio}
+                    </strong>{' '}
+                    → Despacho/Entrega{' '}
+                    <strong>
+                      {DIAS_SEMANA_LABELS[regraDiasChamada.diaDespacho as DiaSemana] ||
+                        regraDiasChamada.diaDespacho}
+                    </strong>{' '}
+                    → Fim{' '}
+                    <strong>
+                      {DIAS_SEMANA_LABELS[regraDiasChamada.diaFim as DiaSemana] ||
+                        regraDiasChamada.diaFim}
+                    </strong>
+                  </span>
+                  <span>{contratosDaChamada.length} contrato(s) ativo(s)</span>
+                </div>
+              )}
+            </div>
+
+            {/* Alerta de ciclo não-terminal DA MESMA CHAMADA */}
+            {cicloNaoTerminalExistenteNaChamada && (
               <Alert className="border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
                 <AlertTriangle className="h-4 w-4 text-amber-600" />
                 <AlertTitle className="text-xs font-semibold">
-                  Atenção: ciclo anterior não-terminal
+                  Atenção: ciclo anterior não-terminal na mesma chamada
                 </AlertTitle>
                 <AlertDescription className="text-xs">
-                  O {cicloNaoTerminalExistente.nome} ainda está na fase{' '}
-                  <strong>{formatFaseAmigavel(cicloNaoTerminalExistente.status)}</strong>.
+                  O <strong>{cicloNaoTerminalExistenteNaChamada.nome}</strong> da chamada{' '}
+                  {selectedChamada?.chamada} ainda está na fase{' '}
+                  <strong>{formatFaseAmigavel(cicloNaoTerminalExistenteNaChamada.status)}</strong>.
                 </AlertDescription>
               </Alert>
             )}
@@ -222,47 +386,47 @@ export function AbrirCicloDialog({ open, onOpenChange, onSuccess }: AbrirCicloDi
             {isDuplicado && (
               <Alert variant="destructive">
                 <AlertTriangle className="h-4 w-4" />
-                <AlertTitle className="text-xs font-semibold">Ciclo duplicado</AlertTitle>
+                <AlertTitle className="text-xs font-semibold">
+                  Ciclo duplicado na chamada
+                </AlertTitle>
                 <AlertDescription className="text-xs">
-                  Já existe um ciclo cadastrado com a numeração {numeroCiclo}/{anoCiclo} (
-                  {nomeCicloFinal}). Não é permitido criar ciclos com numeração repetida no mesmo
-                  ano.
+                  Já existe um ciclo cadastrado na chamada {selectedChamada?.chamada} com o número{' '}
+                  {numeroCiclo}/{anoCiclo} ({nomeCicloFinal}). Não é permitido repetir a semana na
+                  mesma chamada.
                 </AlertDescription>
               </Alert>
             )}
 
-            {/* Linha de Número do Ciclo e Ano (Número EDITÁVEL pelo usuário) */}
+            {/* Linha de Número do Ciclo (= Semana do Ano) e Ano */}
             <div className="grid grid-cols-3 gap-3">
               <div className="col-span-2 space-y-1.5">
                 <Label htmlFor="ciclo-numero" className="text-xs font-semibold">
-                  Número do Ciclo <span className="text-destructive">*</span>
+                  Número do Ciclo = Semana do Ano (ISO) <span className="text-destructive">*</span>
                 </Label>
-                <div className="relative">
-                  <Input
-                    id="ciclo-numero"
-                    type="text"
-                    inputMode="numeric"
-                    pattern="[0-9]*"
-                    value={numeroCiclo}
-                    onChange={(e) => handleNumeroCicloChange(e.target.value)}
-                    placeholder="Ex: 41"
-                    className={
-                      isDuplicado || (!numeroCiclo.trim() && numeroCiclo !== '')
-                        ? 'border-destructive focus-visible:ring-destructive'
-                        : ''
-                    }
-                    autoFocus
-                  />
-                </div>
+                <Input
+                  id="ciclo-numero"
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  value={numeroCiclo}
+                  onChange={(e) => handleNumeroCicloChange(e.target.value)}
+                  placeholder="Ex: 41"
+                  className={
+                    isDuplicado || (!numeroCiclo.trim() && numeroCiclo !== '')
+                      ? 'border-destructive focus-visible:ring-destructive font-mono text-base font-bold'
+                      : 'font-mono text-base font-bold'
+                  }
+                  autoFocus
+                />
                 <p className="text-[11px] text-muted-foreground">
-                  Você pode escolher livremente o número do ciclo (apenas dígitos).
+                  Semana do ano (1 a 53). Ao alterar, as datas são recalculadas imediatamente.
                 </p>
                 {erroNumero && (
                   <p className="text-[11px] text-destructive font-medium">{erroNumero}</p>
                 )}
                 {isDuplicado && (
                   <p className="text-[11px] text-destructive font-medium">
-                    Número {numeroCiclo}/{anoCiclo} já em uso. Altere para avançar.
+                    Semana {numeroCiclo}/{anoCiclo} já em uso nesta chamada.
                   </p>
                 )}
               </div>
@@ -277,59 +441,98 @@ export function AbrirCicloDialog({ open, onOpenChange, onSuccess }: AbrirCicloDi
                   value={anoCiclo}
                   readOnly
                   disabled
-                  className="bg-muted text-muted-foreground font-medium cursor-not-allowed"
-                  title="O ano é derivado automaticamente da data de início da quarta-feira"
+                  className="bg-muted text-muted-foreground font-mono text-base font-medium cursor-not-allowed"
+                  title="O ano é derivado da semana operacional do ciclo"
                 />
-                <p className="text-[10px] text-muted-foreground leading-tight">Regra semanal</p>
+                <p className="text-[10px] text-muted-foreground leading-tight">Ano civil</p>
               </div>
             </div>
 
             {/* Preview do Nome Gerado */}
-            <div className="bg-muted/40 border rounded-md px-3 py-2 text-xs flex items-center justify-between">
+            <div className="bg-primary/5 border border-primary/20 rounded-md px-3 py-2 text-xs flex items-center justify-between">
               <span className="text-muted-foreground">Nome gerado do ciclo:</span>
-              <span className="font-semibold text-primary">{nomeCicloFinal || '—'}</span>
+              <span className="font-bold text-sm text-primary">{nomeCicloFinal || '—'}</span>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label htmlFor="ciclo-inicio" className="text-xs font-semibold">
-                  Início (Quarta-feira)
+            {/* DATAS CALCULADAS (COM AJUSTE MANUAL PERMITIDO E LIMITADO) */}
+            <div className="border rounded-lg p-3 bg-card space-y-3">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                  <Info className="h-3.5 w-3.5 text-primary" /> Datas do Período Operacional
                 </Label>
-                <Input
-                  id="ciclo-inicio"
-                  type="date"
-                  value={dataInicio}
-                  onChange={(e) => handleDataInicioChange(e.target.value)}
-                />
+                <span className="text-[10px] text-muted-foreground">
+                  Ajuste manual restrito à semana
+                </span>
               </div>
 
-              <div className="space-y-1.5">
-                <Label htmlFor="ciclo-fim" className="text-xs font-semibold">
-                  Fim (Terça-feira)
-                </Label>
-                <Input
-                  id="ciclo-fim"
-                  type="date"
-                  value={dataFim}
-                  onChange={(e) => setDataFim(e.target.value)}
-                />
-              </div>
-            </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                <div className="space-y-1">
+                  <Label
+                    htmlFor="ciclo-inicio"
+                    className="text-[11px] font-medium text-muted-foreground"
+                  >
+                    1º dia (Início)
+                  </Label>
+                  <Input
+                    id="ciclo-inicio"
+                    type="date"
+                    value={dataInicio}
+                    onChange={(e) => setDataInicio(e.target.value)}
+                    className="h-8 text-xs font-mono"
+                  />
+                  <p className="text-[10px] text-muted-foreground">
+                    Padrão:{' '}
+                    {DIAS_SEMANA_LABELS[regraDiasChamada.diaInicio as DiaSemana] ||
+                      regraDiasChamada.diaInicio}
+                  </p>
+                </div>
 
-            <div className="space-y-1.5">
-              <Label htmlFor="ciclo-despacho" className="text-xs font-semibold">
-                Despacho Previsto (Segunda-feira)
-              </Label>
-              <Input
-                id="ciclo-despacho"
-                type="date"
-                value={dataDespacho}
-                onChange={(e) => setDataDespacho(e.target.value)}
-              />
-              <p className="text-[11px] text-muted-foreground">
-                Início do ciclo ocorre na quarta-feira, despacho em rota na segunda seguinte e
-                fechamento na terça.
-              </p>
+                <div className="space-y-1">
+                  <Label
+                    htmlFor="ciclo-despacho"
+                    className="text-[11px] font-medium text-muted-foreground"
+                  >
+                    Despacho / Entrega
+                  </Label>
+                  <Input
+                    id="ciclo-despacho"
+                    type="date"
+                    value={dataDespacho}
+                    onChange={(e) => setDataDespacho(e.target.value)}
+                    className="h-8 text-xs font-mono"
+                  />
+                  <p className="text-[10px] text-muted-foreground">
+                    Padrão:{' '}
+                    {DIAS_SEMANA_LABELS[regraDiasChamada.diaDespacho as DiaSemana] ||
+                      regraDiasChamada.diaDespacho}
+                  </p>
+                </div>
+
+                <div className="space-y-1">
+                  <Label
+                    htmlFor="ciclo-fim"
+                    className="text-[11px] font-medium text-muted-foreground"
+                  >
+                    Último dia (Fim)
+                  </Label>
+                  <Input
+                    id="ciclo-fim"
+                    type="date"
+                    value={dataFim}
+                    onChange={(e) => setDataFim(e.target.value)}
+                    className="h-8 text-xs font-mono"
+                  />
+                  <p className="text-[10px] text-muted-foreground">
+                    Padrão:{' '}
+                    {DIAS_SEMANA_LABELS[regraDiasChamada.diaFim as DiaSemana] ||
+                      regraDiasChamada.diaFim}
+                  </p>
+                </div>
+              </div>
+
+              {!validacaoDatas.valido && (
+                <p className="text-[11px] text-destructive font-medium">{validacaoDatas.erro}</p>
+              )}
             </div>
           </div>
         ) : (
@@ -337,16 +540,20 @@ export function AbrirCicloDialog({ open, onOpenChange, onSuccess }: AbrirCicloDi
             <Alert className="border-amber-400 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/40">
               <AlertTriangle className="h-5 w-5 text-amber-600" />
               <AlertTitle className="text-sm font-semibold text-amber-950 dark:text-amber-100">
-                Aviso de Fechamento Pendente
+                Aviso de Fechamento Pendente da Chamada
               </AlertTitle>
               <AlertDescription className="text-xs text-amber-900 dark:text-amber-200 mt-2 space-y-2 leading-relaxed">
                 <p>
-                  O {cicloNaoTerminalExistente?.nome} ainda está em{' '}
-                  {formatFaseAmigavel(cicloNaoTerminalExistente?.status)}. Abrir o {nomeCicloFinal}{' '}
-                  deixa o {cicloNaoTerminalExistente?.nome} como Fechamento Pendente (continua
-                  visível no Histórico até ser fechado).
+                  O <strong>{cicloNaoTerminalExistenteNaChamada?.nome}</strong> da chamada{' '}
+                  <strong>{selectedChamada?.chamada}</strong> ainda está na fase{' '}
+                  <strong>{formatFaseAmigavel(cicloNaoTerminalExistenteNaChamada?.status)}</strong>.
                 </p>
-                <p className="font-semibold">Confirmar?</p>
+                <p>
+                  Abrir o <strong>{nomeCicloFinal}</strong> deixa o ciclo anterior como Fechamento
+                  Pendente desta chamada (continua visível no Histórico até ser fechado). Cada
+                  chamada tem no máximo 1 ciclo ativo por vez.
+                </p>
+                <p className="font-semibold">Deseja confirmar a abertura?</p>
               </AlertDescription>
             </Alert>
           </div>

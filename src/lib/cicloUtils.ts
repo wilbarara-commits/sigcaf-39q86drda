@@ -1,5 +1,203 @@
 /**
- * Utilitários para cálculo de Ciclos do SIGCAF segundo a regra semanal Quarta-Feira -> Terça-Feira:
+ * Utilitários para cálculo de Ciclos do SIGCAF por chamada e regra de dias:
+ *
+ * REGRA DO CICLO POR CHAMADA:
+ * 1. Cada ciclo pertence a uma Chamada. O ciclo cobre apenas os contratos dessa chamada.
+ * 2. Unicidade: no máximo 1 ciclo ativo por chamada.
+ * 3. O número do ciclo É a semana do ano (ISO).
+ * 4. A chamada configura 3 dias da semana: primeiro dia (início), dia de despacho/entrega, último dia (fim).
+ * 5. Padrão sugerido/default: quarta -> segunda -> terça.
+ */
+
+/**
+ * Normaliza um identificador de dia da semana para o número de 0 a 6 (0 = domingo, ..., 6 = sábado).
+ */
+export function normalizarDiaSemanaNum(dia?: string | number): number {
+  if (typeof dia === 'number') {
+    return ((dia % 7) + 7) % 7
+  }
+  if (!dia) return 3 // default quarta
+  const d = String(dia).trim().toLowerCase()
+  if (d in DIA_SEMANA_MAP) {
+    return DIA_SEMANA_MAP[d]
+  }
+  const n = parseInt(d, 10)
+  if (!isNaN(n)) return ((n % 7) + 7) % 7
+  return 3
+}
+
+/**
+ * Retorna a data (segunda-feira) que inicia a semana ISO 1 do ano especificado.
+ * Semana ISO 1 é a semana que contém a primeira quinta-feira do ano (ou 4 de janeiro).
+ */
+export function getInicioSemanaISO1(ano: number): Date {
+  const jan4 = new Date(Date.UTC(ano, 0, 4, 12, 0, 0, 0))
+  const day = jan4.getUTCDay() // 0=Dom, 1=Seg, ..., 6=Sab
+  const isoDay = day === 0 ? 7 : day // 1=Seg..7=Dom
+  // Subtrair (isoDay - 1) dias para chegar na segunda-feira
+  const segSemana1 = new Date(Date.UTC(ano, 0, 4 - (isoDay - 1), 0, 0, 0, 0))
+  return segSemana1
+}
+
+/**
+ * Obtém a segunda-feira de início da semana ISO especificada para o ano fornecido.
+ */
+export function getInicioSemanaISO(ano: number, semana: number): Date {
+  const segSemana1 = getInicioSemanaISO1(ano)
+  const msPorSemana = 7 * 24 * 60 * 60 * 1000
+  return new Date(segSemana1.getTime() + (semana - 1) * msPorSemana)
+}
+
+/**
+ * Calcula as 3 datas do ciclo a partir do número da semana do ano (ISO) e da regra de dias da chamada.
+ *
+ * A semana do ciclo é a semana do ano informada cujo primeiro dia (ex: quarta) cai nela:
+ * - Localiza o primeiro dia que cai na semana ISO informada (segunda..domingo).
+ * - data_inicio: esse primeiro dia.
+ * - data_fim: 6 dias após o início (mesmo dia da semana 'último dia').
+ * - data_despacho: o dia de despacho/entrega localizado dentro da janela início..fim (offset de 0 a 6 dias).
+ */
+export function calcularDatasCicloPorSemana(
+  numeroSemana: number,
+  ano: number,
+  regra?: RegraDiasChamada,
+): {
+  dataInicio: Date
+  dataFim: Date
+  dataDespacho: Date
+  dataInicioIso: string
+  dataFimIso: string
+  dataDespachoIso: string
+  codigoCiclo: string
+  nomeCicloPadrao: string
+} {
+  const diaInicioNum = normalizarDiaSemanaNum(regra?.diaInicio ?? 'quarta')
+  const diaDespachoNum = normalizarDiaSemanaNum(regra?.diaDespacho ?? 'segunda')
+  const diaFimNum = normalizarDiaSemanaNum(regra?.diaFim ?? 'terca')
+
+  // Segunda-feira (UTC) da semana ISO especificada
+  const segIso = getInicioSemanaISO(ano, numeroSemana)
+
+  // Encontrar o primeiro dia da semana do ciclo dentro da semana ISO (segunda=1..domingo=7)
+  // segIso tem getUTCDay() === 1 (Segunda)
+  // Offset da segunda-feira até o diaInicioNum (0=Dom, 1=Seg, 2=Ter, 3=Qua, 4=Qui, 5=Sex, 6=Sab):
+  // Se diaInicioNum = 1 (Seg): offset 0
+  // Se diaInicioNum = 3 (Qua): offset 2
+  // Se diaInicioNum = 0 (Dom): offset 6
+  const isoDayInicio = diaInicioNum === 0 ? 7 : diaInicioNum
+  const offsetInicioDias = isoDayInicio - 1
+
+  const dataInicio = new Date(segIso.getTime() + offsetInicioDias * 24 * 60 * 60 * 1000)
+
+  // Fim: 6 dias após o início (fecha o ciclo de 7 dias civis, ex.: qua -> ter)
+  // Observação: se diaFimNum for especificado, calcula a distância cíclica positiva de início até fim.
+  let diffFim = (diaFimNum - diaInicioNum + 7) % 7
+  if (diffFim === 0) diffFim = 6 // se for o mesmo dia, a janela é de 6 dias
+  const dataFim = new Date(Date.UTC(
+    dataInicio.getUTCFullYear(),
+    dataInicio.getUTCMonth(),
+    dataInicio.getUTCDate() + diffFim,
+    23,
+    59,
+    59,
+    999,
+  ))
+
+  // Despacho: dia da semana dentro da janela [início, fim]
+  const diffDespacho = (diaDespachoNum - diaInicioNum + 7) % 7
+  const dataDespacho = new Date(Date.UTC(
+    dataInicio.getUTCFullYear(),
+    dataInicio.getUTCMonth(),
+    dataInicio.getUTCDate() + diffDespacho,
+    12,
+    0,
+    0,
+    0,
+  ))
+
+  const numFormatado = String(numeroSemana).padStart(2, '0')
+  const codigoCiclo = `${numFormatado}/${ano}`
+  const nomeCicloPadrao = `Ciclo ${codigoCiclo}`
+
+  return {
+    dataInicio,
+    dataFim,
+    dataDespacho,
+    dataInicioIso: dataInicio.toISOString(),
+    dataFimIso: dataFim.toISOString(),
+    dataDespachoIso: dataDespacho.toISOString(),
+    codigoCiclo,
+    nomeCicloPadrao,
+  }
+}
+
+/**
+ * Valida o ajuste manual das datas de um ciclo:
+ * 1. A semana do ciclo permanece a âncora: início, despacho e fim devem pertencer à mesma semana do ciclo
+ *    (dentro da janela de tolerância de 7 dias a partir da âncora original da semana).
+ * 2. A ordem deve se manter: início <= despacho/entrega <= último dia (entrega pode ser no último dia).
+ */
+export function validarAjusteManualDatasCiclo(
+  dataInicioStr: string,
+  dataDespachoStr: string,
+  dataFimStr: string,
+  semanaOriginal?: { inicioRef: string; fimRef: string },
+): { valido: boolean; erro?: string } {
+  if (!dataInicioStr || !dataDespachoStr || !dataFimStr) {
+    return { valido: false, erro: 'Todas as datas do período operacional são obrigatórias.' }
+  }
+
+  const dIni = parseDateSegura(dataInicioStr)
+  const dDesp = parseDateSegura(dataDespachoStr)
+  const dFim = parseDateSegura(dataFimStr)
+
+  // Comparação pura de dia civil YYYY-MM-DD
+  const sIni = dataInicioStr.split('T')[0]
+  const sDesp = dataDespachoStr.split('T')[0]
+  const sFim = dataFimStr.split('T')[0]
+
+  if (sIni > sDesp) {
+    return {
+      valido: false,
+      erro: 'A data de início do ciclo não pode ser posterior à data de despacho/entrega.',
+    }
+  }
+
+  if (sDesp > sFim) {
+    return {
+      valido: false,
+      erro: 'A data de despacho/entrega não pode ser posterior ao último dia do ciclo.',
+    }
+  }
+
+  // Verificar se o intervalo não ultrapassou os limites da semana (máximo 8 dias civis de abertura a fechamento)
+  const diffDiasTotal = Math.round((dFim.getTime() - dIni.getTime()) / (1000 * 60 * 60 * 24))
+  if (diffDiasTotal < 0) {
+    return { valido: false, erro: 'A data de encerramento deve ser igual ou posterior à de início.' }
+  }
+  if (diffDiasTotal > 10) {
+    return {
+      valido: false,
+      erro: 'O período do ciclo não pode exceder os limites da semana operacional correspondente.',
+    }
+  }
+
+  if (semanaOriginal?.inicioRef && semanaOriginal?.fimRef) {
+    const dIniRef = parseDateSegura(semanaOriginal.inicioRef)
+    const dFimRef = parseDateSegura(semanaOriginal.fimRef)
+    // Cada data só pode ser movida dentro da semana a que pertence (tolerância de +-3 dias em relação à âncora)
+    const diffIniRef = Math.abs(Math.round((dIni.getTime() - dIniRef.getTime()) / (1000 * 60 * 60 * 24)))
+    const diffFimRef = Math.abs(Math.round((dFim.getTime() - dFimRef.getTime()) / (1000 * 60 * 60 * 24)))
+    if (diffIniRef > 6 || diffFimRef > 6) {
+      return {
+        valido: false,
+        erro: 'As datas só podem ser ajustadas dentro da semana operacional do ciclo.',
+      }
+    }
+  }
+
+  return { valido: true }
+}
  *
  * REGRA DO CICLO SEMANAL:
  * 1. A semana do ciclo começa na QUARTA-FEIRA às 00:00:00 e termina na TERÇA-FEIRA seguinte às 23:59:59.
@@ -22,6 +220,14 @@
  *      Terça-feira de encerramento: 22/09/2026.
  */
 
+import type { DiaSemana, ChamadaRecord } from '@/lib/types'
+
+export interface RegraDiasChamada {
+  diaInicio?: DiaSemana | string
+  diaDespacho?: DiaSemana | string
+  diaFim?: DiaSemana | string
+}
+
 export interface CicloSemanalInfo {
   ano: number
   numeroSemana: number
@@ -33,6 +239,26 @@ export interface CicloSemanalInfo {
   dataInicioIso: string
   dataFimIso: string
   dataDespachoIso: string
+}
+
+export const DIA_SEMANA_MAP: Record<string, number> = {
+  domingo: 0,
+  segunda: 1,
+  terca: 2,
+  quarta: 3,
+  quinta: 4,
+  sexta: 5,
+  sabado: 6,
+}
+
+export const NUM_PARA_DIA_SEMANA: Record<number, DiaSemana> = {
+  0: 'domingo',
+  1: 'segunda',
+  2: 'terca',
+  3: 'quarta',
+  4: 'quinta',
+  5: 'sexta',
+  6: 'sabado',
 }
 
 /**
@@ -176,22 +402,28 @@ export function getDespachoEfetivoCiclo(
   ciclo?: {
     data_inicio?: string
     data_fim?: string
+    data_despacho?: string
     snapshot?: { despacho_previsto_segunda?: string } | any
   } | null,
 ): Date {
   if (!ciclo) return new Date()
 
-  // 1. Se houver snapshot com data de despacho gravada
+  // 1. Se houver campo explícito data_despacho no ciclo
+  if (ciclo.data_despacho) {
+    return parseDateSegura(ciclo.data_despacho)
+  }
+
+  // 2. Se houver snapshot com data de despacho gravada
   if (ciclo.snapshot?.despacho_previsto_segunda) {
     return parseDateSegura(ciclo.snapshot.despacho_previsto_segunda)
   }
 
-  // 2. Se houver data de início
+  // 3. Se houver data de início
   if (ciclo.data_inicio) {
     return getDespachoPrevistoCiclo(ciclo.data_inicio)
   }
 
-  // 3. Se houver data de fim (terça-feira -> segunda é véspera: -1 dia)
+  // 4. Se houver data de fim (terça-feira -> segunda é véspera: -1 dia)
   if (ciclo.data_fim) {
     const fim = parseDateSegura(ciclo.data_fim)
     return new Date(fim.getFullYear(), fim.getMonth(), fim.getDate() - 1, 12, 0, 0, 0)
@@ -386,11 +618,17 @@ export function hasContratoNaoTerminal(
  * Ciclo ATIVO = o mais recente ciclo com PELO MENOS UM contrato em fase não-terminal. Sempre no máximo 1.
  */
 export function getCicloAtivo(
-  ciclos: Array<{ id: string; status?: string; created?: string; data_inicio?: string }>,
+  ciclos: Array<{ id: string; status?: string; created?: string; data_inicio?: string; chamada_id?: string }>,
   cicloContratos?: CicloContratoRef[],
+  chamadaId?: string,
 ): any | null {
+  let lista = [...ciclos]
+  if (chamadaId) {
+    lista = lista.filter((c) => c.chamada_id === chamadaId)
+  }
+
   // Ordenar ciclos por mais recente primeiro
-  const ordenados = [...ciclos].sort((a, b) => {
+  const ordenados = lista.sort((a, b) => {
     const tA = new Date(a.created || a.data_inicio || 0).getTime()
     const tB = new Date(b.created || b.data_inicio || 0).getTime()
     return tB - tA
@@ -408,6 +646,25 @@ export function getCicloAtivo(
   }
 
   return null
+}
+
+/**
+ * Retorna os ciclos ativos de todas as chamadas (no máximo 1 por chamada).
+ */
+export function getCiclosAtivosPorChamada(
+  ciclos: Array<{ id: string; status?: string; created?: string; data_inicio?: string; chamada_id?: string }>,
+  cicloContratos?: CicloContratoRef[],
+): Record<string, any> {
+  const porChamada: Record<string, any> = {}
+  const chamadasIds = Array.from(new Set(ciclos.map((c) => c.chamada_id).filter(Boolean) as string[]))
+
+  for (const chId of chamadasIds) {
+    const ativo = getCicloAtivo(ciclos, cicloContratos, chId)
+    if (ativo) {
+      porChamada[chId] = ativo
+    }
+  }
+  return porChamada
 }
 
 /**
@@ -474,8 +731,9 @@ export function parseNumeroEAnoCiclo(
 export function isCicloNumeroAnoDuplicado(
   numero: number | string,
   ano: number | string,
-  ciclosExistentes: CicloExistenteReferencia[] = [],
+  ciclosExistentes: Array<CicloExistenteReferencia & { chamada_id?: string }> = [],
   ignoreCicloId?: string,
+  chamadaId?: string,
 ): boolean {
   const numInt = typeof numero === 'number' ? numero : parseInt(String(numero).trim(), 10)
   const anoInt = typeof ano === 'number' ? ano : parseInt(String(ano).trim(), 10)
@@ -483,6 +741,11 @@ export function isCicloNumeroAnoDuplicado(
 
   return ciclosExistentes.some((c) => {
     if (ignoreCicloId && c.id === ignoreCicloId) return false
+    // Se foi passada uma chamadaId, a duplicidade só ocorre DENTRO da mesma chamada
+    if (chamadaId && c.chamada_id && c.chamada_id !== chamadaId) {
+      return false
+    }
+
     const parsed = parseNumeroEAnoCiclo(c.nome)
     if (parsed) {
       return parsed.numero === numInt && parsed.ano === anoInt
@@ -498,15 +761,20 @@ export function isCicloNumeroAnoDuplicado(
 }
 
 export function sugerirProximoCiclo(
-  ciclosExistentes: CicloExistenteReferencia[] = [],
+  ciclosExistentes: Array<CicloExistenteReferencia & { chamada_id?: string }> = [],
   dataRef: Date = new Date(),
+  chamadaId?: string,
+  regraChamada?: RegraDiasChamada,
 ): CicloSemanalInfo {
   const dHoje = new Date(dataRef.getFullYear(), dataRef.getMonth(), dataRef.getDate(), 12, 0, 0, 0)
-  const isHojeQuarta = dHoje.getDay() === 3
+
+  // Filtrar ciclos da chamada se especificada
+  const listaFiltrada = chamadaId
+    ? ciclosExistentes.filter((c) => c.chamada_id === chamadaId)
+    : ciclosExistentes
 
   // Ordenar ciclos existentes pelo mais recente
-  const ordenados = [...ciclosExistentes].sort((a, b) => {
-    // 1. Tentar ordenar por ano e número decrescente
+  const ordenados = [...listaFiltrada].sort((a, b) => {
     const parsedA = parseNumeroEAnoCiclo(a.nome)
     const parsedB = parseNumeroEAnoCiclo(b.nome)
     if (parsedA && parsedB) {
@@ -627,6 +895,28 @@ export function sugerirProximoCiclo(
   }
 
   // Fallback quando não há nenhum ciclo no banco:
+  // Se houver regra de chamada, usa calcularDatasCicloPorSemana para a semana ISO de hoje
+  if (regraChamada) {
+    const jan4 = new Date(Date.UTC(dHoje.getFullYear(), 0, 4, 12, 0, 0, 0))
+    const dIso = dHoje.getDay() === 0 ? 7 : dHoje.getDay()
+    const segSemana1 = getInicioSemanaISO1(dHoje.getFullYear())
+    const diffMs = dHoje.getTime() - segSemana1.getTime()
+    const semNum = Math.max(1, Math.min(53, Math.floor(diffMs / (7 * 24 * 60 * 60 * 1000)) + 1))
+    const calc = calcularDatasCicloPorSemana(semNum, dHoje.getFullYear(), regraChamada)
+    return {
+      ano: dHoje.getFullYear(),
+      numeroSemana: semNum,
+      codigoCiclo: calc.codigoCiclo,
+      nomeCicloPadrao: calc.nomeCicloPadrao,
+      quartaInicio: calc.dataInicio,
+      tercaFim: calc.dataFim,
+      segundaDespacho: calc.dataDespacho,
+      dataInicioIso: calc.dataInicioIso,
+      dataFimIso: calc.dataFimIso,
+      dataDespachoIso: calc.dataDespachoIso,
+    }
+  }
+
   return calcularProximoCicloParaAbertura(dataRef)
 }
 

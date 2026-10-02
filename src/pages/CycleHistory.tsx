@@ -52,11 +52,13 @@ import { AbrirCicloDialog } from '@/components/AbrirCicloDialog'
 import { CancelarCicloDialog } from '@/components/CancelarCicloDialog'
 
 export default function CycleHistory() {
-  const { ciclos, cicloContratos, contracts, activeCiclo, orders, products, schools } = useApp()
+  const { chamadas, ciclos, cicloContratos, contracts, activeCiclo, orders, products, schools } =
+    useApp()
 
   const [dataInicio, setDataInicio] = useState('')
   const [dataFim, setDataFim] = useState('')
   const [filtroNome, setFiltroNome] = useState('')
+  const [filtroChamada, setFiltroChamada] = useState<string>('todas')
 
   // Detalhes do ciclo selecionado
   const [selectedCiclo, setSelectedCiclo] = useState<CicloRecord | null>(null)
@@ -78,11 +80,14 @@ export default function CycleHistory() {
       if (filtroNome.trim()) {
         if (!c.nome.toLowerCase().includes(filtroNome.toLowerCase())) return false
       }
+      if (filtroChamada !== 'todas') {
+        if (c.chamada_id !== filtroChamada) return false
+      }
       if (dataInicio && c.data_inicio < dataInicio) return false
       if (dataFim && c.data_fim > dataFim) return false
       return true
     })
-  }, [ciclos, filtroNome, dataInicio, dataFim])
+  }, [ciclos, filtroNome, filtroChamada, dataInicio, dataFim])
 
   // Estatísticas calculadas por ciclo
   const ciclosStats = useMemo(() => {
@@ -201,7 +206,7 @@ export default function CycleHistory() {
       {/* Filtros */}
       <Card>
         <CardContent className="p-4">
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
             <div>
               <Label className="text-xs">Buscar por nome</Label>
               <div className="relative mt-1">
@@ -213,6 +218,22 @@ export default function CycleHistory() {
                   className="pl-9 h-9"
                 />
               </div>
+            </div>
+            <div>
+              <Label className="text-xs">Chamada Pública</Label>
+              <Select value={filtroChamada} onValueChange={setFiltroChamada}>
+                <SelectTrigger className="h-9 mt-1 text-xs">
+                  <SelectValue placeholder="Todas as chamadas" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todas">Todas as chamadas</SelectItem>
+                  {chamadas.map((ch) => (
+                    <SelectItem key={ch.id} value={ch.id}>
+                      {ch.chamada}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div>
               <Label className="text-xs">Data Início (a partir de)</Label>
@@ -252,7 +273,8 @@ export default function CycleHistory() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Ciclo</TableHead>
-                  <TableHead>Período (Qua → Ter)</TableHead>
+                  <TableHead>Chamada</TableHead>
+                  <TableHead>Período Operacional</TableHead>
                   <TableHead>Despacho Previsto</TableHead>
                   <TableHead>Fase / Status</TableHead>
                   <TableHead className="text-center">Escolas</TableHead>
@@ -265,12 +287,14 @@ export default function CycleHistory() {
               <TableBody>
                 {filteredCiclos.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={10} className="text-center py-8 text-muted-foreground">
                       Nenhum ciclo encontrado com os filtros aplicados.
                     </TableCell>
                   </TableRow>
                 ) : (
                   filteredCiclos.map((c) => {
+                    const chamadaDoCiclo =
+                      c.expand?.chamada_id || chamadas.find((ch) => ch.id === c.chamada_id)
                     const st = ciclosStats[c.id] || {
                       pedidosCount: 0,
                       escolasCount: 0,
@@ -347,6 +371,15 @@ export default function CycleHistory() {
                     return (
                       <TableRow key={c.id}>
                         <TableCell className="font-semibold text-primary">{c.nome}</TableCell>
+                        <TableCell className="text-xs">
+                          {chamadaDoCiclo ? (
+                            <Badge variant="outline" className="font-normal text-[11px]">
+                              {chamadaDoCiclo.chamada}
+                            </Badge>
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )}
+                        </TableCell>
                         <TableCell className="text-xs">
                           {formatIntervaloCiclo(c.data_inicio, c.data_fim)}
                         </TableCell>

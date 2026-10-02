@@ -408,9 +408,12 @@ export default function Monitoring() {
               <SelectContent>
                 {sortedCiclos.map((c) => {
                   const isAct = c.id === activeCiclo?.id
+                  const chamadaNome =
+                    c.expand?.chamada_id?.chamada ||
+                    chamadas.find((ch) => ch.id === c.chamada_id)?.chamada
                   return (
                     <SelectItem key={c.id} value={c.id}>
-                      {c.nome} {isAct ? '(Ativo)' : ''}
+                      {c.nome} {chamadaNome ? `[${chamadaNome}]` : ''} {isAct ? '(Ativo)' : ''}
                     </SelectItem>
                   )
                 })}

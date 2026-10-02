@@ -161,8 +161,10 @@ interface AppState {
   ) => Promise<boolean>
   createCiclo: (data: {
     nome: string
+    chamada_id?: string
     data_inicio: string
     data_fim: string
+    data_despacho?: string
     status?: 'coletando' | 'correcao' | 'coleta_encerrada' | 'coletado' | 'fechado' | string
     snapshot?: any
     contratoIds?: string[]
@@ -300,11 +302,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
         return true
       })
 
-      setCiclos(rawCiclos)
+      setCiclos(ciclosEnriquecidos)
       setCicloContratos(dedupedCicloContratos)
 
       // Ciclo ATIVO = o mais recente ciclo com PELO MENOS UM contrato em fase não-terminal (máx. 1)
-      const ordenadosCiclos = [...rawCiclos].sort((a, b) => {
+      const ordenadosCiclos = [...ciclosEnriquecidos].sort((a, b) => {
         const tA = new Date(a.created || a.data_inicio).getTime()
         const tB = new Date(b.created || b.data_inicio).getTime()
         return tB - tA
@@ -442,6 +444,30 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setOrders(mappedOrders)
 
       // Map contratos with N:N escolas and balance calculation
+      // Auto-vínculo de compatibilidade para ciclos legados sem chamada_id:
+      // Se um ciclo legado não tiver chamada_id, derivar a partir do primeiro contrato vinculado
+      const ciclosEnriquecidos = rawCiclos.map((ciclo) => {
+        let chId = ciclo.chamada_id
+        if (!chId) {
+          const primeiroVinculo = dedupedCicloContratos.find((cc) => cc.ciclo_id === ciclo.id)
+          if (primeiroVinculo) {
+            const contr = dedupedContratos.find((c) => c.id === primeiroVinculo.contrato_id)
+            if (contr?.chamada_id) {
+              chId = contr.chamada_id
+            }
+          }
+        }
+        const chObj = rawChamadas.find((ch) => ch.id === chId)
+        return {
+          ...ciclo,
+          chamada_id: chId,
+          expand: {
+            ...ciclo.expand,
+            chamada_id: chObj || ciclo.expand?.chamada_id,
+          },
+        }
+      })
+
       const mappedContracts: Contract[] = dedupedContratos.map((c) => {
         const links = rawContratoEscolas.filter((ce) => ce.contrato_id === c.id && !ce.encerrado_em)
         const linkedSchools = links.map((ce) => {
@@ -2971,21 +2997,27 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const createCiclo = async (data: {
     nome: string
+    chamada_id?: string
     data_inicio: string
     data_fim: string
+    data_despacho?: string
     status?: 'coletando' | 'correcao' | 'coleta_encerrada' | 'coletado' | 'fechado' | string
     snapshot?: any
     contratoIds?: string[]
   }): Promise<CicloRecord | null> => {
     const tempId = `temp-ciclo-${Date.now()}`
     const initialStatus = data.status || 'coletando'
+    const targetChamada = chamadas.find((c) => c.id === data.chamada_id)
     const tempCiclo: CicloRecord = {
       id: tempId,
       nome: data.nome,
+      chamada_id: data.chamada_id,
       data_inicio: data.data_inicio,
       data_fim: data.data_fim,
+      data_despacho: data.data_despacho,
       status: initialStatus,
       snapshot: data.snapshot,
+      expand: targetChamada ? { chamada_id: targetChamada } : undefined,
       created: new Date().toISOString(),
       updated: new Date().toISOString(),
     }
@@ -3002,18 +3034,25 @@ export function AppProvider({ children }: { children: ReactNode }) {
     try {
       const created = await ciclosService.create({
         nome: data.nome,
+        chamada_id: data.chamada_id,
         data_inicio: data.data_inicio,
         data_fim: data.data_fim,
+        data_despacho: data.data_despacho,
         status: initialStatus,
         snapshot: data.snapshot,
       })
 
       // Determinar quais contratos vincular: se passados data.contratoIds, usar eles;
-      // senão vincular todos os contratos Ativos
+      // senão vincular contratos Ativos da chamada do ciclo (se informada) ou todos os Ativos
       const idsParaVincular =
         data.contratoIds && data.contratoIds.length > 0
           ? data.contratoIds
-          : contracts.filter((c) => c.status === 'Ativo').map((c) => c.id)
+          : contracts
+              .filter(
+                (c) =>
+                  c.status === 'Ativo' && (!data.chamada_id || c.chamada_id === data.chamada_id),
+              )
+              .map((c) => c.id)
 
       const novosCC: CicloContratoRecord[] = []
       for (const cId of idsParaVincular) {

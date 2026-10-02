@@ -4,6 +4,9 @@ import { useApp } from '@/context/app-context'
 import { useAuth } from '@/context/auth-context'
 import {
   DEPENDENCIAS_ADMINISTRATIVAS,
+  DIAS_SEMANA_ORDEM,
+  DIAS_SEMANA_LABELS,
+  type DiaSemana,
   type ChamadaRecord,
   type ChamadaStatus,
   type ChamadaModalidade,
@@ -120,6 +123,9 @@ export default function Producao() {
   const [formPrograma, setFormPrograma] = useState('PNAE')
   const [formModalidade, setFormModalidade] = useState<ChamadaModalidade>('individualizado')
   const [formDependencia, setFormDependencia] = useState<string>('')
+  const [formDiaInicio, setFormDiaInicio] = useState<string>('quarta')
+  const [formDiaDespacho, setFormDiaDespacho] = useState<string>('segunda')
+  const [formDiaFim, setFormDiaFim] = useState<string>('terca')
   const [formStatus, setFormStatus] = useState<ChamadaStatus>('Ativo')
   const [activeTab, setActiveTab] = useState<'geral' | 'itens' | 'rotas' | 'contratos'>('geral')
   const [formItems, setFormItems] = useState<ChamadaItemForm[]>([])
@@ -190,6 +196,9 @@ export default function Producao() {
     setFormPrograma('PNAE')
     setFormModalidade('individualizado')
     setFormDependencia('')
+    setFormDiaInicio('quarta')
+    setFormDiaDespacho('segunda')
+    setFormDiaFim('terca')
     setFormStatus('Ativo')
     setFormItems([])
     setActiveTab('geral')
@@ -202,6 +211,9 @@ export default function Producao() {
     setFormPrograma(item.programa || 'PNAE')
     setFormModalidade(item.modalidade || 'individualizado')
     setFormDependencia(item.dependencia_administrativa || '')
+    setFormDiaInicio(item.dia_inicio_ciclo || 'quarta')
+    setFormDiaDespacho(item.dia_despacho_ciclo || 'segunda')
+    setFormDiaFim(item.dia_fim_ciclo || 'terca')
     setFormStatus(item.status || 'Ativo')
     setFormItems(buildChamadaItemsForModal(item.id))
     setActiveTab('geral')
@@ -221,6 +233,14 @@ export default function Producao() {
       return
     }
 
+    // Validação da ordem semanal dos dias do ciclo:
+    // O ciclo tem 7 dias (ex: quarta -> terça).
+    // O dia de início não pode ser igual ao dia de fim.
+    if (formDiaInicio === formDiaFim) {
+      toast.error('O primeiro dia da semana do ciclo e o último dia não podem ser iguais.')
+      return
+    }
+
     setIsSubmitting(true)
     try {
       let savedChamadaId: string
@@ -230,6 +250,9 @@ export default function Producao() {
           programa: formPrograma.trim(),
           modalidade: formModalidade,
           dependencia_administrativa: formDependencia || '',
+          dia_inicio_ciclo: formDiaInicio,
+          dia_despacho_ciclo: formDiaDespacho,
+          dia_fim_ciclo: formDiaFim,
           status: formStatus,
         })
         savedChamadaId = editingChamada.id
@@ -240,6 +263,9 @@ export default function Producao() {
           programa: formPrograma.trim(),
           modalidade: formModalidade,
           dependencia_administrativa: formDependencia || '',
+          dia_inicio_ciclo: formDiaInicio,
+          dia_despacho_ciclo: formDiaDespacho,
+          dia_fim_ciclo: formDiaFim,
           status: formStatus,
         })
         savedChamadaId = created.id
@@ -953,6 +979,91 @@ export default function Producao() {
                         </div>
                       </div>
 
+                      {/* Configuração dos 3 Dias da Semana do Ciclo */}
+                      <div className="p-2.5 rounded-lg border bg-card space-y-2.5">
+                        <div className="space-y-0.5">
+                          <Label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                            <Calendar className="h-3.5 w-3.5 text-primary" /> Regra Operacional de
+                            Dias do Ciclo
+                          </Label>
+                          <p className="text-[11px] text-muted-foreground">
+                            Define os dias padrão usados no cálculo automático ao abrir ciclos desta
+                            chamada.
+                          </p>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                          <div className="space-y-1">
+                            <Label
+                              htmlFor="ch-dia-inicio"
+                              className="text-[11px] font-medium text-muted-foreground"
+                            >
+                              1º dia da semana (Início)
+                            </Label>
+                            <Select value={formDiaInicio} onValueChange={setFormDiaInicio}>
+                              <SelectTrigger id="ch-dia-inicio" className="h-8 text-xs">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {DIAS_SEMANA_ORDEM.map((d) => (
+                                  <SelectItem key={d} value={d} className="text-xs">
+                                    {DIAS_SEMANA_LABELS[d]}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+
+                          <div className="space-y-1">
+                            <Label
+                              htmlFor="ch-dia-despacho"
+                              className="text-[11px] font-medium text-muted-foreground"
+                            >
+                              Dia de Despacho / Entrega
+                            </Label>
+                            <Select value={formDiaDespacho} onValueChange={setFormDiaDespacho}>
+                              <SelectTrigger id="ch-dia-despacho" className="h-8 text-xs">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {DIAS_SEMANA_ORDEM.map((d) => (
+                                  <SelectItem key={d} value={d} className="text-xs">
+                                    {DIAS_SEMANA_LABELS[d]}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+
+                          <div className="space-y-1">
+                            <Label
+                              htmlFor="ch-dia-fim"
+                              className="text-[11px] font-medium text-muted-foreground"
+                            >
+                              Último dia da semana (Fim)
+                            </Label>
+                            <Select value={formDiaFim} onValueChange={setFormDiaFim}>
+                              <SelectTrigger id="ch-dia-fim" className="h-8 text-xs">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {DIAS_SEMANA_ORDEM.map((d) => (
+                                  <SelectItem key={d} value={d} className="text-xs">
+                                    {DIAS_SEMANA_LABELS[d]}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </div>
+
+                        {formDiaInicio === formDiaFim && (
+                          <p className="text-[11px] text-destructive font-medium">
+                            O primeiro dia e o último dia do ciclo não podem ser iguais.
+                          </p>
+                        )}
+                      </div>
+
                       {/* Contador de Escolas Agregadas (somente leitura) */}
                       <div className="p-2.5 rounded-lg border bg-muted/40 space-y-1">
                         <div className="flex items-center justify-between gap-3">
@@ -1456,6 +1567,91 @@ export default function Producao() {
                         </SelectContent>
                       </Select>
                     </div>
+                  </div>
+
+                  {/* Configuração dos 3 Dias da Semana do Ciclo */}
+                  <div className="p-2.5 rounded-lg border bg-card space-y-2.5">
+                    <div className="space-y-0.5">
+                      <Label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                        <Calendar className="h-3.5 w-3.5 text-primary" /> Regra Operacional de Dias
+                        do Ciclo
+                      </Label>
+                      <p className="text-[11px] text-muted-foreground">
+                        Define os dias padrão usados no cálculo automático ao abrir ciclos desta
+                        chamada.
+                      </p>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                      <div className="space-y-1">
+                        <Label
+                          htmlFor="ch-dia-inicio-new"
+                          className="text-[11px] font-medium text-muted-foreground"
+                        >
+                          1º dia da semana (Início)
+                        </Label>
+                        <Select value={formDiaInicio} onValueChange={setFormDiaInicio}>
+                          <SelectTrigger id="ch-dia-inicio-new" className="h-8 text-xs">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {DIAS_SEMANA_ORDEM.map((d) => (
+                              <SelectItem key={d} value={d} className="text-xs">
+                                {DIAS_SEMANA_LABELS[d]}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div className="space-y-1">
+                        <Label
+                          htmlFor="ch-dia-despacho-new"
+                          className="text-[11px] font-medium text-muted-foreground"
+                        >
+                          Dia de Despacho / Entrega
+                        </Label>
+                        <Select value={formDiaDespacho} onValueChange={setFormDiaDespacho}>
+                          <SelectTrigger id="ch-dia-despacho-new" className="h-8 text-xs">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {DIAS_SEMANA_ORDEM.map((d) => (
+                              <SelectItem key={d} value={d} className="text-xs">
+                                {DIAS_SEMANA_LABELS[d]}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div className="space-y-1">
+                        <Label
+                          htmlFor="ch-dia-fim-new"
+                          className="text-[11px] font-medium text-muted-foreground"
+                        >
+                          Último dia da semana (Fim)
+                        </Label>
+                        <Select value={formDiaFim} onValueChange={setFormDiaFim}>
+                          <SelectTrigger id="ch-dia-fim-new" className="h-8 text-xs">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {DIAS_SEMANA_ORDEM.map((d) => (
+                              <SelectItem key={d} value={d} className="text-xs">
+                                {DIAS_SEMANA_LABELS[d]}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+
+                    {formDiaInicio === formDiaFim && (
+                      <p className="text-[11px] text-destructive font-medium">
+                        O primeiro dia e o último dia do ciclo não podem ser iguais.
+                      </p>
+                    )}
                   </div>
 
                   <DialogFooter className="pt-2 gap-2">

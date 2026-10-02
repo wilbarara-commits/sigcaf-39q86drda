@@ -12,6 +12,9 @@ export interface CreateChamadaData {
   programa?: string
   modalidade?: ChamadaModalidade
   dependencia_administrativa?: string
+  dia_inicio_ciclo?: string
+  dia_despacho_ciclo?: string
+  dia_fim_ciclo?: string
   status?: ChamadaStatus
 }
 
@@ -20,6 +23,9 @@ export interface UpdateChamadaData {
   programa?: string
   modalidade?: ChamadaModalidade
   dependencia_administrativa?: string
+  dia_inicio_ciclo?: string
+  dia_despacho_ciclo?: string
+  dia_fim_ciclo?: string
   status?: ChamadaStatus
 }
 
@@ -48,6 +54,9 @@ export const chamadasService = {
       programa: data.programa?.trim() || '',
       modalidade: data.modalidade || 'individualizado',
       status: data.status || 'Ativo',
+      dia_inicio_ciclo: data.dia_inicio_ciclo || 'quarta',
+      dia_despacho_ciclo: data.dia_despacho_ciclo || 'segunda',
+      dia_fim_ciclo: data.dia_fim_ciclo || 'terca',
     }
     if (data.dependencia_administrativa !== undefined && data.dependencia_administrativa !== '') {
       payload.dependencia_administrativa = data.dependencia_administrativa
@@ -65,6 +74,9 @@ export const chamadasService = {
     if (data.dependencia_administrativa !== undefined) {
       payload.dependencia_administrativa = data.dependencia_administrativa || ''
     }
+    if (data.dia_inicio_ciclo !== undefined) payload.dia_inicio_ciclo = data.dia_inicio_ciclo
+    if (data.dia_despacho_ciclo !== undefined) payload.dia_despacho_ciclo = data.dia_despacho_ciclo
+    if (data.dia_fim_ciclo !== undefined) payload.dia_fim_ciclo = data.dia_fim_ciclo
 
     return await pb.collection('chamadas').update<ChamadaRecord>(id, payload)
   },

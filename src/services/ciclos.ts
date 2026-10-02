@@ -5,6 +5,7 @@ export const ciclosService = {
   async getAll(): Promise<CicloRecord[]> {
     return await pb.collection('ciclos').getFullList<CicloRecord>({
       sort: '-created',
+      expand: 'chamada_id',
     })
   },
 
@@ -12,6 +13,7 @@ export const ciclosService = {
     const records = await pb.collection('ciclos').getFullList<CicloRecord>({
       filter: 'status != "fechado"',
       sort: '-created',
+      expand: 'chamada_id',
     })
     return records[0] || null
   },
@@ -22,8 +24,10 @@ export const ciclosService = {
 
   async create(data: {
     nome: string
+    chamada_id?: string
     data_inicio: string
     data_fim: string
+    data_despacho?: string
     status: string
     snapshot?: any
     motivo_cancelamento?: string
