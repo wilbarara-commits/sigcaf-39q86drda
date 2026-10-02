@@ -1566,6 +1566,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     })
 
     if (pedidosDaRota.length === 0) {
+      // Validação estrita: não há pedidos pendentes elegíveis.
+      // NÃO altera nenhum campo da rota, despacho ou pedido.
       toast.info('Não há pedidos pendentes no ciclo ativo para as escolas desta rota.')
       return false
     }

@@ -1253,9 +1253,7 @@ export default function DeliveryRoutes() {
           {rotasLogisticasDetalhes.map((item) => {
             const hasPendentes = item.pedidosPendentes.length > 0
             const hasEmRota =
-              item.pedidosEmRota.length > 0 ||
-              item.ultimoDespacho?.status === 'Em Rota' ||
-              Boolean(item.rota.caminhao_escola_id)
+              item.pedidosEmRota.length > 0 || item.ultimoDespacho?.status === 'Em Rota'
             const totalEmTransito = item.pedidosPendentes.length + item.pedidosEmRota.length
             const isDraggingOverThisRota =
               dragOverRotaId === item.rota.id && draggedSourceRotaId !== item.rota.id
@@ -1391,8 +1389,9 @@ export default function DeliveryRoutes() {
                     </div>
 
                     <div className="flex items-center gap-1.5 shrink-0">
-                      {/* Botão Colocar em Rota (Rota Inteira) */}
-                      {hasPendentes &&
+                      {/* Botão Colocar em Rota (Rota Inteira) - Disponível apenas quando a rota não está em execução */}
+                      {!hasEmRota &&
+                        hasPendentes &&
                         (() => {
                           let faseMotivoBloqueio = ''
                           const despachoBloqueado = item.pedidosPendentes.some((ped) => {
