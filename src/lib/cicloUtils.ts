@@ -467,6 +467,36 @@ export function parseNumeroEAnoCiclo(
  *   pré-preenche a quarta de hoje.
  * - Fallback se não houver ciclos existentes: calcula a partir da data de referência (hoje).
  */
+/**
+ * Verifica se já existe um ciclo cadastrado com o mesmo número e ano informados.
+ * Compara tanto códigos exatos (ex.: "41/2026") quanto o parsing de número e ano de nomes ("Ciclo 41/2026").
+ */
+export function isCicloNumeroAnoDuplicado(
+  numero: number | string,
+  ano: number | string,
+  ciclosExistentes: CicloExistenteReferencia[] = [],
+  ignoreCicloId?: string,
+): boolean {
+  const numInt = typeof numero === 'number' ? numero : parseInt(String(numero).trim(), 10)
+  const anoInt = typeof ano === 'number' ? ano : parseInt(String(ano).trim(), 10)
+  if (isNaN(numInt) || isNaN(anoInt)) return false
+
+  return ciclosExistentes.some((c) => {
+    if (ignoreCicloId && c.id === ignoreCicloId) return false
+    const parsed = parseNumeroEAnoCiclo(c.nome)
+    if (parsed) {
+      return parsed.numero === numInt && parsed.ano === anoInt
+    }
+    // Fallback: verificar se o nome contém o código numérico "XX/AAAA"
+    const cod = extractCicloCodigo(c.nome)
+    const codMatch = cod.match(/^(\d{1,3})\/(\d{4})$/)
+    if (codMatch) {
+      return parseInt(codMatch[1], 10) === numInt && parseInt(codMatch[2], 10) === anoInt
+    }
+    return false
+  })
+}
+
 export function sugerirProximoCiclo(
   ciclosExistentes: CicloExistenteReferencia[] = [],
   dataRef: Date = new Date(),
