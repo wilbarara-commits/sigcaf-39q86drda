@@ -1252,7 +1252,10 @@ export default function DeliveryRoutes() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {rotasLogisticasDetalhes.map((item) => {
             const hasPendentes = item.pedidosPendentes.length > 0
-            const hasEmRota = item.pedidosEmRota.length > 0
+            const hasEmRota =
+              item.pedidosEmRota.length > 0 ||
+              item.ultimoDespacho?.status === 'Em Rota' ||
+              Boolean(item.rota.caminhao_escola_id)
             const totalEmTransito = item.pedidosPendentes.length + item.pedidosEmRota.length
             const isDraggingOverThisRota =
               dragOverRotaId === item.rota.id && draggedSourceRotaId !== item.rota.id

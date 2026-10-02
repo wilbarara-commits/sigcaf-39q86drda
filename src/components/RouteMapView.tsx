@@ -295,14 +295,24 @@ export function RouteMapView({
     return paradasComCoord.findIndex((p) => p.parada.escolaId === caminhaoEscolaId)
   }, [caminhaoEscolaId, paradasComCoord])
 
-  // Índice da próxima parada quando EM ROTA
+  // Se o caminhão está na última parada com coordenadas
+  const isCaminhaoNaUltimaParada = useMemo(() => {
+    return (
+      caminhaoCoordIndex >= 0 &&
+      paradasComCoord.length > 0 &&
+      caminhaoCoordIndex >= paradasComCoord.length - 1
+    )
+  }, [caminhaoCoordIndex, paradasComCoord.length])
+
+  // Índice da próxima parada quando EM ROTA (-1 se caminhão já estiver na última parada, pois a próxima destinação é o Retorno ao Depósito Central)
   const proximaParadaCoordIndex = useMemo(() => {
     if (paradasComCoord.length === 0) return -1
     if (caminhaoCoordIndex < 0) return 0
-    return Math.min(caminhaoCoordIndex + 1, paradasComCoord.length - 1)
-  }, [caminhaoCoordIndex, paradasComCoord.length])
+    if (isCaminhaoNaUltimaParada) return -1
+    return caminhaoCoordIndex + 1
+  }, [caminhaoCoordIndex, paradasComCoord.length, isCaminhaoNaUltimaParada])
 
-  // Próxima parada (objeto ParadaMapaItem)
+  // Próxima parada (objeto ParadaMapaItem) - se estiver na última parada, não há próxima escola física
   const proximaParada = useMemo(() => {
     if (proximaParadaCoordIndex < 0 || proximaParadaCoordIndex >= paradasComCoord.length)
       return null
@@ -453,14 +463,26 @@ export function RouteMapView({
   }, [isEmRota, caminhaoCoordIndex, paradasComCoord, osrmEmRotaResult, depositoCoords])
 
   // 2. Trecho em VERMELHO: Da posição do caminhão (ou Depósito se não marcado) até a PRÓXIMA parada
+  // Caso o caminhão esteja na última parada, o trecho ativo é o RETORNO da última parada ao Depósito Central em VERMELHO
   const trechoEmRotaAtivoVermelho = useMemo<[number, number][]>(() => {
-    if (!isEmRota || paradasComCoord.length === 0 || proximaParadaCoordIndex < 0) return []
+    if (!isEmRota || paradasComCoord.length === 0) return []
 
     if (osrmEmRotaResult?.trechoAtivoVermelho && osrmEmRotaResult.trechoAtivoVermelho.length > 0) {
       return osrmEmRotaResult.trechoAtivoVermelho
     }
 
-    // Fallback linha reta: Caminhão (ou depósito se não marcado) -> Próxima
+    // Se caminhão está na última parada, o trecho ativo é Última Parada -> Depósito Central
+    if (isCaminhaoNaUltimaParada) {
+      const last = paradasComCoord[paradasComCoord.length - 1]
+      return [
+        [last.lat, last.lng],
+        [depositoCoords.latitude, depositoCoords.longitude],
+      ]
+    }
+
+    if (proximaParadaCoordIndex < 0) return []
+
+    // Fallback linha reta: Caminhão (ou depósito se não marcado) -> Próxima Parada
     const startLat =
       caminhaoCoordIndex >= 0 ? paradasComCoord[caminhaoCoordIndex].lat : depositoCoords.latitude
     const startLng =
@@ -476,6 +498,7 @@ export function RouteMapView({
     paradasComCoord,
     proximaParadaCoordIndex,
     caminhaoCoordIndex,
+    isCaminhaoNaUltimaParada,
     osrmEmRotaResult,
     depositoCoords,
   ])
@@ -551,12 +574,18 @@ export function RouteMapView({
               Caminhão na Parada #{paradaCaminhao.ordem}
             </span>
           )}
-          {isEmRota && proximaParada && (
-            <span className="inline-flex items-center gap-1 font-semibold text-red-600 dark:text-red-400">
-              <span className="inline-block w-2 h-2 rounded-full bg-red-600 animate-pulse"></span>
-              Próxima: #{proximaParada.ordem}
-            </span>
-          )}
+          {isEmRota &&
+            (isCaminhaoNaUltimaParada ? (
+              <span className="inline-flex items-center gap-1 font-semibold text-red-600 dark:text-red-400">
+                <span className="inline-block w-2 h-2 rounded-full bg-red-600 animate-pulse"></span>
+                Retorno ao Depósito
+              </span>
+            ) : proximaParada ? (
+              <span className="inline-flex items-center gap-1 font-semibold text-red-600 dark:text-red-400">
+                <span className="inline-block w-2 h-2 rounded-full bg-red-600 animate-pulse"></span>
+                Próxima: #{proximaParada.ordem}
+              </span>
+            ) : null)}
         </div>
       </div>
 
@@ -577,10 +606,8 @@ export function RouteMapView({
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
             maxZoom={19}
           />
-
           {/* Ajusta enquadramento dinamicamente */}
           <MapBoundsUpdater bounds={bounds} />
-
           {/* Marcador do Depósito Central */}
           <Marker
             position={[depositoCoords.latitude, depositoCoords.longitude]}
@@ -601,7 +628,6 @@ export function RouteMapView({
               </div>
             </Popup>
           </Marker>
-
           {/* Marcadores das Paradas numeradas (todas visíveis) */}
           {paradasComCoord.map((item) => {
             const p = item.parada
@@ -656,7 +682,6 @@ export function RouteMapView({
               </Marker>
             )
           })}
-
           {/* Marcador destacado de CAMINHÃO MANUAL sobre a parada indicada */}
           {paradaCaminhao && (
             <Marker
@@ -694,7 +719,6 @@ export function RouteMapView({
               </Popup>
             </Marker>
           )}
-
           {/* ================= DESENHO DE LINHAS: ROTA NÃO DESPACHADA ================= */}
           {!isEmRota && trechoOrigem && (
             <Polyline
@@ -707,7 +731,6 @@ export function RouteMapView({
               }}
             />
           )}
-
           {!isEmRota && trechoParadas.length > 1 && (
             <Polyline
               positions={trechoParadas}
@@ -718,7 +741,6 @@ export function RouteMapView({
               }}
             />
           )}
-
           {/* ================= DESENHO DE LINHAS: ROTA EM ROTA ================= */}
           {/* 1. Trecho Concluído: Depósito Central até a posição do caminhão (verde contínuo) */}
           {isEmRota && trechoEmRotaConcluido.length > 1 && (
@@ -731,7 +753,6 @@ export function RouteMapView({
               }}
             />
           )}
-
           {/* 2. Trecho em VERMELHO: do caminhão até a próxima parada (OSRM e fallback em linha reta) */}
           {isEmRota && trechoEmRotaAtivoVermelho.length > 1 && (
             <Polyline
@@ -744,9 +765,9 @@ export function RouteMapView({
               }}
             />
           )}
-
-          {/* 3. Trecho de Retorno ao Depósito Central: da última parada ao depósito (verde neutro contínuo) */}
-          {isEmRota && trechoEmRotaRetorno.length > 1 && (
+          {/* 3. Trecho de Retorno ao Depósito Central: da última parada ao depósito (azul tracejado #0284c7, dash '6, 6') */}
+          {/* Quando o caminhão está na última parada, o trecho ativo vermelho já cobre esse trecho; não duplicamos */}
+          {isEmRota && !isCaminhaoNaUltimaParada && trechoEmRotaRetorno.length > 1 && (
             <Polyline
               positions={trechoEmRotaRetorno}
               pathOptions={{
@@ -756,7 +777,7 @@ export function RouteMapView({
                 dashArray: '6, 6',
               }}
             />
-          )}
+          )}{' '}
         </MapContainer>
 
         {/* Legenda flutuante sobre o mapa */}
@@ -779,23 +800,26 @@ export function RouteMapView({
           {/* Itens da Legenda conforme modo */}
           {isEmRota ? (
             <>
-              {caminhaoCoordIndex >= 0 && (
-                <div className="flex items-center gap-1.5 text-muted-foreground">
-                  <span className="w-5 h-1 bg-emerald-600 inline-block rounded-xs shrink-0"></span>
-                  <span>Percurso Concluído (Depósito → #{caminhaoCoordIndex + 1})</span>
-                </div>
-              )}
-              <div className="flex items-center gap-1.5 text-red-600 dark:text-red-400 font-semibold">
-                <span className="w-5 h-1 bg-red-600 inline-block rounded-xs shrink-0"></span>
+              <div className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 font-medium">
+                <span className="w-5 h-1 bg-emerald-600 inline-block rounded-xs shrink-0"></span>
                 <span>
-                  Trecho Ativo ({caminhaoCoordIndex >= 0 ? `Caminhão` : 'Depósito'} → Próxima #
-                  {proximaParadaCoordIndex + 1})
+                  Percurso Concluído
+                  {caminhaoCoordIndex >= 0 ? ` (Depósito → #${caminhaoCoordIndex + 1})` : ''}
+                </span>
+              </div>
+              <div className="flex items-center gap-1.5 text-red-600 dark:text-red-400 font-semibold">
+                <span className="w-5 h-1.5 bg-red-600 inline-block rounded-xs shrink-0 shadow-xs"></span>
+                <span>
+                  Trecho Ativo em Progresso
+                  {isCaminhaoNaUltimaParada
+                    ? ' (Retorno ao Depósito)'
+                    : ` (${caminhaoCoordIndex >= 0 ? `Caminhão #${caminhaoCoordIndex + 1}` : 'Depósito'} → Próxima #${proximaParada?.ordem ?? proximaParadaCoordIndex + 1})`}
                 </span>
               </div>
               <div className="flex items-center gap-1.5 text-muted-foreground">
                 <span className="w-5 h-0.5 border-t-2 border-dashed border-sky-600 inline-block shrink-0"></span>
-                <span>Retorno ao Depósito (após #{paradasComCoord.length})</span>
-              </div>
+                <span>Retorno ao Depósito</span>
+              </div>{' '}
               {osrmEmRotaResult && (
                 <div className="pt-1 border-t border-border/60 space-y-0.5 text-[9px] text-muted-foreground">
                   <div className="flex items-center justify-between font-medium text-foreground">

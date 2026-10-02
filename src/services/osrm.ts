@@ -160,8 +160,9 @@ export async function obterRotaEstradaEmRotaOSRM(
   if (paradas.length === 0) return null
 
   const timeoutMs = options?.timeoutMs ?? 8000
-  // Índice da próxima parada: se caminhaoIndex < 0 => 0; senão caminhaoIndex + 1 (clamp até paradas.length - 1)
-  const proximaIndex = caminhaoIndex < 0 ? 0 : Math.min(caminhaoIndex + 1, paradas.length - 1)
+  // Índice da próxima parada: se caminhaoIndex < 0 => 0; se caminhão na última parada => -1 (trecho ativo passa a ser o retorno ao depósito); senão caminhaoIndex + 1
+  const isUltimaParada = caminhaoIndex >= 0 && caminhaoIndex >= paradas.length - 1
+  const proximaIndex = caminhaoIndex < 0 ? 0 : isUltimaParada ? -1 : caminhaoIndex + 1
 
   // Chave de cache inclui depósito, todas as paradas e os índices
   const cacheKey = `em-rota:${caminhaoIndex}:${proximaIndex};${buildCacheKey([deposito, ...paradas])}`
@@ -175,8 +176,8 @@ export async function obterRotaEstradaEmRotaOSRM(
     const pontoCaminhao: LatLngCoord =
       caminhaoIndex >= 0 && caminhaoIndex < paradas.length ? paradas[caminhaoIndex] : deposito
 
-    // 2. Próxima parada
-    const pontoProxima: LatLngCoord = paradas[proximaIndex]
+    // 2. Próxima parada (se isUltimaParada, a próxima destinação é o Depósito Central)
+    const pontoProxima: LatLngCoord = isUltimaParada ? deposito : paradas[proximaIndex]
 
     // 3. Última parada
     const pontoUltima: LatLngCoord = paradas[paradas.length - 1]
@@ -191,16 +192,21 @@ export async function obterRotaEstradaEmRotaOSRM(
         ? fetchOsrmDrivingRoute(pontosConcluidos, timeoutMs)
         : Promise.resolve(null)
 
-    // B) Trecho Ativo em VERMELHO: do Caminhão até a Próxima Parada
+    // B) Trecho Ativo em VERMELHO:
+    // Se está na última parada: Última parada (onde o caminhão está) -> Depósito Central
+    // Caso contrário: Caminhão -> Próxima Parada
     const promisseAtivo = fetchOsrmDrivingRoute([pontoCaminhao, pontoProxima], timeoutMs)
 
     // C) Trecho de Retorno: da Última parada de volta ao Depósito Central
+    // (Se estiver na última parada, o trecho ativo já é o retorno em vermelho)
     const promisseRetorno = fetchOsrmDrivingRoute([pontoUltima, deposito], timeoutMs)
 
     // D) Trecho restante intermediário (se houver paradas entre a próxima e a última):
     // Próxima -> ... -> Última
     const pontosRestantesIntermediarios: LatLngCoord[] =
-      proximaIndex < paradas.length - 1 ? paradas.slice(proximaIndex) : []
+      !isUltimaParada && proximaIndex >= 0 && proximaIndex < paradas.length - 1
+        ? paradas.slice(proximaIndex)
+        : []
 
     const promisseRestanteIntermediario =
       pontosRestantesIntermediarios.length >= 2
@@ -237,9 +243,14 @@ export async function obterRotaEstradaEmRotaOSRM(
     const distIntermediarioKm = (resIntermediario?.distanceMeters || 0) / 1000
     const durIntermediarioSec = resIntermediario?.durationSeconds || 0
 
-    // Distância restante: do caminhão até a próxima (ativo) + trecho restante até a última + retorno ao depósito
-    const distRestanteKm = distAtivoKm + distIntermediarioKm + distRetornoKm
-    const durRestanteMin = Math.round((durAtivoSec + durIntermediarioSec + durRetornoSec) / 60)
+    // Distância restante:
+    // Se está na última parada, o trecho ativo é exatamente o retorno ao depósito (distAtivoKm), então não duplica
+    const distRestanteKm = isUltimaParada
+      ? distAtivoKm
+      : distAtivoKm + distIntermediarioKm + distRetornoKm
+    const durRestanteMin = isUltimaParada
+      ? Math.round(durAtivoSec / 60)
+      : Math.round((durAtivoSec + durIntermediarioSec + durRetornoSec) / 60)
 
     // Distância total do percurso completo (circuito fechado: depósito -> todas paradas -> depósito)
     // Se temos trechoConcluido + trechoAtivo + intermediario + retorno
