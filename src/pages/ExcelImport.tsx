@@ -78,6 +78,7 @@ import {
   getDespachoPrevistoCiclo,
   calcularProximoCicloParaAbertura,
   formatFaseAmigavel,
+  sugerirProximoCiclo,
 } from '@/lib/cicloUtils'
 
 export default function ExcelImport() {
@@ -86,6 +87,7 @@ export default function ExcelImport() {
     schools,
     products,
     contractItems,
+    chamadas,
     ciclos,
     cicloContratos,
     activeCiclo,
@@ -146,6 +148,45 @@ export default function ExcelImport() {
     if (!selectedContractId) return []
     return contractItems.filter((ci) => ci.contrato_id === selectedContractId)
   }, [contractItems, selectedContractId])
+
+  // Ciclo ativo específico da chamada do contrato selecionado
+  const cicloAtivoDoContrato = useMemo(() => {
+    if (!selectedContract) return null
+    const chId = selectedContract.chamada_id
+    const ciclosChamada = ciclos
+      .filter((c) => (chId ? c.chamada_id === chId : true))
+      .sort((a, b) => {
+        const tA = new Date(a.created || a.data_inicio).getTime()
+        const tB = new Date(b.created || b.data_inicio).getTime()
+        return tB - tA
+      })
+
+    const encontrado = ciclosChamada.find((c) => {
+      const st = (c.status || '').toLowerCase()
+      if (st === 'fechado' || st === 'cancelado') return false
+      const cc = cicloContratos.find(
+        (item) => item.ciclo_id === c.id && item.contrato_id === selectedContract.id,
+      )
+      if (cc) {
+        const faseNorm = (cc.fase || '').toLowerCase()
+        return faseNorm !== 'fechado' && faseNorm !== 'cancelado'
+      }
+      return true
+    })
+
+    if (encontrado) return encontrado
+
+    if (
+      activeCiclo &&
+      (!chId || activeCiclo.chamada_id === chId) &&
+      activeCiclo.status !== 'fechado' &&
+      activeCiclo.status !== 'cancelado'
+    ) {
+      return activeCiclo
+    }
+
+    return null
+  }, [selectedContract, ciclos, cicloContratos, activeCiclo])
 
   // Subtotais por aba de rota para a prévia da importação
   interface RouteSubtotal {
@@ -429,8 +470,12 @@ export default function ExcelImport() {
     if (!pendingLinkOrder || !pendingLinkOrder.prefilledLink || !selectedContract) return
     setIsLinking(true)
     try {
-      // 1. Garantir que a rota existe no contrato
-      const rotaRec = await rotasService.findOrCreate(selectedContract.id, linkRotaNome)
+      // 1. Garantir que a rota existe no contrato / chamada
+      const rotaRec = await rotasService.findOrCreate(
+        selectedContract.id,
+        linkRotaNome,
+        selectedContract.chamada_id,
+      )
 
       // 2. Criar vínculo em contrato_escolas
       await contratosService.linkEscola({
@@ -522,6 +567,7 @@ export default function ExcelImport() {
       const rotaRec = await rotasService.findOrCreate(
         selectedContract.id,
         newSchoolRota.trim() || pendingCreateOrder.routeRaw,
+        selectedContract.chamada_id,
       )
 
       // Vincular ao contrato
@@ -576,10 +622,28 @@ export default function ExcelImport() {
     if (!parsedData || !selectedContract) return
 
     // Obter ou criar ciclo para importação:
-    // Se NÃO existir ciclo ativo, cria automaticamente com a fórmula atual (e cria os vínculos ciclo_contratos).
-    // Se existir, usa o ativo.
-    // Validação de fase DO CONTRATO ALVO: Coletando ou Correção (trava MUDANÇA 3).
-    let cicloAlvo = activeCiclo
+    // Resolver cicloAlvo priorizando o ciclo ativo da chamada do contrato selecionado (status não-terminal).
+    // Ciclos são por chamada (1 ativo por chamada).
+    const chamadaContratoId = selectedContract.chamada_id
+
+    // 1. Buscar ciclos pertencentes à chamada do contrato selecionado ordenados do mais recente ao mais antigo
+    const ciclosDaChamada = ciclos
+      .filter((c) => (chamadaContratoId ? c.chamada_id === chamadaContratoId : true))
+      .sort((a, b) => {
+        const tA = new Date(a.created || a.data_inicio).getTime()
+        const tB = new Date(b.created || b.data_inicio).getTime()
+        return tB - tA
+      })
+
+    // Ciclo ativo da chamada: status não-terminal (não 'fechado' nem 'cancelado')
+    const cicloAtivoDaChamada =
+      cicloAtivoDoContrato ||
+      ciclosDaChamada.find((c) => {
+        const statusNorm = (c.status || '').toLowerCase()
+        return statusNorm !== 'fechado' && statusNorm !== 'cancelado'
+      })
+
+    let cicloAlvo = cicloAtivoDaChamada
 
     if (cicloAlvo) {
       // Validar a fase específica deste contrato no ciclo ativo
@@ -605,16 +669,39 @@ export default function ExcelImport() {
         return
       }
     } else {
-      // Criar automaticamente com a fórmula padrão semanal vinculando os contratos ativos
-      const infoCiclo = calcularProximoCicloParaAbertura(new Date())
+      // Criar automaticamente para a chamada do contrato selecionado
+      const targetChamada = chamadas.find((ch) => ch.id === chamadaContratoId)
+      const regraChamada = {
+        diaInicio: targetChamada?.dia_inicio_ciclo || 'quarta',
+        diaDespacho: targetChamada?.dia_despacho_ciclo || 'segunda',
+        diaFim: targetChamada?.dia_fim_ciclo || 'terca',
+      }
+      const infoCiclo = sugerirProximoCiclo(
+        ciclos,
+        new Date(),
+        chamadaContratoId || undefined,
+        regraChamada,
+      )
+
+      const inicioIso = infoCiclo.quartaInicio.toISOString()
+      const fimIso = infoCiclo.tercaFim.toISOString()
+      const despachoIso = infoCiclo.segundaDespacho.toISOString()
+
       const novo = await createCiclo({
         nome: infoCiclo.nomeCicloPadrao,
-        data_inicio: infoCiclo.quartaInicio.toISOString(),
-        data_fim: infoCiclo.tercaFim.toISOString(),
+        chamada_id: selectedContract.chamada_id,
+        data_inicio: inicioIso,
+        data_fim: fimIso,
+        data_despacho: despachoIso,
         status: 'coletando',
         snapshot: {
-          regra_semanal: 'quarta_a_terca',
-          despacho_previsto_segunda: infoCiclo.segundaDespacho.toISOString(),
+          regra_semanal: `${regraChamada.diaInicio}_a_${regraChamada.diaFim}`,
+          numero_ciclo: infoCiclo.numeroSemana,
+          ano_ciclo: infoCiclo.ano,
+          despacho_previsto_segunda: despachoIso,
+          chamada_id: selectedContract.chamada_id,
+          chamada_numero: targetChamada?.chamada,
+          regra_dias: regraChamada,
         },
         contratoIds: [selectedContract.id],
       })
@@ -668,7 +755,11 @@ export default function ExcelImport() {
       const routeMap = new Map<string, string>() // sheetName -> rotaId
 
       for (const sheetName of parsedData.routesFound) {
-        const rotaRec = await rotasService.findOrCreate(selectedContract.id, sheetName)
+        const rotaRec = await rotasService.findOrCreate(
+          selectedContract.id,
+          sheetName,
+          selectedContract.chamada_id,
+        )
         routeMap.set(sheetName, rotaRec.id)
       }
 
@@ -895,15 +986,15 @@ export default function ExcelImport() {
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Ciclo Ativo Vinculado:</span>
                     <span className="font-semibold text-foreground">
-                      {activeCiclo?.nome || 'Sem ciclo ativo'}{' '}
                       {(() => {
-                        if (!activeCiclo) return ''
+                        if (!cicloAtivoDoContrato) return 'Sem ciclo ativo'
                         const cc = cicloContratos.find(
                           (c) =>
-                            c.ciclo_id === activeCiclo.id && c.contrato_id === selectedContract.id,
+                            c.ciclo_id === cicloAtivoDoContrato.id &&
+                            c.contrato_id === selectedContract.id,
                         )
-                        const f = cc?.fase || activeCiclo.status || 'coletando'
-                        return `(Fase do contrato: ${formatFaseAmigavel(f)})`
+                        const f = cc?.fase || cicloAtivoDoContrato.status || 'coletando'
+                        return `${cicloAtivoDoContrato.nome} (Fase do contrato: ${formatFaseAmigavel(f)})`
                       })()}
                     </span>
                   </div>
@@ -2134,14 +2225,18 @@ export default function ExcelImport() {
                 <div>
                   <span className="text-[11px] text-muted-foreground block">Ciclo & Contrato:</span>
                   <span className="text-foreground">
-                    Ciclo: <strong>{activeCiclo?.nome || '—'}</strong>
-                    {activeCiclo && (
+                    Ciclo: <strong>{cicloAtivoDoContrato?.nome || '—'}</strong>
+                    {cicloAtivoDoContrato && (
                       <span className="text-muted-foreground ml-1">
-                        ({formatIntervaloCiclo(activeCiclo.data_inicio, activeCiclo.data_fim)} —
-                        Despacho:{' '}
+                        (
+                        {formatIntervaloCiclo(
+                          cicloAtivoDoContrato.data_inicio,
+                          cicloAtivoDoContrato.data_fim,
+                        )}{' '}
+                        — Despacho:{' '}
                         {formatDespachoAmigavel(
-                          activeCiclo.snapshot?.despacho_previsto_segunda ||
-                            getDespachoPrevistoCiclo(activeCiclo.data_inicio),
+                          cicloAtivoDoContrato.snapshot?.despacho_previsto_segunda ||
+                            getDespachoPrevistoCiclo(cicloAtivoDoContrato.data_inicio),
                         )}
                         )
                       </span>

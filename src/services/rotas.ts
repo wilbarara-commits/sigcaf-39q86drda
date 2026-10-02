@@ -59,21 +59,68 @@ export const rotasService = {
     return await pb.collection('rotas').delete(id)
   },
 
-  async findOrCreate(contratoId: string, nome: string): Promise<RotaRecord> {
+  async findOrCreate(contratoId: string, nome: string, chamadaId?: string): Promise<RotaRecord> {
     const trimmed = (nome || '').trim().replace(/\s+/g, ' ')
-    const existing = await pb.collection('rotas').getFullList<RotaRecord>({
-      filter: `contrato_id = "${contratoId}" && nome = "${trimmed}"`,
-    })
-    if (existing.length > 0) {
-      return existing[0]
+    let resolvedChamadaId = chamadaId?.trim() || ''
+
+    // Se temos chamada_id fornecido, 1ª prioridade: buscar por chamada_id = X && nome = Y
+    if (resolvedChamadaId) {
+      const existingChamada = await pb.collection('rotas').getFullList<RotaRecord>({
+        filter: `chamada_id = "${resolvedChamadaId}" && nome = "${trimmed}"`,
+      })
+      if (existingChamada.length > 0) {
+        return existingChamada[0]
+      }
     }
-    const count = await pb.collection('rotas').getFullList<RotaRecord>({
-      filter: `contrato_id = "${contratoId}"`,
-    })
+
+    // 2ª prioridade: fallback por contrato_id = X && nome = Y (se contratoId fornecido)
+    if (contratoId) {
+      const existingContrato = await pb.collection('rotas').getFullList<RotaRecord>({
+        filter: `contrato_id = "${contratoId}" && nome = "${trimmed}"`,
+      })
+      if (existingContrato.length > 0) {
+        return existingContrato[0]
+      }
+
+      // 3ª prioridade: se não tínhamos chamadaId mas temos contratoId, resolve o chamada_id do contrato
+      if (!resolvedChamadaId) {
+        try {
+          const cRec = await pb.collection('contratos').getOne<{ chamada_id?: string }>(contratoId)
+          if (cRec?.chamada_id) {
+            resolvedChamadaId = cRec.chamada_id
+            const existingChamadaResolvida = await pb.collection('rotas').getFullList<RotaRecord>({
+              filter: `chamada_id = "${resolvedChamadaId}" && nome = "${trimmed}"`,
+            })
+            if (existingChamadaResolvida.length > 0) {
+              return existingChamadaResolvida[0]
+            }
+          }
+        } catch {
+          // Fallback silencioso se o contrato não for encontrado ou não tiver chamada_id
+        }
+      }
+    }
+
+    // Se não existia, criar nova rota.
+    // Descobrir a contagem para a ordem dentro da chamada (se houver) ou do contrato
+    let count = 0
+    if (resolvedChamadaId) {
+      const rotasChamada = await pb.collection('rotas').getFullList<RotaRecord>({
+        filter: `chamada_id = "${resolvedChamadaId}"`,
+      })
+      count = rotasChamada.length
+    } else if (contratoId) {
+      const rotasContrato = await pb.collection('rotas').getFullList<RotaRecord>({
+        filter: `contrato_id = "${contratoId}"`,
+      })
+      count = rotasContrato.length
+    }
+
     return await pb.collection('rotas').create<RotaRecord>({
-      contrato_id: contratoId,
+      contrato_id: contratoId || undefined,
+      chamada_id: resolvedChamadaId || undefined,
       nome: trimmed,
-      ordem: count.length + 1,
+      ordem: count + 1,
       ativa: true,
     })
   },
