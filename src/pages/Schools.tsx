@@ -82,6 +82,7 @@ export default function Schools() {
   const { isAdmin } = useAuth()
   const [search, setSearch] = useState('')
   const [filterTipo, setFilterTipo] = useState<string>('todos')
+  const [filterDependencia, setFilterDependencia] = useState<string>('todas')
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1)
@@ -142,9 +143,17 @@ export default function Schools() {
       const matchesTipo =
         filterTipo === 'todos' ? true : filterTipo === 'sem_tipo' ? !s.tipo : s.tipo === filterTipo
 
-      return matchesSearch && matchesTipo
+      // Filter by dependencia administrativa
+      const matchesDependencia =
+        filterDependencia === 'todas'
+          ? true
+          : filterDependencia === 'sem_dependencia'
+            ? !s.dependencia_administrativa
+            : s.dependencia_administrativa === filterDependencia
+
+      return matchesSearch && matchesTipo && matchesDependencia
     })
-  }, [schools, search, filterTipo])
+  }, [schools, search, filterTipo, filterDependencia])
 
   // Reset page when filters change
   const totalPages = Math.max(1, Math.ceil(filteredSchools.length / pageSize))
@@ -155,11 +164,13 @@ export default function Schools() {
     return filteredSchools.slice(start, start + pageSize)
   }, [filteredSchools, safeCurrentPage, pageSize])
 
-  const hasActiveFilters = search.trim() !== '' || filterTipo !== 'todos'
+  const hasActiveFilters =
+    search.trim() !== '' || filterTipo !== 'todos' || filterDependencia !== 'todas'
 
   const handleClearFilters = () => {
     setSearch('')
     setFilterTipo('todos')
+    setFilterDependencia('todas')
     setCurrentPage(1)
   }
 
@@ -508,10 +519,10 @@ export default function Schools() {
         </div>
       </div>
 
-      {/* Barra de Filtros: Busca textual e Tipo */}
+      {/* Barra de Filtros: Busca textual, Tipo e Dependência Administrativa */}
       <Card className="border-border/60">
         <CardContent className="p-4 space-y-3">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
             {/* 1. Busca textual */}
             <div className="space-y-1.5 sm:col-span-2">
               <Label className="text-xs text-muted-foreground">Busca Textual</Label>
@@ -529,7 +540,32 @@ export default function Schools() {
               </div>
             </div>
 
-            {/* 2. Filtro por Tipo */}
+            {/* 2. Filtro por Dependência Administrativa */}
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Dependência Administrativa</Label>
+              <Select
+                value={filterDependencia}
+                onValueChange={(val) => {
+                  setFilterDependencia(val)
+                  setCurrentPage(1)
+                }}
+              >
+                <SelectTrigger className="h-9 bg-background text-xs">
+                  <SelectValue placeholder="Todas as dependências" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todas">Todas as dependências</SelectItem>
+                  {DEPENDENCIAS_ADMINISTRATIVAS.map((dep) => (
+                    <SelectItem key={dep} value={dep}>
+                      {dep}
+                    </SelectItem>
+                  ))}
+                  <SelectItem value="sem_dependencia">Não classificadas</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* 3. Filtro por Tipo */}
             <div className="space-y-1.5">
               <Label className="text-xs text-muted-foreground">Tipo de Instituição</Label>
               <Select
