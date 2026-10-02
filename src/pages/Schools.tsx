@@ -78,7 +78,7 @@ import { DEPENDENCIAS_ADMINISTRATIVAS } from '@/lib/types'
 const ESCOLA_TIPOS: EscolaTipo[] = ['CMEI', 'CRECHE', 'INTEGRAL', 'FUNDAMENTAL', 'Médio', 'Técnico']
 
 export default function Schools() {
-  const { schools, isLoading, refreshData } = useApp()
+  const { schools, isLoading, refreshData, contracts, rotasLogisticas } = useApp()
   const { isAdmin } = useAuth()
   const [search, setSearch] = useState('')
   const [filterTipo, setFilterTipo] = useState<string>('todos')
@@ -91,6 +91,30 @@ export default function Schools() {
   // Details dialog state
   const [detailsSchool, setDetailsSchool] = useState<School | null>(null)
   const [detailsDialogOpen, setDetailsDialogOpen] = useState(false)
+
+  // Vínculos operacionais da escola selecionada para o modal de detalhes
+  const detailsSchoolVinculos = useMemo(() => {
+    if (!detailsSchool) return []
+    const list: Array<{
+      contratoNumero: string
+      chamadaNome?: string
+      status: string
+      rotaNome?: string
+    }> = []
+
+    for (const c of contracts) {
+      const match = c.escolas?.find((e) => e.escolaId === detailsSchool.id)
+      if (match) {
+        list.push({
+          contratoNumero: c.numero,
+          chamadaNome: c.chamadaNumero || c.tipo,
+          status: c.status,
+          rotaNome: match.rotaLogisticaNome || match.rotaNome || match.rotaPlanilha,
+        })
+      }
+    }
+    return list
+  }, [detailsSchool, contracts])
 
   // Form dialog state
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -981,75 +1005,89 @@ export default function Schools() {
                 </div>
               </DialogHeader>
 
-              <div className="space-y-5 pt-2">
-                {/* Badges de Destaque */}
-                <div className="flex flex-wrap items-center gap-2">
-                  {detailsSchool.tipo && (
-                    <Badge variant="secondary" className="text-xs">
-                      {detailsSchool.tipo}
-                    </Badge>
-                  )}
-                  {detailsSchool.alunos !== undefined && detailsSchool.alunos !== null && (
-                    <Badge variant="outline" className="text-xs gap-1">
-                      <Users className="h-3 w-3 text-primary" />
-                      {detailsSchool.alunos} alunos matriculados
-                    </Badge>
-                  )}
-                  {detailsSchool.codigo_inep && (
-                    <Badge variant="outline" className="text-xs gap-1 font-mono border-primary/30">
-                      INEP: {detailsSchool.codigo_inep}
-                    </Badge>
-                  )}
-                  {detailsSchool.dependencia_administrativa && (
-                    <Badge variant="outline" className="text-xs border-border/80">
-                      Dependência: {detailsSchool.dependencia_administrativa}
-                    </Badge>
-                  )}
-                </div>
+              <div className="space-y-4 pt-2">
+                {/* 1. IDENTIFICAÇÃO NO TOPO: Nome da escola, tipo de instituição, Código INEP, Dependência Administrativa */}
+                <div className="rounded-lg border border-border p-3.5 bg-muted/20 space-y-2.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                      <Building2 className="h-3.5 w-3.5 text-primary" /> Identificação da Escola
+                    </h4>
+                    {detailsSchool.tipo && (
+                      <Badge variant="secondary" className="text-xs font-medium">
+                        {detailsSchool.tipo}
+                      </Badge>
+                    )}
+                  </div>
 
-                {/* Bloco de Informações Cadastrais */}
-                <div className="rounded-lg border border-border p-4 bg-muted/20 space-y-3">
-                  <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-                    <Info className="h-3.5 w-3.5 text-primary" /> Dados do Cadastro Mestre
-                  </h4>
+                  <div className="text-base font-semibold text-foreground leading-snug">
+                    {detailsSchool.name}
+                  </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
-                    {/* Endereço na mesma coluna/bloco empilhado: Linha 1 = logradouro/número, Linha 2 = Bairro e CEP */}
-                    <div className="space-y-1 sm:col-span-2">
-                      <span className="text-xs text-muted-foreground block">Endereço</span>
-                      <div className="flex items-start gap-1.5 text-foreground/90">
-                        <MapPin className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
-                        <div className="space-y-0.5 min-w-0 flex-1">
-                          <div className="font-medium text-foreground">
-                            {detailsSchool.address?.trim() || 'Endereço não informado'}
-                          </div>
-                          {detailsSchool.bairro?.trim() || detailsSchool.cep?.trim() ? (
-                            <div className="text-xs text-muted-foreground">
-                              {[
-                                detailsSchool.bairro?.trim()
-                                  ? `Bairro: ${detailsSchool.bairro.trim()}`
-                                  : null,
-                                detailsSchool.cep?.trim()
-                                  ? `CEP: ${detailsSchool.cep.trim()}`
-                                  : null,
-                              ]
-                                .filter(Boolean)
-                                .join(' — ')}
-                            </div>
-                          ) : null}
-                        </div>
-                      </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1 border-t border-border/50 text-xs">
+                    <div>
+                      <span className="text-muted-foreground block text-[11px]">Código INEP</span>
+                      <p className="font-mono font-semibold text-foreground/90 mt-0.5">
+                        {detailsSchool.codigo_inep || 'Não informado'}
+                      </p>
                     </div>
 
-                    {/* Telefone / Contato na mesma coluna empilhados (sem prefixo 'Contato:') */}
+                    <div>
+                      <span className="text-muted-foreground block text-[11px]">
+                        Dependência Administrativa
+                      </span>
+                      <p className="font-medium text-foreground/90 mt-0.5">
+                        {detailsSchool.dependencia_administrativa || 'Não classificada'}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 2. ENDEREÇO EM SEGUIDA: Linha 1 = logradouro e número; Linha 2 = Bairro — CEP */}
+                <div className="rounded-lg border border-border p-3.5 bg-muted/20 space-y-2">
+                  <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                    <MapPin className="h-3.5 w-3.5 text-primary" /> Localização / Endereço
+                  </h4>
+                  <div className="flex items-start gap-2 text-sm text-foreground/90">
+                    <MapPin className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
+                    <div className="space-y-0.5 min-w-0 flex-1">
+                      {/* Linha 1: Logradouro e número */}
+                      <div className="font-medium text-foreground">
+                        {detailsSchool.address?.trim() || 'Endereço não informado'}
+                      </div>
+                      {/* Linha 2: Bairro — CEP */}
+                      {detailsSchool.bairro?.trim() || detailsSchool.cep?.trim() ? (
+                        <div className="text-xs text-muted-foreground">
+                          {[
+                            detailsSchool.bairro?.trim()
+                              ? `Bairro: ${detailsSchool.bairro.trim()}`
+                              : null,
+                            detailsSchool.cep?.trim() ? `CEP: ${detailsSchool.cep.trim()}` : null,
+                          ]
+                            .filter(Boolean)
+                            .join(' — ')}
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
+                </div>
+
+                {/* 3. CONTATO DEPOIS: Telefone / Contato (telefone na linha 1, responsável empilhado abaixo sem prefixo 'Contato:') e E-mail */}
+                <div className="rounded-lg border border-border p-3.5 bg-muted/20 space-y-2.5">
+                  <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                    <Phone className="h-3.5 w-3.5 text-primary" /> Canais de Contato
+                  </h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+                    {/* Telefone / Contato */}
                     <div className="space-y-1">
-                      <span className="text-xs text-muted-foreground block">
+                      <span className="text-[11px] text-muted-foreground block">
                         Telefone / Contato
                       </span>
                       <div className="flex items-start gap-1.5 text-foreground/90">
                         <Phone className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
                         <div className="space-y-0.5 min-w-0 flex-1">
-                          <div>{detailsSchool.contact?.trim() || 'Telefone não informado'}</div>
+                          <div className="font-medium">
+                            {detailsSchool.contact?.trim() || 'Telefone não informado'}
+                          </div>
                           {detailsSchool.contatoResponsavel?.trim() && (
                             <div className="text-xs text-muted-foreground">
                               {detailsSchool.contatoResponsavel.trim()}
@@ -1059,34 +1097,47 @@ export default function Schools() {
                       </div>
                     </div>
 
-                    <div className="space-y-1 sm:col-span-2">
-                      <span className="text-xs text-muted-foreground block">
+                    {/* E-mail Institucional */}
+                    <div className="space-y-1">
+                      <span className="text-[11px] text-muted-foreground block">
                         E-mail Institucional
                       </span>
-                      <p className="flex items-center gap-1.5 text-foreground/90 truncate">
+                      <div className="flex items-center gap-1.5 text-foreground/90 truncate">
                         <Mail className="h-4 w-4 text-muted-foreground shrink-0" />
-                        <span>{detailsSchool.email || 'E-mail não informado'}</span>
-                      </p>
+                        <span className="text-xs truncate">
+                          {detailsSchool.email || 'E-mail não informado'}
+                        </span>
+                      </div>
                     </div>
+                  </div>
+                </div>
 
-                    <div className="space-y-1">
-                      <span className="text-xs text-muted-foreground block">Código INEP</span>
-                      <p className="font-mono text-xs text-foreground/90 font-semibold">
-                        {detailsSchool.codigo_inep || 'Não informado'}
-                      </p>
-                    </div>
+                {/* 4. INFORMAÇÕES OPERACIONAIS POR ÚLTIMO: Coordenadas (lat/long), alunos, vínculos (rotas/contratos) */}
+                <div className="rounded-lg border border-border p-3.5 bg-muted/20 space-y-3">
+                  <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                    <Info className="h-3.5 w-3.5 text-primary" /> Informações Operacionais &
+                    Vínculos
+                  </h4>
 
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+                    {/* Alunos matriculados */}
                     <div className="space-y-1">
-                      <span className="text-xs text-muted-foreground block">
-                        Dependência Administrativa
+                      <span className="text-[11px] text-muted-foreground block">
+                        Alunos Matriculados
                       </span>
-                      <p className="text-xs text-foreground/90 font-medium">
-                        {detailsSchool.dependencia_administrativa || '—'}
-                      </p>
+                      <div className="flex items-center gap-1.5 text-foreground/90">
+                        <Users className="h-4 w-4 text-primary shrink-0" />
+                        <span className="font-semibold text-xs">
+                          {detailsSchool.alunos !== undefined && detailsSchool.alunos !== null
+                            ? `${detailsSchool.alunos} alunos`
+                            : 'Não informado'}
+                        </span>
+                      </div>
                     </div>
 
-                    <div className="space-y-1 sm:col-span-2">
-                      <span className="text-xs text-muted-foreground block">
+                    {/* Coordenadas Geográficas (Lat / Long) */}
+                    <div className="space-y-1">
+                      <span className="text-[11px] text-muted-foreground block">
                         Coordenadas (Lat / Long)
                       </span>
                       <p className="font-mono text-xs text-foreground/90">
@@ -1095,6 +1146,51 @@ export default function Schools() {
                           : 'Coordenadas não informadas'}
                       </p>
                     </div>
+                  </div>
+
+                  {/* Vínculos com Rotas e Contratos */}
+                  <div className="space-y-1.5 pt-2 border-t border-border/50">
+                    <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider block">
+                      Vínculos com Contratos & Rotas
+                    </span>
+                    {detailsSchoolVinculos.length > 0 ? (
+                      <div className="space-y-1.5">
+                        {detailsSchoolVinculos.map((v, idx) => (
+                          <div
+                            key={idx}
+                            className="flex flex-wrap items-center justify-between gap-2 p-2 rounded-md bg-background/80 border border-border/60 text-xs"
+                          >
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium text-foreground">
+                                Contrato {v.contratoNumero}
+                              </span>
+                              {v.chamadaNome && (
+                                <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4">
+                                  {v.chamadaNome}
+                                </Badge>
+                              )}
+                              <Badge
+                                variant={v.status === 'Ativo' ? 'default' : 'secondary'}
+                                className="text-[10px] px-1.5 py-0 h-4"
+                              >
+                                {v.status}
+                              </Badge>
+                            </div>
+                            <div className="text-muted-foreground text-[11px] flex items-center gap-1">
+                              <span>Rota:</span>
+                              <strong className="text-foreground">
+                                {v.rotaNome || 'Sem rota atribuída'}
+                              </strong>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-xs text-muted-foreground italic">
+                        Esta instituição não está associada a nenhum contrato ou rota logística no
+                        momento.
+                      </p>
+                    )}
                   </div>
                 </div>
               </div>
