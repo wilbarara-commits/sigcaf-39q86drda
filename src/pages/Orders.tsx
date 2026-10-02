@@ -217,17 +217,40 @@ export default function Orders() {
     const linkEscola = contractSchools.find((cs) => cs.escola_id === selectedSchool)
     const contratoIdDaEscola = selectedContractId || linkEscola?.contrato_id
 
-    // TRAVA DE FASE POR CONTRATO (MUDANÇA 3):
-    // Validada contra o vínculo ciclo_contratos do contrato no ciclo ativo
-    if (!activeCiclo) {
-      toast.error('Nenhum ciclo ativo cadastrado. Abra um ciclo antes de lançar pedidos.')
+    // Identificar a chamada do contrato da escola
+    const contratoObj = contratoIdDaEscola
+      ? contracts.find((cnt) => cnt.id === contratoIdDaEscola)
+      : null
+    const chamadaDaEscolaId = contratoObj?.chamada_id
+
+    // Resolver ciclo ativo da chamada da escola (ou fallback no activeCiclo)
+    const cicloAtivoParaPedido = chamadaDaEscolaId
+      ? ciclos
+          .filter((c) => c.chamada_id === chamadaDaEscolaId)
+          .sort((a, b) => {
+            const tA = new Date(a.created || a.data_inicio || 0).getTime()
+            const tB = new Date(b.created || b.data_inicio || 0).getTime()
+            return tB - tA
+          })
+          .find((c) => {
+            const st = (c.status || '').toLowerCase()
+            return st !== 'fechado' && st !== 'cancelado'
+          }) || activeCiclo
+      : activeCiclo
+
+    // TRAVA DE FASE POR CONTRATO:
+    // Validada contra o vínculo ciclo_contratos do contrato no ciclo ativo da chamada
+    if (!cicloAtivoParaPedido) {
+      toast.error(
+        'Nenhum ciclo ativo cadastrado para esta chamada. Abra um ciclo antes de lançar pedidos.',
+      )
       return
     }
 
-    let faseContrato = (activeCiclo.status || 'coletando').toLowerCase()
+    let faseContrato = (cicloAtivoParaPedido.status || 'coletando').toLowerCase()
     if (contratoIdDaEscola) {
       const cc = cicloContratos.find(
-        (c) => c.ciclo_id === activeCiclo.id && c.contrato_id === contratoIdDaEscola,
+        (c) => c.ciclo_id === cicloAtivoParaPedido.id && c.contrato_id === contratoIdDaEscola,
       )
       if (cc) {
         faseContrato = (cc.fase || 'coletando').toLowerCase()
@@ -282,7 +305,7 @@ export default function Orders() {
     const success = await addOrder({
       schoolId: selectedSchool,
       date: orderDate,
-      cicloId: activeCiclo?.id,
+      cicloId: cicloAtivoParaPedido?.id,
       origem: orderOrigem,
       rotaId: rotaIdToUse,
       items: validItems.map((i) => ({

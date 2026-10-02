@@ -46,15 +46,65 @@ routerAdd('POST', '/backend/v1/rotas-logisticas/despachar', (e) => {
       escolaIds.push(paradas[i].getString('escola_id'))
     }
 
+    // Resolução estrita do ciclo ativo: deve ser o ciclo ativo DA CHAMADA DA ROTA
+    let effectiveCicloId = cicloId
+    let targetChamadaNome = ''
+
+    if (chamadaId) {
+      try {
+        const chRec = txApp.findRecordById('chamadas', chamadaId)
+        targetChamadaNome = chRec.getString('chamada') || ''
+      } catch (_) {}
+    }
+
+    // Se ciclo_id não foi fornecido, resolver o ciclo ativo da chamada da rota
+    if (!effectiveCicloId) {
+      if (chamadaId) {
+        const ciclosDaChamada = txApp.findRecordsByFilter(
+          'ciclos',
+          'chamada_id = {:chId} && status != "fechado" && status != "cancelado"',
+          '-created,-data_inicio',
+          1,
+          0,
+          { chId: chamadaId },
+        )
+        if (ciclosDaChamada.length > 0) {
+          effectiveCicloId = ciclosDaChamada[0].id
+        }
+      } else {
+        // Fallback defensivo: se a rota não tiver chamada_id, buscar ciclo não terminal global
+        const ciclosAtivos = txApp.findRecordsByFilter(
+          'ciclos',
+          'status != "fechado" && status != "cancelado"',
+          '-created,-data_inicio',
+          1,
+          0,
+        )
+        if (ciclosAtivos.length > 0) {
+          effectiveCicloId = ciclosAtivos[0].id
+        }
+      }
+    }
+
+    // Se a chamada da rota não possuir ciclo ativo, bloquear com mensagem clara
+    if (!effectiveCicloId) {
+      const chamadaIdent = targetChamadaNome ? ' "' + targetChamadaNome + '"' : ''
+      throw new BadRequestError(
+        'Esta rota pertence a uma chamada' +
+          chamadaIdent +
+          ' que não possui ciclo ativo para despacho.',
+      )
+    }
+
     let pedidos = []
-    if (cicloId) {
+    if (effectiveCicloId) {
       pedidos = txApp.findRecordsByFilter(
         'pedidos',
         'status = "Pendente" && ciclo_id = {:cicloId}',
         '-created',
         0,
         0,
-        { cicloId: cicloId },
+        { cicloId: effectiveCicloId },
       )
     } else {
       pedidos = txApp.findRecordsByFilter('pedidos', 'status = "Pendente"', '-created', 0, 0)
@@ -72,7 +122,9 @@ routerAdd('POST', '/backend/v1/rotas-logisticas/despachar', (e) => {
     }
 
     if (pedidosParaDespachar.length === 0) {
-      throw new BadRequestError('Nenhum pedido pendente encontrado para esta rota.')
+      throw new BadRequestError(
+        'Não há pedidos pendentes no ciclo ativo para as escolas desta rota.',
+      )
     }
 
     const nowIso = new Date().toISOString()
@@ -81,7 +133,7 @@ routerAdd('POST', '/backend/v1/rotas-logisticas/despachar', (e) => {
     const despRec = new Record(despachosCol)
     if (chamadaId) despRec.set('chamada_id', chamadaId)
     if (contratoId) despRec.set('contrato_id', contratoId)
-    if (cicloId) despRec.set('ciclo_id', cicloId)
+    if (effectiveCicloId) despRec.set('ciclo_id', effectiveCicloId)
     despRec.set('rota_id', rotaId)
     if (userId) despRec.set('usuario_id', userId)
     despRec.set('data_despacho', nowIso)
@@ -145,15 +197,65 @@ routerAdd('POST', '/backend/v1/rotas/despachar', (e) => {
       escolaIds.push(paradas[i].getString('escola_id'))
     }
 
+    // Resolução estrita do ciclo ativo: deve ser o ciclo ativo DA CHAMADA DA ROTA
+    let effectiveCicloId = cicloId
+    let targetChamadaNome = ''
+
+    if (chamadaId) {
+      try {
+        const chRec = txApp.findRecordById('chamadas', chamadaId)
+        targetChamadaNome = chRec.getString('chamada') || ''
+      } catch (_) {}
+    }
+
+    // Se ciclo_id não foi fornecido, resolver o ciclo ativo da chamada da rota
+    if (!effectiveCicloId) {
+      if (chamadaId) {
+        const ciclosDaChamada = txApp.findRecordsByFilter(
+          'ciclos',
+          'chamada_id = {:chId} && status != "fechado" && status != "cancelado"',
+          '-created,-data_inicio',
+          1,
+          0,
+          { chId: chamadaId },
+        )
+        if (ciclosDaChamada.length > 0) {
+          effectiveCicloId = ciclosDaChamada[0].id
+        }
+      } else {
+        // Fallback defensivo: se a rota não tiver chamada_id, buscar ciclo não terminal global
+        const ciclosAtivos = txApp.findRecordsByFilter(
+          'ciclos',
+          'status != "fechado" && status != "cancelado"',
+          '-created,-data_inicio',
+          1,
+          0,
+        )
+        if (ciclosAtivos.length > 0) {
+          effectiveCicloId = ciclosAtivos[0].id
+        }
+      }
+    }
+
+    // Se a chamada da rota não possuir ciclo ativo, bloquear com mensagem clara
+    if (!effectiveCicloId) {
+      const chamadaIdent = targetChamadaNome ? ' "' + targetChamadaNome + '"' : ''
+      throw new BadRequestError(
+        'Esta rota pertence a uma chamada' +
+          chamadaIdent +
+          ' que não possui ciclo ativo para despacho.',
+      )
+    }
+
     let pedidos = []
-    if (cicloId) {
+    if (effectiveCicloId) {
       pedidos = txApp.findRecordsByFilter(
         'pedidos',
         'status = "Pendente" && ciclo_id = {:cicloId}',
         '-created',
         0,
         0,
-        { cicloId: cicloId },
+        { cicloId: effectiveCicloId },
       )
     } else {
       pedidos = txApp.findRecordsByFilter('pedidos', 'status = "Pendente"', '-created', 0, 0)
@@ -171,7 +273,9 @@ routerAdd('POST', '/backend/v1/rotas/despachar', (e) => {
     }
 
     if (pedidosParaDespachar.length === 0) {
-      throw new BadRequestError('Nenhum pedido pendente encontrado para esta rota.')
+      throw new BadRequestError(
+        'Não há pedidos pendentes no ciclo ativo para as escolas desta rota.',
+      )
     }
 
     const nowIso = new Date().toISOString()
@@ -180,7 +284,7 @@ routerAdd('POST', '/backend/v1/rotas/despachar', (e) => {
     const despRec = new Record(despachosCol)
     if (chamadaId) despRec.set('chamada_id', chamadaId)
     if (contratoId) despRec.set('contrato_id', contratoId)
-    if (cicloId) despRec.set('ciclo_id', cicloId)
+    if (effectiveCicloId) despRec.set('ciclo_id', effectiveCicloId)
     despRec.set('rota_id', rotaId)
     if (userId) despRec.set('usuario_id', userId)
     despRec.set('data_despacho', nowIso)

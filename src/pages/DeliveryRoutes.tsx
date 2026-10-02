@@ -543,10 +543,26 @@ export default function DeliveryRoutes() {
         o.status === 'Pendente',
     )
 
+    // Resolver ciclo ativo da chamada à qual a rota pertence (com fallback no activeCiclo)
+    const chamadaDaRotaId = rotaToDispatch.chamada_id || currentChamada?.id
+    const cicloAtivoChamadaRota = chamadaDaRotaId
+      ? ciclos
+          .filter((c) => c.chamada_id === chamadaDaRotaId)
+          .sort((a, b) => {
+            const tA = new Date(a.created || a.data_inicio || 0).getTime()
+            const tB = new Date(b.created || b.data_inicio || 0).getTime()
+            return tB - tA
+          })
+          .find((c) => {
+            const st = (c.status || '').toLowerCase()
+            return st !== 'fechado' && st !== 'cancelado'
+          }) || activeCiclo
+      : activeCiclo
+
     // Validação de despacho baseada na FASE DO CONTRATO no ciclo:
     // O despacho só é liberado na fase "Coleta Encerrada" do contrato no ciclo.
     const pedidoBloqueado = pedidosPendentesRota.find((ped) => {
-      const pedCiclo = ciclos.find((c) => c.id === ped.cicloId) || activeCiclo
+      const pedCiclo = ciclos.find((c) => c.id === ped.cicloId) || cicloAtivoChamadaRota
       if (!pedCiclo || pedCiclo.status === 'fechado' || pedCiclo.status === 'cancelado') {
         return true
       }
@@ -569,7 +585,7 @@ export default function DeliveryRoutes() {
     })
 
     if (pedidoBloqueado) {
-      const pedCiclo = ciclos.find((c) => c.id === pedidoBloqueado.cicloId) || activeCiclo
+      const pedCiclo = ciclos.find((c) => c.id === pedidoBloqueado.cicloId) || cicloAtivoChamadaRota
       const linkEscola = contractSchools.find((cs) => cs.escola_id === pedidoBloqueado.schoolId)
       const contratoId =
         linkEscola?.contrato_id ||
@@ -1394,8 +1410,24 @@ export default function DeliveryRoutes() {
                         hasPendentes &&
                         (() => {
                           let faseMotivoBloqueio = ''
+                          const chamadaRotaId = item.rota.chamada_id || currentChamada?.id
+                          const cicloAtivoChamada = chamadaRotaId
+                            ? ciclos
+                                .filter((c) => c.chamada_id === chamadaRotaId)
+                                .sort((a, b) => {
+                                  const tA = new Date(a.created || a.data_inicio || 0).getTime()
+                                  const tB = new Date(b.created || b.data_inicio || 0).getTime()
+                                  return tB - tA
+                                })
+                                .find((c) => {
+                                  const st = (c.status || '').toLowerCase()
+                                  return st !== 'fechado' && st !== 'cancelado'
+                                }) || activeCiclo
+                            : activeCiclo
+
                           const despachoBloqueado = item.pedidosPendentes.some((ped) => {
-                            const pedCiclo = ciclos.find((c) => c.id === ped.cicloId) || activeCiclo
+                            const pedCiclo =
+                              ciclos.find((c) => c.id === ped.cicloId) || cicloAtivoChamada
                             if (
                               !pedCiclo ||
                               pedCiclo.status === 'fechado' ||

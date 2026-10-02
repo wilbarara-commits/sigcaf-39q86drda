@@ -1549,15 +1549,38 @@ export function AppProvider({ children }: { children: ReactNode }) {
     userId?: string,
     chamadaId?: string,
   ): Promise<boolean> => {
+    const rotaLog = rotasLogisticas.find((r) => r.id === rotaLogisticaId)
+    const effectiveChamadaId = chamadaId || rotaLog?.chamada_id
+    const effectiveContratoId = contratoId || rotaLog?.contrato_id
+    const targetChamada = effectiveChamadaId
+      ? chamadas.find((ch) => ch.id === effectiveChamadaId)
+      : null
+
+    // Resolver ciclo ativo DA CHAMADA À QUAL A ROTA PERTENCE
+    // (usando getCicloAtivo com filtro de chamadaId, mantendo paridade com importação e backend)
+    const cicloAtivoChamada = effectiveChamadaId
+      ? getCicloAtivo(ciclos, cicloContratos, effectiveChamadaId)
+      : activeCiclo
+
+    if (!cicloAtivoChamada) {
+      const nomeChamada = targetChamada?.chamada ? ` "${targetChamada.chamada}"` : ''
+      toast.info(
+        effectiveChamadaId
+          ? `Esta rota pertence à chamada${nomeChamada}, que não possui ciclo ativo para despacho.`
+          : 'Não há ciclo ativo para despacho desta rota.',
+      )
+      return false
+    }
+
     // Escolas que pertencem a esta rota (via paradas_rota)
     const escolasDaRota = new Set(
       paradasRota.filter((p) => p.rota_id === rotaLogisticaId).map((p) => p.escola_id),
     )
 
-    // Identificar pedidos pendentes do ciclo ativo (ou pendentes em geral)
+    // Identificar pedidos pendentes do ciclo ativo DA CHAMADA da rota
     const pedidosDaRota = orders.filter((o) => {
       if (o.status !== 'Pendente') return false
-      if (activeCiclo?.id && o.cicloId && o.cicloId !== activeCiclo.id) return false
+      if (cicloAtivoChamada?.id && o.cicloId && o.cicloId !== cicloAtivoChamada.id) return false
       return (
         escolasDaRota.has(o.schoolId) ||
         o.rotaLogisticaId === rotaLogisticaId ||
@@ -1572,7 +1595,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return false
     }
 
-    const rotaLog = rotasLogisticas.find((r) => r.id === rotaLogisticaId)
     const prevOrders = [...orders]
     const prevDespachos = [...despachos]
     const nowIso = new Date().toISOString()
@@ -1592,14 +1614,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       ),
     )
 
-    const effectiveChamadaId = chamadaId || rotaLog?.chamada_id
-    const effectiveContratoId = contratoId || rotaLog?.contrato_id
-
     const tempDespacho: DespachoRecord = {
       id: `temp-desp-${Date.now()}`,
       chamada_id: effectiveChamadaId,
       contrato_id: effectiveContratoId,
-      ciclo_id: activeCiclo?.id,
+      ciclo_id: cicloAtivoChamada?.id,
       rota_id: rotaLogisticaId,
       usuario_id: userId,
       data_despacho: nowIso,
@@ -1614,7 +1633,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         rota_logistica_id: rotaLogisticaId,
         chamada_id: effectiveChamadaId,
         contrato_id: effectiveContratoId,
-        ciclo_id: activeCiclo?.id || undefined,
+        ciclo_id: cicloAtivoChamada?.id || undefined,
         user_id: userId,
       })
 
