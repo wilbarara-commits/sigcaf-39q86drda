@@ -46,7 +46,7 @@ export function AbrirCicloDialog({
   chamadaIdInicial,
   onSuccess,
 }: AbrirCicloDialogProps) {
-  const { ciclos, cicloContratos, chamadas, contracts, createCiclo } = useApp()
+  const { ciclos, chamadas, contracts, createCiclo } = useApp()
 
   const chamadasAtivas = useMemo(() => {
     return chamadas.filter((ch) => ch.status === 'Ativo')
@@ -92,10 +92,10 @@ export function AbrirCicloDialog({
     if (!selectedChamadaId) return null
     return ciclos.find((c) => {
       if (c.chamada_id !== selectedChamadaId) return false
-      const status = derivarStatusCiclo(c.id, cicloContratos, c.status)
+      const status = derivarStatusCiclo(c.status)
       return isCicloNaoTerminal(status)
     })
-  }, [ciclos, selectedChamadaId, cicloContratos])
+  }, [ciclos, selectedChamadaId])
 
   // Inicialização ao abrir o modal
   useEffect(() => {
@@ -292,7 +292,6 @@ export function AbrirCicloDialog({
           chamada_numero: selectedChamada?.chamada,
           regra_dias: regraDiasChamada,
         },
-        contratoIds: contratoIdsDaChamada,
       })
 
       if (created) {

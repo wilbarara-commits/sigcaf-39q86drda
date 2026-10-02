@@ -110,13 +110,13 @@ describe('cicloUtils - numeração livre e validações de ciclo', () => {
       },
     ]
 
-    const ativoMun = getCicloAtivo(ciclos, [], 'ch-mun')
+    const ativoMun = getCicloAtivo(ciclos, 'ch-mun')
     expect(ativoMun?.id).toBe('c1')
 
-    const ativoEst = getCicloAtivo(ciclos, [], 'ch-est')
+    const ativoEst = getCicloAtivo(ciclos, 'ch-est')
     expect(ativoEst?.id).toBe('c2')
 
-    const ativosPorChamada = getCiclosAtivosPorChamada(ciclos, [])
+    const ativosPorChamada = getCiclosAtivosPorChamada(ciclos)
     expect(ativosPorChamada['ch-mun']?.id).toBe('c1')
     expect(ativosPorChamada['ch-est']?.id).toBe('c2')
   })

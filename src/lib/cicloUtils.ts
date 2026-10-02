@@ -496,15 +496,6 @@ export function isCicloNaoTerminal(status?: string): boolean {
   return !isCicloTerminal(status)
 }
 
-export interface CicloContratoRef {
-  id?: string
-  ciclo_id: string
-  contrato_id: string
-  fase: string
-  motivo_cancelamento?: string
-  data_cancelamento?: string
-}
-
 /**
  * Formata o nome amigável da fase (ex.: coletando -> Coletando, correcao -> Correção, coleta_encerrada -> Coleta Encerrada)
  * Normaliza 'coleta_encerrada', 'coletado' e 'coleta encerrada' para exibir "Coleta Encerrada".
@@ -523,111 +514,20 @@ export function formatFaseAmigavel(fase?: string): string {
 }
 
 /**
- * Deriva o status consolidado de um ciclo com base nas fases dos seus contratos.
- * - Se não houver vínculos: usa ciclo.status (fallback de compatibilidade) ou 'coletando'
- * - Se todos os contratos estiverem fechados: 'fechado'
- * - Se todos os contratos estiverem cancelados: 'cancelado'
- * - Trata 'coleta_encerrada' e 'coletado' como a mesma fase consolidada não-terminal (retorna 'coleta_encerrada')
+ * Retorna o status de um ciclo a partir do seu campo status próprio.
  */
-export function derivarStatusCiclo(
-  cicloId: string,
-  cicloContratos: CicloContratoRef[],
-  fallbackStatus?: string,
-): string {
-  const vinculados = cicloContratos.filter((cc) => cc.ciclo_id === cicloId)
-  if (vinculados.length === 0) {
-    const fb = (fallbackStatus || 'coletando').toLowerCase()
-    if (fb === 'coletado' || fb === 'coleta_encerrada' || fb === 'coleta encerrada') {
-      return 'coleta_encerrada'
-    }
-    return fb
-  }
-
-  const todasFases = vinculados.map((cc) => (cc.fase || 'coletando').toLowerCase())
-  const todosFechados = todasFases.every((f) => f === 'fechado')
-  if (todosFechados) return 'fechado'
-
-  const todosCancelados = todasFases.every((f) => f === 'cancelado')
-  if (todosCancelados) return 'cancelado'
-
-  // Se houver algum em Coletando
-  if (todasFases.some((f) => f === 'coletando')) return 'coletando'
-  // Se houver algum em Correção
-  if (todasFases.some((f) => f === 'correcao')) return 'correcao'
-  // Se houver algum em Coleta Encerrada (ou legado coletado)
-  if (
-    todasFases.some((f) => f === 'coleta_encerrada' || f === 'coletado' || f === 'coleta encerrada')
-  ) {
-    return 'coleta_encerrada'
-  }
-
-  const fb = (fallbackStatus || 'coletando').toLowerCase()
+export function derivarStatusCiclo(status?: string): string {
+  const fb = (status || 'coletando').toLowerCase()
   if (fb === 'coletado' || fb === 'coleta_encerrada' || fb === 'coleta encerrada') {
     return 'coleta_encerrada'
   }
   return fb
 }
-/**
- * Gera um resumo textual derivado das fases dos contratos de um ciclo.
- * Exemplo: "3 contratos em Correção, 1 Coletado, 1 Cancelado" ou "Todos em Coletando"
- */
-export function gerarResumoFasesCiclo(
-  cicloId: string,
-  cicloContratos: CicloContratoRef[],
-  contratosMap?: Map<string, { numero?: string }>,
-): string {
-  const vinculadosRaw = cicloContratos.filter((cc) => cc.ciclo_id === cicloId)
-  if (vinculadosRaw.length === 0) {
-    return 'Sem contratos vinculados'
-  }
-
-  // Deduplicar por contrato_id para garantir que cada contrato conte exatamente 1 vez
-  const seen = new Set<string>()
-  const vinculados: CicloContratoRef[] = []
-  for (const cc of vinculadosRaw) {
-    if (!cc.contrato_id || seen.has(cc.contrato_id)) continue
-    seen.add(cc.contrato_id)
-    vinculados.push(cc)
-  }
-
-  if (vinculados.length === 1) {
-    const cName = contratosMap?.get(vinculados[0].contrato_id)?.numero
-    const prefix = cName ? `${cName}: ` : ''
-    return `${prefix}${formatFaseAmigavel(vinculados[0].fase)}`
-  }
-
-  // Agrupar por fase amigável
-  const counts: Record<string, number> = {}
-  for (const cc of vinculados) {
-    const nomeFase = formatFaseAmigavel(cc.fase)
-    counts[nomeFase] = (counts[nomeFase] || 0) + 1
-  }
-
-  const parts = Object.entries(counts).map(([fase, qtd]) => {
-    return `${qtd} ${qtd === 1 ? 'contrato' : 'contratos'} em ${fase}`
-  })
-
-  return parts.join(', ')
-}
 
 /**
- * Verifica se um ciclo tem pelo menos um contrato em fase não-terminal.
- */
-export function hasContratoNaoTerminal(
-  cicloId: string,
-  cicloContratos: CicloContratoRef[],
-  fallbackStatus?: string,
-): boolean {
-  const vinculados = cicloContratos.filter((cc) => cc.ciclo_id === cicloId)
-  if (vinculados.length === 0) {
-    return isCicloNaoTerminal(fallbackStatus)
-  }
-  return vinculados.some((cc) => isCicloNaoTerminal(cc.fase))
-}
-
-/**
- * Identifica o ciclo ativo entre uma lista de ciclos segundo a nova regra:
- * Ciclo ATIVO = o mais recente ciclo com PELO MENOS UM contrato em fase não-terminal. Sempre no máximo 1.
+ * Identifica o ciclo ativo entre uma lista de ciclos:
+ * Ciclo ATIVO = o mais recente ciclo com status não-terminal (coletando, correcao ou coleta_encerrada)
+ * da chamada especificada (ou geral). No máximo 1 por chamada.
  */
 export function getCicloAtivo(
   ciclos: Array<{
@@ -637,7 +537,6 @@ export function getCicloAtivo(
     data_inicio?: string
     chamada_id?: string
   }>,
-  cicloContratos?: CicloContratoRef[],
   chamadaId?: string,
 ): any | null {
   let lista = [...ciclos]
@@ -652,18 +551,8 @@ export function getCicloAtivo(
     return tB - tA
   })
 
-  if (!cicloContratos || cicloContratos.length === 0) {
-    const naoTerminais = ordenados.filter((c) => isCicloNaoTerminal(c.status))
-    return naoTerminais[0] || null
-  }
-
-  for (const c of ordenados) {
-    if (hasContratoNaoTerminal(c.id, cicloContratos, c.status)) {
-      return c
-    }
-  }
-
-  return null
+  const naoTerminais = ordenados.filter((c) => isCicloNaoTerminal(c.status))
+  return naoTerminais[0] || null
 }
 
 /**
@@ -677,7 +566,6 @@ export function getCiclosAtivosPorChamada(
     data_inicio?: string
     chamada_id?: string
   }>,
-  cicloContratos?: CicloContratoRef[],
 ): Record<string, any> {
   const porChamada: Record<string, any> = {}
   const chamadasIds = Array.from(
@@ -685,7 +573,7 @@ export function getCiclosAtivosPorChamada(
   )
 
   for (const chId of chamadasIds) {
-    const ativo = getCicloAtivo(ciclos, cicloContratos, chId)
+    const ativo = getCicloAtivo(ciclos, chId)
     if (ativo) {
       porChamada[chId] = ativo
     }

@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-02T15:30:48.622Z",
+  "generatedAt": "2026-10-02T16:42:28.341Z",
   "collections": [
     {
       "name": "users",
@@ -1244,70 +1244,6 @@
         "CREATE INDEX idx_despachos_contrato ON despachos (contrato_id)",
         "CREATE INDEX idx_despachos_ciclo ON despachos (ciclo_id)",
         "CREATE INDEX `idx_despachos_chamada` ON `despachos` (chamada_id)"
-      ]
-    },
-    {
-      "name": "ciclo_contratos",
-      "type": "base",
-      "apiRules": {
-        "list": "@request.auth.id != ''",
-        "view": "@request.auth.id != ''",
-        "create": "@request.auth.id != ''",
-        "update": "@request.auth.id != ''",
-        "delete": "@request.auth.id != ''"
-      },
-      "fields": [
-        {
-          "name": "ciclo_id",
-          "type": "relation",
-          "required": true,
-          "system": false,
-          "collectionRef": "ciclos"
-        },
-        {
-          "name": "contrato_id",
-          "type": "relation",
-          "required": true,
-          "system": false,
-          "collectionRef": "contratos"
-        },
-        {
-          "name": "fase",
-          "type": "text",
-          "required": true,
-          "system": false
-        },
-        {
-          "name": "motivo_cancelamento",
-          "type": "text",
-          "required": false,
-          "system": false
-        },
-        {
-          "name": "data_cancelamento",
-          "type": "date",
-          "required": false,
-          "system": false
-        },
-        {
-          "name": "created",
-          "type": "autodate",
-          "required": false,
-          "system": false,
-          "autodateTriggers": ["onCreate"]
-        },
-        {
-          "name": "updated",
-          "type": "autodate",
-          "required": false,
-          "system": false,
-          "autodateTriggers": ["onCreate", "onUpdate"]
-        }
-      ],
-      "indexes": [
-        "CREATE UNIQUE INDEX idx_ciclo_contratos_unique ON ciclo_contratos (ciclo_id, contrato_id)",
-        "CREATE INDEX idx_ciclo_contratos_ciclo ON ciclo_contratos (ciclo_id)",
-        "CREATE INDEX idx_ciclo_contratos_contrato ON ciclo_contratos (contrato_id)"
       ]
     },
     {

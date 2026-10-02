@@ -52,21 +52,6 @@ export type CicloStatus =
   | 'cancelado'
   | string
 
-export interface CicloContratoRecord {
-  id: string
-  ciclo_id: string
-  contrato_id: string
-  fase: CicloStatus
-  motivo_cancelamento?: string
-  data_cancelamento?: string
-  expand?: {
-    ciclo_id?: CicloRecord
-    contrato_id?: ContratoRecord
-  }
-  created?: string
-  updated?: string
-}
-
 export type DiaSemana = 'domingo' | 'segunda' | 'terca' | 'quarta' | 'quinta' | 'sexta' | 'sabado'
 
 export const DIAS_SEMANA_ORDEM: readonly DiaSemana[] = [
