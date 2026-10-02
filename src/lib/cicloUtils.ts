@@ -515,13 +515,38 @@ export function formatFaseAmigavel(fase?: string): string {
 
 /**
  * Retorna o status de um ciclo a partir do seu campo status próprio.
+ * Mantém assinatura retrocompatível aceitando parâmetros legados:
+ * derivarStatusCiclo(status) OU derivarStatusCiclo(cicloId, cicloContratos, status)
  */
-export function derivarStatusCiclo(status?: string): string {
-  const fb = (status || 'coletando').toLowerCase()
+export function derivarStatusCiclo(arg1?: string, arg2?: any, arg3?: string): string {
+  const statusRaw = typeof arg3 === 'string' ? arg3 : typeof arg1 === 'string' ? arg1 : 'coletando'
+  const fb = (statusRaw || 'coletando').toLowerCase()
   if (fb === 'coletado' || fb === 'coleta_encerrada' || fb === 'coleta encerrada') {
     return 'coleta_encerrada'
   }
   return fb
+}
+
+/**
+ * Resumo textual da fase do ciclo (aposentado o controle individual por contrato).
+ * A fase agora é única do próprio ciclo.
+ * Assinatura compatível com código legado:
+ * gerarResumoFasesCiclo(cicloIdOrStatus, ...args)
+ */
+export function gerarResumoFasesCiclo(
+  cicloOuId?: string | { status?: string } | null,
+  _arg2?: any,
+  _arg3?: any,
+): string {
+  let statusRaw = 'coletando'
+  if (typeof cicloOuId === 'object' && cicloOuId !== null) {
+    statusRaw = cicloOuId.status || 'coletando'
+  } else if (typeof cicloOuId === 'string') {
+    // Se for string de status ou id
+    statusRaw = cicloOuId
+  }
+  const statusDerivado = derivarStatusCiclo(statusRaw)
+  return formatFaseAmigavel(statusDerivado)
 }
 
 /**

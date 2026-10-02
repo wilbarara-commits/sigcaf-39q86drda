@@ -32,7 +32,7 @@ export function CancelarContratoDialog({
   contract,
   onSuccess,
 }: CancelarContratoDialogProps) {
-  const { ciclos, cicloContratos, contractSchools, orders, atestos, refreshData } = useApp()
+  const { ciclos, contractSchools, orders, atestos, refreshData } = useApp()
 
   const [motivo, setMotivo] = useState('')
   const [confirmCicloChecked, setConfirmCicloChecked] = useState(false)
@@ -62,8 +62,10 @@ export function CancelarContratoDialog({
       contractSchools.filter((cs) => cs.contrato_id === contract.id).map((cs) => cs.escola_id),
     )
 
-    // Ciclos nos quais o contrato participa
-    const vinculosCiclo = cicloContratos.filter((cc) => cc.contrato_id === contract.id)
+    // Ciclos nos quais o contrato participa (ciclos da chamada do contrato)
+    const ciclosDoContrato = ciclos.filter(
+      (c) => !contract.chamada_id || c.chamada_id === contract.chamada_id,
+    )
 
     // Detalhar cada ciclo vinculado que esteja em fase não-terminal
     const ciclosNaoTerminais: Array<{
@@ -75,14 +77,13 @@ export function CancelarContratoDialog({
 
     let totalAtestosBloqueantes = 0
 
-    for (const cc of vinculosCiclo) {
-      const cicloObj = ciclos.find((c) => c.id === cc.ciclo_id)
-      const fase = cc.fase || cicloObj?.status || 'coletando'
+    for (const cicloObj of ciclosDoContrato) {
+      const fase = cicloObj.status || 'coletando'
 
       if (isCicloNaoTerminal(fase)) {
         // Checar atestos emitidos para escolas deste contrato neste ciclo não-terminal
         const pedidosDoContratoNoCiclo = orders.filter(
-          (o) => o.cicloId === cc.ciclo_id && escolasIds.has(o.schoolId),
+          (o) => o.cicloId === cicloObj.id && escolasIds.has(o.schoolId),
         )
         const pedidoIds = new Set(pedidosDoContratoNoCiclo.map((o) => o.id))
         const atestosEmitidos = atestos.filter((a) => pedidoIds.has(a.orderId))
@@ -91,8 +92,8 @@ export function CancelarContratoDialog({
         totalAtestosBloqueantes += atestosCount
 
         ciclosNaoTerminais.push({
-          cicloId: cc.ciclo_id,
-          nome: cicloObj?.nome || 'Ciclo',
+          cicloId: cicloObj.id,
+          nome: cicloObj.nome || 'Ciclo',
           fase: formatFaseAmigavel(fase),
           atestosCount,
         })
@@ -105,7 +106,7 @@ export function CancelarContratoDialog({
       totalAtestosBloqueantes,
       escolasDoContratoIds: escolasIds,
     }
-  }, [contract, cicloContratos, ciclos, contractSchools, orders, atestos])
+  }, [contract, ciclos, contractSchools, orders, atestos])
 
   if (!contract) return null
 

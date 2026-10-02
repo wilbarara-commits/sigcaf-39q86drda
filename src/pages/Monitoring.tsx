@@ -52,11 +52,10 @@ export default function Monitoring() {
   const navigate = useNavigate()
   const {
     ciclos,
-    cicloContratos,
     contracts,
     contractSchools,
     activeCiclo,
-    updateCicloContratoFase,
+    updateCicloStatus,
     schools,
     orders,
     chamadas,
@@ -112,51 +111,26 @@ export default function Monitoring() {
       })
   }, [selectedCiclo])
 
-  // Contratos vinculados ao ciclo selecionado (deduplicados estritamente por contratoId)
+  // Contratos participantes do ciclo: contratos ativos da chamada do ciclo (ou todos os ativos se ciclo sem chamada)
   const contratosVinculados = useMemo(() => {
     if (!selectedCiclo) return []
-    const ccList = cicloContratos.filter((cc) => cc.ciclo_id === selectedCiclo.id)
+    const chId = selectedCiclo.chamada_id
+    const faseCiclo = derivarStatusCiclo(selectedCiclo.status)
 
-    // Deduplica ccList por contrato_id garantindo apenas 1 entrada por contrato
-    const seenContratos = new Set<string>()
-    const uniqueList: Array<{
-      contratoId: string
-      numero: string
-      fase: string
-      motivo_cancelamento?: string
-      data_cancelamento?: string
-    }> = []
+    const list = contracts.filter((c) => {
+      if (c.status !== 'Ativo') return false
+      if (chId && c.chamada_id && c.chamada_id !== chId) return false
+      return true
+    })
 
-    if (ccList.length === 0) {
-      for (const c of contracts) {
-        if (c.status === 'Ativo' && !seenContratos.has(c.id)) {
-          seenContratos.add(c.id)
-          uniqueList.push({
-            contratoId: c.id,
-            numero: c.numero,
-            fase: selectedCiclo.status || 'coletando',
-            motivo_cancelamento: undefined,
-            data_cancelamento: undefined,
-          })
-        }
-      }
-      return uniqueList
-    }
-
-    for (const cc of ccList) {
-      if (!cc.contrato_id || seenContratos.has(cc.contrato_id)) continue
-      seenContratos.add(cc.contrato_id)
-      const contrato = contracts.find((c) => c.id === cc.contrato_id)
-      uniqueList.push({
-        contratoId: cc.contrato_id,
-        numero: contrato?.numero || cc.expand?.contrato_id?.numero || 'Contrato',
-        fase: cc.fase,
-        motivo_cancelamento: cc.motivo_cancelamento,
-        data_cancelamento: cc.data_cancelamento,
-      })
-    }
-    return uniqueList
-  }, [selectedCiclo, cicloContratos, contracts])
+    return list.map((c) => ({
+      contratoId: c.id,
+      numero: c.numero,
+      fase: faseCiclo,
+      motivo_cancelamento: selectedCiclo.motivo_cancelamento,
+      data_cancelamento: selectedCiclo.data_cancelamento,
+    }))
+  }, [selectedCiclo, contracts])
 
   // Ajustar selectedContratoId se não existir mais na lista
   useEffect(() => {
@@ -174,37 +148,10 @@ export default function Monitoring() {
     }
   }, [contratosVinculados, selectedContratoId])
 
-  // Vínculo do contrato selecionado atualmente
-  const currentCicloContrato = useMemo(() => {
-    if (!selectedCiclo || selectedContratoId === 'todos') return null
-    return (
-      cicloContratos.find(
-        (cc) => cc.ciclo_id === selectedCiclo.id && cc.contrato_id === selectedContratoId,
-      ) || null
-    )
-  }, [selectedCiclo, selectedContratoId, cicloContratos])
-
-  // Fase em vigor na tela: se tem contrato específico selecionado, usa a fase dele; senão usa resumo/predominante
+  // Fase em vigor na tela: a fase pertence unicamente ao ciclo
   const currentFase = useMemo(() => {
-    if (currentCicloContrato) {
-      return currentCicloContrato.fase || 'coletando'
-    }
-    if (contratosVinculados.length > 0) {
-      // Se todos estiverem na mesma fase
-      const fases = contratosVinculados.map((c) => c.fase)
-      if (fases.every((f) => f === fases[0])) return fases[0]
-      if (fases.some((f) => f === 'coletando')) return 'coletando'
-      if (fases.some((f) => f === 'correcao')) return 'correcao'
-      if (
-        fases.some((f) => f === 'coleta_encerrada' || f === 'coletado' || f === 'coleta encerrada')
-      ) {
-        return 'coleta_encerrada'
-      }
-      if (fases.every((f) => f === 'fechado')) return 'fechado'
-      if (fases.every((f) => f === 'cancelado')) return 'cancelado'
-    }
-    return selectedCiclo?.status || 'coletando'
-  }, [currentCicloContrato, contratosVinculados, selectedCiclo])
+    return derivarStatusCiclo(selectedCiclo?.status)
+  }, [selectedCiclo])
 
   const isSelectedAtivo = activeCiclo?.id === selectedCiclo?.id
 
@@ -325,7 +272,7 @@ export default function Monitoring() {
     enviosWhatsapp,
   ])
 
-  // Mudança de fase: opera sobre o par ciclo + contrato selecionado
+  // Mudança de fase: opera sobre o status do ciclo
   const handleChangeFase = async (
     newFase: 'coletando' | 'correcao' | 'coleta_encerrada' | 'coletado' | 'fechado',
   ) => {
@@ -335,7 +282,7 @@ export default function Monitoring() {
     }
 
     if (currentFase === 'cancelado') {
-      toast.error('Não é possível alterar a fase de um contrato/ciclo cancelado.')
+      toast.error('Não é possível alterar a fase de um ciclo cancelado.')
       return
     }
 
@@ -344,16 +291,7 @@ export default function Monitoring() {
 
     setUpdating(true)
     try {
-      if (selectedContratoId && selectedContratoId !== 'todos') {
-        await updateCicloContratoFase(selectedCiclo.id, selectedContratoId, tokenFase)
-      } else {
-        // Se 'todos', aplica a todos os contratos vinculados ao ciclo
-        for (const c of contratosVinculados) {
-          if (c.fase !== 'cancelado') {
-            await updateCicloContratoFase(selectedCiclo.id, c.contratoId, tokenFase)
-          }
-        }
-      }
+      await updateCicloStatus(selectedCiclo.id, tokenFase)
     } finally {
       setUpdating(false)
     }
@@ -375,9 +313,8 @@ export default function Monitoring() {
 
   const resumoFasesTexto = useMemo(() => {
     if (!selectedCiclo) return ''
-    const contratosMap = new Map(contracts.map((c) => [c.id, { numero: c.numero }]))
-    return gerarResumoFasesCiclo(selectedCiclo.id, cicloContratos, contratosMap)
-  }, [selectedCiclo, cicloContratos, contracts])
+    return gerarResumoFasesCiclo(selectedCiclo)
+  }, [selectedCiclo])
 
   const selectedContratoNumero = useMemo(() => {
     if (selectedContratoId === 'todos') return 'Todos os contratos'
@@ -454,11 +391,7 @@ export default function Monitoring() {
           {/* Botão Cancelar Ciclo (cancela o CICLO INTEIRO selecionado no seletor) */}
           {selectedCiclo &&
             (() => {
-              const statusCiclo = derivarStatusCiclo(
-                selectedCiclo.id,
-                cicloContratos,
-                selectedCiclo.status,
-              )
+              const statusCiclo = derivarStatusCiclo(selectedCiclo.status)
               const canCancelCiclo =
                 statusCiclo !== 'fechado' &&
                 statusCiclo !== 'cancelado' &&
@@ -531,11 +464,9 @@ export default function Monitoring() {
                 {currentFase === 'cancelado' && (
                   <Badge variant="destructive" className="text-xs">
                     Cancelado{' '}
-                    {currentCicloContrato?.motivo_cancelamento
-                      ? `— ${currentCicloContrato.motivo_cancelamento}`
-                      : selectedCiclo?.motivo_cancelamento
-                        ? `— ${selectedCiclo.motivo_cancelamento}`
-                        : ''}
+                    {selectedCiclo?.motivo_cancelamento
+                      ? `— ${selectedCiclo.motivo_cancelamento}`
+                      : ''}
                   </Badge>
                 )}
               </div>

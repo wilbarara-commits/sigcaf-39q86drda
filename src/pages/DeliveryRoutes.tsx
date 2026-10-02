@@ -109,7 +109,6 @@ export default function DeliveryRoutes() {
     chamadas,
     contracts,
     contractSchools,
-    cicloContratos,
     orders,
     schools,
     ciclos,
@@ -559,53 +558,27 @@ export default function DeliveryRoutes() {
           }) || activeCiclo
       : activeCiclo
 
-    // Validação de despacho baseada na FASE DO CONTRATO no ciclo:
-    // O despacho só é liberado na fase "Coleta Encerrada" do contrato no ciclo.
+    // Validação de despacho baseada no STATUS DO CICLO:
+    // O despacho só é liberado quando o ciclo da chamada/pedido estiver em "coleta_encerrada".
     const pedidoBloqueado = pedidosPendentesRota.find((ped) => {
       const pedCiclo = ciclos.find((c) => c.id === ped.cicloId) || cicloAtivoChamadaRota
       if (!pedCiclo || pedCiclo.status === 'fechado' || pedCiclo.status === 'cancelado') {
         return true
       }
-
-      const linkEscola = contractSchools.find((cs) => cs.escola_id === ped.schoolId)
-      const contratoId =
-        linkEscola?.contrato_id ||
-        rotaToDispatch.contrato_id ||
-        contracts.find((cnt) => cnt.escolas.some((e) => e.escolaId === ped.schoolId))?.id
-
-      if (!contratoId) {
-        return true
-      }
-
-      const cc = cicloContratos.find(
-        (c) => c.ciclo_id === pedCiclo.id && c.contrato_id === contratoId,
-      )
-      const fase = cc?.fase || pedCiclo.status
-      return !isFaseElegivelParaDespacho(fase)
+      return !isFaseElegivelParaDespacho(pedCiclo.status)
     })
 
     if (pedidoBloqueado) {
       const pedCiclo = ciclos.find((c) => c.id === pedidoBloqueado.cicloId) || cicloAtivoChamadaRota
-      const linkEscola = contractSchools.find((cs) => cs.escola_id === pedidoBloqueado.schoolId)
-      const contratoId =
-        linkEscola?.contrato_id ||
-        rotaToDispatch.contrato_id ||
-        contracts.find((cnt) => cnt.escolas.some((e) => e.escolaId === pedidoBloqueado.schoolId))
-          ?.id
-
-      const cc =
-        pedCiclo && contratoId
-          ? cicloContratos.find((c) => c.ciclo_id === pedCiclo.id && c.contrato_id === contratoId)
-          : null
-      const faseAtual = cc?.fase || pedCiclo?.status || 'desconhecida'
+      const faseAtual = pedCiclo?.status || 'desconhecida'
 
       if (pedCiclo?.status === 'fechado' || faseAtual.toLowerCase() === 'fechado') {
-        toast.error('Ciclo já se encontra fechado para este contrato.')
+        toast.error('Ciclo já se encontra fechado.')
       } else if (pedCiclo?.status === 'cancelado' || faseAtual.toLowerCase() === 'cancelado') {
-        toast.error('Ciclo/contrato cancelado. Despacho não permitido.')
+        toast.error('Ciclo cancelado. Despacho não permitido.')
       } else {
         toast.error(
-          `Despacho liberado apenas após a Coleta Encerrada (fase atual: "${faseAtual}").`,
+          `Despacho liberado apenas após a Coleta Encerrada (fase atual do ciclo: "${faseAtual}").`,
         )
       }
       return

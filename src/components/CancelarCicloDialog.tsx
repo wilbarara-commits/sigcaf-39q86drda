@@ -25,20 +25,11 @@ interface CancelarCicloDialogProps {
 
 export function CancelarCicloDialog({
   ciclo,
-  contratoId,
   open,
   onOpenChange,
   onSuccess,
 }: CancelarCicloDialogProps) {
-  const {
-    orders,
-    atestos,
-    contracts,
-    contractSchools,
-    cicloContratos,
-    cancelarCiclo,
-    cancelarCicloContrato,
-  } = useApp()
+  const { orders, atestos, cancelarCiclo } = useApp()
   const [motivo, setMotivo] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
 
@@ -50,28 +41,8 @@ export function CancelarCicloDialog({
 
   if (!ciclo) return null
 
-  const contratoAlvo = contratoId ? contracts.find((c) => c.id === contratoId) : null
-  const currentCC = contratoId
-    ? cicloContratos.find((cc) => cc.ciclo_id === ciclo.id && cc.contrato_id === contratoId)
-    : null
-
-  const isContratoScope = Boolean(contratoId && contratoAlvo)
-
-  // Escolas do contrato alvo (se escopo de contrato)
-  const contratoEscolaIds = isContratoScope
-    ? new Set(
-        contractSchools.filter((cs) => cs.contrato_id === contratoId).map((cs) => cs.escola_id),
-      )
-    : null
-
-  // Identificar pedidos afetados
-  const pedidosAfetados = orders.filter((o) => {
-    if (o.cicloId !== ciclo.id) return false
-    if (contratoEscolaIds) {
-      return contratoEscolaIds.has(o.schoolId)
-    }
-    return true
-  })
+  // Identificar pedidos afetados pelo ciclo
+  const pedidosAfetados = orders.filter((o) => o.cicloId === ciclo.id)
   const pedidosNaoCancelados = pedidosAfetados.filter((o) => o.status !== 'Cancelado')
   const pedidoIdsSet = new Set(pedidosAfetados.map((o) => o.id))
 
@@ -80,10 +51,8 @@ export function CancelarCicloDialog({
   const isBloqueadoPorAtestos = atestosEmitidos.length > 0
 
   // Proteção 3: FECHADO ou CANCELADO não pode ser cancelado
-  const isFechado = isContratoScope ? currentCC?.fase === 'fechado' : ciclo.status === 'fechado'
-  const isJaCancelado = isContratoScope
-    ? currentCC?.fase === 'cancelado'
-    : ciclo.status === 'cancelado'
+  const isFechado = ciclo.status === 'fechado'
+  const isJaCancelado = ciclo.status === 'cancelado'
 
   // Proteção 2: COM pedidos -> pergunta se cancela pedidos junto
   const hasPedidos = pedidosNaoCancelados.length > 0
@@ -94,12 +63,7 @@ export function CancelarCicloDialog({
 
     setIsSubmitting(true)
     try {
-      let ok = false
-      if (isContratoScope && contratoId) {
-        ok = await cancelarCicloContrato(ciclo.id, contratoId, trimmed, cancelarPedidosJunto)
-      } else {
-        ok = await cancelarCiclo(ciclo.id, trimmed, cancelarPedidosJunto)
-      }
+      const ok = await cancelarCiclo(ciclo.id, trimmed, cancelarPedidosJunto)
       if (ok) {
         onOpenChange(false)
         onSuccess?.()
@@ -109,9 +73,7 @@ export function CancelarCicloDialog({
     }
   }
 
-  const tituloDialog = isContratoScope
-    ? `Cancelar Contrato ${contratoAlvo?.numero} no Ciclo: ${ciclo.nome}`
-    : `Cancelar Ciclo: ${ciclo.nome}`
+  const tituloDialog = `Cancelar Ciclo: ${ciclo.nome}`
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -121,9 +83,7 @@ export function CancelarCicloDialog({
             <Ban className="h-5 w-5" /> {tituloDialog}
           </DialogTitle>
           <DialogDescription>
-            {isContratoScope
-              ? 'O cancelamento afetará apenas este contrato neste ciclo. Os outros contratos do ciclo seguem normalmente.'
-              : 'O cancelamento congela o ciclo e impede novas coletas ou importações.'}
+            O cancelamento congela o ciclo e impede novas coletas ou importações.
           </DialogDescription>
         </DialogHeader>
 
@@ -134,9 +94,7 @@ export function CancelarCicloDialog({
               <AlertOctagon className="h-4 w-4" />
               <AlertTitle className="font-semibold text-xs">Ação Não Permitida</AlertTitle>
               <AlertDescription className="text-xs mt-1">
-                {isContratoScope
-                  ? 'Contrato já fechado neste ciclo não pode ser cancelado (o caminho é o ciclo seguinte).'
-                  : 'Ciclo já fechado não pode ser cancelado (o caminho é o ciclo seguinte).'}
+                Ciclo já fechado não pode ser cancelado (o caminho é o ciclo seguinte).
               </AlertDescription>
             </Alert>
           )}
@@ -147,9 +105,7 @@ export function CancelarCicloDialog({
               <AlertOctagon className="h-4 w-4" />
               <AlertTitle className="font-semibold text-xs">Ação Não Permitida</AlertTitle>
               <AlertDescription className="text-xs mt-1">
-                {isContratoScope
-                  ? 'Este contrato já está cancelado neste ciclo.'
-                  : 'Este ciclo já está cancelado.'}
+                Este ciclo já está cancelado.
               </AlertDescription>
             </Alert>
           )}
@@ -160,9 +116,8 @@ export function CancelarCicloDialog({
               <ShieldAlert className="h-4 w-4" />
               <AlertTitle className="font-semibold text-xs">Cancelamento Bloqueado</AlertTitle>
               <AlertDescription className="text-xs mt-1 leading-relaxed">
-                {isContratoScope
-                  ? 'Este contrato possui atestos emitidos neste ciclo — já houve entrega formalizada. O caminho é FECHAR, não cancelá-lo.'
-                  : 'Este ciclo possui atestos emitidos — já houve entrega formalizada. O caminho é FECHAR o ciclo, não cancelá-lo.'}
+                Este ciclo possui atestos emitidos — já houve entrega formalizada. O caminho é
+                FECHAR o ciclo, não cancelá-lo.
               </AlertDescription>
             </Alert>
           )}
@@ -238,8 +193,6 @@ export function CancelarCicloDialog({
                     <>
                       <Loader2 className="h-4 w-4 animate-spin" /> Cancelando...
                     </>
-                  ) : isContratoScope ? (
-                    'Cancelar Contrato e Pedidos'
                   ) : (
                     'Cancelar Ciclo e Pedidos'
                   )}

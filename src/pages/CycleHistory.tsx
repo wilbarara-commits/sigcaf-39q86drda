@@ -59,8 +59,7 @@ import { AbrirCicloDialog } from '@/components/AbrirCicloDialog'
 import { CancelarCicloDialog } from '@/components/CancelarCicloDialog'
 
 export default function CycleHistory() {
-  const { chamadas, ciclos, cicloContratos, contracts, activeCiclo, orders, products, schools } =
-    useApp()
+  const { chamadas, ciclos, contracts, activeCiclo, orders, products, schools } = useApp()
 
   const [dataInicio, setDataInicio] = useState('')
   const [dataFim, setDataFim] = useState('')
@@ -310,25 +309,13 @@ export default function CycleHistory() {
                     }
 
                     const isAtivo = activeCiclo?.id === c.id
-                    const statusDerivado = derivarStatusCiclo(c.id, cicloContratos, c.status)
+                    const statusDerivado = derivarStatusCiclo(c.status)
                     const isNaoTerminal = isCicloNaoTerminal(statusDerivado)
                     const isPendente = isNaoTerminal && !isAtivo
                     const diasAtraso = calcularDiasAtrasoFechamento(c.data_fim)
 
-                    // Resumo das fases por contrato
-                    const contratosMap = new Map(
-                      contracts.map((ct) => [ct.id, { numero: ct.numero }]),
-                    )
-                    const resumoFases = gerarResumoFasesCiclo(c.id, cicloContratos, contratosMap)
-
-                    // Contratos cancelados deste ciclo (deduplicados por contrato_id)
-                    const seenCcCancelados = new Set<string>()
-                    const ccCancelados = cicloContratos.filter((cc) => {
-                      if (cc.ciclo_id !== c.id || cc.fase !== 'cancelado') return false
-                      if (seenCcCancelados.has(cc.contrato_id)) return false
-                      seenCcCancelados.add(cc.contrato_id)
-                      return true
-                    })
+                    // Resumo da fase do ciclo
+                    const resumoFases = gerarResumoFasesCiclo(c)
 
                     let statusBadge = (
                       <Badge variant="secondary" className="capitalize">
@@ -357,9 +344,7 @@ export default function CycleHistory() {
                     } else if (statusDerivado === 'fechado') {
                       statusBadge = <Badge variant="secondary">Fechado</Badge>
                     } else if (statusDerivado === 'cancelado') {
-                      const motivoCancelExibir =
-                        c.motivo_cancelamento ||
-                        ccCancelados.find((cc) => cc.motivo_cancelamento)?.motivo_cancelamento
+                      const motivoCancelExibir = c.motivo_cancelamento
                       statusBadge = (
                         <Badge
                           variant="destructive"
@@ -412,27 +397,10 @@ export default function CycleHistory() {
                             <span className="text-[11px] text-muted-foreground leading-tight">
                               {resumoFases}
                             </span>
-                            {ccCancelados.length > 0 && statusDerivado !== 'cancelado' && (
-                              <div className="flex flex-wrap gap-1 mt-0.5">
-                                {ccCancelados.map((cc) => {
-                                  const cNome =
-                                    contratosMap.get(cc.contrato_id)?.numero || 'Contrato'
-                                  return (
-                                    <Badge
-                                      key={cc.id}
-                                      variant="destructive"
-                                      className="text-[9px] py-0 px-1"
-                                      title={
-                                        cc.motivo_cancelamento
-                                          ? `Motivo: ${cc.motivo_cancelamento}`
-                                          : undefined
-                                      }
-                                    >
-                                      {cNome} cancelado
-                                    </Badge>
-                                  )
-                                })}
-                              </div>
+                            {c.motivo_cancelamento && statusDerivado === 'cancelado' && (
+                              <span className="text-[10px] text-destructive italic">
+                                Motivo: {c.motivo_cancelamento}
+                              </span>
                             )}
                             {isPendente && (
                               <Badge className="bg-amber-600 hover:bg-amber-700 text-[10px]">
