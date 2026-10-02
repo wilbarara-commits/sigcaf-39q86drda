@@ -1670,6 +1670,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const prevOrders = [...orders]
     const prevProducts = [...products]
     const prevDespachos = [...despachos]
+    const prevRotasLogisticas = [...rotasLogisticas]
+    const prevRotas = [...rotas]
     const pedidosEmRotaIds = new Set(pedidosEmRota.map((p) => p.id))
 
     // Optimistic Update: pedidos afetados -> Entregue
@@ -1693,11 +1695,35 @@ export function AppProvider({ children }: { children: ReactNode }) {
       ),
     )
 
+    // Optimistic Update: limpar caminhão da rota concluída (para o caminhão sumir imediatamente)
+    const limparCaminhaoDaRota = (rList: RotaRecord[]) =>
+      rList.map((r) =>
+        r.id === rotaLogisticaId
+          ? {
+              ...r,
+              caminhao_escola_id: undefined,
+              caminhao_posicao_atual: undefined,
+            }
+          : r,
+      )
+    setRotasLogisticas(limparCaminhaoDaRota)
+    setRotas(limparCaminhaoDaRota)
+
     try {
       await rotasLogisticasService.entregarRotaBatch({
         rota_logistica_id: rotaLogisticaId,
         user_id: userId,
       })
+
+      // Garantir limpeza no backend via rotasService também caso o hook falhe parcialmente
+      try {
+        await rotasService.atualizarPosicaoCaminhao(rotaLogisticaId, {
+          caminhao_escola_id: null,
+          caminhao_posicao_atual: null,
+        })
+      } catch (_) {
+        // Tolerante: o hook do backend já atualizou
+      }
 
       toast.success(`Rota confirmada como entregue! ${pedidosEmRota.length} pedido(s) finalizados.`)
       return true
@@ -1707,6 +1733,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setOrders(prevOrders)
       setProducts(prevProducts)
       setDespachos(prevDespachos)
+      setRotasLogisticas(prevRotasLogisticas)
+      setRotas(prevRotas)
       toast.error('Falha ao confirmar entrega da rota.')
       return false
     }

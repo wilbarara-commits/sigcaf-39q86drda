@@ -192,13 +192,14 @@ export async function obterRotaEstradaEmRotaOSRM(
         ? fetchOsrmDrivingRoute(pontosConcluidos, timeoutMs)
         : Promise.resolve(null)
 
-    // B) Trecho Ativo em VERMELHO:
-    // Se está na última parada: Última parada (onde o caminhão está) -> Depósito Central
-    // Caso contrário: Caminhão -> Próxima Parada
-    const promisseAtivo = fetchOsrmDrivingRoute([pontoCaminhao, pontoProxima], timeoutMs)
+    // B) Trecho Ativo em VERMELHO (apenas antes da última parada: caminhão -> próxima parada)
+    // Se está na última parada, não há trecho ativo vermelho (o retorno é verde)
+    const promisseAtivo = !isUltimaParada
+      ? fetchOsrmDrivingRoute([pontoCaminhao, pontoProxima], timeoutMs)
+      : Promise.resolve(null)
 
     // C) Trecho de Retorno: da Última parada de volta ao Depósito Central
-    // (Se estiver na última parada, o trecho ativo já é o retorno em vermelho)
+    // (Quando na última parada, este trecho representa o retorno em verde pelas estradas)
     const promisseRetorno = fetchOsrmDrivingRoute([pontoUltima, deposito], timeoutMs)
 
     // D) Trecho restante intermediário (se houver paradas entre a próxima e a última):
@@ -226,12 +227,14 @@ export async function obterRotaEstradaEmRotaOSRM(
     const distConcluidoKm = (resConcluido?.distanceMeters || 0) / 1000
     const durConcluidoSec = resConcluido?.durationSeconds || 0
 
-    const coordsAtivo = resAtivo?.coordinates || [
-      [pontoCaminhao.latitude, pontoCaminhao.longitude],
-      [pontoProxima.latitude, pontoProxima.longitude],
-    ]
-    const distAtivoKm = (resAtivo?.distanceMeters || 0) / 1000
-    const durAtivoSec = resAtivo?.durationSeconds || 0
+    const coordsAtivo = isUltimaParada
+      ? []
+      : resAtivo?.coordinates || [
+          [pontoCaminhao.latitude, pontoCaminhao.longitude],
+          [pontoProxima.latitude, pontoProxima.longitude],
+        ]
+    const distAtivoKm = isUltimaParada ? 0 : (resAtivo?.distanceMeters || 0) / 1000
+    const durAtivoSec = isUltimaParada ? 0 : resAtivo?.durationSeconds || 0
 
     const coordsRetorno = resRetorno?.coordinates || [
       [pontoUltima.latitude, pontoUltima.longitude],
@@ -244,19 +247,21 @@ export async function obterRotaEstradaEmRotaOSRM(
     const durIntermediarioSec = resIntermediario?.durationSeconds || 0
 
     // Distância restante:
-    // Se está na última parada, o trecho ativo é exatamente o retorno ao depósito (distAtivoKm), então não duplica
+    // Se está na última parada, o trecho restante é exatamente o retorno ao depósito
     const distRestanteKm = isUltimaParada
-      ? distAtivoKm
+      ? distRetornoKm
       : distAtivoKm + distIntermediarioKm + distRetornoKm
     const durRestanteMin = isUltimaParada
-      ? Math.round(durAtivoSec / 60)
+      ? Math.round(durRetornoSec / 60)
       : Math.round((durAtivoSec + durIntermediarioSec + durRetornoSec) / 60)
 
     // Distância total do percurso completo (circuito fechado: depósito -> todas paradas -> depósito)
     // Se temos trechoConcluido + trechoAtivo + intermediario + retorno
-    const distTotalCircuitoKm = distConcluidoKm + distAtivoKm + distIntermediarioKm + distRetornoKm
+    const distTotalCircuitoKm =
+      distConcluidoKm + (isUltimaParada ? 0 : distAtivoKm) + distIntermediarioKm + distRetornoKm
     const durTotalMin = Math.round(
-      (durConcluidoSec + durAtivoSec + durIntermediarioSec + durRetornoSec) / 60,
+      (durConcluidoSec + (isUltimaParada ? 0 : durAtivoSec) + durIntermediarioSec + durRetornoSec) /
+        60,
     )
 
     const result: OsrmEmRotaResult = {

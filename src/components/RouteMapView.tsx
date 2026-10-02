@@ -462,22 +462,14 @@ export function RouteMapView({
     return pontos
   }, [isEmRota, caminhaoCoordIndex, paradasComCoord, osrmEmRotaResult, depositoCoords])
 
-  // 2. Trecho em VERMELHO: Da posição do caminhão (ou Depósito se não marcado) até a PRÓXIMA parada
-  // Caso o caminhão esteja na última parada, o trecho ativo é o RETORNO da última parada ao Depósito Central em VERMELHO
+  // 2. Trecho em VERMELHO: Da posição do caminhão (ou Depósito se não marcado) até a PRÓXIMA parada.
+  // IMPORTANTE: O trecho vermelho só existe ANTES da última parada (posição -> próxima parada).
+  // Quando o caminhão está na última parada, ele passa a retornar ao depósito em VERDE sólido.
   const trechoEmRotaAtivoVermelho = useMemo<[number, number][]>(() => {
-    if (!isEmRota || paradasComCoord.length === 0) return []
+    if (!isEmRota || paradasComCoord.length === 0 || isCaminhaoNaUltimaParada) return []
 
     if (osrmEmRotaResult?.trechoAtivoVermelho && osrmEmRotaResult.trechoAtivoVermelho.length > 0) {
       return osrmEmRotaResult.trechoAtivoVermelho
-    }
-
-    // Se caminhão está na última parada, o trecho ativo é Última Parada -> Depósito Central
-    if (isCaminhaoNaUltimaParada) {
-      const last = paradasComCoord[paradasComCoord.length - 1]
-      return [
-        [last.lat, last.lng],
-        [depositoCoords.latitude, depositoCoords.longitude],
-      ]
     }
 
     if (proximaParadaCoordIndex < 0) return []
@@ -504,6 +496,8 @@ export function RouteMapView({
   ])
 
   // 3. Trecho Retorno ao Depósito Central: da última parada até o Depósito Central
+  // Quando o caminhão está na última parada, este trecho é exibido em VERDE sólido (#059669);
+  // Antes da última parada, é exibido em azul tracejado (#0284c7).
   const trechoEmRotaRetorno = useMemo<[number, number][]>(() => {
     if (!isEmRota || paradasComCoord.length === 0) return []
 
@@ -576,9 +570,9 @@ export function RouteMapView({
           )}
           {isEmRota &&
             (isCaminhaoNaUltimaParada ? (
-              <span className="inline-flex items-center gap-1 font-semibold text-red-600 dark:text-red-400">
-                <span className="inline-block w-2 h-2 rounded-full bg-red-600 animate-pulse"></span>
-                Retorno ao Depósito
+              <span className="inline-flex items-center gap-1 font-semibold text-emerald-600 dark:text-emerald-400">
+                <span className="inline-block w-2 h-2 rounded-full bg-emerald-600 animate-pulse"></span>
+                Retorno ao Depósito (Em regresso)
               </span>
             ) : proximaParada ? (
               <span className="inline-flex items-center gap-1 font-semibold text-red-600 dark:text-red-400">
@@ -765,13 +759,25 @@ export function RouteMapView({
               }}
             />
           )}
-          {/* 3. Trecho de Retorno ao Depósito Central: da última parada ao depósito (azul tracejado #0284c7, dash '6, 6') */}
-          {/* Quando o caminhão está na última parada, o trecho ativo vermelho já cobre esse trecho; não duplicamos */}
+          {/* 3. Trecho de Retorno ao Depósito Central: da última parada ao depósito */}
+          {/* Quando o caminhão está na ÚLTIMA parada: retorno em VERDE sólido (#059669, mesmo tom do percurso concluído) */}
+          {isEmRota && isCaminhaoNaUltimaParada && trechoEmRotaRetorno.length > 1 && (
+            <Polyline
+              positions={trechoEmRotaRetorno}
+              pathOptions={{
+                color: '#059669', // emerald-600 sólido
+                weight: 4,
+                opacity: 0.85,
+                dashArray: undefined,
+              }}
+            />
+          )}
+          {/* ANTES da última parada: retorno futuro previsto em azul tracejado (#0284c7) */}
           {isEmRota && !isCaminhaoNaUltimaParada && trechoEmRotaRetorno.length > 1 && (
             <Polyline
               positions={trechoEmRotaRetorno}
               pathOptions={{
-                color: '#0284c7', // sky blue
+                color: '#0284c7', // sky blue tracejado
                 weight: 3,
                 opacity: 0.8,
                 dashArray: '6, 6',
@@ -800,35 +806,68 @@ export function RouteMapView({
           {/* Itens da Legenda conforme modo */}
           {isEmRota ? (
             <>
-              <div className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 font-medium">
-                <span className="w-5 h-1 bg-emerald-600 inline-block rounded-xs shrink-0"></span>
-                <span>
-                  Percurso Concluído
-                  {caminhaoCoordIndex >= 0 ? ` (Depósito → #${caminhaoCoordIndex + 1})` : ''}
-                </span>
-              </div>
-              <div className="flex items-center gap-1.5 text-red-600 dark:text-red-400 font-semibold">
-                <span className="w-5 h-1.5 bg-red-600 inline-block rounded-xs shrink-0 shadow-xs"></span>
-                <span>
-                  Trecho Ativo em Progresso
-                  {isCaminhaoNaUltimaParada
-                    ? ' (Retorno ao Depósito)'
-                    : ` (${caminhaoCoordIndex >= 0 ? `Caminhão #${caminhaoCoordIndex + 1}` : 'Depósito'} → Próxima #${proximaParada?.ordem ?? proximaParadaCoordIndex + 1})`}
-                </span>
-              </div>
-              <div className="flex items-center gap-1.5 text-muted-foreground">
-                <span className="w-5 h-0.5 border-t-2 border-dashed border-sky-600 inline-block shrink-0"></span>
-                <span>Retorno ao Depósito</span>
-              </div>{' '}
+              {isCaminhaoNaUltimaParada ? (
+                /* Estado de Retorno: caminhão na última parada */
+                <>
+                  <div className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 font-medium">
+                    <span className="w-5 h-1 bg-emerald-600 inline-block rounded-xs shrink-0"></span>
+                    <span>
+                      Percurso Concluído
+                      {caminhaoCoordIndex >= 0 ? ` (Depósito → #${caminhaoCoordIndex + 1})` : ''}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1.5 text-emerald-700 dark:text-emerald-300 font-semibold">
+                    <span className="w-5 h-1 bg-emerald-600 inline-block rounded-xs shrink-0"></span>
+                    <span>Retorno ao Depósito (Em regresso)</span>
+                  </div>
+                </>
+              ) : (
+                /* Estado normal em rota: antes da última parada */
+                <>
+                  <div className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 font-medium">
+                    <span className="w-5 h-1 bg-emerald-600 inline-block rounded-xs shrink-0"></span>
+                    <span>
+                      Percurso Concluído
+                      {caminhaoCoordIndex >= 0 ? ` (Depósito → #${caminhaoCoordIndex + 1})` : ''}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1.5 text-red-600 dark:text-red-400 font-semibold">
+                    <span className="w-5 h-1.5 bg-red-600 inline-block rounded-xs shrink-0 shadow-xs"></span>
+                    <span>
+                      Trecho Ativo em Progresso
+                      {` (${caminhaoCoordIndex >= 0 ? `Caminhão #${caminhaoCoordIndex + 1}` : 'Depósito'} → Próxima #${proximaParada?.ordem ?? proximaParadaCoordIndex + 1})`}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1.5 text-muted-foreground">
+                    <span className="w-5 h-0.5 border-t-2 border-dashed border-sky-600 inline-block shrink-0"></span>
+                    <span>Retorno ao Depósito</span>
+                  </div>
+                </>
+              )}
               {osrmEmRotaResult && (
                 <div className="pt-1 border-t border-border/60 space-y-0.5 text-[9px] text-muted-foreground">
-                  <div className="flex items-center justify-between font-medium text-foreground">
-                    <span className="flex items-center gap-1 text-red-600 dark:text-red-400">
-                      <Navigation className="h-2.5 w-2.5" />
-                      Trecho Ativo:
-                    </span>
-                    <span>{osrmEmRotaResult.distanciaAtivaKm.toFixed(1).replace('.', ',')} km</span>
-                  </div>
+                  {!isCaminhaoNaUltimaParada && (
+                    <div className="flex items-center justify-between font-medium text-foreground">
+                      <span className="flex items-center gap-1 text-red-600 dark:text-red-400">
+                        <Navigation className="h-2.5 w-2.5" />
+                        Trecho Ativo:
+                      </span>
+                      <span>
+                        {osrmEmRotaResult.distanciaAtivaKm.toFixed(1).replace('.', ',')} km
+                      </span>
+                    </div>
+                  )}
+                  {isCaminhaoNaUltimaParada && (
+                    <div className="flex items-center justify-between font-medium text-foreground">
+                      <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
+                        <Navigation className="h-2.5 w-2.5" />
+                        Trecho de Retorno:
+                      </span>
+                      <span>
+                        {osrmEmRotaResult.distanciaRetornoKm.toFixed(1).replace('.', ',')} km
+                      </span>
+                    </div>
+                  )}
                   <div className="flex items-center justify-between">
                     <span>Circuito total:</span>
                     <span>
@@ -885,7 +924,9 @@ export function RouteMapView({
             <Info className="h-3.5 w-3.5 text-primary shrink-0" />
             <span>
               {isEmRota
-                ? 'Em rota: traçado em vermelho destaca o trecho ativo do caminhão até a próxima parada com retorno ao Depósito Central.'
+                ? isCaminhaoNaUltimaParada
+                  ? 'Em rota (retorno): última parada atendida; traçado em verde destaca o regresso ao Depósito Central.'
+                  : 'Em rota: traçado em vermelho destaca o trecho ativo do caminhão até a próxima parada com retorno previsto ao Depósito Central.'
                 : 'Os números nos pinos refletem a ordem atual de entrega. Reordene arrastando na lista ao lado.'}
             </span>
           </span>
@@ -900,14 +941,28 @@ export function RouteMapView({
           {/* Rodapé de Distâncias para Modo EM ROTA */}
           {isEmRota && osrmEmRotaResult && !loadingRoute && (
             <div className="flex flex-wrap items-center gap-1.5">
-              <span className="inline-flex items-center gap-1 text-red-700 dark:text-red-400 text-[10px] bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 px-2 py-0.5 rounded-full font-semibold">
-                <Navigation className="h-3 w-3" />
-                Trecho até Próxima Parada:{' '}
-                <strong>{osrmEmRotaResult.distanciaAtivaKm.toFixed(1).replace('.', ',')} km</strong>
-              </span>
+              {!isCaminhaoNaUltimaParada && (
+                <span className="inline-flex items-center gap-1 text-red-700 dark:text-red-400 text-[10px] bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 px-2 py-0.5 rounded-full font-semibold">
+                  <Navigation className="h-3 w-3" />
+                  Trecho até Próxima Parada:{' '}
+                  <strong>
+                    {osrmEmRotaResult.distanciaAtivaKm.toFixed(1).replace('.', ',')} km
+                  </strong>
+                </span>
+              )}
+
+              {isCaminhaoNaUltimaParada && (
+                <span className="inline-flex items-center gap-1 text-emerald-700 dark:text-emerald-400 text-[10px] bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 px-2 py-0.5 rounded-full font-semibold">
+                  <Navigation className="h-3 w-3" />
+                  Retorno ao Depósito:{' '}
+                  <strong>
+                    {osrmEmRotaResult.distanciaRetornoKm.toFixed(1).replace('.', ',')} km
+                  </strong>
+                </span>
+              )}
 
               <span className="inline-flex items-center gap-1 text-emerald-700 dark:text-emerald-400 text-[10px] bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 px-2 py-0.5 rounded-full font-medium">
-                Percurso real com retorno:{' '}
+                Percurso total do circuito:{' '}
                 <strong>
                   {osrmEmRotaResult.distanciaTotalPercursoKm.toFixed(1).replace('.', ',')} km
                 </strong>

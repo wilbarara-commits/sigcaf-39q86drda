@@ -77,6 +77,22 @@ routerAdd('POST', '/backend/v1/rotas-logisticas/entregar', (e) => {
       d.set('status', 'Entregue')
       txApp.save(d)
     }
+
+    // 5. Limpar marcador do caminhão na rota (caminhao_escola_id e caminhao_posicao_atual)
+    try {
+      const rotaRec = txApp.findRecordById('rotas_logisticas', rotaId)
+      rotaRec.set('caminhao_escola_id', '')
+      rotaRec.set('caminhao_posicao_atual', 0)
+      txApp.save(rotaRec)
+    } catch (_) {
+      // Se não for rotas_logisticas, tenta em 'rotas'
+      try {
+        const rRec = txApp.findRecordById('rotas', rotaId)
+        rRec.set('caminhao_escola_id', '')
+        rRec.set('caminhao_posicao_atual', 0)
+        txApp.save(rRec)
+      } catch (__) {}
+    }
   })
 
   return e.json(200, {
@@ -158,6 +174,22 @@ routerAdd('POST', '/backend/v1/rotas/entregar', (e) => {
       const d = despachosAtivos[i]
       d.set('status', 'Entregue')
       txApp.save(d)
+    }
+
+    // 5. Limpar marcador do caminhão na rota (caminhao_escola_id e caminhao_posicao_atual)
+    try {
+      const rotaRec = txApp.findRecordById('rotas_logisticas', rotaId)
+      rotaRec.set('caminhao_escola_id', '')
+      rotaRec.set('caminhao_posicao_atual', 0)
+      txApp.save(rotaRec)
+    } catch (_) {
+      // Se não for rotas_logisticas, tenta em 'rotas'
+      try {
+        const rRec = txApp.findRecordById('rotas', rotaId)
+        rRec.set('caminhao_escola_id', '')
+        rRec.set('caminhao_posicao_atual', 0)
+        txApp.save(rRec)
+      } catch (__) {}
     }
   })
 
