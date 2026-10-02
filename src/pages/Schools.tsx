@@ -1006,7 +1006,7 @@ export default function Schools() {
               </DialogHeader>
 
               <div className="space-y-4 pt-2">
-                {/* 1. IDENTIFICAÇÃO NO TOPO: Nome da escola, tipo de instituição, Código INEP, Dependência Administrativa */}
+                {/* (1) Identificação: Nome da escola, tipo de instituição, Código INEP, Dependência Administrativa */}
                 <div className="rounded-lg border border-border p-3.5 bg-muted/20 space-y-2.5">
                   <div className="flex items-center justify-between gap-2">
                     <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
@@ -1042,10 +1042,10 @@ export default function Schools() {
                   </div>
                 </div>
 
-                {/* 2. ENDEREÇO EM SEGUIDA: Linha 1 = logradouro e número; Linha 2 = Bairro — CEP */}
+                {/* (2) Endereço: mantendo o padrão de duas linhas (logradouro/número; Bairro — CEP abaixo, na mesma coluna) */}
                 <div className="rounded-lg border border-border p-3.5 bg-muted/20 space-y-2">
                   <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-                    <MapPin className="h-3.5 w-3.5 text-primary" /> Localização / Endereço
+                    <MapPin className="h-3.5 w-3.5 text-primary" /> Endereço
                   </h4>
                   <div className="flex items-start gap-2 text-sm text-foreground/90">
                     <MapPin className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
@@ -1054,7 +1054,7 @@ export default function Schools() {
                       <div className="font-medium text-foreground">
                         {detailsSchool.address?.trim() || 'Endereço não informado'}
                       </div>
-                      {/* Linha 2: Bairro — CEP */}
+                      {/* Linha 2: Bairro — CEP na mesma coluna */}
                       {detailsSchool.bairro?.trim() || detailsSchool.cep?.trim() ? (
                         <div className="text-xs text-muted-foreground">
                           {[
@@ -1071,13 +1071,13 @@ export default function Schools() {
                   </div>
                 </div>
 
-                {/* 3. CONTATO DEPOIS: Telefone / Contato (telefone na linha 1, responsável empilhado abaixo sem prefixo 'Contato:') e E-mail */}
+                {/* (3) Contato: Telefone na primeira linha, contato/responsável logo abaixo, sem rótulo */}
                 <div className="rounded-lg border border-border p-3.5 bg-muted/20 space-y-2.5">
                   <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-                    <Phone className="h-3.5 w-3.5 text-primary" /> Canais de Contato
+                    <Phone className="h-3.5 w-3.5 text-primary" /> Contato
                   </h4>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
-                    {/* Telefone / Contato */}
+                    {/* Telefone na linha 1, contato/responsável logo abaixo sem rótulo */}
                     <div className="space-y-1">
                       <span className="text-[11px] text-muted-foreground block">
                         Telefone / Contato
@@ -1112,14 +1112,25 @@ export default function Schools() {
                   </div>
                 </div>
 
-                {/* 4. INFORMAÇÕES OPERACIONAIS POR ÚLTIMO: Coordenadas (lat/long), alunos, vínculos (rotas/contratos) */}
+                {/* (4) Informações operacionais: coordenadas, alunos, vínculos */}
                 <div className="rounded-lg border border-border p-3.5 bg-muted/20 space-y-3">
                   <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-                    <Info className="h-3.5 w-3.5 text-primary" /> Informações Operacionais &
-                    Vínculos
+                    <Info className="h-3.5 w-3.5 text-primary" /> Informações Operacionais
                   </h4>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+                    {/* Coordenadas (Lat / Long) */}
+                    <div className="space-y-1">
+                      <span className="text-[11px] text-muted-foreground block">
+                        Coordenadas (Lat / Long)
+                      </span>
+                      <p className="font-mono text-xs text-foreground/90">
+                        {detailsSchool.latitude && detailsSchool.longitude
+                          ? `${detailsSchool.latitude}, ${detailsSchool.longitude}`
+                          : 'Coordenadas não informadas'}
+                      </p>
+                    </div>
+
                     {/* Alunos matriculados */}
                     <div className="space-y-1">
                       <span className="text-[11px] text-muted-foreground block">
@@ -1133,18 +1144,6 @@ export default function Schools() {
                             : 'Não informado'}
                         </span>
                       </div>
-                    </div>
-
-                    {/* Coordenadas Geográficas (Lat / Long) */}
-                    <div className="space-y-1">
-                      <span className="text-[11px] text-muted-foreground block">
-                        Coordenadas (Lat / Long)
-                      </span>
-                      <p className="font-mono text-xs text-foreground/90">
-                        {detailsSchool.latitude && detailsSchool.longitude
-                          ? `${detailsSchool.latitude}, ${detailsSchool.longitude}`
-                          : 'Coordenadas não informadas'}
-                      </p>
                     </div>
                   </div>
 
