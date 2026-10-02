@@ -28,10 +28,9 @@ import {
   isCicloNumeroAnoDuplicado,
   calcularDatasCicloPorSemana,
   validarAjusteManualDatasCiclo,
-  DIAS_SEMANA_LABELS,
   normalizarDiaSemanaNum,
 } from '@/lib/cicloUtils'
-import type { DiaSemana } from '@/lib/types'
+import { DIAS_SEMANA_LABELS, type DiaSemana } from '@/lib/types'
 import { toast } from 'sonner'
 
 interface AbrirCicloDialogProps {

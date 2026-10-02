@@ -302,6 +302,30 @@ export function AppProvider({ children }: { children: ReactNode }) {
         return true
       })
 
+      // Auto-vínculo de compatibilidade para ciclos legados sem chamada_id:
+      // Se um ciclo legado não tiver chamada_id, derivar a partir do primeiro contrato vinculado
+      const ciclosEnriquecidos = rawCiclos.map((ciclo) => {
+        let chId = ciclo.chamada_id
+        if (!chId) {
+          const primeiroVinculo = dedupedCicloContratos.find((cc) => cc.ciclo_id === ciclo.id)
+          if (primeiroVinculo) {
+            const contr = dedupedContratos.find((c) => c.id === primeiroVinculo.contrato_id)
+            if (contr?.chamada_id) {
+              chId = contr.chamada_id
+            }
+          }
+        }
+        const chObj = rawChamadas.find((ch) => ch.id === chId)
+        return {
+          ...ciclo,
+          chamada_id: chId,
+          expand: {
+            ...ciclo.expand,
+            chamada_id: chObj || ciclo.expand?.chamada_id,
+          },
+        }
+      })
+
       setCiclos(ciclosEnriquecidos)
       setCicloContratos(dedupedCicloContratos)
 
@@ -444,30 +468,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setOrders(mappedOrders)
 
       // Map contratos with N:N escolas and balance calculation
-      // Auto-vínculo de compatibilidade para ciclos legados sem chamada_id:
-      // Se um ciclo legado não tiver chamada_id, derivar a partir do primeiro contrato vinculado
-      const ciclosEnriquecidos = rawCiclos.map((ciclo) => {
-        let chId = ciclo.chamada_id
-        if (!chId) {
-          const primeiroVinculo = dedupedCicloContratos.find((cc) => cc.ciclo_id === ciclo.id)
-          if (primeiroVinculo) {
-            const contr = dedupedContratos.find((c) => c.id === primeiroVinculo.contrato_id)
-            if (contr?.chamada_id) {
-              chId = contr.chamada_id
-            }
-          }
-        }
-        const chObj = rawChamadas.find((ch) => ch.id === chId)
-        return {
-          ...ciclo,
-          chamada_id: chId,
-          expand: {
-            ...ciclo.expand,
-            chamada_id: chObj || ciclo.expand?.chamada_id,
-          },
-        }
-      })
-
       const mappedContracts: Contract[] = dedupedContratos.map((c) => {
         const links = rawContratoEscolas.filter((ce) => ce.contrato_id === c.id && !ce.encerrado_em)
         const linkedSchools = links.map((ce) => {

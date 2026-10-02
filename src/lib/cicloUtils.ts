@@ -93,27 +93,31 @@ export function calcularDatasCicloPorSemana(
   // Observação: se diaFimNum for especificado, calcula a distância cíclica positiva de início até fim.
   let diffFim = (diaFimNum - diaInicioNum + 7) % 7
   if (diffFim === 0) diffFim = 6 // se for o mesmo dia, a janela é de 6 dias
-  const dataFim = new Date(Date.UTC(
-    dataInicio.getUTCFullYear(),
-    dataInicio.getUTCMonth(),
-    dataInicio.getUTCDate() + diffFim,
-    23,
-    59,
-    59,
-    999,
-  ))
+  const dataFim = new Date(
+    Date.UTC(
+      dataInicio.getUTCFullYear(),
+      dataInicio.getUTCMonth(),
+      dataInicio.getUTCDate() + diffFim,
+      23,
+      59,
+      59,
+      999,
+    ),
+  )
 
   // Despacho: dia da semana dentro da janela [início, fim]
   const diffDespacho = (diaDespachoNum - diaInicioNum + 7) % 7
-  const dataDespacho = new Date(Date.UTC(
-    dataInicio.getUTCFullYear(),
-    dataInicio.getUTCMonth(),
-    dataInicio.getUTCDate() + diffDespacho,
-    12,
-    0,
-    0,
-    0,
-  ))
+  const dataDespacho = new Date(
+    Date.UTC(
+      dataInicio.getUTCFullYear(),
+      dataInicio.getUTCMonth(),
+      dataInicio.getUTCDate() + diffDespacho,
+      12,
+      0,
+      0,
+      0,
+    ),
+  )
 
   const numFormatado = String(numeroSemana).padStart(2, '0')
   const codigoCiclo = `${numFormatado}/${ano}`
@@ -173,7 +177,10 @@ export function validarAjusteManualDatasCiclo(
   // Verificar se o intervalo não ultrapassou os limites da semana (máximo 8 dias civis de abertura a fechamento)
   const diffDiasTotal = Math.round((dFim.getTime() - dIni.getTime()) / (1000 * 60 * 60 * 24))
   if (diffDiasTotal < 0) {
-    return { valido: false, erro: 'A data de encerramento deve ser igual ou posterior à de início.' }
+    return {
+      valido: false,
+      erro: 'A data de encerramento deve ser igual ou posterior à de início.',
+    }
   }
   if (diffDiasTotal > 10) {
     return {
@@ -186,8 +193,12 @@ export function validarAjusteManualDatasCiclo(
     const dIniRef = parseDateSegura(semanaOriginal.inicioRef)
     const dFimRef = parseDateSegura(semanaOriginal.fimRef)
     // Cada data só pode ser movida dentro da semana a que pertence (tolerância de +-3 dias em relação à âncora)
-    const diffIniRef = Math.abs(Math.round((dIni.getTime() - dIniRef.getTime()) / (1000 * 60 * 60 * 24)))
-    const diffFimRef = Math.abs(Math.round((dFim.getTime() - dFimRef.getTime()) / (1000 * 60 * 60 * 24)))
+    const diffIniRef = Math.abs(
+      Math.round((dIni.getTime() - dIniRef.getTime()) / (1000 * 60 * 60 * 24)),
+    )
+    const diffFimRef = Math.abs(
+      Math.round((dFim.getTime() - dFimRef.getTime()) / (1000 * 60 * 60 * 24)),
+    )
     if (diffIniRef > 6 || diffFimRef > 6) {
       return {
         valido: false,
@@ -198,7 +209,8 @@ export function validarAjusteManualDatasCiclo(
 
   return { valido: true }
 }
- *
+
+/**
  * REGRA DO CICLO SEMANAL:
  * 1. A semana do ciclo começa na QUARTA-FEIRA às 00:00:00 e termina na TERÇA-FEIRA seguinte às 23:59:59.
  * 2. O DESPACHO (colocação em rota) ocorre sempre na SEGUNDA-FEIRA contida nessa semana do ciclo
@@ -618,7 +630,13 @@ export function hasContratoNaoTerminal(
  * Ciclo ATIVO = o mais recente ciclo com PELO MENOS UM contrato em fase não-terminal. Sempre no máximo 1.
  */
 export function getCicloAtivo(
-  ciclos: Array<{ id: string; status?: string; created?: string; data_inicio?: string; chamada_id?: string }>,
+  ciclos: Array<{
+    id: string
+    status?: string
+    created?: string
+    data_inicio?: string
+    chamada_id?: string
+  }>,
   cicloContratos?: CicloContratoRef[],
   chamadaId?: string,
 ): any | null {
@@ -652,11 +670,19 @@ export function getCicloAtivo(
  * Retorna os ciclos ativos de todas as chamadas (no máximo 1 por chamada).
  */
 export function getCiclosAtivosPorChamada(
-  ciclos: Array<{ id: string; status?: string; created?: string; data_inicio?: string; chamada_id?: string }>,
+  ciclos: Array<{
+    id: string
+    status?: string
+    created?: string
+    data_inicio?: string
+    chamada_id?: string
+  }>,
   cicloContratos?: CicloContratoRef[],
 ): Record<string, any> {
   const porChamada: Record<string, any> = {}
-  const chamadasIds = Array.from(new Set(ciclos.map((c) => c.chamada_id).filter(Boolean) as string[]))
+  const chamadasIds = Array.from(
+    new Set(ciclos.map((c) => c.chamada_id).filter(Boolean) as string[]),
+  )
 
   for (const chId of chamadasIds) {
     const ativo = getCicloAtivo(ciclos, cicloContratos, chId)
@@ -789,6 +815,7 @@ export function sugerirProximoCiclo(
   const maisRecente = ordenados[0]
 
   // Se hoje for quarta e não existir ciclo aberto para a semana corrente, pré-preencher a quarta de hoje:
+  const isHojeQuarta = dHoje.getDay() === 3
   if (isHojeQuarta) {
     const hojeIso = `${dHoje.getFullYear()}-${String(dHoje.getMonth() + 1).padStart(2, '0')}-${String(dHoje.getDate()).padStart(2, '0')}`
     const existeCicloSemanaCorrente = ciclosExistentes.some((c) => {

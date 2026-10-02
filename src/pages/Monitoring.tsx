@@ -59,6 +59,7 @@ export default function Monitoring() {
     updateCicloContratoFase,
     schools,
     orders,
+    chamadas,
   } = useApp()
 
   // Seletor de ciclos: mais recente primeiro, padrão = ciclo ativo (ou o mais recente de todos)
