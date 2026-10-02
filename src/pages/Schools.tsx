@@ -1218,7 +1218,7 @@ export default function Schools() {
 
       {/* Dialog Criar / Editar Escola */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="sm:max-w-[500px]">
+        <DialogContent className="max-w-[96vw] sm:max-w-2xl md:max-w-3xl lg:max-w-4xl max-h-[92vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editingSchool ? 'Editar Escola' : 'Cadastrar Nova Escola'}</DialogTitle>
             <DialogDescription>
@@ -1229,35 +1229,51 @@ export default function Schools() {
           </DialogHeader>
 
           <form onSubmit={handleSubmit} className="space-y-4 pt-2">
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <div className="space-y-2 sm:col-span-2">
-                <Label htmlFor="school-name">
-                  Nome da Instituição Escolar <span className="text-destructive">*</span>
-                </Label>
-                <Input
-                  id="school-name"
-                  placeholder="Ex: E.M. Darcy Ribeiro"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  required
-                />
-              </div>
+            {/* Linha 1: Nome da Instituição Escolar + Código INEP */}
+            <div className="space-y-1">
+              <div className="grid grid-cols-1 sm:grid-cols-12 gap-3">
+                <div className="space-y-2 sm:col-span-8 lg:col-span-9">
+                  <Label htmlFor="school-name">
+                    Nome da Instituição Escolar <span className="text-destructive">*</span>
+                  </Label>
+                  <Input
+                    id="school-name"
+                    placeholder="Ex: E.M. Darcy Ribeiro"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    required
+                  />
+                </div>
 
-              <div className="space-y-2 sm:col-span-1">
-                <Label htmlFor="school-inep">Código INEP</Label>
-                <Input
-                  id="school-inep"
-                  placeholder="Ex: 33051010"
-                  value={codigoInep}
-                  onChange={(e) => setCodigoInep(e.target.value)}
-                />
+                <div className="space-y-2 sm:col-span-4 lg:col-span-3">
+                  <Label htmlFor="school-inep">Código INEP</Label>
+                  <Input
+                    id="school-inep"
+                    placeholder="Ex: 33051010"
+                    value={codigoInep}
+                    onChange={(e) => setCodigoInep(e.target.value)}
+                  />
+                </div>
               </div>
+              <p className="text-[11px] text-muted-foreground pt-0.5">
+                O nome é normalizado para evitar duplicidades no cadastro mestre global.
+              </p>
             </div>
-            <p className="text-[11px] text-muted-foreground -mt-2">
-              O nome é normalizado para evitar duplicidades no cadastro mestre global.
-            </p>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            {/* Linha 2: Nº de Alunos + Tipo + Dependência Administrativa */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="space-y-2">
+                <Label htmlFor="school-alunos">Nº de Alunos</Label>
+                <Input
+                  id="school-alunos"
+                  type="number"
+                  min="0"
+                  placeholder="Ex: 250"
+                  value={alunos}
+                  onChange={(e) => setAlunos(e.target.value)}
+                />
+              </div>
+
               <div className="space-y-2">
                 <Label htmlFor="school-tipo">Tipo</Label>
                 <Select
@@ -1297,19 +1313,10 @@ export default function Schools() {
                   </SelectContent>
                 </Select>
               </div>
+            </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="school-alunos">Nº de Alunos</Label>
-                <Input
-                  id="school-alunos"
-                  type="number"
-                  min="0"
-                  placeholder="Ex: 250"
-                  value={alunos}
-                  onChange={(e) => setAlunos(e.target.value)}
-                />
-              </div>
-
+            {/* Linha 3: Telefone / WhatsApp + Contato / Responsável */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-2">
                 <Label htmlFor="school-contact">Telefone / WhatsApp</Label>
                 <Input
@@ -1319,9 +1326,7 @@ export default function Schools() {
                   onChange={(e) => setContact(e.target.value)}
                 />
               </div>
-            </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-2">
                 <Label htmlFor="school-contact-person">Contato / Responsável</Label>
                 <Input
@@ -1329,6 +1334,31 @@ export default function Schools() {
                   placeholder="Ex: Diretora Ana Silva / (21) 99999-0000"
                   value={contatoResponsavel}
                   onChange={(e) => setContatoResponsavel(e.target.value)}
+                />
+              </div>
+            </div>
+
+            {/* Linha 4: E-mail Institucional */}
+            <div className="space-y-2">
+              <Label htmlFor="school-email">E-mail Institucional</Label>
+              <Input
+                id="school-email"
+                type="email"
+                placeholder="Ex: escola.darcy@educacao.gov.br"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+              />
+            </div>
+
+            {/* Linha 5: Endereço Completo + Bairro */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label htmlFor="school-address">Endereço Completo</Label>
+                <Input
+                  id="school-address"
+                  placeholder="Ex: Rua das Palmeiras, 100"
+                  value={address}
+                  onChange={(e) => setAddress(e.target.value)}
                 />
               </div>
 
@@ -1343,27 +1373,7 @@ export default function Schools() {
               </div>
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="school-email">E-mail Institucional</Label>
-              <Input
-                id="school-email"
-                type="email"
-                placeholder="Ex: escola.darcy@educacao.gov.br"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="school-address">Endereço Completo</Label>
-              <Input
-                id="school-address"
-                placeholder="Ex: Rua das Palmeiras, 100"
-                value={address}
-                onChange={(e) => setAddress(e.target.value)}
-              />
-            </div>
-
+            {/* Linha 6: CEP + Latitude + Longitude */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div className="space-y-2">
                 <Label htmlFor="school-cep">CEP</Label>
