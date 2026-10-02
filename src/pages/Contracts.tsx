@@ -91,6 +91,7 @@ import {
   ContractSchoolImportDialog,
   type ImportedSchoolLinkResult,
 } from '@/components/ContractSchoolImportDialog'
+import { ContractBatchImportDialog } from '@/components/ContractBatchImportDialog'
 import {
   ContractRouteSchoolEditorDialog,
   type ContractRouteInfo,
@@ -188,6 +189,8 @@ export default function Contracts() {
 
   // Diálogo de Importação CSV/Planilha de Escolas para o Contrato
   const [schoolImportDialogOpen, setSchoolImportDialogOpen] = useState(false)
+  // Diálogo de Importação em Massa de Contratos (XLSX / CSV / Colar)
+  const [contractBatchImportDialogOpen, setContractBatchImportDialogOpen] = useState(false)
 
   // Diálogo de Edição de Rota (incluir/retirar escolas com regra de exclusividade)
   const [routeEditorOpen, setRouteEditorOpen] = useState(false)
@@ -1088,9 +1091,19 @@ export default function Contracts() {
           </p>
         </div>
         {isAdmin && (
-          <Button onClick={handleOpenCreate} className="gap-2">
-            <Plus className="h-4 w-4" /> Novo Contrato
-          </Button>
+          <div className="flex items-center gap-2 flex-wrap">
+            <Button
+              variant="outline"
+              onClick={() => setContractBatchImportDialogOpen(true)}
+              className="gap-2"
+              title="Importar múltiplos contratos e vínculos de escolas a partir de planilha XLSX, CSV ou colagem de texto"
+            >
+              <FileSpreadsheet className="h-4 w-4 text-primary" /> Importar Contratos em Massa
+            </Button>
+            <Button onClick={handleOpenCreate} className="gap-2">
+              <Plus className="h-4 w-4" /> Novo Contrato
+            </Button>
+          </div>
         )}
       </div>
 
@@ -2240,6 +2253,15 @@ export default function Contracts() {
           </form>
         </DialogContent>
       </Dialog>
+
+      {/* DIÁLOGO DE IMPORTAÇÃO EM MASSA DE CONTRATOS (XLSX / CSV / COLAR) */}
+      <ContractBatchImportDialog
+        open={contractBatchImportDialogOpen}
+        onOpenChange={setContractBatchImportDialogOpen}
+        onSuccess={async () => {
+          await refreshData()
+        }}
+      />
 
       {/* DIÁLOGO DE IMPORTAÇÃO DE ESCOLAS CSV / PLANILHA PARA O CONTRATO */}
       <ContractSchoolImportDialog
