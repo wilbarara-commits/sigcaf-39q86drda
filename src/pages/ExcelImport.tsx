@@ -188,6 +188,18 @@ export default function ExcelImport() {
     return null
   }, [selectedContract, ciclos, cicloContratos, activeCiclo])
 
+  // Interface para escolas da chamada sem pedidos na planilha
+  interface EscolaChamadaSemPedido {
+    escolaId: string
+    escolaNome: string
+    codigoInep?: string
+    rotaNome?: string
+    contratoNumero: string
+    contratoId: string
+    statusContrato: string
+    motivo: string
+  }
+
   // Subtotais por aba de rota para a prévia da importação
   interface RouteSubtotal {
     sheetName: string
@@ -283,6 +295,92 @@ export default function ExcelImport() {
 
     return list
   }, [parsedData])
+
+  // Escolas da chamada vinculadas aos contratos da chamada do contrato selecionado
+  // (ou fallback no selectedContract se sem chamada_id) que NÃO constam em parsedData.orders
+  const escolasChamadaSemPedidos = useMemo<EscolaChamadaSemPedido[]>(() => {
+    if (!parsedData || !selectedContract) return []
+
+    // 1. Identificar pedidos da planilha: conjuntos para casamento rápido
+    const orderSchoolIds = new Set<string>()
+    const orderNamesNormalized = new Set<string>()
+
+    for (const order of parsedData.orders) {
+      if (order.schoolId) {
+        orderSchoolIds.add(order.schoolId)
+      }
+      if (order.schoolNameMatched) {
+        const normMatched = normalizeName(order.schoolNameMatched)
+        if (normMatched) orderNamesNormalized.add(normMatched)
+      }
+      if (order.schoolNameRaw) {
+        const normRaw = normalizeName(order.schoolNameRaw)
+        if (normRaw) orderNamesNormalized.add(normRaw)
+      }
+    }
+
+    // 2. Determinar contratos da chamada (excluindo Cancelados)
+    const chamadaId = selectedContract.chamada_id
+    const contratosAlvo = chamadaId
+      ? contracts.filter((c) => c.chamada_id === chamadaId && c.status !== 'Cancelado')
+      : [selectedContract]
+
+    // 3. Mapa de escolas cadastradas para fallback de INEP / nome
+    const schoolsMap = new Map<string, (typeof schools)[0]>()
+    for (const s of schools) {
+      schoolsMap.set(s.id, s)
+    }
+
+    // 4. Coletar e desduplicar escolas dos vínculos dos contratos
+    const dedupMap = new Map<string, EscolaChamadaSemPedido>()
+
+    for (const c of contratosAlvo) {
+      const links = c.escolas || []
+      for (const link of links) {
+        const schoolObj = link.escolaId ? schoolsMap.get(link.escolaId) : undefined
+        const escolaId = link.escolaId || schoolObj?.id || ''
+        const escolaNome = (link.escolaNome || schoolObj?.name || 'Escola sem nome').trim()
+        const normName = normalizeName(escolaNome)
+
+        // Casamento: já possui pedido nesta planilha?
+        const hasOrderById = Boolean(escolaId && orderSchoolIds.has(escolaId))
+        const hasOrderByName = Boolean(normName && orderNamesNormalized.has(normName))
+
+        if (hasOrderById || hasOrderByName) {
+          // Escola já contemplada com pedido nesta planilha
+          continue
+        }
+
+        // Dedup key: preferencialmente escolaId, fallback em nome normalizado
+        const dedupKey = escolaId ? `id:${escolaId}` : `name:${normName}`
+        if (!dedupMap.has(dedupKey)) {
+          const inep = link.escolaCodigoInep || schoolObj?.codigo_inep || undefined
+          const rota =
+            link.rotaNome ||
+            link.rotaPlanilha ||
+            link.rotaLogisticaNome ||
+            schoolObj?.route ||
+            undefined
+
+          dedupMap.set(dedupKey, {
+            escolaId,
+            escolaNome,
+            codigoInep: inep,
+            rotaNome: rota,
+            contratoNumero: c.numero,
+            contratoId: c.id,
+            statusContrato: c.status,
+            motivo: 'Sem pedido na planilha',
+          })
+        }
+      }
+    }
+
+    // 5. Ordenar por nome pt-BR
+    return Array.from(dedupMap.values()).sort((a, b) =>
+      a.escolaNome.localeCompare(b.escolaNome, 'pt-BR', { sensitivity: 'base' }),
+    )
+  }, [parsedData, selectedContract, contracts, schools])
 
   // Carregar histórico de importações
   const loadHistory = async () => {
@@ -1303,6 +1401,109 @@ export default function ExcelImport() {
                   </div>
                 </div>
               )}
+
+              {/* Seção de Escolas da Chamada sem Pedidos na Planilha */}
+              <Card className="border border-border/80 shadow-sm">
+                <CardHeader className="p-4 pb-2">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <Building2 className="h-4 w-4 text-primary" />
+                      <CardTitle className="text-sm font-semibold text-foreground">
+                        Escolas da Chamada sem Pedidos nesta Planilha
+                      </CardTitle>
+                    </div>
+                    {escolasChamadaSemPedidos.length === 0 ? (
+                      <Badge className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs gap-1.5 py-0.5 px-2.5">
+                        <CheckCircle2 className="h-3.5 w-3.5" /> 100% de cobertura
+                      </Badge>
+                    ) : (
+                      <Badge
+                        variant="outline"
+                        className="bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-300 dark:border-amber-700 text-xs gap-1.5 py-0.5 px-2.5 font-semibold"
+                      >
+                        <AlertTriangle className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
+                        {escolasChamadaSemPedidos.length}{' '}
+                        {escolasChamadaSemPedidos.length === 1
+                          ? 'escola sem pedido'
+                          : 'escolas sem pedidos'}
+                      </Badge>
+                    )}
+                  </div>
+                  <CardDescription className="text-xs">
+                    Escolas vinculadas aos contratos ativos da mesma chamada que não constam com
+                    pedidos nesta planilha.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="p-4 pt-1">
+                  {escolasChamadaSemPedidos.length === 0 ? (
+                    <div className="p-3.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-900 dark:text-emerald-200 text-xs flex items-center gap-2.5">
+                      <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                      <span>
+                        Todas as escolas da chamada selecionada foram contempladas com pedidos nesta
+                        planilha!
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="rounded-md border overflow-hidden max-h-[300px] overflow-y-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow className="bg-muted/40">
+                            <TableHead className="font-semibold text-xs">Escola</TableHead>
+                            <TableHead className="font-semibold text-xs">Contrato</TableHead>
+                            <TableHead className="font-semibold text-xs">Rota Cadastrada</TableHead>
+                            <TableHead className="font-semibold text-xs text-center">
+                              Situação
+                            </TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {escolasChamadaSemPedidos.map((esc, idx) => (
+                            <TableRow
+                              key={`${esc.contratoId}-${esc.escolaId || idx}`}
+                              className="text-xs"
+                            >
+                              <TableCell className="py-2">
+                                <div className="flex flex-col gap-0.5">
+                                  <span className="font-medium text-foreground">
+                                    {esc.escolaNome}
+                                  </span>
+                                  {esc.codigoInep && (
+                                    <span className="text-[10px] text-muted-foreground font-mono">
+                                      INEP: {esc.codigoInep}
+                                    </span>
+                                  )}
+                                </div>
+                              </TableCell>
+                              <TableCell className="py-2">
+                                <Badge variant="outline" className="font-mono text-[10px]">
+                                  {esc.contratoNumero}
+                                </Badge>
+                              </TableCell>
+                              <TableCell className="py-2 text-muted-foreground">
+                                {esc.rotaNome ? (
+                                  <span className="font-medium text-foreground">
+                                    {esc.rotaNome}
+                                  </span>
+                                ) : (
+                                  <span className="text-muted-foreground italic">—</span>
+                                )}
+                              </TableCell>
+                              <TableCell className="py-2 text-center">
+                                <Badge
+                                  variant="secondary"
+                                  className="text-[10px] bg-amber-100 text-amber-800 dark:bg-amber-950/70 dark:text-amber-300 border border-amber-300/60 dark:border-amber-800 font-medium"
+                                >
+                                  {esc.motivo}
+                                </Badge>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
 
               {/* Informação neutra e discreta sobre abas ignoradas (sem rota cadastrada correspondente) */}
               {parsedData.ignoredUnmatchedSheets &&
