@@ -507,6 +507,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           chamadaNumero: matchedChamada?.chamada || c.numero_chamada || '',
           chamadaPrograma: matchedChamada?.programa || c.tipo || '',
           chamadaModalidade: matchedChamada?.modalidade || (c.modalidade_pedido as any),
+          chamadaDependenciaAdministrativa: matchedChamada?.dependencia_administrativa || '',
           chamadaStatus: matchedChamada?.status || (c.status as any),
           numero_chamada: c.numero_chamada || matchedChamada?.chamada || '',
           tipo: c.tipo || 'PNAE',
@@ -1021,6 +1022,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
             chamadaNumero:
               matchedChamada?.chamada || c.numero_chamada || existing?.chamadaNumero || '',
             chamadaPrograma: matchedChamada?.programa || c.tipo || existing?.chamadaPrograma || '',
+            chamadaDependenciaAdministrativa:
+              matchedChamada?.dependencia_administrativa ||
+              existing?.chamadaDependenciaAdministrativa ||
+              '',
             chamadaModalidade:
               matchedChamada?.modalidade ||
               (c.modalidade_pedido as any) ||
@@ -1133,6 +1138,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
             chamadaNumero:
               matchedChamada?.chamada || c.numero_chamada || existing?.chamadaNumero || '',
             chamadaPrograma: matchedChamada?.programa || c.tipo || existing?.chamadaPrograma || '',
+            chamadaDependenciaAdministrativa:
+              matchedChamada?.dependencia_administrativa ||
+              existing?.chamadaDependenciaAdministrativa ||
+              '',
             chamadaModalidade:
               matchedChamada?.modalidade ||
               (c.modalidade_pedido as any) ||

@@ -1169,11 +1169,18 @@ export default function Contracts() {
                               >
                                 {rotuloChamada}
                               </Badge>
-                              {chamadaEncontrada.programa && (
-                                <span className="text-[10px] text-muted-foreground">
-                                  {chamadaEncontrada.programa}
-                                </span>
-                              )}
+                              <div className="flex items-center gap-1 flex-wrap">
+                                {chamadaEncontrada.programa && (
+                                  <span className="text-[10px] text-muted-foreground">
+                                    {chamadaEncontrada.programa}
+                                  </span>
+                                )}
+                                {chamadaEncontrada.dependencia_administrativa && (
+                                  <span className="text-[10px] text-muted-foreground">
+                                    • {chamadaEncontrada.dependencia_administrativa}
+                                  </span>
+                                )}
+                              </div>
                             </div>
                           ) : (
                             <span className="text-xs text-muted-foreground font-mono">
@@ -2533,8 +2540,11 @@ export default function Contracts() {
           <DialogHeader>
             <DialogTitle>Contrato {viewingContract?.numero}</DialogTitle>
             <DialogDescription>
-              {viewingContract?.tipo || 'PNAE'} • Modalidade:{' '}
-              {viewingContract?.modalidade_pedido || 'individualizado'}
+              {viewingContract?.tipo || 'PNAE'}
+              {viewingContract?.chamadaDependenciaAdministrativa && (
+                <> • Dep. Administrativa: {viewingContract.chamadaDependenciaAdministrativa}</>
+              )}{' '}
+              • Modalidade: {viewingContract?.modalidade_pedido || 'individualizado'}
               {viewingContract?.modalidade_pedido === 'centralizado' && (
                 <>
                   {' '}

@@ -11,6 +11,7 @@ export interface CreateChamadaData {
   chamada: string
   programa?: string
   modalidade?: ChamadaModalidade
+  dependencia_administrativa?: string
   status?: ChamadaStatus
 }
 
@@ -18,6 +19,7 @@ export interface UpdateChamadaData {
   chamada?: string
   programa?: string
   modalidade?: ChamadaModalidade
+  dependencia_administrativa?: string
   status?: ChamadaStatus
 }
 
@@ -41,12 +43,17 @@ export const chamadasService = {
   },
 
   async create(data: CreateChamadaData): Promise<ChamadaRecord> {
-    return await pb.collection('chamadas').create<ChamadaRecord>({
+    const payload: Record<string, any> = {
       chamada: data.chamada.trim(),
       programa: data.programa?.trim() || '',
       modalidade: data.modalidade || 'individualizado',
       status: data.status || 'Ativo',
-    })
+    }
+    if (data.dependencia_administrativa !== undefined && data.dependencia_administrativa !== '') {
+      payload.dependencia_administrativa = data.dependencia_administrativa
+    }
+
+    return await pb.collection('chamadas').create<ChamadaRecord>(payload)
   },
 
   async update(id: string, data: UpdateChamadaData): Promise<ChamadaRecord> {
@@ -55,6 +62,9 @@ export const chamadasService = {
     if (data.programa !== undefined) payload.programa = data.programa.trim()
     if (data.modalidade !== undefined) payload.modalidade = data.modalidade
     if (data.status !== undefined) payload.status = data.status
+    if (data.dependencia_administrativa !== undefined) {
+      payload.dependencia_administrativa = data.dependencia_administrativa || ''
+    }
 
     return await pb.collection('chamadas').update<ChamadaRecord>(id, payload)
   },

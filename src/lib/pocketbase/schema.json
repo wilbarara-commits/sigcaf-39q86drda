@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-02T03:53:25.304Z",
+  "generatedAt": "2026-10-02T04:23:58.041Z",
   "collections": [
     {
       "name": "users",
@@ -1424,6 +1424,13 @@
           "required": false,
           "system": false,
           "autodateTriggers": ["onCreate", "onUpdate"]
+        },
+        {
+          "name": "dependencia_administrativa",
+          "type": "select",
+          "required": false,
+          "system": false,
+          "selectValues": ["Federal", "Estadual", "Municipal", "Privada"]
         }
       ],
       "indexes": [

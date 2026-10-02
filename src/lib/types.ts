@@ -154,6 +154,7 @@ export interface ChamadaRecord {
   chamada: string
   programa?: string
   modalidade?: ChamadaModalidade
+  dependencia_administrativa?: DependenciaAdministrativa | string
   status: ChamadaStatus
   created?: string
   updated?: string
@@ -389,6 +390,7 @@ export interface Contract {
   chamadaNumero?: string
   chamadaPrograma?: string
   chamadaModalidade?: ChamadaModalidade
+  chamadaDependenciaAdministrativa?: string
   chamadaStatus?: ChamadaStatus
   numero_chamada?: string
   tipo?: string

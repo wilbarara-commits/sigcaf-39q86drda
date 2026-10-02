@@ -2,7 +2,12 @@ import { useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useApp } from '@/context/app-context'
 import { useAuth } from '@/context/auth-context'
-import type { ChamadaRecord, ChamadaStatus, ChamadaModalidade } from '@/lib/types'
+import {
+  DEPENDENCIAS_ADMINISTRATIVAS,
+  type ChamadaRecord,
+  type ChamadaStatus,
+  type ChamadaModalidade,
+} from '@/lib/types'
 import { chamadasService } from '@/services/chamadas'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -60,7 +65,15 @@ import {
   Route as RouteIcon,
   SlidersHorizontal,
   Package,
+  Download,
 } from 'lucide-react'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import * as XLSX from 'xlsx'
 import { toast } from 'sonner'
 import { ChamadaItemsManager, ChamadaItemForm } from '@/components/ChamadaItemsManager'
 
@@ -94,6 +107,7 @@ export default function Producao() {
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<'todos' | ChamadaStatus>('todos')
   const [modalidadeFilter, setModalidadeFilter] = useState<'todos' | ChamadaModalidade>('todos')
+  const [dependenciaFilter, setDependenciaFilter] = useState<string>('todos')
 
   // Modais
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -105,6 +119,7 @@ export default function Producao() {
   const [formChamada, setFormChamada] = useState('')
   const [formPrograma, setFormPrograma] = useState('PNAE')
   const [formModalidade, setFormModalidade] = useState<ChamadaModalidade>('individualizado')
+  const [formDependencia, setFormDependencia] = useState<string>('')
   const [formStatus, setFormStatus] = useState<ChamadaStatus>('Ativo')
   const [activeTab, setActiveTab] = useState<'geral' | 'itens' | 'rotas' | 'contratos'>('geral')
   const [formItems, setFormItems] = useState<ChamadaItemForm[]>([])
@@ -174,6 +189,7 @@ export default function Producao() {
     setFormChamada('')
     setFormPrograma('PNAE')
     setFormModalidade('individualizado')
+    setFormDependencia('')
     setFormStatus('Ativo')
     setFormItems([])
     setActiveTab('geral')
@@ -185,6 +201,7 @@ export default function Producao() {
     setFormChamada(item.chamada || '')
     setFormPrograma(item.programa || 'PNAE')
     setFormModalidade(item.modalidade || 'individualizado')
+    setFormDependencia(item.dependencia_administrativa || '')
     setFormStatus(item.status || 'Ativo')
     setFormItems(buildChamadaItemsForModal(item.id))
     setActiveTab('geral')
@@ -212,6 +229,7 @@ export default function Producao() {
           chamada: trimmedChamada,
           programa: formPrograma.trim(),
           modalidade: formModalidade,
+          dependencia_administrativa: formDependencia || '',
           status: formStatus,
         })
         savedChamadaId = editingChamada.id
@@ -221,6 +239,7 @@ export default function Producao() {
           chamada: trimmedChamada,
           programa: formPrograma.trim(),
           modalidade: formModalidade,
+          dependencia_administrativa: formDependencia || '',
           status: formStatus,
         })
         savedChamadaId = created.id
@@ -282,17 +301,25 @@ export default function Producao() {
       if (modalidadeFilter !== 'todos' && item.modalidade !== modalidadeFilter) {
         return false
       }
+      if (dependenciaFilter !== 'todos') {
+        if (dependenciaFilter === 'sem_dependencia') {
+          if (item.dependencia_administrativa) return false
+        } else if (item.dependencia_administrativa !== dependenciaFilter) {
+          return false
+        }
+      }
       if (searchQuery.trim()) {
         const query = searchQuery.toLowerCase().trim()
         const matchChamada = (item.chamada || '').toLowerCase().includes(query)
         const matchProg = (item.programa || '').toLowerCase().includes(query)
         const matchMod = (item.modalidade || '').toLowerCase().includes(query)
         const matchStatus = (item.status || '').toLowerCase().includes(query)
-        return matchChamada || matchProg || matchMod || matchStatus
+        const matchDep = (item.dependencia_administrativa || '').toLowerCase().includes(query)
+        return matchChamada || matchProg || matchMod || matchStatus || matchDep
       }
       return true
     })
-  }, [chamadas, searchQuery, statusFilter, modalidadeFilter])
+  }, [chamadas, searchQuery, statusFilter, modalidadeFilter, dependenciaFilter])
 
   const formatDate = (isoString?: string) => {
     if (!isoString) return '-'
@@ -309,6 +336,145 @@ export default function Producao() {
     }
   }
 
+  // Prepara dados para exportação da relação de chamadas
+  const getPreparedChamadasExportRows = () => {
+    return filteredChamadas.map((ch) => {
+      const contratosDesta = contracts.filter((c) => c.chamada_id === ch.id)
+      const contratosIdsSet = new Set(contratosDesta.map((c) => c.id))
+      const rotasDesta = rotasLogisticas.filter(
+        (r) => r.chamada_id === ch.id || (r.contrato_id && contratosIdsSet.has(r.contrato_id)),
+      )
+      return {
+        chamada: ch.chamada || '',
+        programa: ch.programa || 'PNAE',
+        dependencia_administrativa: ch.dependencia_administrativa || '',
+        modalidade: ch.modalidade || 'individualizado',
+        contratos_vinculados: contratosDesta.map((c) => c.numero).join(', ') || 'Nenhum',
+        qtd_contratos: contratosDesta.length,
+        qtd_rotas: rotasDesta.length,
+        status: ch.status || 'Ativo',
+        criada_em: formatDate(ch.created),
+      }
+    })
+  }
+
+  const handleExportChamadasCSV = () => {
+    if (filteredChamadas.length === 0) {
+      toast.warning('Nenhuma chamada para exportar.')
+      return
+    }
+
+    const rows = getPreparedChamadasExportRows()
+    const headers = [
+      'Chamada',
+      'Programa',
+      'Dependência Administrativa',
+      'Modalidade',
+      'Nº de Contratos',
+      'Contratos Vinculados',
+      'Nº de Rotas',
+      'Status',
+      'Criada em',
+    ]
+
+    const escapeCsvField = (field: any) => {
+      const str = String(field ?? '')
+      if (str.includes(';') || str.includes('"') || str.includes('\n') || str.includes('\r')) {
+        return `"${str.replace(/"/g, '""')}"`
+      }
+      return str
+    }
+
+    const lines: string[] = []
+    lines.push(headers.map(escapeCsvField).join(';'))
+
+    for (const r of rows) {
+      lines.push(
+        [
+          r.chamada,
+          r.programa,
+          r.dependencia_administrativa,
+          r.modalidade,
+          r.qtd_contratos,
+          r.contratos_vinculados,
+          r.qtd_rotas,
+          r.status,
+          r.criada_em,
+        ]
+          .map(escapeCsvField)
+          .join(';'),
+      )
+    }
+
+    const csvContent = '\uFEFF' + lines.join('\r\n')
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `chamadas-${new Date().toISOString().slice(0, 10)}.csv`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+
+    toast.success('Relação de chamadas exportada em CSV!')
+  }
+
+  const handleExportChamadasXLSX = () => {
+    if (filteredChamadas.length === 0) {
+      toast.warning('Nenhuma chamada para exportar.')
+      return
+    }
+
+    const rows = getPreparedChamadasExportRows()
+    const wsData: any[][] = []
+
+    wsData.push([
+      'Chamada',
+      'Programa',
+      'Dependência Administrativa',
+      'Modalidade',
+      'Nº de Contratos',
+      'Contratos Vinculados',
+      'Nº de Rotas',
+      'Status',
+      'Criada em',
+    ])
+
+    for (const r of rows) {
+      wsData.push([
+        r.chamada,
+        r.programa,
+        r.dependencia_administrativa,
+        r.modalidade,
+        r.qtd_contratos,
+        r.contratos_vinculados,
+        r.qtd_rotas,
+        r.status,
+        r.criada_em,
+      ])
+    }
+
+    const wb = XLSX.utils.book_new()
+    const ws = XLSX.utils.aoa_to_sheet(wsData)
+
+    ws['!cols'] = [
+      { wch: 20 }, // Chamada
+      { wch: 14 }, // Programa
+      { wch: 26 }, // Dependência Administrativa
+      { wch: 18 }, // Modalidade
+      { wch: 15 }, // Nº de Contratos
+      { wch: 30 }, // Contratos
+      { wch: 12 }, // Nº de Rotas
+      { wch: 14 }, // Status
+      { wch: 14 }, // Criada em
+    ]
+
+    XLSX.utils.book_append_sheet(wb, ws, 'Chamadas')
+    XLSX.writeFile(wb, `chamadas-${new Date().toISOString().slice(0, 10)}.xlsx`)
+    toast.success('Relação de chamadas exportada em Excel!')
+  }
+
   return (
     <div className="space-y-6">
       {/* Cabeçalho */}
@@ -320,25 +486,65 @@ export default function Producao() {
             Escolas.
           </p>
         </div>
-        {isAdmin && (
-          <Button onClick={handleOpenCreate} className="gap-2">
-            <Plus className="h-4 w-4" /> Nova {MODULO_CHAMADA_SINGULAR}
-          </Button>
-        )}
+        <div className="flex items-center gap-2 shrink-0 flex-wrap">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={filteredChamadas.length === 0}
+                className="gap-1.5"
+              >
+                <Download className="h-4 w-4 text-primary" />
+                Exportar
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="text-xs">
+              <DropdownMenuItem onClick={handleExportChamadasCSV} className="cursor-pointer">
+                CSV (.csv)
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={handleExportChamadasXLSX} className="cursor-pointer">
+                Excel (.xlsx)
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          {isAdmin && (
+            <Button onClick={handleOpenCreate} className="gap-2">
+              <Plus className="h-4 w-4" /> Nova {MODULO_CHAMADA_SINGULAR}
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Filtros e Busca */}
       <Card>
         <CardContent className="pt-6">
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <div className="relative">
               <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder={`Buscar ${MODULO_CHAMADA_SINGULAR.toLowerCase()}, programa...`}
+                placeholder={`Buscar ${MODULO_CHAMADA_SINGULAR.toLowerCase()}, programa, dep...`}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="pl-9"
               />
+            </div>
+            <div>
+              <Select value={dependenciaFilter} onValueChange={(v) => setDependenciaFilter(v)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Todas as dependências" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todos">Todas as dependências</SelectItem>
+                  {DEPENDENCIAS_ADMINISTRATIVAS.map((dep) => (
+                    <SelectItem key={dep} value={dep}>
+                      {dep}
+                    </SelectItem>
+                  ))}
+                  <SelectItem value="sem_dependencia">Não classificadas</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             <div>
               <Select value={modalidadeFilter} onValueChange={(v) => setModalidadeFilter(v as any)}>
@@ -388,6 +594,7 @@ export default function Producao() {
                 <TableRow>
                   <TableHead>{MODULO_CHAMADA_SINGULAR}</TableHead>
                   <TableHead>Programa</TableHead>
+                  <TableHead>Dependência</TableHead>
                   <TableHead>Modalidade</TableHead>
                   <TableHead>Contratos Vinculados</TableHead>
                   <TableHead>Rotas</TableHead>
@@ -399,7 +606,7 @@ export default function Producao() {
               <TableBody>
                 {isLoading ? (
                   <TableRow>
-                    <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
                       <div className="flex items-center justify-center gap-2">
                         <Loader2 className="h-4 w-4 animate-spin" /> Carregando{' '}
                         {MODULO_CHAMADAS_LABEL.toLowerCase()}...
@@ -408,8 +615,11 @@ export default function Producao() {
                   </TableRow>
                 ) : filteredChamadas.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
-                      {searchQuery || statusFilter !== 'todos' || modalidadeFilter !== 'todos'
+                    <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
+                      {searchQuery ||
+                      statusFilter !== 'todos' ||
+                      modalidadeFilter !== 'todos' ||
+                      dependenciaFilter !== 'todos'
                         ? `Nenhuma ${MODULO_CHAMADA_SINGULAR.toLowerCase()} encontrada para os filtros selecionados.`
                         : `Nenhuma ${MODULO_CHAMADA_SINGULAR.toLowerCase()} cadastrada ainda.`}
                     </TableCell>
@@ -437,6 +647,18 @@ export default function Producao() {
                         </TableCell>
                         <TableCell>
                           <Badge variant="outline">{item.programa || 'PNAE'}</Badge>
+                        </TableCell>
+                        <TableCell className="align-middle text-xs">
+                          {item.dependencia_administrativa ? (
+                            <Badge
+                              variant="outline"
+                              className="text-[11px] font-normal border-border/70 whitespace-nowrap"
+                            >
+                              {item.dependencia_administrativa}
+                            </Badge>
+                          ) : (
+                            <span className="text-xs text-muted-foreground/40 italic">—</span>
+                          )}
                         </TableCell>
                         <TableCell>
                           <Badge
@@ -628,29 +850,55 @@ export default function Producao() {
                         </p>
                       </div>
 
-                      <div className="space-y-1.5">
-                        <Label htmlFor="ch-prog" className="text-xs font-semibold">
-                          Programa
-                        </Label>
-                        <Select value={formPrograma} onValueChange={setFormPrograma}>
-                          <SelectTrigger id="ch-prog" className="h-8 text-xs">
-                            <SelectValue placeholder="Selecione o programa" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="PNAE" className="text-xs">
-                              PNAE (Alimentação Escolar)
-                            </SelectItem>
-                            <SelectItem value="PAA" className="text-xs">
-                              PAA (Aquisição de Alimentos)
-                            </SelectItem>
-                            <SelectItem value="Municipal" className="text-xs">
-                              Municipal / Direto
-                            </SelectItem>
-                            <SelectItem value="Outro" className="text-xs">
-                              Outro
-                            </SelectItem>
-                          </SelectContent>
-                        </Select>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div className="space-y-1.5">
+                          <Label htmlFor="ch-prog" className="text-xs font-semibold">
+                            Programa
+                          </Label>
+                          <Select value={formPrograma} onValueChange={setFormPrograma}>
+                            <SelectTrigger id="ch-prog" className="h-8 text-xs">
+                              <SelectValue placeholder="Selecione o programa" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="PNAE" className="text-xs">
+                                PNAE (Alimentação Escolar)
+                              </SelectItem>
+                              <SelectItem value="PAA" className="text-xs">
+                                PAA (Aquisição de Alimentos)
+                              </SelectItem>
+                              <SelectItem value="Municipal" className="text-xs">
+                                Municipal / Direto
+                              </SelectItem>
+                              <SelectItem value="Outro" className="text-xs">
+                                Outro
+                              </SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <Label htmlFor="ch-dependencia" className="text-xs font-semibold">
+                            Dependência Administrativa
+                          </Label>
+                          <Select
+                            value={formDependencia || 'none'}
+                            onValueChange={(val) => setFormDependencia(val === 'none' ? '' : val)}
+                          >
+                            <SelectTrigger id="ch-dependencia" className="h-8 text-xs">
+                              <SelectValue placeholder="Selecione a dependência" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="none" className="text-xs">
+                                —
+                              </SelectItem>
+                              {DEPENDENCIAS_ADMINISTRATIVAS.map((dep) => (
+                                <SelectItem key={dep} value={dep} className="text-xs">
+                                  {dep}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
                       </div>
 
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -1107,41 +1355,67 @@ export default function Producao() {
                     </p>
                   </div>
 
-                  <div className="space-y-1.5">
-                    <Label htmlFor="ch-prog" className="text-xs font-semibold">
-                      Programa
-                    </Label>
-                    <Select value={formPrograma} onValueChange={setFormPrograma}>
-                      <SelectTrigger id="ch-prog" className="h-8 text-xs">
-                        <SelectValue placeholder="Selecione o programa" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="PNAE" className="text-xs">
-                          PNAE (Alimentação Escolar)
-                        </SelectItem>
-                        <SelectItem value="PAA" className="text-xs">
-                          PAA (Aquisição de Alimentos)
-                        </SelectItem>
-                        <SelectItem value="Municipal" className="text-xs">
-                          Municipal / Direto
-                        </SelectItem>
-                        <SelectItem value="Outro" className="text-xs">
-                          Outro
-                        </SelectItem>
-                      </SelectContent>
-                    </Select>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="ch-prog-new" className="text-xs font-semibold">
+                        Programa
+                      </Label>
+                      <Select value={formPrograma} onValueChange={setFormPrograma}>
+                        <SelectTrigger id="ch-prog-new" className="h-8 text-xs">
+                          <SelectValue placeholder="Selecione o programa" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="PNAE" className="text-xs">
+                            PNAE (Alimentação Escolar)
+                          </SelectItem>
+                          <SelectItem value="PAA" className="text-xs">
+                            PAA (Aquisição de Alimentos)
+                          </SelectItem>
+                          <SelectItem value="Municipal" className="text-xs">
+                            Municipal / Direto
+                          </SelectItem>
+                          <SelectItem value="Outro" className="text-xs">
+                            Outro
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <Label htmlFor="ch-dependencia-new" className="text-xs font-semibold">
+                        Dependência Administrativa
+                      </Label>
+                      <Select
+                        value={formDependencia || 'none'}
+                        onValueChange={(val) => setFormDependencia(val === 'none' ? '' : val)}
+                      >
+                        <SelectTrigger id="ch-dependencia-new" className="h-8 text-xs">
+                          <SelectValue placeholder="Selecione a dependência" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none" className="text-xs">
+                            —
+                          </SelectItem>
+                          {DEPENDENCIAS_ADMINISTRATIVAS.map((dep) => (
+                            <SelectItem key={dep} value={dep} className="text-xs">
+                              {dep}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div className="space-y-1.5">
-                      <Label htmlFor="ch-mod" className="text-xs font-semibold">
+                      <Label htmlFor="ch-mod-new" className="text-xs font-semibold">
                         Modalidade
                       </Label>
                       <Select
                         value={formModalidade}
                         onValueChange={(v) => setFormModalidade(v as ChamadaModalidade)}
                       >
-                        <SelectTrigger id="ch-mod" className="h-8 text-xs">
+                        <SelectTrigger id="ch-mod-new" className="h-8 text-xs">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -1156,14 +1430,14 @@ export default function Producao() {
                     </div>
 
                     <div className="space-y-1.5">
-                      <Label htmlFor="ch-status" className="text-xs font-semibold">
+                      <Label htmlFor="ch-status-new" className="text-xs font-semibold">
                         Status
                       </Label>
                       <Select
                         value={formStatus}
                         onValueChange={(v) => setFormStatus(v as ChamadaStatus)}
                       >
-                        <SelectTrigger id="ch-status" className="h-8 text-xs">
+                        <SelectTrigger id="ch-status-new" className="h-8 text-xs">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
