@@ -3,7 +3,9 @@ import {
   extractQuantityAndProductName,
   matchCatalogItemTolerant,
   parsePastedOrderText,
-  OrderPasteCatalogProduct,
+  isComprovantePedido,
+  extractComprovanteMetadata,
+  type OrderPasteCatalogProduct,
 } from './orderPasteParser'
 
 describe('orderPasteParser', () => {
@@ -161,6 +163,72 @@ Arroz Tipo 1 5
       const result = parsePastedOrderText(text, mockCatalog)
       expect(result.matched.length).toBe(1)
       expect(result.unmatched.length).toBe(0)
+    })
+
+    it('deve processar com perfeição o comprovante exato de pedido colado pelo usuário', () => {
+      const comprovanteText = `═══════════════════════════════════════
+         COMPROVANTE DE PEDIDO         
+═══════════════════════════════════════
+📋 PROTOCOLO: FOR-38-0088
+🏫 ESCOLA: CE PRESIDENTE BERNARDES
+🔄 CICLO: Ciclo 38/2026
+📅 PREVISÃO DE ENTREGA: Segunda-feira, 28/09/2026
+───────────────────────────────────────
+ITENS SOLICITADOS:
+ • AIPIM: 1,0 Kg
+ • CENOURA: 100,0 Kg
+ • COUVE MINEIRA: 5,0 Kg
+ • PEPINO: 1,5 Kg
+═══════════════════════════════════════
+Guarde este comprovante para conferência.`
+
+      const extendedCatalog: OrderPasteCatalogProduct[] = [
+        ...mockCatalog,
+        { productId: 'p10', nome: 'Aipim', unidade: 'Kg', preco: 4.5 },
+        { productId: 'p11', nome: 'Cenoura', unidade: 'Kg', preco: 5.0 },
+        { productId: 'p12', nome: 'Couve Mineira', unidade: 'Kg', preco: 3.5 },
+        { productId: 'p13', nome: 'Pepino', unidade: 'Kg', preco: 4.0 },
+      ]
+
+      expect(isComprovantePedido(comprovanteText)).toBe(true)
+
+      const meta = extractComprovanteMetadata(comprovanteText)
+      expect(meta.isComprovante).toBe(true)
+      expect(meta.protocolo).toBe('FOR-38-0088')
+      expect(meta.escolaNome).toBe('CE PRESIDENTE BERNARDES')
+      expect(meta.cicloTexto).toBe('Ciclo 38/2026')
+      expect(meta.previsaoEntrega).toBe('Segunda-feira, 28/09/2026')
+
+      const result = parsePastedOrderText(comprovanteText, extendedCatalog)
+
+      // Requisito 3: extração dos 4 itens com quantidades certas, zero linhas de erro e detecção da escola
+      expect(result.unmatched).toEqual([])
+      expect(result.matched.length).toBe(4)
+      expect(result.metadata?.escolaNome).toBe('CE PRESIDENTE BERNARDES')
+      expect(result.metadata?.protocolo).toBe('FOR-38-0088')
+      expect(result.metadata?.cicloTexto).toBe('Ciclo 38/2026')
+
+      const aipim = result.matched.find((m) => m.productId === 'p10')
+      expect(aipim).toBeDefined()
+      expect(aipim?.quantity).toBe(1.0)
+      expect(aipim?.subtotal).toBe(1.0 * 4.5)
+
+      const cenoura = result.matched.find((m) => m.productId === 'p11')
+      expect(cenoura).toBeDefined()
+      expect(cenoura?.quantity).toBe(100.0)
+      expect(cenoura?.subtotal).toBe(100.0 * 5.0)
+
+      const couve = result.matched.find((m) => m.productId === 'p12')
+      expect(couve).toBeDefined()
+      expect(couve?.quantity).toBe(5.0)
+      expect(couve?.subtotal).toBe(5.0 * 3.5)
+
+      const pepino = result.matched.find((m) => m.productId === 'p13')
+      expect(pepino).toBeDefined()
+      expect(pepino?.quantity).toBe(1.5)
+      expect(pepino?.subtotal).toBe(1.5 * 4.0)
+
+      expect(result.totalCalculated).toBe(1.0 * 4.5 + 100.0 * 5.0 + 5.0 * 3.5 + 1.5 * 4.0)
     })
   })
 })

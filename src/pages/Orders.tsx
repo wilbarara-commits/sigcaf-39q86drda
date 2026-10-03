@@ -90,6 +90,7 @@ import {
 } from '@/lib/decimalUtils'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { whatsappService } from '@/services/whatsapp-import'
+import { normalizeName } from '@/lib/excelImporter'
 import { parsePastedOrderText, type OrderPasteParseResult } from '@/lib/orderPasteParser'
 
 export default function Orders() {
@@ -393,6 +394,24 @@ export default function Orders() {
     }
     const result = parsePastedOrderText(pasteText, availableItemsForChamada)
     setPastePreview(result)
+
+    // Se detectou escola no comprovante e a escola ainda não foi selecionada no modal:
+    if (result.metadata?.escolaNome && !selectedSchool && availableSchoolsForCiclo.length > 0) {
+      const detectedNorm = normalizeName(result.metadata.escolaNome)
+      const matchedSchool = availableSchoolsForCiclo.find((esc) => {
+        const escNorm = normalizeName(esc.nome)
+        return (
+          escNorm === detectedNorm ||
+          escNorm.includes(detectedNorm) ||
+          detectedNorm.includes(escNorm)
+        )
+      })
+      if (matchedSchool) {
+        setSelectedSchool(matchedSchool.escolaId)
+        toast.info(`Escola "${matchedSchool.nome}" sugerida pelo comprovante e pré-selecionada!`)
+      }
+    }
+
     if (result.matched.length === 0) {
       toast.error('Nenhum item reconhecido. Verifique os formatos aceitos.')
     } else if (result.unmatched.length > 0) {
@@ -407,6 +426,26 @@ export default function Orders() {
   // Confirmar e aplicar itens colados à lista do pedido
   const handleApplyPastedOrderItems = () => {
     if (!pastePreview || pastePreview.matched.length === 0) return
+
+    // Se a escola ainda não foi selecionada, tenta vincular pela escola detectada no comprovante
+    if (
+      !selectedSchool &&
+      pastePreview.metadata?.escolaNome &&
+      availableSchoolsForCiclo.length > 0
+    ) {
+      const detectedNorm = normalizeName(pastePreview.metadata.escolaNome)
+      const matchedSchool = availableSchoolsForCiclo.find((esc) => {
+        const escNorm = normalizeName(esc.nome)
+        return (
+          escNorm === detectedNorm ||
+          escNorm.includes(detectedNorm) ||
+          detectedNorm.includes(escNorm)
+        )
+      })
+      if (matchedSchool) {
+        setSelectedSchool(matchedSchool.escolaId)
+      }
+    }
 
     setOrderItems((current) => {
       const copy = [...current]
@@ -1241,9 +1280,10 @@ export default function Orders() {
                 <ClipboardPaste className="h-5 w-5 text-primary" /> Colar Itens do Pedido
               </DialogTitle>
               <DialogDescription className="text-xs">
-                Cole o texto contendo o produto e a quantidade. O parser aceita tabulação
-                (planilha), vírgula, ponto-e-vírgula, &quot;5x Produto&quot; ou quantidade no fim da
-                linha. Preços são soberanos da chamada.
+                Cole o texto com produtos e quantidades ou o <strong>Comprovante de Pedido</strong>{' '}
+                gerado pelo formulário. Aceita tabulação (planilha), vírgula, ponto-e-vírgula,
+                &quot;5x Produto&quot;, lista com marcadores (&quot;•&quot;) e sufixo Kg. Preços são
+                soberanos da chamada.
               </DialogDescription>
             </DialogHeader>
 
@@ -1251,17 +1291,16 @@ export default function Orders() {
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between">
                   <Label htmlFor="paste-order-text" className="text-xs font-semibold">
-                    Texto do Pedido (uma linha por item)
+                    Texto do Pedido ou Comprovante Completo
                   </Label>
                   <span className="text-[11px] text-muted-foreground">
-                    Ex: &quot;Arroz Tipo 1 5&quot; ou &quot;Banana Prata 2,5&quot; ou &quot;5x
-                    Feijão&quot;
+                    Ex: Comprovante com &quot; • AIPIM: 1,0 Kg&quot; ou &quot;Arroz 5&quot;
                   </span>
                 </div>
                 <Textarea
                   id="paste-order-text"
                   rows={6}
-                  placeholder={`Arroz Tipo 1\t5\nFeijão Carioca\t2,5\n5x Banana Prata\nMaçã Nacional 3`}
+                  placeholder={`Cole aqui o comprovante de pedido completo ou linhas como:\n • AIPIM: 1,0 Kg\n • CENOURA: 100,0 Kg\nou no formato planilha:\nArroz Tipo 1\t5\nFeijão Carioca\t2,5`}
                   value={pasteText}
                   onChange={(e) => {
                     setPasteText(e.target.value)
@@ -1287,6 +1326,41 @@ export default function Orders() {
               {/* Prévia dos itens interpretados */}
               {pastePreview && (
                 <div className="space-y-3 pt-2 border-t">
+                  {/* Informações detectadas do comprovante se houver */}
+                  {pastePreview.metadata?.isComprovante && (
+                    <div className="p-2.5 rounded-lg border bg-primary/5 text-xs space-y-1">
+                      <div className="font-semibold text-primary flex items-center gap-1.5">
+                        <CheckCircle2 className="h-3.5 w-3.5" /> Comprovante de Pedido Identificado
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-1 text-[11px] text-muted-foreground pt-0.5">
+                        {pastePreview.metadata.protocolo && (
+                          <div>
+                            <span className="font-medium text-foreground">Protocolo:</span>{' '}
+                            {pastePreview.metadata.protocolo}
+                          </div>
+                        )}
+                        {pastePreview.metadata.escolaNome && (
+                          <div>
+                            <span className="font-medium text-foreground">Escola:</span>{' '}
+                            {pastePreview.metadata.escolaNome}
+                          </div>
+                        )}
+                        {pastePreview.metadata.cicloTexto && (
+                          <div>
+                            <span className="font-medium text-foreground">Ciclo:</span>{' '}
+                            {pastePreview.metadata.cicloTexto}
+                          </div>
+                        )}
+                        {pastePreview.metadata.previsaoEntrega && (
+                          <div>
+                            <span className="font-medium text-foreground">Previsão:</span>{' '}
+                            {pastePreview.metadata.previsaoEntrega}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
                   <div className="flex items-center justify-between text-xs">
                     <span className="font-semibold text-foreground">
                       Prévia dos Itens Reconhecidos:

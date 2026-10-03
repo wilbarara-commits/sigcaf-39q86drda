@@ -50,11 +50,20 @@ export interface UnmatchedPastedOrderLine {
   reason: string
 }
 
+export interface OrderPasteMetadata {
+  isComprovante?: boolean
+  protocolo?: string
+  escolaNome?: string
+  cicloTexto?: string
+  previsaoEntrega?: string
+}
+
 export interface OrderPasteParseResult {
   matched: MatchedPastedOrderItem[]
   unmatched: UnmatchedPastedOrderLine[]
   totalItems: number
   totalCalculated: number
+  metadata?: OrderPasteMetadata
 }
 
 /**
@@ -124,9 +133,9 @@ export function extractQuantityAndProductName(rawLine: string): {
     }
   }
 
-  // 5. Separador por traço ou dois-pontos com espaços: "Arroz - 5" ou "Arroz : 5" ou "Arroz - 2,5"
+  // 5. Separador por traço ou dois-pontos com espaços: "Arroz - 5" ou "Arroz : 5" ou "Arroz - 2,5" ou "AIPIM: 1,0 Kg"
   const matchDashOrColon = line.match(
-    /^(.+?)\s*[-:]\s*(\d+(?:[.,]\d+)?)(?:\s*(?:kg|kilo|un|unid|pct|cx|l|g))?$/i,
+    /^(.+?)\s*[-:]\s*(\d+(?:[.,]\d+)?)(?:\s*(?:kg|kilo|kilos|quilos|un|unid|und|unidade|unidades|pct|pacote|cx|caixa|l|litro|litros|g|gramas))?$/i,
   )
   if (matchDashOrColon) {
     const q = parseQuantityToken(matchDashOrColon[2])
@@ -140,7 +149,7 @@ export function extractQuantityAndProductName(rawLine: string): {
   if (line.includes(',')) {
     // Tenta casar nome seguido de vírgula e número decimal: "Arroz, 2,5" ou "Arroz, 5"
     const matchCommaQty = line.match(
-      /^(.+?),\s*(\d+(?:[.,]\d+)?)(?:\s*(?:kg|kilo|un|unid|pct|cx|l|g))?$/i,
+      /^(.+?),\s*(\d+(?:[.,]\d+)?)(?:\s*(?:kg|kilo|kilos|quilos|un|unid|und|unidade|unidades|pct|pacote|cx|caixa|l|litro|litros|g|gramas))?$/i,
     )
     if (matchCommaQty) {
       const q = parseQuantityToken(matchCommaQty[2])
@@ -152,7 +161,7 @@ export function extractQuantityAndProductName(rawLine: string): {
 
   // 7. Quantidade no fim da linha precedida de espaço: "Arroz agulhinha 5" ou "Feijão carioca 2,5"
   const matchEndQty = line.match(
-    /^(.+?)\s+(\d+(?:[.,]\d+)?)(?:\s*(?:kg|kilo|un|unid|pct|cx|l|g))?$/i,
+    /^(.+?)\s+(\d+(?:[.,]\d+)?)(?:\s*(?:kg|kilo|kilos|quilos|un|unid|und|unidade|unidades|pct|pacote|cx|caixa|l|litro|litros|g|gramas))?$/i,
   )
   if (matchEndQty) {
     const q = parseQuantityToken(matchEndQty[2])
@@ -163,7 +172,7 @@ export function extractQuantityAndProductName(rawLine: string): {
 
   // 8. Quantidade no início da linha: "5 Arroz" ou "2,5 Feijão"
   const matchStartQty = line.match(
-    /^(\d+(?:[.,]\d+)?)(?:\s*(?:kg|kilo|un|unid|pct|cx|l|g))?\s+(.+)$/i,
+    /^(\d+(?:[.,]\d+)?)(?:\s*(?:kg|kilo|kilos|quilos|un|unid|und|unidade|unidades|pct|pacote|cx|caixa|l|litro|litros|g|gramas))?\s+(.+)$/i,
   )
   if (matchStartQty) {
     const q = parseQuantityToken(matchStartQty[1])
@@ -178,12 +187,94 @@ export function extractQuantityAndProductName(rawLine: string): {
 function parseQuantityToken(token: string): { val: number; raw: string } | null {
   if (!token) return null
   // Remove unidades comuns coladas ("5kg" -> "5", "2,5un" -> "2,5")
-  const cleaned = token.replace(/(?:kg|kilo|un|unid|pct|cx|l|g)$/i, '').trim()
+  const cleaned = token
+    .replace(
+      /(?:kg|kilo|kilos|quilos|un|unid|und|unidade|unidades|pct|pacote|cx|caixa|l|litro|litros|g|gramas)$/i,
+      '',
+    )
+    .trim()
   const valid = validateQuantityStepHalf(cleaned)
   if (valid.isValid && valid.numericValue > 0) {
     return { val: valid.numericValue, raw: cleaned }
   }
   return null
+}
+
+/**
+ * Detecta se o texto colado é um comprovante de pedido gerado pelo formulário ou WhatsApp.
+ */
+export function isComprovantePedido(rawText: string): boolean {
+  if (!rawText) return false
+  const upper = rawText.toUpperCase()
+  return (
+    upper.includes('COMPROVANTE DE PEDIDO') ||
+    (upper.includes('PROTOCOLO:') && upper.includes('ITENS SOLICITADOS:'))
+  )
+}
+
+/**
+ * Extrai metadados do cabeçalho do comprovante (Escola, Protocolo, Ciclo, Previsão).
+ */
+export function extractComprovanteMetadata(rawText: string): OrderPasteMetadata {
+  const metadata: OrderPasteMetadata = {
+    isComprovante: isComprovantePedido(rawText),
+  }
+  if (!metadata.isComprovante) return metadata
+
+  const lines = rawText.split(/\r?\n/)
+  for (const rawLine of lines) {
+    const trimmed = rawLine.trim()
+
+    // 📋 PROTOCOLO: FOR-38-0088
+    const protoMatch = trimmed.match(/PROTOCOLO:\s*([^\r\n]+)/i)
+    if (protoMatch && !metadata.protocolo) {
+      metadata.protocolo = protoMatch[1].trim()
+    }
+
+    // 🏫 ESCOLA: CE PRESIDENTE BERNARDES
+    const escolaMatch = trimmed.match(/ESCOLA:\s*([^\r\n]+)/i)
+    if (escolaMatch && !metadata.escolaNome) {
+      metadata.escolaNome = escolaMatch[1].trim()
+    }
+
+    // 🔄 CICLO: Ciclo 38/2026
+    const cicloMatch = trimmed.match(/CICLO:\s*([^\r\n]+)/i)
+    if (cicloMatch && !metadata.cicloTexto) {
+      metadata.cicloTexto = cicloMatch[1].trim()
+    }
+
+    // 📅 PREVISÃO DE ENTREGA: Segunda-feira, 28/09/2026
+    const entregaMatch = trimmed.match(/PREVISÃO DE ENTREGA:\s*([^\r\n]+)/i)
+    if (entregaMatch && !metadata.previsaoEntrega) {
+      metadata.previsaoEntrega = entregaMatch[1].trim()
+    }
+  }
+
+  return metadata
+}
+
+/**
+ * Verifica se a linha é estrutural/metadado do comprovante que deve ser ignorada silenciosamente.
+ */
+function isComprovanteStructuralLine(line: string): boolean {
+  const t = line.trim()
+  if (!t) return true
+
+  // Linhas divisórias (═, ─, -, =)
+  if (/^[═\-_=\s]{3,}$/.test(t)) return true
+
+  // Cabeçalho e rodapé
+  const upper = t.toUpperCase()
+  if (upper.includes('COMPROVANTE DE PEDIDO')) return true
+  if (upper.includes('ITENS SOLICITADOS:')) return true
+  if (upper.includes('GUARDE ESTE COMPROVANTE')) return true
+  if (upper.includes('PROTOCOLO:')) return true
+  if (upper.includes('ESCOLA:')) return true
+  if (upper.includes('CICLO:')) return true
+  if (upper.includes('PREVISÃO DE ENTREGA:') || upper.includes('PREVISAO DE ENTREGA:')) return true
+  if (upper.includes('NENHUM ITEM LISTADO')) return true
+
+  return false
 }
 
 /**
@@ -300,6 +391,9 @@ export function parsePastedOrderText(
   rawText: string,
   catalog: OrderPasteCatalogProduct[],
 ): OrderPasteParseResult {
+  const isComprovante = isComprovantePedido(rawText)
+  const metadata = extractComprovanteMetadata(rawText)
+
   const lines = (rawText || '').split(/\r?\n/)
   const matchedMap = new Map<string, MatchedPastedOrderItem>()
   const unmatched: UnmatchedPastedOrderLine[] = []
@@ -308,10 +402,70 @@ export function parsePastedOrderText(
     const lineNum = idx + 1
     const trimmed = rawLine.trim()
 
-    // Linhas vazias são solenemente ignoradas sem emitir aviso
+    // Linhas vazias são ignoradas sem aviso
     if (!trimmed) return
 
-    const extracted = extractQuantityAndProductName(trimmed)
+    // Se detectou modo comprovante:
+    if (isComprovante) {
+      // Ignora silenciosamente linhas estruturais/cabeçalho/rodapé
+      if (isComprovanteStructuralLine(trimmed)) {
+        return
+      }
+
+      // Se for comprovante, itens têm bullet "•", "-", "*" ou são linhas de item
+      // Remove marcador inicial se presente
+      const itemLine = trimmed.replace(/^[\s•\-*·]+\s*/, '').trim()
+      if (!itemLine) return
+
+      const extracted = extractQuantityAndProductName(itemLine)
+      if (!extracted) {
+        unmatched.push({
+          lineNumber: lineNum,
+          line: trimmed,
+          reason: 'Não foi possível identificar a quantidade (ex: 5, 2,5, 1x).',
+        })
+        return
+      }
+
+      const matchedProd = matchCatalogItemTolerant(extracted.productText, catalog)
+      if (!matchedProd) {
+        unmatched.push({
+          lineNumber: lineNum,
+          line: trimmed,
+          reason: `Produto "${extracted.productText}" não localizado no catálogo desta chamada.`,
+        })
+        return
+      }
+
+      const { product, matchedVia } = matchedProd
+      const unitPrice = product.preco || 0
+      const addQty = extracted.quantity
+
+      if (matchedMap.has(product.productId)) {
+        const existing = matchedMap.get(product.productId)!
+        const newQty = existing.quantity + addQty
+        existing.quantity = newQty
+        existing.subtotal = newQty * unitPrice
+        existing.originalLine += ` + [L${lineNum}: ${trimmed}]`
+      } else {
+        matchedMap.set(product.productId, {
+          productId: product.productId,
+          productName: product.nome,
+          unidade: product.unidade || 'un',
+          unitPrice,
+          quantity: addQty,
+          subtotal: addQty * unitPrice,
+          originalLine: trimmed,
+          matchedVia,
+        })
+      }
+      return
+    }
+
+    // Modo padrão / formatos anteriores:
+    // Remove eventual bullet inicial caso o usuário cole lista com bullet fora de comprovante
+    const itemLine = trimmed.replace(/^[\s•\-*·]+\s*/, '').trim()
+    const extracted = extractQuantityAndProductName(itemLine || trimmed)
     if (!extracted) {
       unmatched.push({
         lineNumber: lineNum,
@@ -363,5 +517,6 @@ export function parsePastedOrderText(
     unmatched,
     totalItems: matched.length,
     totalCalculated,
+    metadata,
   }
 }
