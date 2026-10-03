@@ -273,9 +273,6 @@ export function AbrirCicloDialog({
       const fimIso = `${dataFim}T23:59:59.999Z`
       const despachoIso = `${dataDespacho}T12:00:00.000Z`
 
-      // Contratos a vincular: estritamente os contratos DA CHAMADA do ciclo
-      const contratoIdsDaChamada = contratosDaChamada.map((c) => c.id)
-
       const created = await createCiclo({
         nome: nomeCicloFinal,
         chamada_id: selectedChamadaId,

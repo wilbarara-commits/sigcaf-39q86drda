@@ -17,7 +17,6 @@ import { AlertOctagon, AlertTriangle, Ban, Loader2, ShieldAlert } from 'lucide-r
 
 interface CancelarCicloDialogProps {
   ciclo: CicloRecord | null
-  contratoId?: string
   open: boolean
   onOpenChange: (open: boolean) => void
   onSuccess?: () => void

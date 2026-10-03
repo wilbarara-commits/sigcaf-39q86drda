@@ -159,7 +159,6 @@ interface AppState {
     data_despacho?: string
     status?: 'coletando' | 'correcao' | 'coleta_encerrada' | 'coletado' | 'fechado' | string
     snapshot?: any
-    contratoIds?: string[]
   }) => Promise<CicloRecord | null>
   cancelarCiclo: (
     cicloId: string,
@@ -2685,7 +2684,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     data_despacho?: string
     status?: 'coletando' | 'correcao' | 'coleta_encerrada' | 'coletado' | 'fechado' | string
     snapshot?: any
-    contratoIds?: string[]
   }): Promise<CicloRecord | null> => {
     const tempId = `temp-ciclo-${Date.now()}`
     const initialStatus = data.status || 'coletando'

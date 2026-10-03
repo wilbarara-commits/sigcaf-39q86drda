@@ -789,7 +789,6 @@ export default function ExcelImport() {
           chamada_numero: targetChamada?.chamada,
           regra_dias: regraChamada,
         },
-        contratoIds: [selectedContract.id],
       })
 
       if (!novo) {
