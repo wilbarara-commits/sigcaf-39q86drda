@@ -34,6 +34,8 @@ import {
   formatIntervaloCiclo,
   formatDespachoAmigavel,
   getDespachoPrevistoCiclo,
+  extractCicloCodigo,
+  formatFaseAmigavel,
 } from '@/lib/cicloUtils'
 import {
   DropdownMenu,
@@ -75,17 +77,27 @@ import {
   Check,
   Send,
   PhoneOff,
+  ClipboardPaste,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { safeOpenWhatsApp, buildProtocoloWhatsAppMessage } from '@/lib/whatsapp'
-import { formatQuantityOneDecimal } from '@/lib/decimalUtils'
+import {
+  formatQuantityOneDecimal,
+  normalizeDecimalTyping,
+  validateQuantityStepHalf,
+  formatQuantityOnBlur,
+} from '@/lib/decimalUtils'
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { whatsappService } from '@/services/whatsapp-import'
+import { parsePastedOrderText, type OrderPasteParseResult } from '@/lib/orderPasteParser'
 
 export default function Orders() {
   const {
     products,
     schools,
+    chamadas,
+    chamadaItems,
     orders,
     contracts,
     rotasLogisticas,
@@ -120,14 +132,19 @@ export default function Orders() {
   const [filterRotaPlanilha, setFilterRotaPlanilha] = useState<string>('todas')
   const [filterRotaLogistica, setFilterRotaLogistica] = useState<string>('todas')
 
-  // Form de criação de pedido
-  const [selectedContractId, setSelectedContractId] = useState<string>('')
+  // Form de criação de pedido — NOVO FLUXO ORIENTADO A CICLO
+  const [selectedCicloId, setSelectedCicloId] = useState<string>('')
   const [selectedSchool, setSelectedSchool] = useState('')
   const [orderOrigem, setOrderOrigem] = useState<'whatsapp' | 'manual'>('whatsapp')
   const [orderDate, setOrderDate] = useState(new Date().toISOString().split('T')[0])
-  const [orderItems, setOrderItems] = useState<Array<{ productId: string; quantity: number }>>([
-    { productId: products[0]?.id || '', quantity: 5 },
-  ])
+  const [orderItems, setOrderItems] = useState<
+    Array<{ productId: string; quantity: number; rawInput?: string }>
+  >([])
+
+  // Diálogo / Painel de Colar Pedido em lote
+  const [pasteModalOpen, setPasteModalOpen] = useState(false)
+  const [pasteText, setPasteText] = useState('')
+  const [pastePreview, setPastePreview] = useState<OrderPasteParseResult | null>(null)
 
   // Detalhes do pedido selecionado
   const [viewingOrder, setViewingOrder] = useState<Order | null>(null)
@@ -157,35 +174,172 @@ export default function Orders() {
   // Envio de protocolo por WhatsApp
   const [sendingWhatsAppId, setSendingWhatsAppId] = useState<string | null>(null)
 
-  // Filtrar contratos com modalidade individualizada para lançamento via WhatsApp
-  const individualContracts = useMemo(
-    () => contracts.filter((c) => c.modalidade_pedido === 'individualizado'),
-    [contracts],
-  )
+  // ==========================================
+  // NOVO FLUXO ORIENTADO A CICLO (Passos 1 a 5)
+  // ==========================================
 
-  // Escolas disponíveis baseadas no contrato selecionado (ou todas se não filtrar)
-  const availableSchools = useMemo(() => {
-    if (!selectedContractId) return schools
-    const c = contracts.find((cnt) => cnt.id === selectedContractId)
-    if (!c) return schools
-    const schoolIds = new Set(c.escolas.map((e) => e.escolaId))
-    return schools.filter((s) => schoolIds.has(s.id))
-  }, [selectedContractId, contracts, schools])
+  // PASSO 1: Ciclos elegíveis (status 'coletando' ou 'correcao')
+  const openCiclos = useMemo(() => {
+    return ciclos.filter((c) => {
+      const st = (c.status || '').toLowerCase()
+      return st === 'coletando' || st === 'correcao'
+    })
+  }, [ciclos])
 
+  // Ciclo selecionado no modal (driver)
+  const selectedCiclo = useMemo(() => {
+    if (!selectedCicloId) return null
+    return ciclos.find((c) => c.id === selectedCicloId) || null
+  }, [selectedCicloId, ciclos])
+
+  // Chamada associada ao ciclo selecionado
+  const selectedChamada = useMemo(() => {
+    if (!selectedCiclo?.chamada_id) return null
+    return (
+      chamadas.find((ch) => ch.id === selectedCiclo.chamada_id) ||
+      selectedCiclo.expand?.chamada_id ||
+      null
+    )
+  }, [selectedCiclo, chamadas])
+
+  // PASSO 3: Contratos ativos vinculados à chamada do ciclo selecionado
+  const activeContractsForChamada = useMemo(() => {
+    if (!selectedCiclo?.chamada_id) return []
+    return contracts.filter(
+      (c) => c.chamada_id === selectedCiclo.chamada_id && c.status === 'Ativo',
+    )
+  }, [selectedCiclo, contracts])
+
+  // Escolas = união desduplicada por id das escolas dos contratos ativos da chamada
+  interface EscolaOpcaoModal {
+    escolaId: string
+    nome: string
+    inep?: string
+    rotaNome: string
+    rotaId?: string
+    contratoId: string
+  }
+
+  const availableSchoolsForCiclo = useMemo<EscolaOpcaoModal[]>(() => {
+    if (!selectedCiclo) return []
+    const map = new Map<string, EscolaOpcaoModal>()
+    for (const c of activeContractsForChamada) {
+      for (const esc of c.escolas) {
+        if (!map.has(esc.escolaId)) {
+          const sch = schools.find((s) => s.id === esc.escolaId)
+          const inep = esc.escolaCodigoInep || sch?.codigo_inep || undefined
+          const nome = esc.escolaNome || sch?.name || 'Escola'
+          const rotaNome =
+            esc.rotaNome || esc.rotaPlanilha || esc.rotaLogisticaNome || sch?.route || 'Sem rota'
+          map.set(esc.escolaId, {
+            escolaId: esc.escolaId,
+            nome,
+            inep,
+            rotaNome,
+            rotaId: esc.rotaId || esc.rotaLogisticaId,
+            contratoId: c.id,
+          })
+        }
+      }
+    }
+    return Array.from(map.values()).sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'))
+  }, [selectedCiclo, activeContractsForChamada, schools])
+
+  // PASSO 4: Itens e preços vindos da CHAMADA (itens da chamada são soberanos em preço)
+  interface ItemCatalogoChamada {
+    productId: string
+    nome: string
+    unidade: string
+    preco: number
+  }
+
+  const availableItemsForChamada = useMemo<ItemCatalogoChamada[]>(() => {
+    if (!selectedCiclo?.chamada_id) {
+      // Fallback para catálogo global caso não haja chamada definida
+      return products.map((p) => ({
+        productId: p.id,
+        nome: p.name,
+        unidade: p.unit || 'un',
+        preco: Number(p.price) || 0,
+      }))
+    }
+
+    const itemsChamada = chamadaItems.filter((ci) => ci.chamada_id === selectedCiclo.chamada_id)
+
+    if (itemsChamada.length > 0) {
+      return itemsChamada.map((ci) => {
+        // Encontrar produto correspondente no catálogo se houver produto_id
+        const prod = ci.produto_id ? products.find((p) => p.id === ci.produto_id) : undefined
+        // Se ci.produto_id não existir, tentar casar por nome exato com catálogo
+        const matchedProd =
+          prod ||
+          products.find((p) => p.name.trim().toLowerCase() === ci.produto.trim().toLowerCase())
+        const prodId = ci.produto_id || matchedProd?.id || ci.id
+        return {
+          productId: prodId,
+          nome: ci.produto || prod?.name || 'Produto',
+          unidade: ci.unidade || prod?.unit || 'un',
+          preco: Number(ci.preco) || 0,
+        }
+      })
+    }
+
+    // Se a chamada ainda não tem itens próprios cadastrados, fallback nos produtos gerais
+    return products.map((p) => ({
+      productId: p.id,
+      nome: p.name,
+      unidade: p.unit || 'un',
+      preco: Number(p.price) || 0,
+    }))
+  }, [selectedCiclo, chamadaItems, products])
+
+  // Total calculado em tempo real com base nos preços soberanos da chamada
   const calculatedTotal = useMemo(() => {
     return orderItems.reduce((acc, item) => {
-      const prod = products.find((p) => p.id === item.productId)
-      return acc + (prod?.price || 0) * (Number(item.quantity) || 0)
+      const itemCat = availableItemsForChamada.find((p) => p.productId === item.productId)
+      const preco = itemCat?.preco || 0
+      return acc + preco * (Number(item.quantity) || 0)
     }, 0)
-  }, [orderItems, products])
+  }, [orderItems, availableItemsForChamada])
+
+  // Formatação amigável do ciclo para o select
+  const formatCicloOptionLabel = (c: (typeof ciclos)[number]) => {
+    const ch = chamadas.find((cham) => cham.id === c.chamada_id) || c.expand?.chamada_id
+    const numChamada = ch?.chamada || 'Chamada'
+    const codCiclo = extractCicloCodigo(c.nome) || c.nome
+    const faseAmigavel = formatFaseAmigavel(c.status)
+    return `Ciclo ${codCiclo} [${numChamada}] — ${faseAmigavel}`
+  }
+
+  // Abertura do modal: auto-seleciona o primeiro ciclo aberto se ainda não tiver selecionado
+  const handleOpenDialog = (isOpen: boolean) => {
+    setOpen(isOpen)
+    if (isOpen) {
+      if (openCiclos.length > 0) {
+        // Se já tem activeCiclo e ele estiver aberto, priorizar ele; senão o 1º de openCiclos
+        const defaultCiclo =
+          (activeCiclo && openCiclos.find((c) => c.id === activeCiclo.id)) || openCiclos[0]
+        setSelectedCicloId(defaultCiclo.id)
+      } else {
+        setSelectedCicloId('')
+      }
+      setSelectedSchool('')
+      setOrderDate(new Date().toISOString().split('T')[0])
+      setOrderItems([])
+    }
+  }
 
   const handleAddItem = () => {
-    const nextProd = products.find((p) => !orderItems.some((i) => i.productId === p.id))
+    const nextProd = availableItemsForChamada.find(
+      (p) => !orderItems.some((i) => i.productId === p.productId),
+    )
+    const pId = nextProd?.productId || availableItemsForChamada[0]?.productId || ''
     setOrderItems((prev) => [
       ...prev,
       {
-        productId: nextProd?.id || products[0]?.id || '',
+        productId: pId,
         quantity: 1,
+        rawInput: '1,0',
       },
     ])
   }
@@ -194,80 +348,142 @@ export default function Orders() {
     setOrderItems((prev) => prev.filter((_, i) => i !== index))
   }
 
-  const handleItemChange = (
-    index: number,
-    field: 'productId' | 'quantity',
-    value: string | number,
-  ) => {
+  const handleItemProductChange = (index: number, newProductId: string) => {
     setOrderItems((prev) =>
-      prev.map((item, i) => (i === index ? { ...item, [field]: value } : item)),
+      prev.map((item, i) => (i === index ? { ...item, productId: newProductId } : item)),
     )
+  }
+
+  const handleItemQuantityTyping = (index: number, raw: string) => {
+    const normalized = normalizeDecimalTyping(raw)
+    const parsed = validateQuantityStepHalf(normalized)
+    setOrderItems((prev) =>
+      prev.map((item, i) =>
+        i === index
+          ? {
+              ...item,
+              rawInput: normalized,
+              quantity: parsed.isValid ? parsed.numericValue : 0,
+            }
+          : item,
+      ),
+    )
+  }
+
+  const handleItemQuantityBlur = (index: number) => {
+    setOrderItems((prev) =>
+      prev.map((item, i) => {
+        if (i !== index) return item
+        const formatted = formatQuantityOnBlur(item.rawInput ?? String(item.quantity || ''))
+        const parsed = validateQuantityStepHalf(formatted)
+        return {
+          ...item,
+          rawInput: formatted,
+          quantity: parsed.isValid ? parsed.numericValue : item.quantity,
+        }
+      }),
+    )
+  }
+
+  // Analisar texto colado pelo usuário
+  const handleProcessPasteText = () => {
+    if (!pasteText.trim()) {
+      toast.warning('Cole o texto do pedido para analisar.')
+      return
+    }
+    const result = parsePastedOrderText(pasteText, availableItemsForChamada)
+    setPastePreview(result)
+    if (result.matched.length === 0) {
+      toast.error('Nenhum item reconhecido. Verifique os formatos aceitos.')
+    } else if (result.unmatched.length > 0) {
+      toast.warning(
+        `${result.matched.length} produto(s) reconhecido(s), mas ${result.unmatched.length} linha(s) não foram identificadas.`,
+      )
+    } else {
+      toast.success(`${result.matched.length} item(ns) reconhecido(s) com sucesso!`)
+    }
+  }
+
+  // Confirmar e aplicar itens colados à lista do pedido
+  const handleApplyPastedOrderItems = () => {
+    if (!pastePreview || pastePreview.matched.length === 0) return
+
+    setOrderItems((current) => {
+      const copy = [...current]
+      for (const m of pastePreview.matched) {
+        const existingIdx = copy.findIndex((it) => it.productId === m.productId)
+        if (existingIdx >= 0) {
+          const oldQty = Number(copy[existingIdx].quantity) || 0
+          const sumQty = oldQty + m.quantity
+          copy[existingIdx] = {
+            productId: m.productId,
+            quantity: sumQty,
+            rawInput: formatQuantityOneDecimal(sumQty),
+          }
+        } else {
+          copy.push({
+            productId: m.productId,
+            quantity: m.quantity,
+            rawInput: formatQuantityOneDecimal(m.quantity),
+          })
+        }
+      }
+      return copy
+    })
+
+    toast.success(`${pastePreview.matched.length} item(ns) adicionado(s) ao pedido!`)
+    setPasteModalOpen(false)
+    setPasteText('')
+    setPastePreview(null)
   }
 
   const handleCreateOrder = async (e: React.FormEvent) => {
     e.preventDefault()
+
+    if (openCiclos.length === 0) {
+      toast.error('Nenhum ciclo aberto em coleta ou correção — abra um ciclo em Monitoramento.')
+      return
+    }
+
+    if (!selectedCicloId || !selectedCiclo) {
+      toast.error('Selecione um ciclo para o pedido.')
+      return
+    }
 
     if (!selectedSchool) {
       toast.error('Selecione a escola solicitante.')
       return
     }
 
-    // Identificar contrato da escola selecionada
-    const linkEscola = contractSchools.find((cs) => cs.escola_id === selectedSchool)
-    const contratoIdDaEscola = selectedContractId || linkEscola?.contrato_id
-
-    // Identificar a chamada do contrato da escola
-    const contratoObj = contratoIdDaEscola
-      ? contracts.find((cnt) => cnt.id === contratoIdDaEscola)
-      : null
-    const chamadaDaEscolaId = contratoObj?.chamada_id
-
-    // Resolver ciclo ativo da chamada da escola (ou fallback no activeCiclo)
-    const cicloAtivoParaPedido = chamadaDaEscolaId
-      ? ciclos
-          .filter((c) => c.chamada_id === chamadaDaEscolaId)
-          .sort((a, b) => {
-            const tA = new Date(a.created || a.data_inicio || 0).getTime()
-            const tB = new Date(b.created || b.data_inicio || 0).getTime()
-            return tB - tA
-          })
-          .find((c) => {
-            const st = (c.status || '').toLowerCase()
-            return st !== 'fechado' && st !== 'cancelado'
-          }) || activeCiclo
-      : activeCiclo
-
-    // TRAVA DE FASE DO CICLO DA CHAMADA:
-    // O ciclo pertence à chamada; sua fase/status governa todos os contratos participantes
-    if (!cicloAtivoParaPedido) {
+    // Trava de fase do ciclo
+    const faseCiclo = (selectedCiclo.status || 'coletando').toLowerCase()
+    if (faseCiclo !== 'coletando' && faseCiclo !== 'correcao') {
       toast.error(
-        'Nenhum ciclo ativo cadastrado para esta chamada. Abra um ciclo antes de lançar pedidos.',
+        `O ciclo selecionado está na fase "${formatFaseAmigavel(selectedCiclo.status)}" — pedidos bloqueados.`,
       )
       return
     }
 
-    const faseCiclo = (cicloAtivoParaPedido.status || 'coletando').toLowerCase()
-
-    if (
-      faseCiclo === 'coleta_encerrada' ||
-      faseCiclo === 'coletado' ||
-      faseCiclo === 'coleta encerrada'
-    ) {
-      toast.error('Coleta encerrada para este ciclo — pedidos bloqueados.')
-      return
+    // Validar múltiplos de 0,5 e quantidade > 0
+    const validItems: Array<{ productId: string; quantity: number }> = []
+    for (let idx = 0; idx < orderItems.length; idx++) {
+      const it = orderItems[idx]
+      if (!it.productId) continue
+      const raw = it.rawInput ?? String(it.quantity)
+      const validRes = validateQuantityStepHalf(raw)
+      if (!validRes.isValid || validRes.numericValue <= 0) {
+        toast.error(
+          validRes.error ||
+            `Item #${idx + 1}: informe uma quantidade válida maior que zero e múltiplo de 0,5 (ex: 0,5 / 1,0 / 1,5).`,
+        )
+        return
+      }
+      validItems.push({
+        productId: it.productId,
+        quantity: validRes.numericValue,
+      })
     }
 
-    if (faseCiclo === 'fechado') {
-      toast.error('Ciclo fechado — abra o próximo ciclo.')
-      return
-    }
-
-    if (faseCiclo === 'cancelado') {
-      toast.error('Ciclo cancelado.')
-      return
-    }
-
-    const validItems = orderItems.filter((i) => i.productId && Number(i.quantity) > 0)
     if (validItems.length === 0) {
       toast.error(
         'Não é possível criar pedido sem itens ou com quantidade zero. Adicione pelo menos um item válido com quantidade maior que zero.',
@@ -275,34 +491,19 @@ export default function Orders() {
       return
     }
 
-    // Se houver algum item preenchido com quantidade <= 0, alertar o usuário
-    const hasZeroItem = orderItems.some(
-      (i) => i.productId && (isNaN(Number(i.quantity)) || Number(i.quantity) <= 0),
-    )
-    if (hasZeroItem) {
-      toast.warning('Itens com quantidade menor ou igual a zero não serão incluídos no pedido.')
-    }
-
     setIsSubmitting(true)
 
-    // Achar rota associada da escola no contrato
-    let rotaIdToUse: string | undefined = undefined
-    if (selectedContractId) {
-      const c = contracts.find((cnt) => cnt.id === selectedContractId)
-      const esc = c?.escolas.find((e) => e.escolaId === selectedSchool)
-      rotaIdToUse = esc?.rotaId
-    }
+    // PASSO 5: Gravação: derive contrato_id/rota em segundo plano (escola escolhida nos contratos ativos da chamada)
+    const escolaOpcao = availableSchoolsForCiclo.find((e) => e.escolaId === selectedSchool)
+    const rotaIdToUse = escolaOpcao?.rotaId
 
     const success = await addOrder({
       schoolId: selectedSchool,
       date: orderDate,
-      cicloId: cicloAtivoParaPedido?.id,
+      cicloId: selectedCiclo.id,
       origem: orderOrigem,
       rotaId: rotaIdToUse,
-      items: validItems.map((i) => ({
-        productId: i.productId,
-        quantity: Number(i.quantity),
-      })),
+      items: validItems,
     })
 
     setIsSubmitting(false)
@@ -310,7 +511,7 @@ export default function Orders() {
     if (success) {
       setOpen(false)
       setSelectedSchool('')
-      setOrderItems([{ productId: products[0]?.id || '', quantity: 5 }])
+      setOrderItems([])
     }
   }
 
@@ -714,226 +915,495 @@ export default function Orders() {
         </div>
 
         {/* Botão de Lançar Pedido */}
-        <Dialog open={open} onOpenChange={setOpen}>
+        <Dialog open={open} onOpenChange={handleOpenDialog}>
           <DialogTrigger asChild>
             <Button className="gap-2">
               <Plus className="h-4 w-4" /> Lançar Pedido
             </Button>
           </DialogTrigger>
-          <DialogContent className="sm:max-w-[620px] max-h-[90vh] overflow-y-auto">
+          <DialogContent className="sm:max-w-[660px] max-h-[90vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <ShoppingCart className="h-5 w-5 text-primary" /> Novo Pedido (Individualizado /
-                WhatsApp)
-              </DialogTitle>
-              <DialogDescription>
-                Ciclo Ativo:{' '}
-                <strong className="text-foreground">{activeCiclo?.nome || 'Nenhum'}</strong> (
-                {activeCiclo?.status || '-'})
-                {activeCiclo && (
-                  <>
-                    {' '}
-                    • {formatIntervaloCiclo(activeCiclo.data_inicio, activeCiclo.data_fim)} •
-                    Despacho:{' '}
-                    <span className="font-semibold text-emerald-600 dark:text-emerald-400">
-                      {formatDespachoAmigavel(
-                        activeCiclo.snapshot?.despacho_previsto_segunda ||
-                          getDespachoPrevistoCiclo(activeCiclo.data_inicio),
-                      )}
-                    </span>
-                  </>
+              <div className="flex items-center justify-between pr-6 gap-2">
+                <DialogTitle className="flex items-center gap-2 text-base">
+                  <ShoppingCart className="h-5 w-5 text-primary" /> Novo Pedido
+                </DialogTitle>
+                {/* PASSO 2 — Chamada derivada do ciclo com badge no cabeçalho */}
+                {selectedChamada && (
+                  <Badge
+                    variant="outline"
+                    className="bg-primary/10 text-primary border-primary/30 text-xs font-semibold shrink-0"
+                  >
+                    Chamada {selectedChamada.chamada}
+                    {selectedChamada.dependencia_administrativa
+                      ? ` • ${selectedChamada.dependencia_administrativa}`
+                      : ''}
+                  </Badge>
                 )}
+              </div>
+              <DialogDescription className="text-xs">
+                Selecione o ciclo em andamento e informe a escola e os itens do pedido com base nos
+                preços da chamada.
               </DialogDescription>
             </DialogHeader>
 
-            <form onSubmit={handleCreateOrder} className="space-y-4 pt-2">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="ord-contrato">Contrato Vinculado</Label>
-                  <Select value={selectedContractId} onValueChange={setSelectedContractId}>
-                    <SelectTrigger id="ord-contrato">
-                      <SelectValue placeholder="Selecione o Contrato" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {individualContracts.map((c) => (
-                        <SelectItem key={c.id} value={c.id}>
-                          {c.numero} ({c.escolas.length} escolas)
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="ord-origem">Canal de Origem</Label>
-                  <Select
-                    value={orderOrigem}
-                    onValueChange={(v) => setOrderOrigem(v as 'whatsapp' | 'manual')}
-                  >
-                    <SelectTrigger id="ord-origem">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="whatsapp">Mensagem WhatsApp (Individual)</SelectItem>
-                      <SelectItem value="manual">Lançamento Interno / Manual</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+            {/* PASSO 1: Alerta âmbar caso não haja ciclos abertos em coleta ou correcao */}
+            {openCiclos.length === 0 ? (
+              <div className="space-y-4 pt-2">
+                <Alert className="border-amber-500/50 bg-amber-500/10 text-amber-900 dark:text-amber-200">
+                  <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                  <AlertTitle className="text-sm font-semibold">Nenhum ciclo aberto</AlertTitle>
+                  <AlertDescription className="text-xs">
+                    Nenhum ciclo aberto em coleta ou correção — abra um ciclo em Monitoramento
+                  </AlertDescription>
+                </Alert>
+                <DialogFooter className="pt-2">
+                  <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+                    Fechar
+                  </Button>
+                </DialogFooter>
               </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="ord-escola">
-                    Escola / Instituição <span className="text-destructive">*</span>
-                  </Label>
-                  <Select value={selectedSchool} onValueChange={setSelectedSchool} required>
-                    <SelectTrigger id="ord-escola">
-                      <SelectValue placeholder="Selecione a escola" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {availableSchools.map((s) => (
-                        <SelectItem key={s.id} value={s.id}>
-                          {s.name} ({s.route})
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="ord-date">Data Prevista de Entrega</Label>
-                  <div className="relative">
-                    <CalIcon className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground pointer-events-none" />
-                    <Input
-                      type="date"
-                      id="ord-date"
-                      className="pl-9"
-                      value={orderDate}
-                      onChange={(e) => setOrderDate(e.target.value)}
+            ) : (
+              <form onSubmit={handleCreateOrder} className="space-y-4 pt-2">
+                {/* PASSO 1 — Seletor de Ciclo (Driver do Modal) */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="ord-ciclo" className="text-xs font-semibold">
+                      Ciclo Operacional <span className="text-destructive">*</span>
+                    </Label>
+                    <Select
+                      value={selectedCicloId}
+                      onValueChange={(val) => {
+                        setSelectedCicloId(val)
+                        setSelectedSchool('')
+                        setOrderItems([])
+                      }}
                       required
-                    />
+                    >
+                      <SelectTrigger id="ord-ciclo" className="text-xs">
+                        <SelectValue placeholder="Selecione o Ciclo" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {openCiclos.map((c) => (
+                          <SelectItem key={c.id} value={c.id} className="text-xs">
+                            {formatCicloOptionLabel(c)}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label htmlFor="ord-origem" className="text-xs font-semibold">
+                      Canal de Origem
+                    </Label>
+                    <Select
+                      value={orderOrigem}
+                      onValueChange={(v) => setOrderOrigem(v as 'whatsapp' | 'manual')}
+                    >
+                      <SelectTrigger id="ord-origem" className="text-xs">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="whatsapp" className="text-xs">
+                          Mensagem WhatsApp (Individual)
+                        </SelectItem>
+                        <SelectItem value="manual" className="text-xs">
+                          Lançamento Interno / Manual
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
-              </div>
 
-              {/* Itens do Pedido */}
-              <div className="space-y-3 pt-2 border-t">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <Label className="font-semibold text-sm">Itens e Quantidades</Label>
-                    <p className="text-xs text-muted-foreground">
-                      Informe os produtos e as respectivas quantidades solicitadas pela escola.
-                    </p>
+                {/* PASSO 3 — Seletor de Escola (desduplicada por id dos contratos ativos da chamada) */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="ord-escola" className="text-xs font-semibold">
+                      Escola / Instituição <span className="text-destructive">*</span>
+                    </Label>
+                    <Select
+                      value={selectedSchool}
+                      onValueChange={setSelectedSchool}
+                      disabled={!selectedCicloId || availableSchoolsForCiclo.length === 0}
+                      required
+                    >
+                      <SelectTrigger id="ord-escola" className="text-xs">
+                        <SelectValue
+                          placeholder={
+                            !selectedCicloId
+                              ? 'Selecione o ciclo primeiro'
+                              : availableSchoolsForCiclo.length === 0
+                                ? 'Nenhuma escola vinculada à chamada'
+                                : 'Selecione a escola'
+                          }
+                        />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {availableSchoolsForCiclo.map((esc) => (
+                          <SelectItem key={esc.escolaId} value={esc.escolaId} className="text-xs">
+                            {esc.nome}
+                            {esc.inep ? ` (INEP ${esc.inep})` : ''} • {esc.rotaNome}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {selectedCicloId && availableSchoolsForCiclo.length === 0 && (
+                      <p className="text-[11px] text-muted-foreground">
+                        Não há contratos ativos com escolas vinculadas a esta chamada.
+                      </p>
+                    )}
                   </div>
+
+                  <div className="space-y-1.5">
+                    <Label htmlFor="ord-date" className="text-xs font-semibold">
+                      Data Prevista de Entrega
+                    </Label>
+                    <div className="relative">
+                      <CalIcon className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground pointer-events-none" />
+                      <Input
+                        type="date"
+                        id="ord-date"
+                        className="pl-9 h-9 text-xs"
+                        value={orderDate}
+                        onChange={(e) => setOrderDate(e.target.value)}
+                        required
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* PASSO 4 — Itens e Quantidades vindos da Chamada (múltiplos de 0,5) */}
+                <div className="space-y-3 pt-2 border-t">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <Label className="font-semibold text-xs">Itens e Quantidades</Label>
+                      <p className="text-[11px] text-muted-foreground">
+                        Preços soberanos da chamada. Aceita múltiplos de 0,5 (ex: 0,5 / 1,0 / 1,5 /
+                        2,0).
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => {
+                          setPasteText('')
+                          setPastePreview(null)
+                          setPasteModalOpen(true)
+                        }}
+                        disabled={!selectedCicloId || availableItemsForChamada.length === 0}
+                        className="h-7 text-xs gap-1 text-primary border border-primary/20 hover:bg-primary/10"
+                        title="Colar texto de pedido com produto e quantidade"
+                      >
+                        <ClipboardPaste className="h-3.5 w-3.5" /> Colar Pedido
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={handleAddItem}
+                        disabled={!selectedCicloId || availableItemsForChamada.length === 0}
+                        className="h-7 text-xs"
+                      >
+                        <Plus className="h-3.5 w-3.5 mr-1" /> Adicionar Produto
+                      </Button>
+                    </div>
+                  </div>
+
+                  {orderItems.length === 0 ? (
+                    <div className="rounded-lg border border-dashed p-4 text-center text-xs text-muted-foreground">
+                      Nenhum item adicionado. Clique em &quot;Adicionar Produto&quot; para incluir
+                      os itens do pedido.
+                    </div>
+                  ) : (
+                    <div className="space-y-2 max-h-[220px] overflow-y-auto pr-1">
+                      {orderItems.map((item, idx) => {
+                        const catItem = availableItemsForChamada.find(
+                          (p) => p.productId === item.productId,
+                        )
+                        const itemPreco = catItem?.preco ?? 0
+                        const itemSubtotal = itemPreco * (Number(item.quantity) || 0)
+                        const valRes = item.rawInput
+                          ? validateQuantityStepHalf(item.rawInput)
+                          : { isValid: true, error: null }
+                        const hasError = !valRes.isValid
+
+                        return (
+                          <div
+                            key={idx}
+                            className={`flex items-center gap-2 p-2 rounded-lg border text-xs ${
+                              hasError ? 'border-destructive/60 bg-destructive/5' : 'bg-muted/20'
+                            }`}
+                          >
+                            <div className="flex-1">
+                              <Select
+                                value={item.productId}
+                                onValueChange={(val) => handleItemProductChange(idx, val)}
+                              >
+                                <SelectTrigger className="h-8 text-xs">
+                                  <SelectValue placeholder="Selecione o produto" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {availableItemsForChamada.map((p) => (
+                                    <SelectItem
+                                      key={p.productId}
+                                      value={p.productId}
+                                      className="text-xs"
+                                    >
+                                      {p.nome} — R$ {p.preco.toFixed(2)} / {p.unidade}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div className="w-24">
+                              <Input
+                                type="text"
+                                inputMode="decimal"
+                                className={`h-8 text-xs font-mono text-center ${
+                                  hasError ? 'border-destructive ring-destructive/30' : ''
+                                }`}
+                                placeholder="0,5"
+                                value={item.rawInput ?? formatQuantityOneDecimal(item.quantity)}
+                                onChange={(e) => handleItemQuantityTyping(idx, e.target.value)}
+                                onBlur={() => handleItemQuantityBlur(idx)}
+                                title={valRes.error || 'Quantidade em múltiplos de 0,5'}
+                              />
+                            </div>
+                            <span className="text-[11px] text-muted-foreground w-10 shrink-0">
+                              {catItem?.unidade || 'un'}
+                            </span>
+                            <div className="w-24 text-right font-mono font-medium text-foreground shrink-0">
+                              R$ {itemSubtotal.toFixed(2)}
+                            </div>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 text-destructive hover:text-destructive shrink-0"
+                              onClick={() => handleRemoveItem(idx)}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+
+                  <div className="flex justify-between items-center p-3 bg-primary/5 rounded-lg border border-primary/20">
+                    <span className="font-semibold text-xs">Valor Total Calculado:</span>
+                    <span className="text-base font-bold text-primary font-mono">
+                      R${' '}
+                      {calculatedTotal.toLocaleString('pt-BR', {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                      })}
+                    </span>
+                  </div>
+                </div>
+
+                <DialogFooter className="pt-2">
                   <Button
                     type="button"
                     variant="outline"
-                    size="sm"
-                    onClick={handleAddItem}
-                    className="h-8 text-xs"
+                    onClick={() => setOpen(false)}
+                    disabled={isSubmitting}
                   >
-                    <Plus className="h-3.5 w-3.5 mr-1" /> Adicionar Produto
+                    Cancelar
                   </Button>
-                </div>
+                  <Button
+                    type="submit"
+                    disabled={
+                      isSubmitting || !selectedCicloId || !selectedSchool || orderItems.length === 0
+                    }
+                  >
+                    {isSubmitting ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Salvando...
+                      </>
+                    ) : (
+                      'Salvar Pedido'
+                    )}
+                  </Button>
+                </DialogFooter>
+              </form>
+            )}
+          </DialogContent>
+        </Dialog>
 
-                <div className="space-y-2 max-h-[200px] overflow-y-auto pr-1">
-                  {orderItems.map((item, idx) => {
-                    const selectedProd = products.find((p) => p.id === item.productId)
-                    const itemSubtotal =
-                      selectedProd &&
-                      selectedProd.price !== undefined &&
-                      selectedProd.price !== null
-                        ? selectedProd.price * (Number(item.quantity) || 0)
-                        : 0
+        {/* Modal "Colar Pedido" em lote */}
+        <Dialog open={pasteModalOpen} onOpenChange={setPasteModalOpen}>
+          <DialogContent className="sm:max-w-[620px] max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-base">
+                <ClipboardPaste className="h-5 w-5 text-primary" /> Colar Itens do Pedido
+              </DialogTitle>
+              <DialogDescription className="text-xs">
+                Cole o texto contendo o produto e a quantidade. O parser aceita tabulação
+                (planilha), vírgula, ponto-e-vírgula, &quot;5x Produto&quot; ou quantidade no fim da
+                linha. Preços são soberanos da chamada.
+              </DialogDescription>
+            </DialogHeader>
 
-                    return (
-                      <div
-                        key={idx}
-                        className="flex items-center gap-2 p-2 rounded-lg border bg-muted/20 text-xs"
-                      >
-                        <div className="flex-1">
-                          <Select
-                            value={item.productId}
-                            onValueChange={(val) => handleItemChange(idx, 'productId', val)}
-                          >
-                            <SelectTrigger className="h-8 text-xs">
-                              <SelectValue placeholder="Selecione o produto" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {products.map((p) => (
-                                <SelectItem key={p.id} value={p.id}>
-                                  {p.name}
-                                  {p.price !== undefined && p.price !== null && p.price > 0
-                                    ? ` - R$ ${p.price.toFixed(2)}`
-                                    : ''}{' '}
-                                  / {p.unit}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div className="w-20">
-                          <Input
-                            type="number"
-                            min="1"
-                            step="1"
-                            className="h-8 text-xs font-mono"
-                            placeholder="Qtd"
-                            value={item.quantity}
-                            onChange={(e) =>
-                              handleItemChange(idx, 'quantity', parseInt(e.target.value) || 1)
-                            }
-                          />
-                        </div>
-                        <div className="w-24 text-right font-mono font-medium text-foreground">
-                          R$ {itemSubtotal.toFixed(2)}
-                        </div>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7 text-destructive hover:text-destructive"
-                          onClick={() => handleRemoveItem(idx)}
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
-                      </div>
-                    )
-                  })}
-                </div>
-
-                <div className="flex justify-between items-center p-3 bg-primary/5 rounded-lg border border-primary/20">
-                  <span className="font-semibold text-xs">Valor Total Calculado:</span>
-                  <span className="text-base font-bold text-primary">
-                    R${' '}
-                    {calculatedTotal.toLocaleString('pt-BR', {
-                      minimumFractionDigits: 2,
-                      maximumFractionDigits: 2,
-                    })}
+            <div className="space-y-4 pt-1">
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="paste-order-text" className="text-xs font-semibold">
+                    Texto do Pedido (uma linha por item)
+                  </Label>
+                  <span className="text-[11px] text-muted-foreground">
+                    Ex: &quot;Arroz Tipo 1 5&quot; ou &quot;Banana Prata 2,5&quot; ou &quot;5x
+                    Feijão&quot;
                   </span>
                 </div>
+                <Textarea
+                  id="paste-order-text"
+                  rows={6}
+                  placeholder={`Arroz Tipo 1\t5\nFeijão Carioca\t2,5\n5x Banana Prata\nMaçã Nacional 3`}
+                  value={pasteText}
+                  onChange={(e) => {
+                    setPasteText(e.target.value)
+                    setPastePreview(null)
+                  }}
+                  className="font-mono text-xs resize-y"
+                />
               </div>
 
-              <DialogFooter className="pt-2">
+              <div className="flex justify-end gap-2">
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => setOpen(false)}
-                  disabled={isSubmitting}
+                  size="sm"
+                  onClick={handleProcessPasteText}
+                  disabled={!pasteText.trim()}
+                  className="text-xs"
                 >
-                  Cancelar
+                  <Sparkles className="h-3.5 w-3.5 mr-1" /> Analisar Linhas
                 </Button>
-                <Button type="submit" disabled={isSubmitting}>
-                  {isSubmitting ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Salvando...
-                    </>
+              </div>
+
+              {/* Prévia dos itens interpretados */}
+              {pastePreview && (
+                <div className="space-y-3 pt-2 border-t">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-semibold text-foreground">
+                      Prévia dos Itens Reconhecidos:
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <Badge
+                        variant="outline"
+                        className="text-emerald-700 bg-emerald-50 text-[11px]"
+                      >
+                        {pastePreview.matched.length} identificado(s)
+                      </Badge>
+                      {pastePreview.unmatched.length > 0 && (
+                        <Badge
+                          variant="outline"
+                          className="text-destructive bg-destructive/10 text-[11px]"
+                        >
+                          {pastePreview.unmatched.length} não localizado(s)
+                        </Badge>
+                      )}
+                    </div>
+                  </div>
+
+                  {pastePreview.matched.length > 0 ? (
+                    <div className="space-y-1.5 max-h-[190px] overflow-y-auto pr-1">
+                      {pastePreview.matched.map((m) => (
+                        <div
+                          key={m.productId}
+                          className="flex items-center justify-between p-2 rounded-lg border bg-muted/20 text-xs"
+                        >
+                          <div className="flex-1 min-w-0 pr-2">
+                            <div className="font-medium text-foreground truncate">
+                              {m.productName}
+                            </div>
+                            <div className="text-[11px] text-muted-foreground truncate">
+                              {m.matchedVia} • R$ {m.unitPrice.toFixed(2)} / {m.unidade}
+                            </div>
+                          </div>
+                          <div className="text-right shrink-0">
+                            <div className="font-mono font-semibold text-primary">
+                              {formatQuantityOneDecimal(m.quantity)} {m.unidade}
+                            </div>
+                            <div className="font-mono text-[11px] text-muted-foreground">
+                              R$ {m.subtotal.toFixed(2)}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   ) : (
-                    'Salvar Pedido'
+                    <div className="rounded-lg border border-dashed p-4 text-center text-xs text-muted-foreground">
+                      Nenhum item do catálogo desta chamada foi identificado no texto colado.
+                    </div>
                   )}
-                </Button>
-              </DialogFooter>
-            </form>
+
+                  {/* Linhas não casadas */}
+                  {pastePreview.unmatched.length > 0 && (
+                    <Alert className="border-amber-500/50 bg-amber-500/10 text-amber-900 dark:text-amber-200">
+                      <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                      <AlertTitle className="text-xs font-semibold">
+                        Linhas não reconhecidas ({pastePreview.unmatched.length}):
+                      </AlertTitle>
+                      <AlertDescription className="text-xs mt-1 space-y-1 max-h-[120px] overflow-y-auto">
+                        {pastePreview.unmatched.map((un, uIdx) => (
+                          <div
+                            key={uIdx}
+                            className="font-mono text-[11px] border-b border-amber-500/20 pb-0.5 last:border-b-0"
+                          >
+                            <span className="font-semibold text-destructive">
+                              L{un.lineNumber}:
+                            </span>{' '}
+                            &quot;{un.line}&quot; —{' '}
+                            <span className="text-muted-foreground italic">{un.reason}</span>
+                          </div>
+                        ))}
+                      </AlertDescription>
+                    </Alert>
+                  )}
+
+                  {pastePreview.matched.length > 0 && (
+                    <div className="flex justify-between items-center p-2.5 bg-primary/5 rounded-lg border border-primary/20">
+                      <span className="text-xs font-semibold">Subtotal dos Itens a Importar:</span>
+                      <span className="text-sm font-bold text-primary font-mono">
+                        R${' '}
+                        {pastePreview.totalCalculated.toLocaleString('pt-BR', {
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2,
+                        })}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <DialogFooter className="pt-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setPasteModalOpen(false)
+                  setPasteText('')
+                  setPastePreview(null)
+                }}
+              >
+                Cancelar
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                onClick={handleApplyPastedOrderItems}
+                disabled={!pastePreview || pastePreview.matched.length === 0}
+              >
+                Confirmar e Adicionar{' '}
+                {pastePreview?.matched.length ? `(${pastePreview.matched.length})` : ''}
+              </Button>
+            </DialogFooter>
           </DialogContent>
         </Dialog>
       </div>

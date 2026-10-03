@@ -1,0 +1,166 @@
+import { describe, it, expect } from 'vitest'
+import {
+  extractQuantityAndProductName,
+  matchCatalogItemTolerant,
+  parsePastedOrderText,
+  OrderPasteCatalogProduct,
+} from './orderPasteParser'
+
+describe('orderPasteParser', () => {
+  const mockCatalog: OrderPasteCatalogProduct[] = [
+    { productId: 'p1', nome: 'Arroz Tipo 1', unidade: 'Kg', preco: 6.5 },
+    { productId: 'p2', nome: 'Feijão Carioca', unidade: 'Kg', preco: 8.0 },
+    { productId: 'p3', nome: 'Banana Prata', unidade: 'Kg', preco: 4.2 },
+    { productId: 'p4', nome: 'Maçã Nacional', unidade: 'Kg', preco: 7.0 },
+    { productId: 'p5', nome: 'Leite Integral Pasteurizado', unidade: 'L', preco: 5.5 },
+  ]
+
+  describe('extractQuantityAndProductName', () => {
+    it('deve extrair formato com tabulação (planilha com 2 colunas)', () => {
+      const res = extractQuantityAndProductName('Arroz Tipo 1\t5')
+      expect(res).not.toBeNull()
+      expect(res?.productText).toBe('Arroz Tipo 1')
+      expect(res?.quantity).toBe(5)
+    })
+
+    it('deve extrair tabulação com quantidade na 1a coluna', () => {
+      const res = extractQuantityAndProductName('2,5\tFeijão Carioca')
+      expect(res).not.toBeNull()
+      expect(res?.productText).toBe('Feijão Carioca')
+      expect(res?.quantity).toBe(2.5)
+    })
+
+    it('deve extrair formato com ponto-e-vírgula', () => {
+      const res = extractQuantityAndProductName('Banana Prata; 10')
+      expect(res).not.toBeNull()
+      expect(res?.productText).toBe('Banana Prata')
+      expect(res?.quantity).toBe(10)
+    })
+
+    it('deve extrair formato com "x" antes do número (5x Arroz)', () => {
+      const res = extractQuantityAndProductName('5x Arroz Tipo 1')
+      expect(res).not.toBeNull()
+      expect(res?.productText).toBe('Arroz Tipo 1')
+      expect(res?.quantity).toBe(5)
+    })
+
+    it('deve extrair formato com "x" após o número (Arroz 5x)', () => {
+      const res = extractQuantityAndProductName('Arroz Tipo 1 5x')
+      expect(res).not.toBeNull()
+      expect(res?.productText).toBe('Arroz Tipo 1')
+      expect(res?.quantity).toBe(5)
+    })
+
+    it('deve extrair quantidade no fim da linha com espaço (Arroz 5)', () => {
+      const res = extractQuantityAndProductName('Arroz Tipo 1 5')
+      expect(res).not.toBeNull()
+      expect(res?.productText).toBe('Arroz Tipo 1')
+      expect(res?.quantity).toBe(5)
+    })
+
+    it('deve extrair quantidade no fim da linha com decimal em vírgula ou ponto', () => {
+      const res1 = extractQuantityAndProductName('Banana Prata 2,5')
+      expect(res1?.quantity).toBe(2.5)
+      expect(res1?.productText).toBe('Banana Prata')
+
+      const res2 = extractQuantityAndProductName('Banana Prata 2.5')
+      expect(res2?.quantity).toBe(2.5)
+      expect(res2?.productText).toBe('Banana Prata')
+    })
+
+    it('deve aceitar separador por vírgula ("Arroz, 5")', () => {
+      const res = extractQuantityAndProductName('Arroz Tipo 1, 5')
+      expect(res).not.toBeNull()
+      expect(res?.productText).toBe('Arroz Tipo 1')
+      expect(res?.quantity).toBe(5)
+    })
+
+    it('deve aceitar sufixo de unidade descartável ("Arroz 5kg")', () => {
+      const res = extractQuantityAndProductName('Arroz Tipo 1 5kg')
+      expect(res?.quantity).toBe(5)
+    })
+
+    it('deve retornar null para linhas vazias ou puramente textuais sem quantidade', () => {
+      expect(extractQuantityAndProductName('')).toBeNull()
+      expect(extractQuantityAndProductName('   ')).toBeNull()
+      expect(extractQuantityAndProductName('Apenas texto sem numero')).toBeNull()
+    })
+  })
+
+  describe('matchCatalogItemTolerant', () => {
+    it('deve casar por nome idêntico normalizado', () => {
+      const m = matchCatalogItemTolerant('arroz tipo 1', mockCatalog)
+      expect(m?.product.productId).toBe('p1')
+    })
+
+    it('deve casar com acentuação e maiúsculas diferentes', () => {
+      const m = matchCatalogItemTolerant('FEIJAO CARIOCA', mockCatalog)
+      expect(m?.product.productId).toBe('p2')
+    })
+
+    it('deve casar no singular/plural ("Bananas Prata" -> "Banana Prata")', () => {
+      const m = matchCatalogItemTolerant('Bananas Prata', mockCatalog)
+      expect(m?.product.productId).toBe('p3')
+    })
+
+    it('deve casar por inclusão / abreviação ("Arroz" -> "Arroz Tipo 1")', () => {
+      const m = matchCatalogItemTolerant('Arroz', mockCatalog)
+      expect(m?.product.productId).toBe('p1')
+    })
+
+    it('deve retornar null para produto não existente', () => {
+      const m = matchCatalogItemTolerant('Produto Desconhecido XYZ', mockCatalog)
+      expect(m).toBeNull()
+    })
+  })
+
+  describe('parsePastedOrderText', () => {
+    it('deve processar texto multilinha completo', () => {
+      const text = `
+Arroz Tipo 1\t5
+Feijão Carioca; 2,5
+5x Banana Prata
+Leite Integral 10
+LinhaInexistente 3
+`
+      const result = parsePastedOrderText(text, mockCatalog)
+      expect(result.matched.length).toBe(4)
+      expect(result.unmatched.length).toBe(1)
+      expect(result.unmatched[0].line).toContain('LinhaInexistente')
+
+      // Preços soberanos da chamada
+      const arroz = result.matched.find((m) => m.productId === 'p1')
+      expect(arroz?.quantity).toBe(5)
+      expect(arroz?.unitPrice).toBe(6.5)
+      expect(arroz?.subtotal).toBe(32.5)
+
+      const feijao = result.matched.find((m) => m.productId === 'p2')
+      expect(feijao?.quantity).toBe(2.5)
+      expect(feijao?.unitPrice).toBe(8.0)
+      expect(feijao?.subtotal).toBe(20.0)
+    })
+
+    it('deve somar quantidades quando o mesmo produto for colado mais de uma vez', () => {
+      const text = `
+Arroz Tipo 1 2,0
+Arroz Tipo 1 3,5
+`
+      const result = parsePastedOrderText(text, mockCatalog)
+      expect(result.matched.length).toBe(1)
+      expect(result.matched[0].quantity).toBe(5.5)
+      expect(result.matched[0].subtotal).toBe(5.5 * 6.5)
+    })
+
+    it('deve ignorar linhas vazias sem adicioná-las aos erros', () => {
+      const text = `
+      
+Arroz Tipo 1 5
+
+
+`
+      const result = parsePastedOrderText(text, mockCatalog)
+      expect(result.matched.length).toBe(1)
+      expect(result.unmatched.length).toBe(0)
+    })
+  })
+})

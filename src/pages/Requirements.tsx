@@ -119,13 +119,18 @@ const MODULES: ModuleSpec[] = [
     route: '/pedidos',
     goal: 'Registro, validação, acompanhamento de status e rastreamento de pedidos das escolas.',
     details: [
+      'Novo Fluxo de Criação Orientado a Ciclo (v0.0.143): O modal "Lançar Pedido" (/pedidos) é conduzido pelo Ciclo Operacional (selectedCicloId). Lista exclusivamente ciclos com status "coletando" ou "correcao" com rótulo "Ciclo {numero}/{ano} [{chamada}] — {fase}". Na ausência de ciclo aberto em coleta ou correção, exibe Alert âmbar explicativo orientando a abertura em Monitoramento e desabilita escola, itens e submissão.',
+      'Chamada Pública Soberana & Badge Contextual (v0.0.143): A Chamada Pública é derivada diretamente do ciclo selecionado (ciclo.chamada_id), exibida em badge destacado no cabeçalho ("Chamada {numero} • {dependencia}"). O seletor manual de contrato foi completamente removido do diálogo.',
+      'Escolas Participantes da Chamada (v0.0.143): O seletor de escola apresenta a união desduplicada por ID das escolas vinculadas aos contratos ativos (status="Ativo") da chamada do ciclo selecionado, exibindo Nome, Código INEP (se houver) e Rota Logística associada.',
+      'Funcionalidade "Colar Pedido" em Lote (v0.0.143): Botão dedicado "Colar Pedido" no diálogo "Novo Pedido" que abre modal de colagem direta de texto contendo produto e quantidade. Parser tolerante com suporte a múltiplos formatos por linha: tabulação (planilha/Excel em duas colunas), ponto-e-vírgula, vírgula, notação "5x Produto" e quantidade no início ou fim da linha. Suporta quantidades com múltiplos de 0,5 (usando vírgula ou ponto decimal), preserva preços soberanos da chamada do ciclo, apresenta prévia discriminada de itens reconhecidos com somatório de quantidades para produtos repetidos e lista separadamente linhas não localizadas para conferência.',
+      'Itens da Chamada & Múltiplos de 0,5 (v0.0.143): Os itens e preços unitários são herdados com soberania da Chamada Pública (chamada_itens). As quantidades aceitam múltiplos de 0,5 (step 0.5, ex.: 0,5 / 1,0 / 1,5), com subtotais e valor total recalculados em tempo real na interface.',
+      'Gravação Automática com Derivação de Contrato e Rota (v0.0.143): No salvamento, o sistema vincula o pedido diretamente ao ciclo selecionado (ciclo_id) e deriva automaticamente a rota da escola escolhida nos contratos ativos da chamada em segundo plano.',
       'Campos: id, numero, escola_id (FK escolas), ciclo_id (FK ciclos), origem (excel / whatsapp / manual / formulario), rota_id (FK rotas — rota unificada que mapeia a aba de origem e o percurso), validacao (json: status, motivo, detalhes), data_prevista, status (Pendente / Em Rota / Entregue / Cancelado), entregue_em, entregue_por (FK users), motivo_cancelamento, cancelado_em.',
       'Origens de Pedido: excel (importação de planilha centralizada), whatsapp (lançamento individual), manual (lançamento interno) e formulario (submissão direta online da escola via R24).',
       'Fluxo de Status do Pedido: transições controladas na listagem de pedidos (Pendente → Em Rota → Entregue, e Cancelado).',
       'Regras Estritas de Cancelamento: pedidos Pendentes (não despachados) podem ser cancelados com motivo livre; pedidos despachados (Em Rota) só podem ser cancelados por motivos logísticos da cooperativa (veículo indisponível, produto indisponível, endereço inacessível, escola fechada, outro motivo logístico com detalhe livre). O cancelamento é definitivo e irreversível (sem retorno para Pendente).',
       'Coluna e Detalhes de Cancelamento: exibição destacada do motivo do cancelamento e timestamp cancelado_em tanto na tabela de pedidos quanto no diálogo de visualização detalhada.',
       'Validação Automática do Pedido: inválido apenas se vazio ou com todas as quantidades zeradas. Não existe regra de compensação de escassez (regra removida — a correção de escassez é negociada diretamente com a cooperativa fora do formulário).',
-      'Lançamento de Pedidos via WhatsApp: suporte para contratos individualizados com pré-preenchimento e atribuição ao ciclo ativo.',
       'Filtros avançados por origem (incluindo filtro por Formulário), status de entrega e validação.',
     ],
   },
@@ -799,6 +804,70 @@ export function Requirements() {
       {/* 7. Registro de Manutenção e Limpeza de Dados */}
       <SectionTitle>7. Registro de Manutenção & Higienização do Banco de Dados</SectionTitle>
       <div className="space-y-4">
+        {/* Reestruturação do Diálogo Novo Pedido Orientado a Ciclo (v0.0.143) */}
+        <div className="rounded-lg border border-border bg-card p-5 space-y-4">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="text-primary border-primary/30">
+                Release v0.0.143
+              </Badge>
+              <span className="font-semibold text-foreground">
+                Reestruturação do Diálogo &quot;Novo Pedido&quot; Orientado a Ciclo
+              </span>
+            </div>
+            <span className="text-xs text-muted-foreground">Executado (v0.0.143)</span>
+          </div>
+          <p className="text-sm text-foreground/90 leading-relaxed">
+            Reengenharia completa do fluxo de criação de pedidos manuais/WhatsApp em{' '}
+            <code>src/pages/Orders.tsx</code>. A abertura de pedidos passa a ser conduzida pelo{' '}
+            <strong>Ciclo Operacional</strong> (status coletando ou correcao), com herança soberana
+            da chamada, escolas desduplicadas por contrato ativo da chamada, quantidades aceitando
+            múltiplos de 0,5 e resolução transparente de rota em segundo plano.
+          </p>
+          <div className="grid sm:grid-cols-2 gap-4 text-sm">
+            <div className="rounded-md border border-border/60 bg-muted/20 p-3 space-y-1.5">
+              <span className="font-medium text-destructive">Comportamentos Substituídos:</span>
+              <ul className="space-y-1 text-xs text-muted-foreground">
+                <li>• Remoção do seletor manual de contrato como condutor do diálogo</li>
+                <li>• Fim do vínculo de escolas restrito a um único contrato pré-selecionado</li>
+                <li>• Fim das quantidades inteiras rígidas (step 1) para pedidos</li>
+                <li>• Fim da inferência implícita de ciclo desconectada da seleção do operador</li>
+              </ul>
+            </div>
+            <div className="rounded-md border border-primary/30 bg-primary/5 p-3 space-y-1.5">
+              <span className="font-medium text-primary">Novo Fluxo Consolidado (5 Passos):</span>
+              <ul className="space-y-1 text-xs text-foreground/80">
+                <li>
+                  • <strong>Passo 1:</strong> Ciclo operacional como driver (apenas fases
+                  coletando/correcao) com alerta âmbar caso vazio
+                </li>
+                <li>
+                  • <strong>Passo 2:</strong> Chamada derivada do ciclo com badge contextual no
+                  cabeçalho
+                </li>
+                <li>
+                  • <strong>Passo 3:</strong> União desduplicada de escolas dos contratos ativos da
+                  chamada com INEP e rota
+                </li>
+                <li>
+                  • <strong>Passo 4:</strong> Itens e preços soberanos da chamada com múltiplos de
+                  0,5 e total em tempo real
+                </li>
+                <li>
+                  • <strong>Passo 5:</strong> Gravação com ciclo_id explícito e rota derivada em
+                  segundo plano
+                </li>
+                <li>
+                  • <strong>Colar Pedido:</strong> Modal integrado para colar produto e quantidade
+                  em lote (tabulação, vírgula, ponto-e-vírgula, &quot;5x Produto&quot; ou final da
+                  linha), com tolerância a múltiplos de 0,5, preços soberanos da chamada, prévia
+                  detalhada e soma automática para produtos repetidos
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
         {/* Aposentadoria Definitiva da Coleção ciclo_contratos (v0.0.140) */}
         <div className="rounded-lg border border-border bg-card p-5 space-y-4">
           <div className="flex items-center justify-between flex-wrap gap-2">
