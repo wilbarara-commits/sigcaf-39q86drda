@@ -195,7 +195,7 @@ const MODULES: ModuleSpec[] = [
       '3 Dias Configuráveis por Chamada (v0.0.127): A regra semanal de cada chamada define 3 marcos operacionais: dia de início (abertura), dia de despacho/entrega e dia de fim (encerramento da semana operacional), padronizados como Quarta / Segunda / Terça e parametrizáveis por chamada.',
       'Ajuste Manual de Datas com Validação da Mesma Semana (v0.0.127): O usuário pode ajustar manualmente as datas do ciclo ao criá-lo ou editá-lo, com validação estrita de pertencimento à mesma semana operacional e respeito à cronologia início ≤ despacho ≤ fim. O ajuste manual é válido exclusivamente para aquele ciclo específico, sem alterar a regra padrão da chamada.',
       'Cadeia Real de Fases Operacionais: Coletando → Correção → Coleta Encerrada → Fechado (+ estado terminal Cancelado). O ciclo só FECHA após o armazenamento de TODOS os atestos das entregas realizadas; "Fechado" é estado do CICLO, não da coleta.',
-      'Seletor de Ciclo e Contrato Independente: O Monitoramento opera sobre o ciclo SELECIONADO (dropdown, ordenado do mais recente para o mais antigo, padrão = ciclo ativo da chamada). Cada ciclo e seus contratos vinculados evoluem sua própria fase de forma independente.',
+      'Ciclo por Chamada com Fase Única & Aposentadoria de ciclo_contratos (v0.0.140): Cada ciclo pertence diretamente a uma Chamada Pública (campo chamada_id). Sua fase e status (`status` em `ciclos`) governam uniformemente toda a chamada e todos os seus contratos participantes (coletando → correcao → coleta_encerrada → fechado / cancelado). A antiga coleção intermediária `ciclo_contratos` foi definitivamente aposentada e removida (migration 0112), eliminando redundância e complexidade obsoletas: os contratos participantes derivam dinamicamente da chamada do ciclo.',
       'Ciclo Ativo: Corresponde ao ciclo mais recente em fase não-terminal por chamada (máximo 1 ativo por chamada). Pedidos de qualquer origem (importação Excel, WhatsApp, lançamento manual ou formulário online) caem automaticamente no ciclo ativo da respectiva chamada.',
       'Badge Derivado de Fechamento Pendente: Qualquer ciclo não-terminal que não seja o ciclo mais recente ativo recebe o badge visual "Fechamento Pendente (atrasado X dias)", alertando sobre pendências operacionais.',
       'Botão "Abrir Ciclo" com Numeração Livre e Seleção de Chamada: O modal de criação de ciclo permite ao usuário selecionar a Chamada Pública correspondente, digitar e escolher livremente o número do ciclo (pré-preenchido com a semana ISO correspondente), calculando as 3 datas oficiais a partir da regra configurada para a chamada, com opção de ajuste manual validado.',
@@ -394,8 +394,7 @@ const STACK = [
 const DATA_MODEL = [
   'users (id, email, nome/name, celular, foto [file], perfil [MASTER/ADMINISTRADOR/SECRETARIA], ativo [bool])',
   'configuracoes (id, nome_cooperativa, sigla, cnpj, telefone, email, cidade_uf, exibir_atalhos_demo [bool], logotipo [file], subtitulo_sistema, deposito_nome, deposito_latitude, deposito_longitude)',
-  'ciclos (id, nome, chamada_id → chamadas, data_inicio, data_fim, data_despacho, status [texto extensível: coletando / correcao / coleta_encerrada / fechado / cancelado], motivo_cancelamento [texto], data_cancelamento [data], snapshot [json com regra semanal e despacho]) [1 ciclo ativo por chamada; número = semana ISO]',
-  'ciclo_contratos (id, ciclo_id → ciclos, contrato_id → contratos, fase [texto extensível por contrato], motivo_cancelamento [texto], data_cancelamento [data]) [Controle granular de fase por contrato vinculado]',
+  'ciclos (id, nome, chamada_id → chamadas, data_inicio, data_fim, data_despacho, status [texto extensível: coletando / correcao / coleta_encerrada / fechado / cancelado], motivo_cancelamento [texto], data_cancelamento [data], snapshot [json com regra semanal e despacho]) [1 ciclo ativo por chamada; número = semana ISO; fase única do ciclo governando todos os contratos da chamada]',
   'chamadas (id, chamada, programa, modalidade [individualizado/centralizado], dependencia_administrativa [Federal/Estadual/Municipal/Privada — opcional], status [Ativo/Pendente/Encerrado/Cancelado]) [Nível estrutural superior: 1 chamada pública : N contratos; populado inicialmente por migração dos contratos com deduplicação futura]',
   'chamada_itens (id, chamada_id → chamadas [obrigatório], produto_id → produtos [opcional], produto, aka [apelido na planilha], unidade, preco) [Produtos, AKAs e preços unitários oficiais vivem na Chamada; quantidade da chamada = soma reativa das quantidades dos contratos vinculados]',
   'produtos (id, nome, unidade, categoria) [Catálogo cadastral mestre — sem preço/estoque, valores financeiros e quantidades residem em chamada_itens e contrato_itens]',
@@ -800,6 +799,53 @@ export function Requirements() {
       {/* 7. Registro de Manutenção e Limpeza de Dados */}
       <SectionTitle>7. Registro de Manutenção & Higienização do Banco de Dados</SectionTitle>
       <div className="space-y-4">
+        {/* Aposentadoria Definitiva da Coleção ciclo_contratos (v0.0.140) */}
+        <div className="rounded-lg border border-border bg-card p-5 space-y-4">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="text-primary border-primary/30">
+                Migration 0112
+              </Badge>
+              <span className="font-semibold text-foreground">
+                Aposentadoria Definitiva da Collection ciclo_contratos
+              </span>
+            </div>
+            <span className="text-xs text-muted-foreground">Executado (v0.0.140)</span>
+          </div>
+          <p className="text-sm text-foreground/90 leading-relaxed">
+            Eliminação estrutural e de código da coleção obsoleta <code>ciclo_contratos</code>. O
+            ciclo operacional é por Chamada Pública (<code>ciclos.chamada_id</code>), sua fase e
+            status são gerenciados diretamente em <code>ciclos.status</code>, e os contratos
+            participantes são derivados dos contratos ativos da própria chamada.
+          </p>
+          <div className="grid sm:grid-cols-2 gap-4 text-sm">
+            <div className="rounded-md border border-border/60 bg-muted/20 p-3 space-y-1.5">
+              <span className="font-medium text-destructive">Artefatos Aposentados:</span>
+              <ul className="space-y-1 text-xs text-muted-foreground">
+                <li>• Coleção ciclo_contratos excluída do banco PocketBase</li>
+                <li>• Registros legados de ciclo_contratos removidos</li>
+                <li>• Interface CicloContratoRecord e ciclo-contratos.ts deletados</li>
+                <li>• Estado cicloContratos e métodos redundantes removidos do AppContext</li>
+              </ul>
+            </div>
+            <div className="rounded-md border border-primary/30 bg-primary/5 p-3 space-y-1.5">
+              <span className="font-medium text-primary">Arquitetura Consolidada:</span>
+              <ul className="space-y-1 text-xs text-foreground/80">
+                <li>
+                  • Fase única do ciclo em <code>ciclos.status</code> para toda a chamada
+                </li>
+                <li>
+                  • Contratos participantes derivados em tempo de execução via{' '}
+                  <code>chamada_id</code>
+                </li>
+                <li>
+                  • Despacho, importação, monitoramento e pedidos alinhados ao ciclo da chamada
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
         {/* Exclusão do Contrato C-2026-01 (v0.0.105) */}
         <div className="rounded-lg border border-border bg-card p-5 space-y-4">
           <div className="flex items-center justify-between flex-wrap gap-2">

@@ -89,7 +89,6 @@ export default function ExcelImport() {
     contractItems,
     chamadas,
     ciclos,
-    cicloContratos,
     activeCiclo,
     rotas,
     paradasRota,
@@ -163,15 +162,7 @@ export default function ExcelImport() {
 
     const encontrado = ciclosChamada.find((c) => {
       const st = (c.status || '').toLowerCase()
-      if (st === 'fechado' || st === 'cancelado') return false
-      const cc = cicloContratos.find(
-        (item) => item.ciclo_id === c.id && item.contrato_id === selectedContract.id,
-      )
-      if (cc) {
-        const faseNorm = (cc.fase || '').toLowerCase()
-        return faseNorm !== 'fechado' && faseNorm !== 'cancelado'
-      }
-      return true
+      return st !== 'fechado' && st !== 'cancelado'
     })
 
     if (encontrado) return encontrado
@@ -186,7 +177,7 @@ export default function ExcelImport() {
     }
 
     return null
-  }, [selectedContract, ciclos, cicloContratos, activeCiclo])
+  }, [selectedContract, ciclos, activeCiclo])
 
   // Interface para escolas da chamada sem pedidos na planilha
   interface EscolaChamadaSemPedido {
@@ -744,26 +735,23 @@ export default function ExcelImport() {
     let cicloAlvo = cicloAtivoDaChamada
 
     if (cicloAlvo) {
-      // Validar a fase específica deste contrato no ciclo ativo
-      const ccContrato = cicloContratos.find(
-        (cc) => cc.ciclo_id === cicloAlvo?.id && cc.contrato_id === selectedContract.id,
-      )
-      const faseContrato = (ccContrato?.fase || cicloAlvo.status || 'coletando').toLowerCase()
+      // Validar a fase do ciclo da chamada
+      const faseCiclo = (cicloAlvo.status || 'coletando').toLowerCase()
 
       if (
-        faseContrato === 'coleta_encerrada' ||
-        faseContrato === 'coletado' ||
-        faseContrato === 'coleta encerrada'
+        faseCiclo === 'coleta_encerrada' ||
+        faseCiclo === 'coletado' ||
+        faseCiclo === 'coleta encerrada'
       ) {
-        toast.error('Coleta encerrada para este contrato — importação bloqueada.')
+        toast.error('Coleta encerrada para este ciclo — importação bloqueada.')
         return
       }
-      if (faseContrato === 'fechado') {
-        toast.error('Ciclo fechado para este contrato — abra o próximo ciclo.')
+      if (faseCiclo === 'fechado') {
+        toast.error('Ciclo fechado — abra o próximo ciclo.')
         return
       }
-      if (faseContrato === 'cancelado') {
-        toast.error('Ciclo cancelado para este contrato.')
+      if (faseCiclo === 'cancelado') {
+        toast.error('Ciclo cancelado.')
         return
       }
     } else {
@@ -1086,13 +1074,8 @@ export default function ExcelImport() {
                     <span className="font-semibold text-foreground">
                       {(() => {
                         if (!cicloAtivoDoContrato) return 'Sem ciclo ativo'
-                        const cc = cicloContratos.find(
-                          (c) =>
-                            c.ciclo_id === cicloAtivoDoContrato.id &&
-                            c.contrato_id === selectedContract.id,
-                        )
-                        const f = cc?.fase || cicloAtivoDoContrato.status || 'coletando'
-                        return `${cicloAtivoDoContrato.nome} (Fase do contrato: ${formatFaseAmigavel(f)})`
+                        const f = cicloAtivoDoContrato.status || 'coletando'
+                        return `${cicloAtivoDoContrato.nome} (Fase do ciclo: ${formatFaseAmigavel(f)})`
                       })()}
                     </span>
                   </div>

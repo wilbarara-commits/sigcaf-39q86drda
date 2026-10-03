@@ -6,7 +6,6 @@ import type {
   EscolaRecord,
   ContratoRecord,
   CicloRecord,
-  CicloContratoRecord,
   ContratoItemRecord,
   ProdutoRecord,
   PedidoRecord,
@@ -72,7 +71,6 @@ export default function SchoolOrderForm() {
   const [escola, setEscola] = useState<EscolaRecord | null>(null)
   const [contrato, setContrato] = useState<ContratoRecord | null>(null)
   const [ciclo, setCiclo] = useState<CicloRecord | null>(null)
-  const [cicloContrato, setCicloContrato] = useState<CicloContratoRecord | null>(null)
   const [formItems, setFormItems] = useState<FormItem[]>([])
 
   // Pedido anterior existente no ciclo (se houver)
@@ -142,15 +140,6 @@ export default function SchoolOrderForm() {
         // Carregar Ciclo
         const cicloRec = await pb.collection('ciclos').getOne<CicloRecord>(tokenRec.ciclo_id)
         setCiclo(cicloRec)
-
-        // Carregar CicloContrato para validar fase
-        const cicloContratosList = await pb
-          .collection('ciclo_contratos')
-          .getList<CicloContratoRecord>(1, 1, {
-            filter: `ciclo_id = "${tokenRec.ciclo_id}" && contrato_id = "${tokenRec.contrato_id}"`,
-          })
-        const ccRec = cicloContratosList.items[0] || null
-        setCicloContrato(ccRec)
 
         // Carregar itens do contrato com expand do produto mestre
         const contratoItens = await pb
@@ -265,9 +254,9 @@ export default function SchoolOrderForm() {
     return 'Próxima segunda-feira'
   }, [dataDespachoDate, cicloInfo])
 
-  // Status da fase do contrato no ciclo
+  // Status da fase do ciclo
   // Cadeia: coletando -> correcao -> coleta_encerrada -> fechado (+ cancelado)
-  const faseAtual = cicloContrato?.fase || ciclo?.status || 'coletando'
+  const faseAtual = ciclo?.status || 'coletando'
   const faseNorm = (faseAtual || '').trim().toLowerCase()
 
   // NOVA REGRA DE JANELAS DE ENVIO (Decisão do Bill):

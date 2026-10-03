@@ -82,7 +82,6 @@ export const DesvincularEscolaDialog: React.FC<DesvincularEscolaDialogProps> = (
     rotasLogisticas,
     paradasRota,
     despachos,
-    cicloContratos,
     ciclos,
     orders,
     refreshData,
@@ -140,21 +139,24 @@ export const DesvincularEscolaDialog: React.FC<DesvincularEscolaDialogProps> = (
       setChecking(true)
       try {
         // ------------------------------------------------------------------
-        // 1. Verificar pedidos em aberto em ciclos ativos/não-terminais
+        // 1. Verificar pedidos em aberto em ciclos ativos/não-terminais da chamada do contrato
         // ------------------------------------------------------------------
-        const ccsDoContrato = (cicloContratos || []).filter((cc) => cc.contrato_id === contractId)
         const cicloIdsNaoTerminais = new Set<string>()
         const cicloNomeMap = new Map<string, string>()
 
-        for (const cc of ccsDoContrato) {
-          const cicloId = cc.ciclo_id
-          if (!cicloId) continue
-          const ciclo = (ciclos || []).find((c) => c.id === cicloId)
-          const fase = cc.fase || ciclo?.status || 'coletando'
+        const ciclosRelevantes = (ciclos || []).filter((c) => {
+          if (effectiveChamadaId && c.chamada_id) {
+            return c.chamada_id === effectiveChamadaId
+          }
+          return true
+        })
+
+        for (const ciclo of ciclosRelevantes) {
+          const fase = ciclo?.status || 'coletando'
           if (fase && isCicloNaoTerminal(fase)) {
-            cicloIdsNaoTerminais.add(cicloId)
-            if (ciclo?.nome) {
-              cicloNomeMap.set(cicloId, ciclo.nome)
+            cicloIdsNaoTerminais.add(ciclo.id)
+            if (ciclo.nome) {
+              cicloNomeMap.set(ciclo.id, ciclo.nome)
             }
           }
         }
@@ -277,7 +279,6 @@ export const DesvincularEscolaDialog: React.FC<DesvincularEscolaDialogProps> = (
     open,
     contractId,
     escolaId,
-    cicloContratos,
     ciclos,
     orders,
     effectiveChamadaId,

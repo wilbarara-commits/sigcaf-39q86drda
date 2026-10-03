@@ -90,7 +90,6 @@ export default function Orders() {
     contracts,
     rotasLogisticas,
     ciclos,
-    cicloContratos,
     contractSchools,
     activeCiclo,
     addOrder,
@@ -238,8 +237,8 @@ export default function Orders() {
           }) || activeCiclo
       : activeCiclo
 
-    // TRAVA DE FASE POR CONTRATO:
-    // Validada contra o vínculo ciclo_contratos do contrato no ciclo ativo da chamada
+    // TRAVA DE FASE DO CICLO DA CHAMADA:
+    // O ciclo pertence à chamada; sua fase/status governa todos os contratos participantes
     if (!cicloAtivoParaPedido) {
       toast.error(
         'Nenhum ciclo ativo cadastrado para esta chamada. Abra um ciclo antes de lançar pedidos.',
@@ -247,32 +246,24 @@ export default function Orders() {
       return
     }
 
-    let faseContrato = (cicloAtivoParaPedido.status || 'coletando').toLowerCase()
-    if (contratoIdDaEscola) {
-      const cc = cicloContratos.find(
-        (c) => c.ciclo_id === cicloAtivoParaPedido.id && c.contrato_id === contratoIdDaEscola,
-      )
-      if (cc) {
-        faseContrato = (cc.fase || 'coletando').toLowerCase()
-      }
-    }
+    const faseCiclo = (cicloAtivoParaPedido.status || 'coletando').toLowerCase()
 
     if (
-      faseContrato === 'coleta_encerrada' ||
-      faseContrato === 'coletado' ||
-      faseContrato === 'coleta encerrada'
+      faseCiclo === 'coleta_encerrada' ||
+      faseCiclo === 'coletado' ||
+      faseCiclo === 'coleta encerrada'
     ) {
-      toast.error('Coleta encerrada para este contrato — pedidos bloqueados.')
+      toast.error('Coleta encerrada para este ciclo — pedidos bloqueados.')
       return
     }
 
-    if (faseContrato === 'fechado') {
-      toast.error('Ciclo fechado para este contrato — abra o próximo ciclo.')
+    if (faseCiclo === 'fechado') {
+      toast.error('Ciclo fechado — abra o próximo ciclo.')
       return
     }
 
-    if (faseContrato === 'cancelado') {
-      toast.error('Ciclo cancelado para este contrato.')
+    if (faseCiclo === 'cancelado') {
+      toast.error('Ciclo cancelado.')
       return
     }
 
@@ -455,19 +446,8 @@ export default function Orders() {
     }
   }
 
-  // Helpers para fase do contrato do pedido
+  // Helpers para fase do contrato do pedido (obtida do ciclo do pedido)
   const getFaseContratoDoPedido = (order: Order): string => {
-    const linkEscola = contractSchools.find((cs) => cs.escola_id === order.schoolId)
-    const contratoIdDaEscola =
-      linkEscola?.contrato_id ||
-      contracts.find((cnt) => cnt.escolas.some((e) => e.escolaId === order.schoolId))?.id
-    const cicloId = order.cicloId || activeCiclo?.id
-    if (cicloId && contratoIdDaEscola) {
-      const cc = cicloContratos.find(
-        (c) => c.ciclo_id === cicloId && c.contrato_id === contratoIdDaEscola,
-      )
-      if (cc && cc.fase) return cc.fase.toLowerCase()
-    }
     const pedidoCiclo = ciclos.find((c) => c.id === order.cicloId) || activeCiclo
     return (pedidoCiclo?.status || 'coletando').toLowerCase()
   }

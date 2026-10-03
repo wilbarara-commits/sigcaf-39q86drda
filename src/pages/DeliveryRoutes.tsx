@@ -1425,10 +1425,7 @@ export default function DeliveryRoutes() {
                               return true
                             }
 
-                            const cc = cicloContratos.find(
-                              (c) => c.ciclo_id === pedCiclo.id && c.contrato_id === contratoId,
-                            )
-                            const fase = cc?.fase || pedCiclo.status
+                            const fase = pedCiclo.status
                             const elegivel = isFaseElegivelParaDespacho(fase)
                             if (!elegivel) {
                               faseMotivoBloqueio = fase || 'coletando'
