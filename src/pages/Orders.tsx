@@ -329,6 +329,7 @@ export default function Orders() {
 
   // Abertura do modal: auto-seleciona o primeiro ciclo aberto se ainda não tiver selecionado
   const handleOpenDialog = (isOpen: boolean) => {
+    if (!isOpen && pasteModalOpen) return
     setOpen(isOpen)
     if (isOpen) {
       // Só inicializa dados se o formulário ainda não estiver preenchido (preserva itens caso haja toggle acidental)
@@ -959,7 +960,15 @@ export default function Orders() {
               <Plus className="h-4 w-4" /> Lançar Pedido
             </Button>
           </DialogTrigger>
-          <DialogContent className="sm:max-w-[660px] max-h-[90vh] overflow-y-auto">
+          <DialogContent
+            className="sm:max-w-[660px] max-h-[90vh] overflow-y-auto"
+            onInteractOutside={(e) => {
+              if (pasteModalOpen) e.preventDefault()
+            }}
+            onPointerDownOutside={(e) => {
+              if (pasteModalOpen) e.preventDefault()
+            }}
+          >
             <DialogHeader>
               <div className="flex items-center justify-between pr-6 gap-2">
                 <DialogTitle className="flex items-center gap-2 text-base">
@@ -1273,6 +1282,7 @@ export default function Orders() {
       <Dialog open={pasteModalOpen} onOpenChange={setPasteModalOpen}>
         <DialogContent
           className="sm:max-w-[620px] max-h-[90vh] overflow-y-auto"
+          onCloseAutoFocus={(e) => e.preventDefault()}
           onInteractOutside={(e) => {
             e.preventDefault()
             e.stopPropagation()
