@@ -1,5 +1,5 @@
 // Orders component
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useRef } from 'react'
 import { useApp } from '@/context/app-context'
 import { useAuth } from '@/context/auth-context'
 import {
@@ -161,6 +161,8 @@ export default function Orders() {
   const [pasteModalOpen, setPasteModalOpen] = useState(false)
   const [pasteText, setPasteText] = useState('')
   const [pastePreview, setPastePreview] = useState<OrderPasteParseResult | null>(null)
+  const isPasteModalOpenRef = useRef(false)
+  const lastPasteClosedAtRef = useRef(0)
 
   // Detalhes do pedido selecionado
   const [viewingOrder, setViewingOrder] = useState<Order | null>(null)
@@ -332,7 +334,17 @@ export default function Orders() {
 
   // Abertura do modal: auto-seleciona o primeiro ciclo aberto se ainda não tiver selecionado
   const handleOpenDialog = (isOpen: boolean) => {
-    if (!isOpen && pasteModalOpen) return
+    if (!isOpen) {
+      // Blindagem estrita: nunca fecha o modal pai se o modal de colagem estiver aberto
+      // ou se tiver acabado de fechar (tolerância de 500ms para cliques/interações do Radix)
+      if (
+        pasteModalOpen ||
+        isPasteModalOpenRef.current ||
+        Date.now() - lastPasteClosedAtRef.current < 500
+      ) {
+        return
+      }
+    }
     setOpen(isOpen)
     if (isOpen) {
       // Só inicializa dados se o formulário ainda não estiver preenchido (preserva itens caso haja toggle acidental)
@@ -465,6 +477,9 @@ export default function Orders() {
     toast.success(
       `${pastePreview.matched.length} produto(s) adicionado(s) à lista do pedido! Complete os dados e clique em "Salvar Pedido".`,
     )
+    // Marca timestamp de fechamento para blindar o diálogo pai contra eventos de clique/foco
+    lastPasteClosedAtRef.current = Date.now()
+    isPasteModalOpenRef.current = false
     setPasteModalOpen(false)
     setPasteText('')
     setPastePreview(null)
@@ -976,10 +991,22 @@ export default function Orders() {
           <DialogContent
             className="sm:max-w-[660px] max-h-[90vh] overflow-y-auto"
             onInteractOutside={(e) => {
-              if (pasteModalOpen) e.preventDefault()
+              if (
+                pasteModalOpen ||
+                isPasteModalOpenRef.current ||
+                Date.now() - lastPasteClosedAtRef.current < 500
+              ) {
+                e.preventDefault()
+              }
             }}
             onPointerDownOutside={(e) => {
-              if (pasteModalOpen) e.preventDefault()
+              if (
+                pasteModalOpen ||
+                isPasteModalOpenRef.current ||
+                Date.now() - lastPasteClosedAtRef.current < 500
+              ) {
+                e.preventDefault()
+              }
             }}
           >
             <DialogHeader>
@@ -1152,6 +1179,7 @@ export default function Orders() {
                         onClick={() => {
                           setPasteText('')
                           setPastePreview(null)
+                          isPasteModalOpenRef.current = true
                           setPasteModalOpen(true)
                         }}
                         disabled={!selectedCicloId || availableItemsForChamada.length === 0}
@@ -1292,7 +1320,18 @@ export default function Orders() {
       </div>
 
       {/* Modal "Colar Produtos" — declarado como irmão de nível raiz para evitar interferência Radix */}
-      <Dialog open={pasteModalOpen} onOpenChange={setPasteModalOpen}>
+      <Dialog
+        open={pasteModalOpen}
+        onOpenChange={(openNext) => {
+          if (!openNext) {
+            lastPasteClosedAtRef.current = Date.now()
+            isPasteModalOpenRef.current = false
+          } else {
+            isPasteModalOpenRef.current = true
+          }
+          setPasteModalOpen(openNext)
+        }}
+      >
         <DialogContent
           className="sm:max-w-[620px] max-h-[90vh] overflow-y-auto"
           onCloseAutoFocus={(e) => e.preventDefault()}
@@ -1307,6 +1346,8 @@ export default function Orders() {
           onEscapeKeyDown={(e) => {
             e.preventDefault()
             e.stopPropagation()
+            lastPasteClosedAtRef.current = Date.now()
+            isPasteModalOpenRef.current = false
             setPasteModalOpen(false)
           }}
         >
@@ -1492,6 +1533,8 @@ export default function Orders() {
               variant="outline"
               size="sm"
               onClick={() => {
+                lastPasteClosedAtRef.current = Date.now()
+                isPasteModalOpenRef.current = false
                 setPasteModalOpen(false)
                 setPasteText('')
                 setPastePreview(null)

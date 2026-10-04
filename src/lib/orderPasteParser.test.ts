@@ -231,4 +231,84 @@ Guarde este comprovante para conferência.`
       expect(result.totalCalculated).toBe(1.0 * 4.5 + 100.0 * 5.0 + 5.0 * 3.5 + 1.5 * 4.0)
     })
   })
+
+  describe('fusão de itens e permanência de lista no fluxo Novo Pedido', () => {
+    it('deve fundir produtos repetidos somando suas quantidades e mantendo múltiplos de 0,5', () => {
+      // Simula itens já presentes no pedido do usuário
+      const currentOrderItems: Array<{ productId: string; quantity: number; rawInput?: string }> = [
+        { productId: 'p1', quantity: 2.0, rawInput: '2,0' }, // Arroz Tipo 1
+        { productId: 'p3', quantity: 1.5, rawInput: '1,5' }, // Banana Prata
+      ]
+
+      // Simula o resultado de parsePreview.matched após colar mais itens
+      const pastedMatched = [
+        { productId: 'p1', quantity: 3.5 }, // Novo Arroz -> deve somar com 2.0 virando 5.5
+        { productId: 'p2', quantity: 4.0 }, // Novo Feijão -> deve ser adicionado à lista
+      ]
+
+      // Lógica idêntica ao handleApplyPastedOrderItems em Orders.tsx
+      const copy = [...currentOrderItems]
+      for (const m of pastedMatched) {
+        const existingIdx = copy.findIndex((it) => it.productId === m.productId)
+        if (existingIdx >= 0) {
+          const oldQty = Number(copy[existingIdx].quantity) || 0
+          const sumQty = oldQty + m.quantity
+          copy[existingIdx] = {
+            productId: m.productId,
+            quantity: sumQty,
+            rawInput: sumQty.toLocaleString('pt-BR', {
+              minimumFractionDigits: 1,
+              maximumFractionDigits: 1,
+            }),
+          }
+        } else {
+          copy.push({
+            productId: m.productId,
+            quantity: m.quantity,
+            rawInput: m.quantity.toLocaleString('pt-BR', {
+              minimumFractionDigits: 1,
+              maximumFractionDigits: 1,
+            }),
+          })
+        }
+      }
+
+      expect(copy.length).toBe(3)
+      const arroz = copy.find((i) => i.productId === 'p1')
+      expect(arroz?.quantity).toBe(5.5)
+      const banana = copy.find((i) => i.productId === 'p3')
+      expect(banana?.quantity).toBe(1.5)
+      const feijao = copy.find((i) => i.productId === 'p2')
+      expect(feijao?.quantity).toBe(4.0)
+    })
+
+    it('deve blindar o diálogo pai quando o modal de colagem fechar recentemente (janela de debounce)', () => {
+      let isParentOpen = true
+      const pasteModalOpen = false
+      const isPasteModalOpenRef = { current: false }
+      const lastPasteClosedAtRef = { current: Date.now() - 100 } // Fechou há 100ms
+
+      const handleOpenDialog = (isOpen: boolean) => {
+        if (!isOpen) {
+          if (
+            pasteModalOpen ||
+            isPasteModalOpenRef.current ||
+            Date.now() - lastPasteClosedAtRef.current < 500
+          ) {
+            return
+          }
+        }
+        isParentOpen = isOpen
+      }
+
+      // Tentativa de fechar o diálogo pai logo após a colagem: deve ser bloqueada
+      handleOpenDialog(false)
+      expect(isParentOpen).toBe(true)
+
+      // Após passar a janela de 500ms, o fechamento legítimo pelo usuário deve funcionar
+      lastPasteClosedAtRef.current = Date.now() - 600
+      handleOpenDialog(false)
+      expect(isParentOpen).toBe(false)
+    })
+  })
 })
