@@ -164,6 +164,11 @@ export default function Orders() {
     Array<{ productId: string; quantity: number; rawInput?: string }>
   >([])
 
+  // Modal / Seleção prévia para Adicionar Produto
+  const [addProductDialogOpen, setAddProductDialogOpen] = useState(false)
+  const [selectedProductToAdd, setSelectedProductToAdd] = useState('')
+  const [productToAddQuantityInput, setProductToAddQuantityInput] = useState('1,0')
+
   // Diálogo / Painel de Colar Produtos do Pedido
   const [pasteModalOpen, setPasteModalOpen] = useState(false)
   const [pasteText, setPasteText] = useState('')
@@ -178,6 +183,8 @@ export default function Orders() {
   const imageInputRef = useRef<HTMLInputElement>(null)
   const isPasteModalOpenRef = useRef(false)
   const lastPasteClosedAtRef = useRef(0)
+  const isAddProductModalOpenRef = useRef(false)
+  const lastAddProductClosedAtRef = useRef(0)
 
   // Libera a URL do objeto quando a URL mudar ou no unmount para evitar vazamento de memória
   const clearImportedImage = () => {
@@ -361,12 +368,15 @@ export default function Orders() {
   // Abertura do modal: auto-seleciona o primeiro ciclo aberto se ainda não tiver selecionado
   const handleOpenDialog = (isOpen: boolean) => {
     if (!isOpen) {
-      // Blindagem estrita: nunca fecha o modal pai se o modal de colagem estiver aberto
+      // Blindagem estrita: nunca fecha o modal pai se o modal de colagem ou de adicionar produto estiver aberto
       // ou se tiver acabado de fechar (tolerância de 500ms para cliques/interações do Radix)
       if (
         pasteModalOpen ||
         isPasteModalOpenRef.current ||
-        Date.now() - lastPasteClosedAtRef.current < 500
+        Date.now() - lastPasteClosedAtRef.current < 500 ||
+        addProductDialogOpen ||
+        isAddProductModalOpenRef.current ||
+        Date.now() - lastAddProductClosedAtRef.current < 500
       ) {
         return
       }
@@ -397,19 +407,84 @@ export default function Orders() {
     setOrderItems([])
   }
 
-  const handleAddItem = () => {
-    const nextProd = availableItemsForChamada.find(
+  const handleOpenAddProductDialog = () => {
+    if (!selectedCicloId || availableItemsForChamada.length === 0) return
+    // Sugere o primeiro item que ainda não esteja na lista, ou o primeiro do catálogo
+    const nextUnused = availableItemsForChamada.find(
       (p) => !orderItems.some((i) => i.productId === p.productId),
     )
-    const pId = nextProd?.productId || availableItemsForChamada[0]?.productId || ''
-    setOrderItems((prev) => [
-      ...prev,
-      {
-        productId: pId,
-        quantity: 1,
-        rawInput: '1,0',
-      },
-    ])
+    const initialProductId = nextUnused?.productId || availableItemsForChamada[0]?.productId || ''
+    setSelectedProductToAdd(initialProductId)
+    setProductToAddQuantityInput('1,0')
+    isAddProductModalOpenRef.current = true
+    setAddProductDialogOpen(true)
+  }
+
+  const handleConfirmAddProduct = (e?: React.FormEvent) => {
+    if (e) e.preventDefault()
+    if (!selectedProductToAdd) {
+      toast.error('Selecione um produto da lista antes de adicionar.')
+      return
+    }
+
+    const itemCat = availableItemsForChamada.find((p) => p.productId === selectedProductToAdd)
+    if (!itemCat) {
+      toast.error('Produto selecionado não encontrado na chamada.')
+      return
+    }
+
+    const valRes = validateQuantityStepHalf(productToAddQuantityInput)
+    if (!valRes.isValid || valRes.numericValue <= 0) {
+      toast.error(
+        valRes.error ||
+          'Informe uma quantidade válida maior que zero e múltiplo de 0,5 (ex: 0,5 / 1,0 / 1,5).',
+      )
+      return
+    }
+
+    const qtyToAdd = valRes.numericValue
+
+    // Regra 4: se o produto não tiver preço cadastrado na chamada, avisar nomeando o produto (não gravar R$ 0,00 silenciosamente)
+    if (!itemCat.preco || itemCat.preco <= 0) {
+      toast.warning(
+        `O produto "${itemCat.nome}" não possui preço cadastrado na chamada selecionada.`,
+      )
+    }
+
+    // Regra 5: se o produto já estiver na lista ao adicionar de novo, somar as quantidades (mesma regra do Colar Produtos)
+    setOrderItems((current) => {
+      const copy = [...current]
+      const existingIdx = copy.findIndex((it) => it.productId === selectedProductToAdd)
+      if (existingIdx >= 0) {
+        const oldQty = Number(copy[existingIdx].quantity) || 0
+        const sumQty = oldQty + qtyToAdd
+        copy[existingIdx] = {
+          productId: selectedProductToAdd,
+          quantity: sumQty,
+          rawInput: formatQuantityOneDecimal(sumQty),
+        }
+      } else {
+        copy.push({
+          productId: selectedProductToAdd,
+          quantity: qtyToAdd,
+          rawInput: formatQuantityOneDecimal(qtyToAdd),
+        })
+      }
+      return copy
+    })
+
+    const existingBefore = orderItems.some((it) => it.productId === selectedProductToAdd)
+    if (existingBefore) {
+      toast.success(
+        `Quantidade de "${itemCat.nome}" somada ao item existente na lista com sucesso!`,
+      )
+    } else {
+      toast.success(`"${itemCat.nome}" adicionado à lista do pedido com sucesso!`)
+    }
+
+    lastAddProductClosedAtRef.current = Date.now()
+    isAddProductModalOpenRef.current = false
+    setAddProductDialogOpen(false)
   }
 
   const handleRemoveItem = (index: number) => {
@@ -1100,7 +1175,10 @@ export default function Orders() {
               if (
                 pasteModalOpen ||
                 isPasteModalOpenRef.current ||
-                Date.now() - lastPasteClosedAtRef.current < 500
+                Date.now() - lastPasteClosedAtRef.current < 500 ||
+                addProductDialogOpen ||
+                isAddProductModalOpenRef.current ||
+                Date.now() - lastAddProductClosedAtRef.current < 500
               ) {
                 e.preventDefault()
               }
@@ -1109,7 +1187,10 @@ export default function Orders() {
               if (
                 pasteModalOpen ||
                 isPasteModalOpenRef.current ||
-                Date.now() - lastPasteClosedAtRef.current < 500
+                Date.now() - lastPasteClosedAtRef.current < 500 ||
+                addProductDialogOpen ||
+                isAddProductModalOpenRef.current ||
+                Date.now() - lastAddProductClosedAtRef.current < 500
               ) {
                 e.preventDefault()
               }
@@ -1299,7 +1380,7 @@ export default function Orders() {
                         type="button"
                         variant="outline"
                         size="sm"
-                        onClick={handleAddItem}
+                        onClick={handleOpenAddProductDialog}
                         disabled={!selectedCicloId || availableItemsForChamada.length === 0}
                         className="h-7 text-xs"
                       >
@@ -1810,6 +1891,184 @@ export default function Orders() {
               {pastePreview?.matched.length ? `(${pastePreview?.matched.length || 0})` : ''}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal / Diálogo: Selecionar Produto antes de Adicionar ao Pedido */}
+      <Dialog
+        open={addProductDialogOpen}
+        onOpenChange={(openNext) => {
+          if (!openNext) {
+            lastAddProductClosedAtRef.current = Date.now()
+            isAddProductModalOpenRef.current = false
+          } else {
+            isAddProductModalOpenRef.current = true
+          }
+          setAddProductDialogOpen(openNext)
+        }}
+      >
+        <DialogContent
+          className="sm:max-w-[500px]"
+          onCloseAutoFocus={(e) => e.preventDefault()}
+          onInteractOutside={(e) => {
+            e.preventDefault()
+            e.stopPropagation()
+          }}
+          onPointerDownOutside={(e) => {
+            e.preventDefault()
+            e.stopPropagation()
+          }}
+          onEscapeKeyDown={(e) => {
+            e.preventDefault()
+            e.stopPropagation()
+            lastAddProductClosedAtRef.current = Date.now()
+            isAddProductModalOpenRef.current = false
+            setAddProductDialogOpen(false)
+          }}
+        >
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-base">
+              <Plus className="h-5 w-5 text-primary" /> Adicionar Produto ao Pedido
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              Selecione o produto na lista da chamada e defina a quantidade desejada antes de
+              incluí-lo na lista de itens do pedido.
+            </DialogDescription>
+          </DialogHeader>
+
+          <form onSubmit={handleConfirmAddProduct} className="space-y-4 pt-1">
+            {/* Campo 1: Seleção de Produto */}
+            <div className="space-y-1.5">
+              <Label htmlFor="add-prod-select" className="text-xs font-semibold">
+                Produto da Chamada <span className="text-destructive">*</span>
+              </Label>
+              <Select value={selectedProductToAdd} onValueChange={setSelectedProductToAdd}>
+                <SelectTrigger id="add-prod-select" className="text-xs">
+                  <SelectValue placeholder="Selecione o produto do catálogo" />
+                </SelectTrigger>
+                <SelectContent className="max-h-[260px]">
+                  {availableItemsForChamada.map((p) => {
+                    const isAlreadyInOrder = orderItems.some(
+                      (item) => item.productId === p.productId,
+                    )
+                    return (
+                      <SelectItem key={p.productId} value={p.productId} className="text-xs">
+                        {p.nome} — R$ {p.preco.toFixed(2)} / {p.unidade}
+                        {isAlreadyInOrder ? ' (já na lista)' : ''}
+                      </SelectItem>
+                    )
+                  })}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Prévia / Detalhe do Produto Selecionado */}
+            {selectedProductToAdd &&
+              (() => {
+                const selectedItem = availableItemsForChamada.find(
+                  (p) => p.productId === selectedProductToAdd,
+                )
+                if (!selectedItem) return null
+
+                const valRes = validateQuantityStepHalf(productToAddQuantityInput)
+                const numericQty = valRes.isValid ? valRes.numericValue : 0
+                const subtotal = (selectedItem.preco || 0) * numericQty
+                const existingItem = orderItems.find(
+                  (item) => item.productId === selectedProductToAdd,
+                )
+
+                return (
+                  <div className="rounded-lg border bg-muted/30 p-3 space-y-2 text-xs">
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <div className="font-semibold text-foreground">{selectedItem.nome}</div>
+                        <div className="text-[11px] text-muted-foreground">
+                          Preço unitário: R$ {selectedItem.preco.toFixed(2)} por{' '}
+                          {selectedItem.unidade}
+                        </div>
+                      </div>
+                      {selectedItem.preco <= 0 && (
+                        <Badge variant="destructive" className="text-[10px]">
+                          Sem preço na chamada
+                        </Badge>
+                      )}
+                    </div>
+
+                    {existingItem && (
+                      <div className="text-[11px] text-amber-700 dark:text-amber-300 bg-amber-500/10 border border-amber-300 dark:border-amber-700/50 rounded px-2 py-1">
+                        Este produto já possui{' '}
+                        <strong>
+                          {formatQuantityOneDecimal(existingItem.quantity)} {selectedItem.unidade}
+                        </strong>{' '}
+                        na lista. A quantidade digitada abaixo será <strong>somada</strong> ao item
+                        existente.
+                      </div>
+                    )}
+
+                    <div className="flex items-center justify-between pt-1 border-t text-[11px]">
+                      <span className="text-muted-foreground">Subtotal a adicionar:</span>
+                      <span className="font-mono font-bold text-primary text-xs">
+                        R${' '}
+                        {subtotal.toLocaleString('pt-BR', {
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2,
+                        })}
+                      </span>
+                    </div>
+                  </div>
+                )
+              })()}
+
+            {/* Campo 2: Quantidade (múltiplos de 0,5) */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <Label htmlFor="add-prod-qty" className="text-xs font-semibold">
+                  Quantidade (
+                  {availableItemsForChamada.find((p) => p.productId === selectedProductToAdd)
+                    ?.unidade || 'un'}
+                  ) <span className="text-destructive">*</span>
+                </Label>
+                <span className="text-[10px] text-muted-foreground">
+                  Múltiplos de 0,5 (ex: 0,5 / 1,0 / 1,5 / 2,0)
+                </span>
+              </div>
+              <Input
+                id="add-prod-qty"
+                type="text"
+                inputMode="decimal"
+                className="h-9 text-xs font-mono"
+                placeholder="1,0"
+                value={productToAddQuantityInput}
+                onChange={(e) => {
+                  const normalized = normalizeDecimalTyping(e.target.value)
+                  setProductToAddQuantityInput(normalized)
+                }}
+                onBlur={() => {
+                  const formatted = formatQuantityOnBlur(productToAddQuantityInput)
+                  setProductToAddQuantityInput(formatted)
+                }}
+                required
+              />
+            </div>
+
+            <DialogFooter className="pt-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  lastAddProductClosedAtRef.current = Date.now()
+                  isAddProductModalOpenRef.current = false
+                  setAddProductDialogOpen(false)
+                }}
+              >
+                Cancelar
+              </Button>
+              <Button type="submit" size="sm" disabled={!selectedProductToAdd}>
+                <Plus className="h-4 w-4 mr-1" /> Adicionar à Lista
+              </Button>
+            </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
 
