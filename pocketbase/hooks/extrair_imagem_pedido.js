@@ -72,16 +72,19 @@ routerAdd(
         const agent = $ai.agent('ocr-pedidos-extractor')
         if (agent) {
           const promptMsg =
-            'Abaixo está o texto bruto extraído via OCR de uma imagem/foto de tabela de pedido semanal de hortifrúti de uma escola.\n' +
+            'Abaixo está o texto bruto extraído via OCR de uma imagem/foto de pedido/tabela de hortifrúti de alimentação escolar.\n' +
             'INSTRUÇÕES ESTRITAS E CRÍTICAS:\n' +
-            '1. A BANANA É MANDATÓRIA NA PRIMEIRA LINHA: Em tabelas de pedidos de hortifrúti onde a Banana é a primeira linha da lista de produtos, ela NUNCA deve ser omitida ou comida pelos cabeçalhos! Se a palavra "Banana" constar no texto OCR, associe sua quantidade pedida (geralmente 30,0 Kg na tabela) e emita obrigatoriamente como primeira linha: "BANANA: 30,0 Kg" (ou valor correspondente).\n' +
-            '2. ALINHAMENTO DE COLUNAS: No OCR de tabelas, nomes e quantidades podem vir intercalados por barras ou traços (ex: "| Kg | 200 | Beterraba | Kg | 200"). Alinhe cada produto ao seu número correspondente.\n' +
-            '3. PRESERVE E RESTAURE RIGOROSAMENTE A VÍRGULA DECIMAL: Em tabelas de merenda escolar, quantidades são na escala de dezenas com 1 decimal ("20,0 Kg", "50,0 Kg", "10,0 Kg", "30,0 Kg", "5,0 Kg", "2,5 Kg"). NUNCA emita 200 Kg, 500 Kg, 100 Kg se o original ou contexto da tabela representa 20,0, 50,0 ou 10,0. Se o OCR leu sem vírgula ou você tiver dúvida se é decimal, marque com interrogação na quantidade ("20,0? Kg") em vez de inflar 10x.\n' +
-            '4. PRESERVE os espaços entre palavras nos nomes dos produtos ("BATATA DOCE", "COUVE FLOR", "BATATA INGLESA" - NUNCA junte para "BATATADOCE").\n' +
-            '5. Formate CADA produto que possua quantidade pedida estritamente no formato:\n' +
-            '   PRODUTO: quantidade unidade (exemplo: "BANANA: 30,0 Kg", "BATATA DOCE: 20,0 Kg", "BRÓCOLIS: 50,0 Kg").\n' +
-            '6. Se a quantidade de uma linha da tabela estiver vazia, em branco, cinza, com hífen ou zero, IGNORE e NÃO inclua essa linha.\n' +
-            '7. Remova apenas os cabeçalhos das colunas (ex: "Produtos", "Unidade", "Pedidos", datas como "21/09", "Agosto").\n' +
+            '1. LAYOUT COM QUANTIDADE ANTES DO PRODUTO (QUANT | UNIDADE | PRODUTO):\n' +
+            '   - Em formulários oficiais com colunas "QUANT. | KG | PRODUTO" (ex: "40 | KG | Aipim", "15 | KG | Alface"), identifique que o número na primeira coluna é a quantidade do produto na terceira coluna.\n' +
+            '   - Formate cada item como "PRODUTO: quantidade unidade" (ex: "AIPIM: 40,0 Kg", "ALFACE: 15,0 Kg", "CHEIRO VERDE: 2,0 Kg", "COUVE-FLOR: 40,0 Kg", "ESPINAFRE: 10,0 Kg", "LIMÃO: 3,0 Kg").\n' +
+            '2. DESCARTAR CABEÇALHOS E RODAPÉ INSTITUCIONAL:\n' +
+            '   - Descarte títulos como "QUANT.", "UNIDADE", "PRODUTO".\n' +
+            '   - IGNORE TOTALMENTE o rodapé institucional: cidade+data (ex: "Teresópolis, 17/09/2026"), brasão/logo SEE DUC, assinaturas, nome da diretora ("Valéria Soares da Silva"), cargo ("DIRETORA / ID..."), nome da escola ("Colégio Estadual..."), endereço, CEP, telefone e e-mail institucional.\n' +
+            '3. PRIMEIRA LINHA MANDATÓRIA: Nunca descarte o primeiro produto válido da tabela (seja Aipim, Banana, etc.).\n' +
+            '4. ALINHAMENTO DE COLUNAS: No OCR de tabelas, nomes e quantidades podem vir intercalados por barras ou traços. Alinhe cada produto ao seu número correspondente.\n' +
+            '5. PRESERVE E RESTAURE RIGOROSAMENTE A VÍRGULA DECIMAL: Formate quantidades com vírgula decimal ("40,0 Kg", "15,0 Kg", "2,0 Kg", "2,5 Kg"). NUNCA infle 10x.\n' +
+            '6. PRESERVE os espaços e hífens nos nomes ("CHEIRO VERDE", "COUVE-FLOR", "BATATA DOCE").\n' +
+            '7. Se a quantidade de uma linha da tabela estiver vazia, em branco, cinza, com hífen ou zero, IGNORE e NÃO inclua essa linha.\n' +
             '8. Retorne APENAS as linhas finais no formato "PRODUTO: quantidade unidade", uma por linha, sem markdown.\n\n' +
             'TEXTO OCR DA IMAGEM:\n' +
             normalizedInput

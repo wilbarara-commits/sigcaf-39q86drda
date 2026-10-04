@@ -96,6 +96,27 @@ describe('orderPasteParser', () => {
       expect(res?.quantity).toBe(30)
     })
 
+    it('deve extrair formato "40 KG Aipim" (quantidade primeiro com unidade no meio)', () => {
+      const res = extractQuantityAndProductName('40 KG Aipim')
+      expect(res).not.toBeNull()
+      expect(res?.productText).toBe('Aipim')
+      expect(res?.quantity).toBe(40)
+    })
+
+    it('deve extrair formato com pipes "40 | KG | Aipim"', () => {
+      const res = extractQuantityAndProductName('40 | KG | Aipim')
+      expect(res).not.toBeNull()
+      expect(res?.productText).toBe('Aipim')
+      expect(res?.quantity).toBe(40)
+    })
+
+    it('deve extrair formato com tabs "40\tKG\tAipim"', () => {
+      const res = extractQuantityAndProductName('40\tKG\tAipim')
+      expect(res).not.toBeNull()
+      expect(res?.productText).toBe('Aipim')
+      expect(res?.quantity).toBe(40)
+    })
+
     it('deve retornar null para linhas vazias ou puramente textuais sem quantidade', () => {
       expect(extractQuantityAndProductName('')).toBeNull()
       expect(extractQuantityAndProductName('   ')).toBeNull()
@@ -282,6 +303,96 @@ COUVE FLOR: 5,0 Kg
       expect(cleaned).not.toContain('500 Kg')
       expect(cleaned).toContain('10,0 Kg')
       expect(cleaned).not.toContain('100 Kg')
+    })
+
+    it('deve extrair a tabela oficial SEE DUC com colunas QUANT. | KG | PRODUTO e descartar rodapé institucional', async () => {
+      const { cleanTableOcrText } = await import('./imageExtractor')
+      const officialFormOcrText = `QUANT. | KG | PRODUTO
+40 | KG | Aipim
+15 | KG | Alface
+2 | KG | Cheiro verde
+40 | KG | Couve-flor
+10 | KG | Espinafre
+3 | KG | Limão
+
+Teresópolis, 17/09/2026
+SEE DUC
+Valéria Soares da Silva
+DIRETORA / ID 42536359
+Colégio Estadual Euclydes da Cunha
+Rua Mello Franco, 608 - Alto - Teresópolis/RJ - CEP 25.960-531
+Telefone 21 2741-1337 - e-mail: ceeuclydesdacunha@educacao.rj.gov.br`
+
+      const cleaned = cleanTableOcrText(officialFormOcrText)
+      const lines = cleaned.split('\n').filter((l) => l.trim().length > 0)
+
+      expect(lines).toEqual([
+        'AIPIM: 40,0 Kg',
+        'ALFACE: 15,0 Kg',
+        'CHEIRO VERDE: 2,0 Kg',
+        'COUVE-FLOR: 40,0 Kg',
+        'ESPINAFRE: 10,0 Kg',
+        'LIMÃO: 3,0 Kg',
+      ])
+
+      // Verifica casamento no parser com o catálogo da chamada 07/2025
+      const catalogChamada07: OrderPasteCatalogProduct[] = [
+        { productId: 'prod_aipim', nome: 'AIPIM', unidade: 'Kg', preco: 6.0 },
+        { productId: 'prod_alface', nome: 'ALFACE', unidade: 'Kg', preco: 7.0 },
+        { productId: 'prod_cheiro', nome: 'CHEIRO-VERDE', unidade: 'Molho', preco: 2.0 },
+        { productId: 'prod_couveflor', nome: 'COUVE-FLOR', unidade: 'Kg', preco: 7.0 },
+        { productId: 'prod_espinafre', nome: 'ESPINAFRE', unidade: 'Kg', preco: 7.0 },
+        { productId: 'prod_limao', nome: 'LIMAO TAITI', unidade: 'Kg', preco: 8.0 },
+      ]
+
+      const parseRes = parsePastedOrderText(cleaned, catalogChamada07)
+      expect(parseRes.unmatched).toEqual([])
+      expect(parseRes.matched.length).toBe(6)
+
+      expect(parseRes.matched.find((m) => m.productId === 'prod_aipim')?.quantity).toBe(40)
+      expect(parseRes.matched.find((m) => m.productId === 'prod_alface')?.quantity).toBe(15)
+      expect(parseRes.matched.find((m) => m.productId === 'prod_cheiro')?.quantity).toBe(2)
+      expect(parseRes.matched.find((m) => m.productId === 'prod_couveflor')?.quantity).toBe(40)
+      expect(parseRes.matched.find((m) => m.productId === 'prod_espinafre')?.quantity).toBe(10)
+      expect(parseRes.matched.find((m) => m.productId === 'prod_limao')?.quantity).toBe(3)
+    })
+
+    it('deve parsear diretamente a tabela bruta QUANT. | KG | PRODUTO mesmo sem pré-limpeza do OCR', () => {
+      const rawTableText = `QUANT. | KG | PRODUTO
+40 | KG | Aipim
+15 | KG | Alface
+2 | KG | Cheiro verde
+40 | KG | Couve-flor
+10 | KG | Espinafre
+3 | KG | Limão
+
+Teresópolis, 17/09/2026
+SEE DUC
+Valéria Soares da Silva
+DIRETORA / ID 42536359
+Colégio Estadual Euclydes da Cunha
+Rua Mello Franco, 608 - Alto - Teresópolis/RJ - CEP 25.960-531
+Telefone 21 2741-1337 - e-mail: ceeuclydesdacunha@educacao.rj.gov.br`
+
+      const catalogChamada07: OrderPasteCatalogProduct[] = [
+        { productId: 'prod_aipim', nome: 'AIPIM', unidade: 'Kg', preco: 6.0 },
+        { productId: 'prod_alface', nome: 'ALFACE', unidade: 'Kg', preco: 7.0 },
+        { productId: 'prod_cheiro', nome: 'CHEIRO-VERDE', unidade: 'Molho', preco: 2.0 },
+        { productId: 'prod_couveflor', nome: 'COUVE-FLOR', unidade: 'Kg', preco: 7.0 },
+        { productId: 'prod_espinafre', nome: 'ESPINAFRE', unidade: 'Kg', preco: 7.0 },
+        { productId: 'prod_limao', nome: 'LIMAO TAITI', unidade: 'Kg', preco: 8.0 },
+      ]
+
+      const parseRes = parsePastedOrderText(rawTableText, catalogChamada07)
+      expect(parseRes.unmatched).toEqual([])
+      expect(parseRes.matched.length).toBe(6)
+
+      expect(parseRes.matched.find((m) => m.productId === 'prod_aipim')?.quantity).toBe(40)
+      expect(parseRes.matched.find((m) => m.productId === 'prod_alface')?.quantity).toBe(15)
+      expect(parseRes.matched.find((m) => m.productId === 'prod_cheiro')?.quantity).toBe(2)
+      expect(parseRes.matched.find((m) => m.productId === 'prod_couveflor')?.quantity).toBe(40)
+      expect(parseRes.matched.find((m) => m.productId === 'prod_espinafre')?.quantity).toBe(10)
+      expect(parseRes.matched.find((m) => m.productId === 'prod_limao')?.quantity).toBe(3)
     })
 
     it('deve converter pontos decimais e normalizar a primeira linha sem dois-pontos logo após o cabeçalho', async () => {

@@ -121,15 +121,33 @@ export function cleanTableOcrText(rawText: string): string {
   const isHeaderFragment = (upper: string): boolean => {
     if (!upper) return true
 
-    // Se a linha tem produtos ou unidades comuns mas é apenas título de coluna
+    // Cabeçalhos clássicos e cabeçalho QUANT | KG | PRODUTO
     if (/^PRODUTOS?(\s*[|/\\;,\t-]\s*|\s+)UNIDADES?(\s*[|/\\;,\t-]\s*|\s+)/.test(upper)) return true
+    if (/^QUANT\.?(\s*[|/\\;,\t-]\s*|\s+).*/.test(upper) && upper.includes('PRODUTO')) return true
+    if (/^QUANT\.?(\s*[|/\\;,\t-]\s*|\s+)?$/.test(upper)) return true
     if (/^PRODUTOS?(\s*[|/\\;,\t-]\s*|\s+)?$/.test(upper)) return true
     if (/^UNIDADES?(\s+[A-Z0-9]+)?$/.test(upper)) return true
 
     // Se contém termos de cabeçalho de pedido/coluna sem ser produto real
-    if (/^(PEDIDOS?|SEMANA\s*\d*|QTDE|QUANTIDADE)(\s*[|/\\;,\t-]\s*|\s*)$/.test(upper)) return true
+    if (/^(PEDIDOS?|SEMANA\s*\d*|QTDE|QUANTIDADE|QUANT\.)(\s*[|/\\;,\t-]\s*|\s*)$/.test(upper))
+      return true
     if (upper.includes('PRODUTOS') && upper.includes('UNIDADE') && upper.includes('PEDIDOS'))
       return true
+    if (upper.includes('QUANT') && upper.includes('PRODUTO')) return true
+
+    // Rodapé institucional a ser descartado:
+    // "Teresópolis, 17/09/2026", brasão SEE DUC, cargo, diretora, endereço, site
+    if (/^TERES[OÓ]POLIS/i.test(upper)) return true
+    if (/\bSEE\s*DUC\b/i.test(upper)) return true
+    if (/\bSECRETARIA\s+DE\s+EDUCA[CÇ][AÃ]O\b/i.test(upper)) return true
+    if (/\bDIRETOR[Aa]?\s*(\/|\b)/i.test(upper)) return true
+    if (/\bID\s*\d{5,}\b/i.test(upper)) return true
+    if (/\bVAL[EÉ]RIA\s+SOARES\b/i.test(upper)) return true
+    if (/\bCOL[EÉ]GIO\s+ESTADUAL\b/i.test(upper)) return true
+    if (/\bEUCLYDES\s+DA\s+CUNHA\b/i.test(upper)) return true
+    if (/\bRUA\s+[A-Z\s0-9]+CEP/i.test(upper)) return true
+    if (/\bTELEFONE\b/i.test(upper)) return true
+    if (/\bE-?MAIL/i.test(upper) || /@EDUCACAO\.RJ\.GOV\.BR/i.test(upper)) return true
 
     // Meses isolados ou datas isoladas de cabeçalho (ex: "Agosto", "$4 21/09", "21/09/2026")
     if (
@@ -201,8 +219,26 @@ export function cleanTableOcrText(rawText: string): string {
       continue
     }
 
-    // 2. Se a linha tem formato de dados com produto + quantidade, PROCESSA ANTES de testar se é cabeçalho!
-    // Trata também colunas com unidade intermediária ex: "Banana | Kg | 30,0" ou "Banana | 300"
+    // 2. Se a linha tem formato de tabela oficial com QUANTIDADE PRIMEIRO:
+    // "QUANT. | UNIDADE | PRODUTO" (ex: "40 | KG | Aipim" ou "15 | KG | Alface" ou "40\tKG\tAipim")
+    const matchQuantFirstPiped = trimmed.match(
+      /^([0-9]+(?:[.,][0-9]+)?\??)(?:\s*\|\s*|\s*\t\s*|\s+)([a-zA-Z]{1,6})(?:\s*\|\s*|\s*\t\s*|\s+)([A-Za-zÀ-ÿ0-9\s\-_/]+)$/,
+    )
+    if (matchQuantFirstPiped) {
+      let rawVal = matchQuantFirstPiped[1].trim()
+      if (!rawVal.includes(',') && !rawVal.includes('.')) {
+        rawVal = `${rawVal},0`
+      }
+      const qtyStr = formatQuantityDisplay(rawVal)
+      const unit = matchQuantFirstPiped[2].trim() || 'Kg'
+      const prodName = normalizeInnerSpaces(matchQuantFirstPiped[3])
+      if (prodName.length >= 2 && !isHeaderFragment(prodName.toUpperCase())) {
+        result.push(`${prodName.toUpperCase()}: ${qtyStr} ${unit}`)
+        continue
+      }
+    }
+
+    // 2b. Trata também colunas com produto primeiro e unidade intermediária: "Banana | Kg | 30,0" ou "Banana | 300"
     const matchWithUnitInMiddle = trimmed.match(
       /^([A-Za-zÀ-ÿ0-9\s\-_/]+?)(?:\s*\|\s*|\s+)([a-zA-Z]{1,4})(?:\s*\|\s*|\s+)([0-9]+(?:[.,][0-9]+)?\??)$/,
     )
@@ -213,6 +249,8 @@ export function cleanTableOcrText(rawText: string): string {
       // Se vier sem vírgula como 200, 300, 500, 100 de hortifrúti
       if (rawVal === '200' || rawVal === '300' || rawVal === '500' || rawVal === '100') {
         rawVal = `${rawVal.slice(0, 2)},0`
+      } else if (!rawVal.includes(',') && !rawVal.includes('.')) {
+        rawVal = `${rawVal},0`
       }
       const qtyStr = formatQuantityDisplay(rawVal)
       const prodName = normalizeInnerSpaces(rawProdName)
@@ -230,6 +268,8 @@ export function cleanTableOcrText(rawText: string): string {
       let rawVal = matchRow[2].trim()
       if (rawVal === '200' || rawVal === '300' || rawVal === '500' || rawVal === '100') {
         rawVal = `${rawVal.slice(0, 2)},0`
+      } else if (!rawVal.includes(',') && !rawVal.includes('.')) {
+        rawVal = `${rawVal},0`
       }
       const qtyStr = formatQuantityDisplay(rawVal)
       const unit = matchRow[3]?.trim() || 'Kg'
@@ -255,12 +295,16 @@ export function cleanTableOcrText(rawText: string): string {
       continue
     }
 
-    // 4. Se possui dígitos no início (ex: "30,0 Banana" ou "20,0 Batata Doce")
+    // 4. Se possui dígitos no início (ex: "30,0 Banana" ou "40 KG Aipim" ou "20,0 Batata Doce")
     const matchInverted = trimmed.match(
       /^([0-9]+(?:[.,][0-9]+)?\??)(?:\s*([a-zA-Z]+))?\s+([A-Za-zÀ-ÿ0-9\s\-_/]+)$/,
     )
     if (matchInverted) {
-      const qtyStr = formatQuantityDisplay(matchInverted[1].trim())
+      let rawVal = matchInverted[1].trim()
+      if (!rawVal.includes(',') && !rawVal.includes('.')) {
+        rawVal = `${rawVal},0`
+      }
+      const qtyStr = formatQuantityDisplay(rawVal)
       const unit = matchInverted[2]?.trim() || 'Kg'
       const prodName = normalizeInnerSpaces(matchInverted[3])
       if (prodName.length >= 2 && !isHeaderFragment(prodName.toUpperCase())) {

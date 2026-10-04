@@ -77,40 +77,137 @@ export function extractQuantityAndProductName(rawLine: string): {
   const line = rawLine.trim()
   if (!line) return null
 
-  // 1. Separador de tabulação (colagem direta de planilha Excel / Sheets: "Arroz\t5")
+  // 1. Linhas separadas por pipes (|) ou barras verticais (ex: "40 | KG | Aipim" ou "40 | Aipim" ou "Aipim | 40 | KG" ou "| 40 | KG | Aipim |")
+  if (line.includes('|')) {
+    const pipeParts = line
+      .split('|')
+      .map((p) => p.trim())
+      .filter(Boolean)
+    if (pipeParts.length >= 2) {
+      // Caso A: Quantidade na 1ª coluna ("40 | KG | Aipim" ou "40 | Aipim")
+      const q0 = parseQuantityToken(pipeParts[0])
+      if (q0 !== null) {
+        // Se a 2ª coluna for apenas uma unidade conhecida (ex: KG, UN, DZ, MOLHO), o produto é a 3ª coluna
+        if (
+          pipeParts.length >= 3 &&
+          /^(kg|kilo|kilos|quilos|dz|dúzia|duzia|dúzias|duzias|un|unid|und|unidade|unidades|pct|pacote|cx|caixa|l|litro|litros|g|gramas|molho|molhos)$/i.test(
+            pipeParts[1],
+          )
+        ) {
+          const prod = pipeParts.slice(2).join(' ')
+          if (prod) return { productText: prod, quantity: q0.val, rawQtyStr: q0.raw }
+        }
+        // Senão junta o resto como nome de produto
+        const prod = pipeParts.slice(1).join(' ')
+        if (prod) return { productText: prod, quantity: q0.val, rawQtyStr: q0.raw }
+      }
+
+      // Caso B: Quantidade na 2ª coluna ("Aipim | 40 | KG")
+      const q1 = parseQuantityToken(pipeParts[1])
+      if (q1 !== null) {
+        return { productText: pipeParts[0], quantity: q1.val, rawQtyStr: q1.raw }
+      }
+
+      // Caso C: Quantidade na última coluna ("Aipim | KG | 40")
+      const qLast = parseQuantityToken(pipeParts[pipeParts.length - 1])
+      if (qLast !== null) {
+        const prod = pipeParts
+          .slice(0, -1)
+          .filter(
+            (p) =>
+              !/^(kg|kilo|kilos|quilos|dz|dúzia|duzia|dúzias|duzias|un|unid|und|unidade|unidades|pct|pacote|cx|caixa|l|litro|litros|g|gramas|molho|molhos)$/i.test(
+                p,
+              ),
+          )
+          .join(' ')
+        if (prod) return { productText: prod, quantity: qLast.val, rawQtyStr: qLast.raw }
+      }
+    }
+  }
+
+  // 2. Separador de tabulação (colagem direta de planilha Excel / Sheets: "Arroz\t5" ou "40\tKG\tAipim")
   if (line.includes('\t')) {
     const parts = line
       .split('\t')
       .map((p) => p.trim())
       .filter(Boolean)
     if (parts.length >= 2) {
-      // Testa se parts[1] é quantidade
+      // Quantidade na 1ª coluna ("40\tKG\tAipim" ou "5\tArroz")
+      const q0 = parseQuantityToken(parts[0])
+      if (q0 !== null) {
+        if (
+          parts.length >= 3 &&
+          /^(kg|kilo|kilos|quilos|dz|dúzia|duzia|dúzias|duzias|un|unid|und|unidade|unidades|pct|pacote|cx|caixa|l|litro|litros|g|gramas|molho|molhos)$/i.test(
+            parts[1],
+          )
+        ) {
+          const prod = parts.slice(2).join(' ')
+          if (prod) return { productText: prod, quantity: q0.val, rawQtyStr: q0.raw }
+        }
+        return { productText: parts.slice(1).join(' '), quantity: q0.val, rawQtyStr: q0.raw }
+      }
+
+      // Quantidade na 2ª coluna ("Arroz\t5" ou "Aipim\t40\tKG")
       const q1 = parseQuantityToken(parts[1])
       if (q1 !== null) {
         return { productText: parts[0], quantity: q1.val, rawQtyStr: q1.raw }
       }
-      // Testa se parts[0] é quantidade ("5\tArroz")
-      const q0 = parseQuantityToken(parts[0])
-      if (q0 !== null) {
-        return { productText: parts.slice(1).join(' '), quantity: q0.val, rawQtyStr: q0.raw }
+
+      // Quantidade na última coluna ("Aipim\tKG\t40")
+      const qLast = parseQuantityToken(parts[parts.length - 1])
+      if (qLast !== null) {
+        const prod = parts
+          .slice(0, -1)
+          .filter(
+            (p) =>
+              !/^(kg|kilo|kilos|quilos|dz|dúzia|duzia|dúzias|duzias|un|unid|und|unidade|unidades|pct|pacote|cx|caixa|l|litro|litros|g|gramas|molho|molhos)$/i.test(
+                p,
+              ),
+          )
+          .join(' ')
+        if (prod) return { productText: prod, quantity: qLast.val, rawQtyStr: qLast.raw }
       }
     }
   }
 
-  // 2. Separador de ponto-e-vírgula ("Arroz; 5" ou "5; Arroz")
+  // 3. Separador de ponto-e-vírgula ("Arroz; 5" ou "5; Arroz" ou "40; KG; Aipim")
   if (line.includes(';')) {
     const parts = line
       .split(';')
       .map((p) => p.trim())
       .filter(Boolean)
     if (parts.length >= 2) {
+      const q0 = parseQuantityToken(parts[0])
+      if (q0 !== null) {
+        if (
+          parts.length >= 3 &&
+          /^(kg|kilo|kilos|quilos|dz|dúzia|duzia|dúzias|duzias|un|unid|und|unidade|unidades|pct|pacote|cx|caixa|l|litro|litros|g|gramas|molho|molhos)$/i.test(
+            parts[1],
+          )
+        ) {
+          const prod = parts.slice(2).join(' ')
+          if (prod) return { productText: prod, quantity: q0.val, rawQtyStr: q0.raw }
+        }
+        return { productText: parts.slice(1).join(' '), quantity: q0.val, rawQtyStr: q0.raw }
+      }
+
       const q1 = parseQuantityToken(parts[1])
       if (q1 !== null) {
         return { productText: parts[0], quantity: q1.val, rawQtyStr: q1.raw }
       }
-      const q0 = parseQuantityToken(parts[0])
-      if (q0 !== null) {
-        return { productText: parts.slice(1).join(' '), quantity: q0.val, rawQtyStr: q0.raw }
+
+      const qLast = parseQuantityToken(parts[parts.length - 1])
+      if (qLast !== null) {
+        const prod = parts
+          .slice(0, -1)
+          .filter(
+            (p) =>
+              !/^(kg|kilo|kilos|quilos|dz|dúzia|duzia|dúzias|duzias|un|unid|und|unidade|unidades|pct|pacote|cx|caixa|l|litro|litros|g|gramas|molho|molhos)$/i.test(
+                p,
+              ),
+          )
+          .join(' ')
+        if (prod) return { productText: prod, quantity: qLast.val, rawQtyStr: qLast.raw }
       }
     }
   }
@@ -171,14 +268,25 @@ export function extractQuantityAndProductName(rawLine: string): {
     }
   }
 
-  // 8. Quantidade no início da linha: "5 Arroz" ou "2,5 Feijão"
+  // 8. Quantidade no início da linha com unidade opcional no meio: "40 KG Aipim", "5 Arroz", "2,5 Feijão"
   const matchStartQty = line.match(
-    /^(\d+(?:[.,]\d+)?)(?:\s*(?:kg|kilo|kilos|quilos|dz|dúzia|duzia|dúzias|duzias|un|unid|und|unidade|unidades|pct|pacote|cx|caixa|l|litro|litros|g|gramas))?\s+(.+)$/i,
+    /^(\d+(?:[.,]\d+)?)(?:\s+(?:kg|kilo|kilos|quilos|dz|dúzia|duzia|dúzias|duzias|un|unid|und|unidade|unidades|pct|pacote|cx|caixa|l|litro|litros|g|gramas|molho|molhos))?\s+(.+)$/i,
   )
   if (matchStartQty) {
     const q = parseQuantityToken(matchStartQty[1])
     if (q !== null) {
       return { productText: matchStartQty[2].trim(), quantity: q.val, rawQtyStr: q.raw }
+    }
+  }
+
+  // 9. Quantidade no início colada com unidade: "40kg Aipim"
+  const matchStartQtyAttached = line.match(
+    /^(\d+(?:[.,]\d+)?)(?:kg|kilo|kilos|quilos|dz|dúzia|duzia|dúzias|duzias|un|unid|und|unidade|unidades|pct|pacote|cx|caixa|l|litro|litros|g|gramas|molho|molhos)\s+(.+)$/i,
+  )
+  if (matchStartQtyAttached) {
+    const q = parseQuantityToken(matchStartQtyAttached[1])
+    if (q !== null) {
+      return { productText: matchStartQtyAttached[2].trim(), quantity: q.val, rawQtyStr: q.raw }
     }
   }
 
@@ -419,11 +527,31 @@ export function parsePastedOrderText(
     // Linhas vazias são ignoradas sem aviso
     if (!trimmed) return
 
-    // Linhas puramente de cabeçalho de tabela ou sem produto ("Produtos | Unidade | Pedidos")
+    // Linhas puramente de cabeçalho de tabela ou sem produto ("Produtos | Unidade | Pedidos", "QUANT. | KG | PRODUTO")
     const upper = trimmed.toUpperCase()
     if (
-      (upper.includes('PRODUTO') && upper.includes('UNIDADE')) ||
-      (upper.startsWith('PRODUTO') && (upper.includes('PEDIDO') || upper.includes('QTDE')))
+      (upper.includes('PRODUTO') &&
+        (upper.includes('UNIDADE') || upper.includes('QUANT') || upper.includes('QTDE'))) ||
+      (upper.startsWith('PRODUTO') && (upper.includes('PEDIDO') || upper.includes('QTDE'))) ||
+      (upper.includes('QUANT') && upper.includes('PRODUTO'))
+    ) {
+      return
+    }
+
+    // Linhas estruturais de rodapé institucional da escola/prefeitura/data a serem ignoradas
+    if (
+      /^TERES[OÓ]POLIS,?\s*\d{1,2}\/\d{1,2}\/\d{2,4}/i.test(trimmed) ||
+      /^TERES[OÓ]POLIS\b/i.test(trimmed) ||
+      /\bSEE\s*DUC\b/i.test(trimmed) ||
+      /\bSECRETARIA\s+DE\s+EDUCA[CÇ][AÃ]O\b/i.test(trimmed) ||
+      /\bDIRETOR[Aa]?\s*(\/|\b)/i.test(trimmed) ||
+      /\bID\s*\d{5,}\b/i.test(trimmed) ||
+      /\bCOL[EÉ]GIO\s+ESTADUAL\b/i.test(trimmed) ||
+      /\bRUA\s+[A-ZÀ-ÿ\s0-9]+CEP/i.test(trimmed) ||
+      /\bTELEFONE\b/i.test(trimmed) ||
+      /\bE-?MAIL:\s*[^@\s]+@[^\s]+/i.test(trimmed) ||
+      /\bWWW\.[A-Z0-9.-]+\.[A-Z]{2,}\b/i.test(trimmed) ||
+      /@educacao\.rj\.gov\.br/i.test(trimmed)
     ) {
       return
     }
