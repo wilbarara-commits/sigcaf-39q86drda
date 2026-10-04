@@ -106,12 +106,6 @@ import {
 } from '@/lib/decimalUtils'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { whatsappService } from '@/services/whatsapp-import'
-import { normalizeName, stripParentheses } from '@/lib/excelImporter'
-import {
-  cleanSchoolNameForMatching,
-  calculateTokenSimilarity,
-  areTypesConflicting,
-} from '@/lib/schoolCoordsMatcher'
 import { parsePastedOrderText, type OrderPasteParseResult } from '@/lib/orderPasteParser'
 
 export default function Orders() {
@@ -333,60 +327,6 @@ export default function Orders() {
     return `Ciclo ${codCiclo} [${numChamada}] — ${faseAmigavel}`
   }
 
-  // Casamento tolerante do nome de escola do comprovante com as escolas disponíveis da chamada
-  const findMatchingSchoolForDetectedName = (rawName: string): EscolaOpcaoModal | undefined => {
-    if (!rawName || availableSchoolsForCiclo.length === 0) return undefined
-
-    const normRaw = normalizeName(rawName)
-    const normRawNoParen = normalizeName(stripParentheses(rawName))
-    const cleanRaw = cleanSchoolNameForMatching(rawName)
-
-    // 1. Exato normalizado
-    const exact = availableSchoolsForCiclo.find((esc) => {
-      const normEsc = normalizeName(esc.nome)
-      return normEsc === normRaw || (normRawNoParen && normEsc === normRawNoParen)
-    })
-    if (exact) return exact
-
-    // 2. Nome limpo (sem títulos e prefixos como CE, EMEF, EM, Prof, etc.)
-    if (cleanRaw) {
-      const cleanMatches = availableSchoolsForCiclo.filter((esc) => {
-        const cleanEsc = cleanSchoolNameForMatching(esc.nome)
-        if (cleanEsc && cleanEsc === cleanRaw) {
-          return !areTypesConflicting(rawName, esc.nome)
-        }
-        return false
-      })
-      if (cleanMatches.length === 1) {
-        return cleanMatches[0]
-      }
-    }
-
-    // 3. Inclusão direta
-    const inclusion = availableSchoolsForCiclo.find((esc) => {
-      const escNorm = normalizeName(esc.nome)
-      return escNorm.includes(normRaw) || normRaw.includes(escNorm)
-    })
-    if (inclusion) return inclusion
-
-    // 4. Similaridade de tokens (Dice token coefficient)
-    let bestSchool: EscolaOpcaoModal | undefined
-    let maxScore = 0
-    for (const esc of availableSchoolsForCiclo) {
-      if (areTypesConflicting(rawName, esc.nome)) continue
-      const sim = calculateTokenSimilarity(rawName, esc.nome)
-      if (sim > maxScore) {
-        maxScore = sim
-        bestSchool = esc
-      }
-    }
-    if (bestSchool && maxScore >= 0.7) {
-      return bestSchool
-    }
-
-    return undefined
-  }
-
   // Abertura do modal: auto-seleciona o primeiro ciclo aberto se ainda não tiver selecionado
   const handleOpenDialog = (isOpen: boolean) => {
     setOpen(isOpen)
@@ -480,15 +420,6 @@ export default function Orders() {
     const result = parsePastedOrderText(pasteText, availableItemsForChamada)
     setPastePreview(result)
 
-    // Se detectou escola no comprovante e a escola ainda não foi selecionada no modal:
-    if (result.metadata?.escolaNome && !selectedSchool && availableSchoolsForCiclo.length > 0) {
-      const matchedSchool = findMatchingSchoolForDetectedName(result.metadata.escolaNome)
-      if (matchedSchool) {
-        setSelectedSchool(matchedSchool.escolaId)
-        toast.info(`Escola "${matchedSchool.nome}" sugerida pelo comprovante e pré-selecionada!`)
-      }
-    }
-
     if (result.matched.length === 0) {
       toast.error('Nenhum item reconhecido. Verifique os formatos aceitos.')
     } else if (result.unmatched.length > 0) {
@@ -503,18 +434,6 @@ export default function Orders() {
   // Confirmar e aplicar itens colados à lista do pedido
   const handleApplyPastedOrderItems = () => {
     if (!pastePreview || pastePreview.matched.length === 0) return
-
-    // Se a escola ainda não foi selecionada, tenta vincular pela escola detectada no comprovante
-    if (
-      !selectedSchool &&
-      pastePreview.metadata?.escolaNome &&
-      availableSchoolsForCiclo.length > 0
-    ) {
-      const matchedSchool = findMatchingSchoolForDetectedName(pastePreview.metadata.escolaNome)
-      if (matchedSchool) {
-        setSelectedSchool(matchedSchool.escolaId)
-      }
-    }
 
     setOrderItems((current) => {
       const copy = [...current]
@@ -1354,8 +1273,19 @@ export default function Orders() {
       <Dialog open={pasteModalOpen} onOpenChange={setPasteModalOpen}>
         <DialogContent
           className="sm:max-w-[620px] max-h-[90vh] overflow-y-auto"
-          onInteractOutside={(e) => e.preventDefault()}
-          onEscapeKeyDown={(e) => e.preventDefault()}
+          onInteractOutside={(e) => {
+            e.preventDefault()
+            e.stopPropagation()
+          }}
+          onPointerDownOutside={(e) => {
+            e.preventDefault()
+            e.stopPropagation()
+          }}
+          onEscapeKeyDown={(e) => {
+            e.preventDefault()
+            e.stopPropagation()
+            setPasteModalOpen(false)
+          }}
         >
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-base">
