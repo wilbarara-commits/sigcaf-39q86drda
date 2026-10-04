@@ -15,6 +15,9 @@ import {
   Loader2,
   PackageCheck,
   Calendar,
+  Layers,
+  ChevronRight,
+  ExternalLink,
 } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { MonthlyReportButton } from '@/components/MonthlyReportButton'
@@ -24,6 +27,7 @@ import {
   getDespachoEfetivoCiclo,
   isCicloNaoTerminal,
   formatFaseAmigavel,
+  getCiclosAtivosPorChamada,
 } from '@/lib/cicloUtils'
 
 export default function Index() {
@@ -34,6 +38,7 @@ export default function Index() {
     contractSchools,
     atestos,
     ciclos,
+    chamadas,
     activeCiclo,
     isLoading,
   } = useApp()
@@ -41,6 +46,9 @@ export default function Index() {
   const pendingOrders = orders.filter((o) => o.status === 'Pendente').length
   const deliveriesToday = orders.filter((o) => o.status === 'Em Rota').length
   const activeContracts = contracts.filter((c) => c.status === 'Ativo').length
+  const chamadasAtivas = useMemo(() => {
+    return chamadas.filter((ch) => ch.status === 'Ativo')
+  }, [chamadas])
 
   // Preço unitário do contrato: mapeia escola -> contrato_id -> itens de contrato
   const { receitaEntregueMes, receitaTotalMes, percentEntregue, currentMonthName } = useMemo(() => {
@@ -194,6 +202,86 @@ export default function Index() {
     maximumFractionDigits: 1,
   })}%`
 
+  // Ciclos ativos por chamada (todos os ciclos não-terminais ativos em suas respectivas chamadas)
+  const activeCiclosList = useMemo(() => {
+    const mapPorChamada = getCiclosAtivosPorChamada(ciclos)
+    const ativosChamadas = Object.values(mapPorChamada)
+
+    // Se houver ciclos sem chamada_id mas não-terminais, garantir que apareçam
+    const idsJaIncluidos = new Set(ativosChamadas.map((c: any) => c.id))
+    const naoTerminaisGerais = ciclos.filter(
+      (c) => isCicloNaoTerminal(c.status) && !idsJaIncluidos.has(c.id),
+    )
+
+    // Se nenhum ciclo com chamada foi encontrado, mas houver activeCiclo, incluir activeCiclo
+    if (ativosChamadas.length === 0 && activeCiclo && !idsJaIncluidos.has(activeCiclo.id)) {
+      naoTerminaisGerais.unshift(activeCiclo)
+      idsJaIncluidos.add(activeCiclo.id)
+    }
+
+    const todos = [...ativosChamadas, ...naoTerminaisGerais]
+
+    // Ordenar por data mais recente
+    return todos.sort((a, b) => {
+      const tA = new Date(a.created || a.data_inicio || 0).getTime()
+      const tB = new Date(b.created || b.data_inicio || 0).getTime()
+      return tB - tA
+    })
+  }, [ciclos, activeCiclo])
+
+  // Indicador de Chamadas ativas e status de ciclo em andamento
+  const chamadasAtivasStats = useMemo(() => {
+    const chamadasComCiclo = new Set<string>()
+    for (const c of activeCiclosList) {
+      if (c.chamada_id) {
+        chamadasComCiclo.add(c.chamada_id)
+      }
+    }
+
+    const total = chamadasAtivas.length
+    const comCiclo = chamadasAtivas.filter((ch) => chamadasComCiclo.has(ch.id)).length
+    const semCiclo = total - comCiclo
+
+    return {
+      total,
+      comCiclo,
+      semCiclo,
+      chamadasComCiclo,
+    }
+  }, [chamadasAtivas, activeCiclosList])
+
+  // Métricas enriquecidas por ciclo (pedidos, escolas atendidas, volume e valor)
+  const cicloMetricsMap = useMemo(() => {
+    const map = new Map<
+      string,
+      {
+        pedidosCount: number
+        escolasCount: number
+        volumeTotal: number
+        valorTotal: number
+      }
+    >()
+
+    for (const c of activeCiclosList) {
+      const cOrders = orders.filter((o) => o.cicloId === c.id && o.status !== 'Cancelado')
+      const escolasIds = new Set(cOrders.map((o) => o.schoolId))
+      const volume = cOrders.reduce(
+        (acc, o) => acc + (o.items || []).reduce((sum, it) => sum + (Number(it.quantity) || 0), 0),
+        0,
+      )
+      const valor = cOrders.reduce((acc, o) => acc + (Number(o.total) || 0), 0)
+
+      map.set(c.id, {
+        pedidosCount: cOrders.length,
+        escolasCount: escolasIds.size,
+        volumeTotal: volume,
+        valorTotal: valor,
+      })
+    }
+
+    return map
+  }, [activeCiclosList, orders])
+
   const metrics = [
     {
       title: 'Pedidos Pendentes',
@@ -210,11 +298,15 @@ export default function Index() {
       bg: 'bg-primary/10',
     },
     {
-      title: 'Entregas Hoje',
-      value: deliveriesToday,
-      icon: Truck,
-      color: 'text-blue-500',
-      bg: 'bg-blue-500/10',
+      title: 'Chamadas Ativas',
+      value: chamadasAtivasStats.total,
+      subtext: `${chamadasAtivasStats.comCiclo} com ciclo em andamento • ${chamadasAtivasStats.semCiclo} sem ciclo`,
+      badge:
+        chamadasAtivasStats.comCiclo > 0 ? `${chamadasAtivasStats.comCiclo} em ciclo` : undefined,
+      icon: Layers,
+      color: 'text-indigo-600 dark:text-indigo-400',
+      bg: 'bg-indigo-600/10 dark:bg-indigo-400/10',
+      linkTo: '/chamadas',
     },
     {
       title: 'Receita Entregue do Mês',
@@ -276,123 +368,346 @@ export default function Index() {
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        {metrics.map((m) => (
-          <Card key={m.title} className="hover:shadow-md transition-shadow">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">{m.title}</CardTitle>
-              <div className={`p-2 rounded-full ${m.bg}`}>
-                <m.icon className={`h-4 w-4 ${m.color}`} />
-              </div>
-            </CardHeader>
-            <CardContent>
-              {isLoading ? (
-                <div className="flex items-center gap-2 text-muted-foreground text-sm">
-                  <Loader2 className="h-4 w-4 animate-spin" /> Carregando...
+        {metrics.map((m) => {
+          const content = (
+            <Card
+              key={m.title}
+              className={`hover:shadow-md transition-all ${
+                m.linkTo ? 'cursor-pointer hover:border-primary/50 group' : ''
+              }`}
+            >
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium flex items-center gap-1.5">
+                  {m.title}
+                  {m.linkTo && (
+                    <ArrowRight className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+                  )}
+                </CardTitle>
+                <div className={`p-2 rounded-full ${m.bg}`}>
+                  <m.icon className={`h-4 w-4 ${m.color}`} />
                 </div>
-              ) : (
-                <div className="space-y-1">
-                  <div className="flex items-baseline justify-between gap-2">
-                    <span className="text-2xl font-bold">{m.value}</span>
-                    {m.badge && (
-                      <Badge
-                        variant="secondary"
-                        className="bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 font-semibold text-xs px-2 py-0.5"
-                      >
-                        {m.badge}
-                      </Badge>
+              </CardHeader>
+              <CardContent>
+                {isLoading ? (
+                  <div className="flex items-center gap-2 text-muted-foreground text-sm">
+                    <Loader2 className="h-4 w-4 animate-spin" /> Carregando...
+                  </div>
+                ) : (
+                  <div className="space-y-1">
+                    <div className="flex items-baseline justify-between gap-2">
+                      <span className="text-2xl font-bold">{m.value}</span>
+                      {m.badge && (
+                        <Badge
+                          variant="secondary"
+                          className={
+                            m.title === 'Chamadas Ativas'
+                              ? 'bg-indigo-100 text-indigo-800 dark:bg-indigo-950 dark:text-indigo-300 font-semibold text-xs px-2 py-0.5'
+                              : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 font-semibold text-xs px-2 py-0.5'
+                          }
+                        >
+                          {m.badge}
+                        </Badge>
+                      )}
+                    </div>
+                    {m.subtext && (
+                      <p className="text-xs text-muted-foreground line-clamp-1" title={m.subtext}>
+                        {m.subtext}
+                      </p>
                     )}
                   </div>
-                  {m.subtext && (
-                    <p className="text-xs text-muted-foreground line-clamp-1" title={m.subtext}>
-                      {m.subtext}
-                    </p>
-                  )}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        ))}
+                )}
+              </CardContent>
+            </Card>
+          )
+
+          return m.linkTo ? (
+            <Link key={m.title} to={m.linkTo} className="block focus:outline-none">
+              {content}
+            </Link>
+          ) : (
+            <div key={m.title}>{content}</div>
+          )
+        })}
       </div>
 
-      {/* Faixa Informativa do Ciclo Operacional Ativo e Pendentes de Fechamento */}
-      {(() => {
-        const ciclosNaoTerminais = ciclos.filter((c) => {
-          return isCicloNaoTerminal(c.status)
-        })
-        const ciclosPendentesFechamento = activeCiclo
-          ? ciclosNaoTerminais.filter((c) => c.id !== activeCiclo.id)
-          : ciclosNaoTerminais
+      {/* Seção de Ciclos Operacionais Ativos (um por chamada) */}
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Calendar className="h-5 w-5 text-primary" />
+            <h2 className="text-lg font-semibold tracking-tight">Ciclos Operacionais Ativos</h2>
+            <Badge variant="secondary" className="font-semibold text-xs">
+              {activeCiclosList.length}{' '}
+              {activeCiclosList.length === 1 ? 'ciclo em andamento' : 'ciclos em andamento'}
+            </Badge>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" size="sm" asChild className="text-xs text-primary gap-1">
+              <Link to="/monitoramento">
+                Painel de Monitoramento <ChevronRight className="h-3.5 w-3.5" />
+              </Link>
+            </Button>
+          </div>
+        </div>
 
-        return (
-          <Card className="border-l-4 border-l-primary bg-primary/5 dark:bg-primary/10">
+        {activeCiclosList.length === 0 ? (
+          <Card className="border-l-4 border-l-muted-foreground/30 bg-muted/20">
             <CardContent className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div className="space-y-1">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <Calendar className="h-4 w-4 text-primary" />
-                  <span className="font-semibold text-sm text-foreground">
-                    {activeCiclo ? `Ciclo ativo: ${activeCiclo.nome}` : 'Nenhum ciclo ativo'}
-                  </span>
-                  {activeCiclo && (
-                    <Badge
-                      variant="outline"
-                      className="text-[11px] border-primary/30 text-primary bg-background"
-                    >
-                      Fase: {formatFaseAmigavel(activeCiclo.status)}
-                    </Badge>
-                  )}
-                  {ciclosPendentesFechamento.length > 0 && (
-                    <Badge className="bg-amber-600 hover:bg-amber-700 text-[11px]">
-                      {ciclosPendentesFechamento.length} ciclo(s) pendente(s) de fechamento
-                    </Badge>
-                  )}
-                </div>
-                {activeCiclo ? (
-                  <p className="text-xs text-muted-foreground">
-                    Semana do ciclo:{' '}
-                    <strong>
-                      quarta-feira (
-                      {
-                        formatIntervaloCiclo(activeCiclo.data_inicio, activeCiclo.data_fim).split(
-                          ' a ',
-                        )[0]
-                      }
-                      )
-                    </strong>{' '}
-                    a{' '}
-                    <strong>
-                      terça-feira (
-                      {
-                        formatIntervaloCiclo(activeCiclo.data_inicio, activeCiclo.data_fim).split(
-                          ' a ',
-                        )[1]
-                      }
-                      )
-                    </strong>
-                  </p>
-                ) : (
-                  <p className="text-xs text-muted-foreground">
-                    Abra um novo ciclo pelo Monitoramento ou Histórico para iniciar a coleta
-                    semanal.
-                  </p>
-                )}
+                <span className="font-semibold text-sm text-foreground">
+                  Nenhum ciclo ativo no momento
+                </span>
+                <p className="text-xs text-muted-foreground">
+                  Abra um novo ciclo pelo Monitoramento ou Histórico para iniciar a coleta semanal
+                  das chamadas públicas.
+                </p>
               </div>
-              {activeCiclo && (
-                <div className="flex items-center gap-2 bg-background dark:bg-card px-3 py-1.5 rounded-md border text-xs shadow-sm">
-                  <Truck className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
-                  <div>
-                    <span className="text-muted-foreground block text-[10px]">
-                      Previsão de Despacho em Rota
-                    </span>
-                    <strong className="text-emerald-700 dark:text-emerald-400 font-semibold">
-                      {formatDespachoAmigavel(getDespachoEfetivoCiclo(activeCiclo), true)}
-                    </strong>
-                  </div>
-                </div>
-              )}
+              <Button asChild size="sm">
+                <Link to="/monitoramento">Abrir Ciclo</Link>
+              </Button>
             </CardContent>
           </Card>
-        )
-      })()}
+        ) : (
+          <div
+            className={`grid gap-4 ${
+              activeCiclosList.length === 1 ? 'grid-cols-1' : 'grid-cols-1 md:grid-cols-2'
+            }`}
+          >
+            {activeCiclosList.map((ciclo) => {
+              const ch =
+                ciclo.expand?.chamada_id || chamadas.find((c) => c.id === ciclo.chamada_id) || null
+              const metricsCiclo = cicloMetricsMap.get(ciclo.id) || {
+                pedidosCount: 0,
+                escolasCount: 0,
+                volumeTotal: 0,
+                valorTotal: 0,
+              }
+              const faseAmigavel = formatFaseAmigavel(ciclo.status)
+              const despachoDate = getDespachoEfetivoCiclo(ciclo)
+              const rotuloChamada = ch?.chamada ? `[${ch.chamada}]` : '[Geral]'
+              const tipoChamada = ch?.dependencia_administrativa || ch?.programa || ''
+
+              return (
+                <Card
+                  key={ciclo.id}
+                  className="border-l-4 border-l-primary bg-card hover:shadow-md transition-shadow relative overflow-hidden"
+                >
+                  <CardHeader className="p-4 pb-2">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-bold text-base text-foreground">
+                            {ciclo.nome} {rotuloChamada}
+                          </span>
+                          <Badge
+                            variant="outline"
+                            className="text-[11px] border-primary/30 text-primary bg-primary/5 font-semibold"
+                          >
+                            Fase: {faseAmigavel}
+                          </Badge>
+                          {tipoChamada && (
+                            <Badge variant="secondary" className="text-[10px] font-normal">
+                              {ch?.chamada} • {tipoChamada}
+                            </Badge>
+                          )}
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          Período: {formatIntervaloCiclo(ciclo.data_inicio, ciclo.data_fim)}
+                        </p>
+                      </div>
+
+                      <div className="flex items-center gap-1.5 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 px-2.5 py-1 rounded-md text-xs font-medium shrink-0">
+                        <Truck className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                        <span>Despacho: {formatDespachoAmigavel(despachoDate, true)}</span>
+                      </div>
+                    </div>
+                  </CardHeader>
+
+                  <CardContent className="p-4 pt-2 space-y-3">
+                    {/* Indicadores do Ciclo: Pedidos, Escolas, Volume, Valor */}
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 border-t">
+                      <div className="bg-muted/40 rounded p-2 text-center">
+                        <span className="text-[10px] uppercase font-semibold text-muted-foreground block">
+                          Pedidos
+                        </span>
+                        <span className="text-lg font-bold text-foreground">
+                          {metricsCiclo.pedidosCount}
+                        </span>
+                      </div>
+                      <div className="bg-muted/40 rounded p-2 text-center">
+                        <span className="text-[10px] uppercase font-semibold text-muted-foreground block">
+                          Escolas Atendidas
+                        </span>
+                        <span className="text-lg font-bold text-primary">
+                          {metricsCiclo.escolasCount}
+                        </span>
+                      </div>
+                      <div className="bg-muted/40 rounded p-2 text-center">
+                        <span className="text-[10px] uppercase font-semibold text-muted-foreground block">
+                          Volume Total
+                        </span>
+                        <span className="text-lg font-bold text-foreground font-mono">
+                          {metricsCiclo.volumeTotal > 0
+                            ? metricsCiclo.volumeTotal.toLocaleString('pt-BR')
+                            : '0'}
+                        </span>
+                      </div>
+                      <div className="bg-muted/40 rounded p-2 text-center">
+                        <span className="text-[10px] uppercase font-semibold text-muted-foreground block">
+                          Valor Previsto
+                        </span>
+                        <span className="text-sm font-bold text-emerald-600 dark:text-emerald-400 font-mono mt-1 block truncate">
+                          {metricsCiclo.valorTotal.toLocaleString('pt-BR', {
+                            style: 'currency',
+                            currency: 'BRL',
+                          })}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between text-xs pt-1">
+                      <span className="text-muted-foreground text-[11px]">
+                        {ch ? (
+                          <>
+                            Chamada: <strong>{ch.chamada}</strong> (
+                            {ch.dependencia_administrativa || 'PNAE'}) • Modalidade:{' '}
+                            {ch.modalidade || 'centralizado'}
+                          </>
+                        ) : (
+                          'Chamada não vinculada'
+                        )}
+                      </span>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        asChild
+                        className="h-7 text-xs text-primary px-2"
+                      >
+                        <Link to="/monitoramento">
+                          Monitorar <ArrowRight className="h-3 w-3 ml-1" />
+                        </Link>
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              )
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Visão Rápida de Chamadas Ativas e Status de Ciclo */}
+      <Card>
+        <CardHeader className="pb-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div>
+              <CardTitle className="text-base flex items-center gap-2">
+                <Layers className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
+                Chamadas Públicas Ativas
+              </CardTitle>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Relação das chamadas com e sem ciclos operacionais em andamento.
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="text-xs font-medium">
+                {chamadasAtivasStats.total}{' '}
+                {chamadasAtivasStats.total === 1 ? 'chamada ativa' : 'chamadas ativas'}
+              </Badge>
+              <Button variant="ghost" size="sm" asChild className="text-xs text-primary h-8 px-2">
+                <Link to="/chamadas">
+                  Gerenciar Chamadas <ExternalLink className="h-3 w-3 ml-1" />
+                </Link>
+              </Button>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {chamadasAtivas.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-4 text-center">
+              Nenhuma chamada pública ativa cadastrada.
+            </p>
+          ) : (
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {chamadasAtivas.map((ch) => {
+                const cicloAtivoDaChamada = activeCiclosList.find((c) => c.chamada_id === ch.id)
+                const temCiclo = Boolean(cicloAtivoDaChamada)
+
+                return (
+                  <div
+                    key={ch.id}
+                    className={`p-3 rounded-lg border transition-colors flex flex-col justify-between gap-2 ${
+                      temCiclo
+                        ? 'bg-card border-indigo-200 dark:border-indigo-900/50 shadow-xs'
+                        : 'bg-muted/20 border-dashed border-border'
+                    }`}
+                  >
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-semibold text-sm text-foreground">
+                          Chamada {ch.chamada}
+                        </span>
+                        {temCiclo ? (
+                          <Badge className="bg-emerald-600 hover:bg-emerald-700 text-[10px] px-1.5 py-0">
+                            Ciclo em andamento
+                          </Badge>
+                        ) : (
+                          <Badge
+                            variant="outline"
+                            className="text-[10px] text-muted-foreground px-1.5 py-0"
+                          >
+                            Sem ciclo ativo
+                          </Badge>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
+                        {ch.dependencia_administrativa && (
+                          <Badge
+                            variant="secondary"
+                            className="text-[10px] px-1.5 py-0 font-normal"
+                          >
+                            {ch.dependencia_administrativa}
+                          </Badge>
+                        )}
+                        <span>{ch.programa || 'PNAE'}</span>
+                        <span>•</span>
+                        <span className="capitalize">{ch.modalidade || 'centralizado'}</span>
+                      </div>
+                    </div>
+
+                    <div className="pt-2 border-t flex items-center justify-between text-xs">
+                      {temCiclo ? (
+                        <div className="flex items-center gap-1.5 text-indigo-700 dark:text-indigo-300 font-medium text-[11px] truncate">
+                          <Clock className="h-3 w-3 shrink-0" />
+                          <span className="truncate">{cicloAtivoDaChamada?.nome}</span>
+                          <span className="text-[10px] text-muted-foreground">
+                            ({formatFaseAmigavel(cicloAtivoDaChamada?.status)})
+                          </span>
+                        </div>
+                      ) : (
+                        <span className="text-[11px] text-muted-foreground italic">
+                          Aguardando abertura de ciclo
+                        </span>
+                      )}
+
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        asChild
+                        className="h-6 text-[11px] text-primary px-1.5 shrink-0 ml-2"
+                      >
+                        <Link to={temCiclo ? '/monitoramento' : '/chamadas'}>
+                          {temCiclo ? 'Ver Ciclo' : 'Abrir'}
+                        </Link>
+                      </Button>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         <Card className="lg:col-span-2">
