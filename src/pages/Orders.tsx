@@ -37,6 +37,22 @@ import {
   extractCicloCodigo,
   formatFaseAmigavel,
 } from '@/lib/cicloUtils'
+import type { CicloRecord } from '@/lib/types'
+
+const getCicloDataDespachoInput = (c?: CicloRecord | null): string => {
+  if (!c) return new Date().toISOString().split('T')[0]
+  if (c.data_despacho) {
+    const raw = c.data_despacho.includes('T')
+      ? c.data_despacho.split('T')[0]
+      : c.data_despacho.split(' ')[0]
+    if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw
+  }
+  const d = getDespachoEfetivoCiclo(c)
+  const ano = d.getFullYear()
+  const mes = String(d.getMonth() + 1).padStart(2, '0')
+  const dia = String(d.getDate()).padStart(2, '0')
+  return `${ano}-${mes}-${dia}`
+}
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -316,16 +332,18 @@ export default function Orders() {
   const handleOpenDialog = (isOpen: boolean) => {
     setOpen(isOpen)
     if (isOpen) {
-      if (openCiclos.length > 0) {
-        // Se já tem activeCiclo e ele estiver aberto, priorizar ele; senão o 1º de openCiclos
-        const defaultCiclo =
-          (activeCiclo && openCiclos.find((c) => c.id === activeCiclo.id)) || openCiclos[0]
-        setSelectedCicloId(defaultCiclo.id)
+      const cicloInicial =
+        openCiclos.length > 0
+          ? (activeCiclo && openCiclos.find((c) => c.id === activeCiclo.id)) || openCiclos[0]
+          : null
+
+      if (cicloInicial) {
+        setSelectedCicloId(cicloInicial.id)
       } else {
         setSelectedCicloId('')
       }
       setSelectedSchool('')
-      setOrderDate(new Date().toISOString().split('T')[0])
+      setOrderDate(getCicloDataDespachoInput(cicloInicial))
       setOrderItems([])
     }
   }
@@ -1015,6 +1033,10 @@ export default function Orders() {
                         setSelectedCicloId(val)
                         setSelectedSchool('')
                         setOrderItems([])
+                        const novoCiclo = ciclos.find((c) => c.id === val)
+                        if (novoCiclo) {
+                          setOrderDate(getCicloDataDespachoInput(novoCiclo))
+                        }
                       }}
                       required
                     >
@@ -1700,7 +1722,13 @@ export default function Orders() {
                         )}
                       </TableCell>
                       <TableCell className="text-xs">
-                        {new Date(order.date).toLocaleDateString('pt-BR')}
+                        {(() => {
+                          const m = String(order.date || '').match(/^(\d{4})-(\d{2})-(\d{2})/)
+                          if (m) {
+                            return `${m[3]}/${m[2]}/${m[1]}`
+                          }
+                          return new Date(order.date).toLocaleDateString('pt-BR')
+                        })()}
                       </TableCell>
                       <TableCell>{getValidacaoBadge(order.validacao)}</TableCell>
                       <TableCell className="text-xs">
