@@ -106,7 +106,12 @@ import {
 } from '@/lib/decimalUtils'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { whatsappService } from '@/services/whatsapp-import'
-import { normalizeName } from '@/lib/excelImporter'
+import { normalizeName, stripParentheses } from '@/lib/excelImporter'
+import {
+  cleanSchoolNameForMatching,
+  calculateTokenSimilarity,
+  areTypesConflicting,
+} from '@/lib/schoolCoordsMatcher'
 import { parsePastedOrderText, type OrderPasteParseResult } from '@/lib/orderPasteParser'
 
 export default function Orders() {
@@ -328,24 +333,86 @@ export default function Orders() {
     return `Ciclo ${codCiclo} [${numChamada}] — ${faseAmigavel}`
   }
 
+  // Casamento tolerante do nome de escola do comprovante com as escolas disponíveis da chamada
+  const findMatchingSchoolForDetectedName = (rawName: string): EscolaOpcaoModal | undefined => {
+    if (!rawName || availableSchoolsForCiclo.length === 0) return undefined
+
+    const normRaw = normalizeName(rawName)
+    const normRawNoParen = normalizeName(stripParentheses(rawName))
+    const cleanRaw = cleanSchoolNameForMatching(rawName)
+
+    // 1. Exato normalizado
+    const exact = availableSchoolsForCiclo.find((esc) => {
+      const normEsc = normalizeName(esc.nome)
+      return normEsc === normRaw || (normRawNoParen && normEsc === normRawNoParen)
+    })
+    if (exact) return exact
+
+    // 2. Nome limpo (sem títulos e prefixos como CE, EMEF, EM, Prof, etc.)
+    if (cleanRaw) {
+      const cleanMatches = availableSchoolsForCiclo.filter((esc) => {
+        const cleanEsc = cleanSchoolNameForMatching(esc.nome)
+        if (cleanEsc && cleanEsc === cleanRaw) {
+          return !areTypesConflicting(rawName, esc.nome)
+        }
+        return false
+      })
+      if (cleanMatches.length === 1) {
+        return cleanMatches[0]
+      }
+    }
+
+    // 3. Inclusão direta
+    const inclusion = availableSchoolsForCiclo.find((esc) => {
+      const escNorm = normalizeName(esc.nome)
+      return escNorm.includes(normRaw) || normRaw.includes(escNorm)
+    })
+    if (inclusion) return inclusion
+
+    // 4. Similaridade de tokens (Dice token coefficient)
+    let bestSchool: EscolaOpcaoModal | undefined
+    let maxScore = 0
+    for (const esc of availableSchoolsForCiclo) {
+      if (areTypesConflicting(rawName, esc.nome)) continue
+      const sim = calculateTokenSimilarity(rawName, esc.nome)
+      if (sim > maxScore) {
+        maxScore = sim
+        bestSchool = esc
+      }
+    }
+    if (bestSchool && maxScore >= 0.7) {
+      return bestSchool
+    }
+
+    return undefined
+  }
+
   // Abertura do modal: auto-seleciona o primeiro ciclo aberto se ainda não tiver selecionado
   const handleOpenDialog = (isOpen: boolean) => {
     setOpen(isOpen)
     if (isOpen) {
-      const cicloInicial =
-        openCiclos.length > 0
-          ? (activeCiclo && openCiclos.find((c) => c.id === activeCiclo.id)) || openCiclos[0]
-          : null
-
-      if (cicloInicial) {
-        setSelectedCicloId(cicloInicial.id)
-      } else {
-        setSelectedCicloId('')
+      // Só inicializa dados se o formulário ainda não estiver preenchido (preserva itens caso haja toggle acidental)
+      if (!selectedCicloId && openCiclos.length > 0) {
+        const cicloInicial =
+          (activeCiclo && openCiclos.find((c) => c.id === activeCiclo.id)) || openCiclos[0]
+        if (cicloInicial) {
+          setSelectedCicloId(cicloInicial.id)
+          setOrderDate(getCicloDataDespachoInput(cicloInicial))
+        }
       }
-      setSelectedSchool('')
-      setOrderDate(getCicloDataDespachoInput(cicloInicial))
-      setOrderItems([])
     }
+  }
+
+  // Reseta campos do pedido de forma explícita
+  const resetOrderForm = () => {
+    const cicloInicial =
+      openCiclos.length > 0
+        ? (activeCiclo && openCiclos.find((c) => c.id === activeCiclo.id)) || openCiclos[0]
+        : null
+    setSelectedCicloId(cicloInicial?.id || '')
+    setSelectedSchool('')
+    setOrderDate(getCicloDataDespachoInput(cicloInicial))
+    setOrderItems([])
   }
 
   const handleAddItem = () => {
@@ -415,15 +482,7 @@ export default function Orders() {
 
     // Se detectou escola no comprovante e a escola ainda não foi selecionada no modal:
     if (result.metadata?.escolaNome && !selectedSchool && availableSchoolsForCiclo.length > 0) {
-      const detectedNorm = normalizeName(result.metadata.escolaNome)
-      const matchedSchool = availableSchoolsForCiclo.find((esc) => {
-        const escNorm = normalizeName(esc.nome)
-        return (
-          escNorm === detectedNorm ||
-          escNorm.includes(detectedNorm) ||
-          detectedNorm.includes(escNorm)
-        )
-      })
+      const matchedSchool = findMatchingSchoolForDetectedName(result.metadata.escolaNome)
       if (matchedSchool) {
         setSelectedSchool(matchedSchool.escolaId)
         toast.info(`Escola "${matchedSchool.nome}" sugerida pelo comprovante e pré-selecionada!`)
@@ -451,15 +510,7 @@ export default function Orders() {
       pastePreview.metadata?.escolaNome &&
       availableSchoolsForCiclo.length > 0
     ) {
-      const detectedNorm = normalizeName(pastePreview.metadata.escolaNome)
-      const matchedSchool = availableSchoolsForCiclo.find((esc) => {
-        const escNorm = normalizeName(esc.nome)
-        return (
-          escNorm === detectedNorm ||
-          escNorm.includes(detectedNorm) ||
-          detectedNorm.includes(escNorm)
-        )
-      })
+      const matchedSchool = findMatchingSchoolForDetectedName(pastePreview.metadata.escolaNome)
       if (matchedSchool) {
         setSelectedSchool(matchedSchool.escolaId)
       }
@@ -974,7 +1025,13 @@ export default function Orders() {
         {/* Botão de Lançar Pedido */}
         <Dialog open={open} onOpenChange={handleOpenDialog}>
           <DialogTrigger asChild>
-            <Button className="gap-2">
+            <Button
+              className="gap-2"
+              onClick={() => {
+                resetOrderForm()
+                setOpen(true)
+              }}
+            >
               <Plus className="h-4 w-4" /> Lançar Pedido
             </Button>
           </DialogTrigger>
@@ -1031,8 +1088,6 @@ export default function Orders() {
                       value={selectedCicloId}
                       onValueChange={(val) => {
                         setSelectedCicloId(val)
-                        setSelectedSchool('')
-                        setOrderItems([])
                         const novoCiclo = ciclos.find((c) => c.id === val)
                         if (novoCiclo) {
                           setOrderDate(getCicloDataDespachoInput(novoCiclo))
@@ -1293,216 +1348,215 @@ export default function Orders() {
             )}
           </DialogContent>
         </Dialog>
+      </div>
 
-        {/* Modal "Colar Pedido" em lote */}
-        <Dialog open={pasteModalOpen} onOpenChange={setPasteModalOpen}>
-          <DialogContent className="sm:max-w-[620px] max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2 text-base">
-                <ClipboardPaste className="h-5 w-5 text-primary" /> Colar Itens do Pedido
-              </DialogTitle>
-              <DialogDescription className="text-xs">
-                Cole o texto com produtos e quantidades ou o <strong>Comprovante de Pedido</strong>{' '}
-                gerado pelo formulário. Aceita tabulação (planilha), vírgula, ponto-e-vírgula,
-                &quot;5x Produto&quot;, lista com marcadores (&quot;•&quot;) e sufixo Kg. Preços são
-                soberanos da chamada.
-              </DialogDescription>
-            </DialogHeader>
+      {/* Modal "Colar Pedido" em lote — declarado como irmão de nível raiz para evitar interferência Radix */}
+      <Dialog open={pasteModalOpen} onOpenChange={setPasteModalOpen}>
+        <DialogContent
+          className="sm:max-w-[620px] max-h-[90vh] overflow-y-auto"
+          onInteractOutside={(e) => e.preventDefault()}
+          onEscapeKeyDown={(e) => e.preventDefault()}
+        >
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-base">
+              <ClipboardPaste className="h-5 w-5 text-primary" /> Colar Itens do Pedido
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              Cole o texto com produtos e quantidades ou o <strong>Comprovante de Pedido</strong>{' '}
+              gerado pelo formulário. Aceita tabulação (planilha), vírgula, ponto-e-vírgula,
+              &quot;5x Produto&quot;, lista com marcadores (&quot;•&quot;) e sufixo Kg. Preços são
+              soberanos da chamada.
+            </DialogDescription>
+          </DialogHeader>
 
-            <div className="space-y-4 pt-1">
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="paste-order-text" className="text-xs font-semibold">
-                    Texto do Pedido ou Comprovante Completo
-                  </Label>
-                  <span className="text-[11px] text-muted-foreground">
-                    Ex: Comprovante com &quot; • AIPIM: 1,0 Kg&quot; ou &quot;Arroz 5&quot;
-                  </span>
-                </div>
-                <Textarea
-                  id="paste-order-text"
-                  rows={6}
-                  placeholder={`Cole aqui o comprovante de pedido completo ou linhas como:\n • AIPIM: 1,0 Kg\n • CENOURA: 100,0 Kg\nou no formato planilha:\nArroz Tipo 1\t5\nFeijão Carioca\t2,5`}
-                  value={pasteText}
-                  onChange={(e) => {
-                    setPasteText(e.target.value)
-                    setPastePreview(null)
-                  }}
-                  className="font-mono text-xs resize-y"
-                />
+          <div className="space-y-4 pt-1">
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <Label htmlFor="paste-order-text" className="text-xs font-semibold">
+                  Texto do Pedido ou Comprovante Completo
+                </Label>
+                <span className="text-[11px] text-muted-foreground">
+                  Ex: Comprovante com &quot; • AIPIM: 1,0 Kg&quot; ou &quot;Arroz 5&quot;
+                </span>
               </div>
-
-              <div className="flex justify-end gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={handleProcessPasteText}
-                  disabled={!pasteText.trim()}
-                  className="text-xs"
-                >
-                  <Sparkles className="h-3.5 w-3.5 mr-1" /> Analisar Linhas
-                </Button>
-              </div>
-
-              {/* Prévia dos itens interpretados */}
-              {pastePreview && (
-                <div className="space-y-3 pt-2 border-t">
-                  {/* Informações detectadas do comprovante se houver */}
-                  {pastePreview.metadata?.isComprovante && (
-                    <div className="p-2.5 rounded-lg border bg-primary/5 text-xs space-y-1">
-                      <div className="font-semibold text-primary flex items-center gap-1.5">
-                        <CheckCircle2 className="h-3.5 w-3.5" /> Comprovante de Pedido Identificado
-                      </div>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-1 text-[11px] text-muted-foreground pt-0.5">
-                        {pastePreview.metadata.protocolo && (
-                          <div>
-                            <span className="font-medium text-foreground">Protocolo:</span>{' '}
-                            {pastePreview.metadata.protocolo}
-                          </div>
-                        )}
-                        {pastePreview.metadata.escolaNome && (
-                          <div>
-                            <span className="font-medium text-foreground">Escola:</span>{' '}
-                            {pastePreview.metadata.escolaNome}
-                          </div>
-                        )}
-                        {pastePreview.metadata.cicloTexto && (
-                          <div>
-                            <span className="font-medium text-foreground">Ciclo:</span>{' '}
-                            {pastePreview.metadata.cicloTexto}
-                          </div>
-                        )}
-                        {pastePreview.metadata.previsaoEntrega && (
-                          <div>
-                            <span className="font-medium text-foreground">Previsão:</span>{' '}
-                            {pastePreview.metadata.previsaoEntrega}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="font-semibold text-foreground">
-                      Prévia dos Itens Reconhecidos:
-                    </span>
-                    <div className="flex items-center gap-2">
-                      <Badge
-                        variant="outline"
-                        className="text-emerald-700 bg-emerald-50 text-[11px]"
-                      >
-                        {pastePreview.matched.length} identificado(s)
-                      </Badge>
-                      {pastePreview.unmatched.length > 0 && (
-                        <Badge
-                          variant="outline"
-                          className="text-destructive bg-destructive/10 text-[11px]"
-                        >
-                          {pastePreview.unmatched.length} não localizado(s)
-                        </Badge>
-                      )}
-                    </div>
-                  </div>
-
-                  {pastePreview.matched.length > 0 ? (
-                    <div className="space-y-1.5 max-h-[190px] overflow-y-auto pr-1">
-                      {pastePreview.matched.map((m) => (
-                        <div
-                          key={m.productId}
-                          className="flex items-center justify-between p-2 rounded-lg border bg-muted/20 text-xs"
-                        >
-                          <div className="flex-1 min-w-0 pr-2">
-                            <div className="font-medium text-foreground truncate">
-                              {m.productName}
-                            </div>
-                            <div className="text-[11px] text-muted-foreground truncate">
-                              {m.matchedVia} • R$ {m.unitPrice.toFixed(2)} / {m.unidade}
-                            </div>
-                          </div>
-                          <div className="text-right shrink-0">
-                            <div className="font-mono font-semibold text-primary">
-                              {formatQuantityOneDecimal(m.quantity)} {m.unidade}
-                            </div>
-                            <div className="font-mono text-[11px] text-muted-foreground">
-                              R$ {m.subtotal.toFixed(2)}
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="rounded-lg border border-dashed p-4 text-center text-xs text-muted-foreground">
-                      Nenhum item do catálogo desta chamada foi identificado no texto colado.
-                    </div>
-                  )}
-
-                  {/* Linhas não casadas */}
-                  {pastePreview.unmatched.length > 0 && (
-                    <Alert className="border-amber-500/50 bg-amber-500/10 text-amber-900 dark:text-amber-200">
-                      <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
-                      <AlertTitle className="text-xs font-semibold">
-                        Linhas não reconhecidas ({pastePreview.unmatched.length}):
-                      </AlertTitle>
-                      <AlertDescription className="text-xs mt-1 space-y-1 max-h-[120px] overflow-y-auto">
-                        {pastePreview.unmatched.map((un, uIdx) => (
-                          <div
-                            key={uIdx}
-                            className="font-mono text-[11px] border-b border-amber-500/20 pb-0.5 last:border-b-0"
-                          >
-                            <span className="font-semibold text-destructive">
-                              L{un.lineNumber}:
-                            </span>{' '}
-                            &quot;{un.line}&quot; —{' '}
-                            <span className="text-muted-foreground italic">{un.reason}</span>
-                          </div>
-                        ))}
-                      </AlertDescription>
-                    </Alert>
-                  )}
-
-                  {pastePreview.matched.length > 0 && (
-                    <div className="flex justify-between items-center p-2.5 bg-primary/5 rounded-lg border border-primary/20">
-                      <span className="text-xs font-semibold">Subtotal dos Itens a Importar:</span>
-                      <span className="text-sm font-bold text-primary font-mono">
-                        R${' '}
-                        {pastePreview.totalCalculated.toLocaleString('pt-BR', {
-                          minimumFractionDigits: 2,
-                          maximumFractionDigits: 2,
-                        })}
-                      </span>
-                    </div>
-                  )}
-                </div>
-              )}
+              <Textarea
+                id="paste-order-text"
+                rows={6}
+                placeholder={`Cole aqui o comprovante de pedido completo ou linhas como:\n • AIPIM: 1,0 Kg\n • CENOURA: 100,0 Kg\nou no formato planilha:\nArroz Tipo 1\t5\nFeijão Carioca\t2,5`}
+                value={pasteText}
+                onChange={(e) => {
+                  setPasteText(e.target.value)
+                  setPastePreview(null)
+                }}
+                className="font-mono text-xs resize-y"
+              />
             </div>
 
-            <DialogFooter className="pt-2">
+            <div className="flex justify-end gap-2">
               <Button
                 type="button"
                 variant="outline"
                 size="sm"
-                onClick={() => {
-                  setPasteModalOpen(false)
-                  setPasteText('')
-                  setPastePreview(null)
-                }}
+                onClick={handleProcessPasteText}
+                disabled={!pasteText.trim()}
+                className="text-xs"
               >
-                Cancelar
+                <Sparkles className="h-3.5 w-3.5 mr-1" /> Analisar Linhas
               </Button>
-              <Button
-                type="button"
-                size="sm"
-                onClick={handleApplyPastedOrderItems}
-                disabled={!pastePreview || pastePreview.matched.length === 0}
-              >
-                Confirmar e Adicionar{' '}
-                {pastePreview?.matched.length ? `(${pastePreview.matched.length})` : ''}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      </div>
+            </div>
+
+            {/* Prévia dos itens interpretados */}
+            {pastePreview && (
+              <div className="space-y-3 pt-2 border-t">
+                {/* Informações detectadas do comprovante se houver */}
+                {pastePreview.metadata?.isComprovante && (
+                  <div className="p-2.5 rounded-lg border bg-primary/5 text-xs space-y-1">
+                    <div className="font-semibold text-primary flex items-center gap-1.5">
+                      <CheckCircle2 className="h-3.5 w-3.5" /> Comprovante de Pedido Identificado
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-1 text-[11px] text-muted-foreground pt-0.5">
+                      {pastePreview.metadata.protocolo && (
+                        <div>
+                          <span className="font-medium text-foreground">Protocolo:</span>{' '}
+                          {pastePreview.metadata.protocolo}
+                        </div>
+                      )}
+                      {pastePreview.metadata.escolaNome && (
+                        <div>
+                          <span className="font-medium text-foreground">Escola:</span>{' '}
+                          {pastePreview.metadata.escolaNome}
+                        </div>
+                      )}
+                      {pastePreview.metadata.cicloTexto && (
+                        <div>
+                          <span className="font-medium text-foreground">Ciclo:</span>{' '}
+                          {pastePreview.metadata.cicloTexto}
+                        </div>
+                      )}
+                      {pastePreview.metadata.previsaoEntrega && (
+                        <div>
+                          <span className="font-medium text-foreground">Previsão:</span>{' '}
+                          {pastePreview.metadata.previsaoEntrega}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-semibold text-foreground">
+                    Prévia dos Itens Reconhecidos:
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <Badge variant="outline" className="text-emerald-700 bg-emerald-50 text-[11px]">
+                      {pastePreview.matched.length} identificado(s)
+                    </Badge>
+                    {pastePreview.unmatched.length > 0 && (
+                      <Badge
+                        variant="outline"
+                        className="text-destructive bg-destructive/10 text-[11px]"
+                      >
+                        {pastePreview.unmatched.length} não localizado(s)
+                      </Badge>
+                    )}
+                  </div>
+                </div>
+
+                {pastePreview.matched.length > 0 ? (
+                  <div className="space-y-1.5 max-h-[190px] overflow-y-auto pr-1">
+                    {pastePreview.matched.map((m) => (
+                      <div
+                        key={m.productId}
+                        className="flex items-center justify-between p-2 rounded-lg border bg-muted/20 text-xs"
+                      >
+                        <div className="flex-1 min-w-0 pr-2">
+                          <div className="font-medium text-foreground truncate">
+                            {m.productName}
+                          </div>
+                          <div className="text-[11px] text-muted-foreground truncate">
+                            {m.matchedVia} • R$ {m.unitPrice.toFixed(2)} / {m.unidade}
+                          </div>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <div className="font-mono font-semibold text-primary">
+                            {formatQuantityOneDecimal(m.quantity)} {m.unidade}
+                          </div>
+                          <div className="font-mono text-[11px] text-muted-foreground">
+                            R$ {m.subtotal.toFixed(2)}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="rounded-lg border border-dashed p-4 text-center text-xs text-muted-foreground">
+                    Nenhum item do catálogo desta chamada foi identificado no texto colado.
+                  </div>
+                )}
+
+                {/* Linhas não casadas */}
+                {pastePreview.unmatched.length > 0 && (
+                  <Alert className="border-amber-500/50 bg-amber-500/10 text-amber-900 dark:text-amber-200">
+                    <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                    <AlertTitle className="text-xs font-semibold">
+                      Linhas não reconhecidas ({pastePreview.unmatched.length}):
+                    </AlertTitle>
+                    <AlertDescription className="text-xs mt-1 space-y-1 max-h-[120px] overflow-y-auto">
+                      {pastePreview.unmatched.map((un, uIdx) => (
+                        <div
+                          key={uIdx}
+                          className="font-mono text-[11px] border-b border-amber-500/20 pb-0.5 last:border-b-0"
+                        >
+                          <span className="font-semibold text-destructive">L{un.lineNumber}:</span>{' '}
+                          &quot;{un.line}&quot; —{' '}
+                          <span className="text-muted-foreground italic">{un.reason}</span>
+                        </div>
+                      ))}
+                    </AlertDescription>
+                  </Alert>
+                )}
+
+                {pastePreview.matched.length > 0 && (
+                  <div className="flex justify-between items-center p-2.5 bg-primary/5 rounded-lg border border-primary/20">
+                    <span className="text-xs font-semibold">Subtotal dos Itens a Importar:</span>
+                    <span className="text-sm font-bold text-primary font-mono">
+                      R${' '}
+                      {pastePreview.totalCalculated.toLocaleString('pt-BR', {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                      })}
+                    </span>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          <DialogFooter className="pt-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setPasteModalOpen(false)
+                setPasteText('')
+                setPastePreview(null)
+              }}
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              onClick={handleApplyPastedOrderItems}
+              disabled={!pastePreview || pastePreview.matched.length === 0}
+            >
+              Confirmar e Adicionar{' '}
+              {pastePreview?.matched.length ? `(${pastePreview?.matched.length || 0})` : ''}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Barra de Filtros */}
       <Card>
