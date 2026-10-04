@@ -74,24 +74,37 @@ routerAdd(
           const promptMsg =
             'Abaixo está o texto bruto extraído via OCR de uma foto/imagem de formulário de pedido de alimentação escolar.\n' +
             'ATENÇÃO: A foto pode conter ruídos ópticos, sombras, marcas de carimbo, assinaturas e colunas com erros de leitura de caracteres (ex: "[xe am" para Kg Aipim, "comerfor" para Couve-Flor, "ao" lido no lugar de 40).\n\n' +
+            'PRINCÍPIO SUPREMO: LINHA DE DADOS NUNCA DEVE SER SILENCIOSAMENTE DESCARTADA.\n' +
+            'Toda linha contendo um produto reconhecível DEVE ser incluída na saída. Descarte silencioso é EXCLUSIVO para cabeçalhos, rodapé institucional e fragmentos puros sem produto.\n\n' +
             'INSTRUÇÕES ESTRITAS E CRÍTICAS:\n' +
             '1. LAYOUT QUANT | UNIDADE | PRODUTO (QUANTIDADE ANTES DO PRODUTO):\n' +
-            '   - Em formulários com colunas QUANT | PRODUTO (ex: "40 | KG | Aipim", "40 [xe am", "40 [KG] couve-flor"), identifique o número na primeira coluna como quantidade e o hortifrúti na última coluna.\n' +
-            '   - Decifre com inteligência os nomes de hortifrúti corrompidos pelo OCR ("am" / "aip" -> AIPIM, "comerfor" -> COUVE-FLOR, "cheiro" -> CHEIRO VERDE, etc.).\n' +
-            '   - Formate CADA linha canonicamente: PRODUTO: quantidade unidade (ex: "AIPIM: 40,0 Kg", "COUVE-FLOR: 40,0 Kg", "ALFACE: 15,0 Kg").\n' +
-            '2. DESCARTAR CABEÇALHOS, RODAPÉ INSTITUCIONAL E CARIMBOS:\n' +
+            '   - Em formulários com colunas QUANT | UNIDADE | PRODUTO (ex: "40 | KG | Aipim", "15 | KG | Alface"), identifique o número na primeira coluna como quantidade e o hortifrúti na última coluna.\n' +
+            '   - Exemplos de produtos esperados com cobertura COMPLETA:\n' +
+            '     * "AIPIM: 40,0 Kg"\n' +
+            '     * "ALFACE: 15,0 Kg"\n' +
+            '     * "CHEIRO VERDE: 2,0 Kg"\n' +
+            '     * "COUVE-FLOR: 40,0 Kg"\n' +
+            '     * "ESPINAFRE: 10,0 Kg"\n' +
+            '     * "LIMÃO: 3,0 Kg"\n' +
+            '2. RESOLVER RUÍDO POR SEMELHANÇA (NÃO DESCARTAR):\n' +
+            '   - "comerfor" -> COUVE-FLOR\n' +
+            '   - "xe am", "am", "aip" -> AIPIM\n' +
+            '   - "alfacc", "aface", "alíace" -> ALFACE\n' +
+            '   - "cheiroverde", "cheiro verde", "cheiro ver", "cheiro" -> CHEIRO VERDE\n' +
+            '   - "espinafre", "espinafrc", "espinafr" -> ESPINAFRE\n' +
+            '   - "Imao", "limao", "tatai" -> LIMÃO\n' +
+            '   - "ao", "4o" -> 40,0 Kg\n' +
+            '   - Se houver dúvida na quantidade exata de um produto reconhecido, emita com interrogação: "NOME: quant? unidade" (ex: "ALFACE: 15,0? Kg") em vez de descartar!\n' +
+            '3. DESCARTAR CABEÇALHOS, RODAPÉ INSTITUCIONAL E CARIMBOS:\n' +
             '   - Descarte completamente cabeçalhos: "QUANT", "QUANT]", "PRODUTO", "UNIDADE".\n' +
-            '   - Descarte TOTALMENTE cidade e data (ex: "Teresópolis, = 17/09/2026"), órgãos ("SEE DUC", "SEE", "DUE,"), cargos/IDs/assinaturas ("DIRETORA / ID...", "áas26350"), nomes de escolas e contatos.\n' +
-            '3. OMITIR LINHAS ILEGÍVEIS OU RUÍDO:\n' +
-            '   - Linhas que não sejam produto reconhecível com quantidade (ex: "É à", "DUE", fragmentos soltos) devem ser TOTALMENTE OMITIDAS.\n' +
-            '   - Se uma linha não for decifrável como item de alimentação escolar, NÃO invente e NÃO emita lixo.\n' +
-            '4. PRIMEIRA LINHA MANDATÓRIA: Nunca descarte o primeiro produto válido da tabela.\n' +
+            '   - Descarte TOTALMENTE cidade e data (ex: "Teresópolis, 17/09/2026", "Teresópolis, = 17/09/2026"), órgãos ("SEE DUC", "SEE", "DUE,"), cargos/IDs/assinaturas ("DIRETORA / ID...", "Valéria Soares...", "áas26350"), nomes de escolas e contatos.\n' +
+            '   - Descarte fragmentos soltos sem nome de produto nem número (ex: "É à", "DUE", "=").\n' +
+            '4. PRIMEIRA E DEMAIS LINHAS MANDATÓRIAS: Nenhuma linha de dado de produto deve sumir.\n' +
             '5. CASAS DECIMAIS PRESERVADAS: Formate quantidades com vírgula decimal ("40,0 Kg", "15,0 Kg", "2,0 Kg"). NUNCA infle 10x.\n' +
             '6. PRESERVE os espaços em nomes compostos ("BATATA DOCE", "CHEIRO VERDE", "COUVE-FLOR").\n' +
             '7. Retorne APENAS as linhas finais no formato "PRODUTO: quantidade unidade", uma por linha, sem markdown (sem ```) e sem nenhum outro texto.\n\n' +
             'TEXTO OCR DA IMAGEM:\n' +
             normalizedInput
-
           const res = agent.chat({
             user_id: userId,
             conversation_id: null,

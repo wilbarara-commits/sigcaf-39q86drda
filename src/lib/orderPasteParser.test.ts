@@ -357,7 +357,7 @@ Telefone 21 2741-1337 - e-mail: ceeuclydesdacunha@educacao.rj.gov.br`
       expect(parseRes.matched.find((m) => m.productId === 'prod_limao')?.quantity).toBe(3)
     })
 
-    it('deve decifrar OCR ruidoso exato relatado pelo usuário, omitindo rodapé e linhas ilegíveis', async () => {
+    it('deve decifrar OCR ruidoso de dois itens, omitindo rodapé e linhas ilegíveis', async () => {
       const { cleanTableOcrText } = await import('./imageExtractor')
       const userReportedNoise = `QUANT] | PRODUTO |
 40 [xe am
@@ -381,7 +381,55 @@ DUE,`
       expect(cleaned).not.toContain('DUE')
       expect(cleaned).not.toContain('É à')
 
-      // Verifica casamento no parser com o catálogo da chamada 07/2025
+      const catalogChamada07: OrderPasteCatalogProduct[] = [
+        { productId: 'prod_aipim', nome: 'AIPIM', unidade: 'Kg', preco: 6.0 },
+        { productId: 'prod_couveflor', nome: 'COUVE-FLOR', unidade: 'Kg', preco: 7.0 },
+      ]
+
+      const parseRes = parsePastedOrderText(cleaned, catalogChamada07)
+      expect(parseRes.unmatched).toEqual([])
+      expect(parseRes.matched.length).toBe(2)
+      expect(parseRes.matched.find((m) => m.productId === 'prod_aipim')?.quantity).toBe(40)
+      expect(parseRes.matched.find((m) => m.productId === 'prod_couveflor')?.quantity).toBe(40)
+    })
+
+    it('deve extrair todos os 6 itens da foto oficial com ruídos de OCR e descartar todo o rodapé institucional', async () => {
+      const { cleanTableOcrText } = await import('./imageExtractor')
+      // Texto OCR simulando a foto completa com ruído nos 6 produtos e rodapé oficial
+      const fullOfficialPhotoOcr = `QUANT] | UNIDADE | PRODUTO |
+40 [xe am
+15 [KG] alfacc
+2 [KG] cheiroverde
+ao [KG] comerfor =
+10 [KG] espinafrc
+3 [KG] Imao
+Teresópolis, = 17/09/2026
+É à
+SEE          “DIRETORA / 10 áas26350.
+DUE,`
+
+      const cleaned = cleanTableOcrText(fullOfficialPhotoOcr)
+      const lines = cleaned.split('\n').filter((l) => l.trim().length > 0)
+
+      // Validação das 6 linhas canônicas completas sem perda
+      expect(lines).toEqual([
+        'AIPIM: 40,0 Kg',
+        'ALFACE: 15,0 Kg',
+        'CHEIRO VERDE: 2,0 Kg',
+        'COUVE-FLOR: 40,0 Kg',
+        'ESPINAFRE: 10,0 Kg',
+        'LIMÃO: 3,0 Kg',
+      ])
+
+      // Nunca deve conter rodapé institucional ou ruído
+      expect(cleaned).not.toContain('QUANT')
+      expect(cleaned).not.toContain('Teresópolis')
+      expect(cleaned).not.toContain('DIRETORA')
+      expect(cleaned).not.toContain('SEE')
+      expect(cleaned).not.toContain('DUE')
+      expect(cleaned).not.toContain('É à')
+
+      // Validação com o catálogo oficial da chamada 07/2025
       const catalogChamada07: OrderPasteCatalogProduct[] = [
         { productId: 'prod_aipim', nome: 'AIPIM', unidade: 'Kg', preco: 6.0 },
         { productId: 'prod_alface', nome: 'ALFACE', unidade: 'Kg', preco: 7.0 },

@@ -116,10 +116,90 @@ export function cleanTableOcrText(rawText: string): string {
   const lines = rawText.split(/\r?\n/)
   const result: string[] = []
 
+  // Normaliza múltiplos espaços internos preservando o espaçamento entre palavras
+  const normalizeInnerSpaces = (name: string): string => {
+    return name.trim().replace(/\s+/g, ' ')
+  }
+
+  // Dicionário de produtos hortifrúti conhecidos para resolução inteligente de ruídos de OCR
+  // e proteção contra descarte acidental de linhas de dados válidas.
+  const KNOWN_HORTIFRUTI_ALIASES: Array<{
+    regex: RegExp
+    canonical: string
+    defaultUnit?: string
+  }> = [
+    {
+      regex: /^(comerfor|couve\s*for|couve[- ]?flor|couveflor)$/i,
+      canonical: 'COUVE-FLOR',
+      defaultUnit: 'Kg',
+    },
+    { regex: /^(am|aip|aipim|aipm|aimpim|aipip)$/i, canonical: 'AIPIM', defaultUnit: 'Kg' },
+    {
+      regex: /^(alface|alfacc|aface|alíace|alfac|alfaçe)$/i,
+      canonical: 'ALFACE',
+      defaultUnit: 'Kg',
+    },
+    {
+      regex: /^(cheiro[- ]?verde|cheiroverde|cheiro\s*ver|cheiro)$/i,
+      canonical: 'CHEIRO VERDE',
+      defaultUnit: 'Kg',
+    },
+    {
+      regex: /^(espinafre|espinafrc|espinafr|espina|espinhafre)$/i,
+      canonical: 'ESPINAFRE',
+      defaultUnit: 'Kg',
+    },
+    {
+      regex: /^(lim[aã]o|limao|imao|tatai|limao\s*taiti|limão\s*taiti)$/i,
+      canonical: 'LIMÃO',
+      defaultUnit: 'Kg',
+    },
+    { regex: /^(banana|banana\s*prata|banana\s*nanica)$/i, canonical: 'BANANA', defaultUnit: 'Kg' },
+    { regex: /^(batata[- ]?doce|batatadoce)$/i, canonical: 'BATATA DOCE', defaultUnit: 'Kg' },
+    { regex: /^(beterraba|beterrab)$/i, canonical: 'BETERRABA', defaultUnit: 'Kg' },
+    { regex: /^(br[oó]colis|brocolis|brocoli)$/i, canonical: 'BRÓCOLIS', defaultUnit: 'Kg' },
+    { regex: /^(cenoura|cenour)$/i, canonical: 'CENOURA', defaultUnit: 'Kg' },
+    { regex: /^(inhame|inham)$/i, canonical: 'INHAME', defaultUnit: 'Kg' },
+    { regex: /^(laranja|laranj)$/i, canonical: 'LARANJA', defaultUnit: 'Kg' },
+    { regex: /^(tomate|tomat)$/i, canonical: 'TOMATE', defaultUnit: 'Kg' },
+    { regex: /^(abobora|abóbora)$/i, canonical: 'ABÓBORA', defaultUnit: 'Kg' },
+    { regex: /^(abobrinha)$/i, canonical: 'ABOBRINHA', defaultUnit: 'Kg' },
+    { regex: /^(chuchu)$/i, canonical: 'CHUCHU', defaultUnit: 'Kg' },
+    { regex: /^(pepino)$/i, canonical: 'PEPINO', defaultUnit: 'Kg' },
+    { regex: /^(pimentao|pimentão)$/i, canonical: 'PIMENTÃO', defaultUnit: 'Kg' },
+    { regex: /^(repolho)$/i, canonical: 'REPOLHO', defaultUnit: 'Kg' },
+    { regex: /^(alho)$/i, canonical: 'ALHO', defaultUnit: 'Kg' },
+    { regex: /^(cebola)$/i, canonical: 'CEBOLA', defaultUnit: 'Kg' },
+    { regex: /^(maca|maçã)$/i, canonical: 'MAÇÃ', defaultUnit: 'Kg' },
+    { regex: /^(melancia)$/i, canonical: 'MELANCIA', defaultUnit: 'Kg' },
+    { regex: /^(melao|melão)$/i, canonical: 'MELÃO', defaultUnit: 'Kg' },
+    { regex: /^(mamao|mamão)$/i, canonical: 'MAMÃO', defaultUnit: 'Kg' },
+    { regex: /^(tangerina|ponkan|pocan)$/i, canonical: 'TANGERINA PONKAN', defaultUnit: 'Kg' },
+  ]
+
+  const resolveKnownProduct = (raw: string): { canonical: string; defaultUnit: string } | null => {
+    const clean = normalizeInnerSpaces(raw)
+      .replace(/[=\-_~^`]/g, '')
+      .trim()
+    for (const entry of KNOWN_HORTIFRUTI_ALIASES) {
+      if (entry.regex.test(clean)) {
+        return { canonical: entry.canonical, defaultUnit: entry.defaultUnit || 'Kg' }
+      }
+    }
+    return null
+  }
+
   // Expressão regular para cabeçalhos ou fragmentos de cabeçalho conhecidos
   // ATENÇÃO: NUNCA deve descartar uma linha de dados com produto e quantidade válida.
   const isHeaderFragment = (upper: string): boolean => {
     if (!upper) return true
+
+    // Se a linha contiver claramente um produto conhecido da lista de hortifrúti, NUNCA é cabeçalho nem fragmento!
+    for (const entry of KNOWN_HORTIFRUTI_ALIASES) {
+      if (entry.regex.test(upper.trim())) {
+        return false
+      }
+    }
 
     // Cabeçalhos clássicos e cabeçalho QUANT | KG | PRODUTO (incluindo ruídos como "QUANT]", "PRODUTO |")
     if (/^PRODUTOS?(\s*[|/\\;,\t-]\s*|\s+)UNIDADES?(\s*[|/\\;,\t-]\s*|\s+)/.test(upper)) return true
@@ -176,14 +256,10 @@ export function cleanTableOcrText(rawText: string): string {
     return false
   }
 
-  // Normaliza múltiplos espaços internos preservando o espaçamento entre palavras
-  const normalizeInnerSpaces = (name: string): string => {
-    return name.trim().replace(/\s+/g, ' ')
-  }
-
   // Normaliza valores numéricos lidos onde a vírgula decimal pode ter sido engolida
   // ou lida como espaço/ponto (ex: "20 0", "20.0" -> "20,0").
   // Se vier com vírgula ou ponto (ex: 20,0 ou 20.0), normaliza para vírgula.
+  // Suporta sufixo ? de incerteza (ex: "15,0?").
   const formatQuantityDisplay = (rawQty: string): string => {
     let clean = rawQty.trim()
     const isUncertain = clean.endsWith('?')
@@ -222,12 +298,16 @@ export function cleanTableOcrText(rawText: string): string {
     // Preserva exatamente a representação numérica (incluindo vírgula decimal e eventual interrogação de incerteza)
     const colonMatch = trimmed.match(/^([^:]+):\s*([0-9]+(?:[.,\s][0-9]+)?\??)(?:\s*([a-zA-Z]+))?$/)
     if (colonMatch) {
-      const prod = normalizeInnerSpaces(colonMatch[1])
+      const rawProd = colonMatch[1].trim()
       const rawQty = colonMatch[2].trim()
       const unit = colonMatch[3]?.trim() || 'Kg'
-      if (prod && !isHeaderFragment(prod.toUpperCase())) {
+
+      const known = resolveKnownProduct(rawProd)
+      const prodCanonical = known ? known.canonical : normalizeInnerSpaces(rawProd).toUpperCase()
+
+      if (prodCanonical && !isHeaderFragment(prodCanonical)) {
         const qty = formatQuantityDisplay(rawQty)
-        result.push(`${prod.toUpperCase()}: ${qty} ${unit}`)
+        result.push(`${prodCanonical}: ${qty} ${unit}`)
       }
       continue
     }
@@ -251,19 +331,15 @@ export function cleanTableOcrText(rawText: string): string {
       const qtyStr = formatQuantityDisplay(rawVal)
       let unit = matchQuantFirstPiped[2].replace(/[[\]]/g, '').trim() || 'Kg'
       if (/^(xe|ke|kc|ko|k)$/i.test(unit)) unit = 'Kg'
-      let prodName = normalizeInnerSpaces(matchQuantFirstPiped[3])
+      const rawProdName = normalizeInnerSpaces(matchQuantFirstPiped[3])
         .replace(/[=\-_~^`]/g, '')
         .trim()
 
-      // Normalização inteligente de OCR ruidoso para produtos típicos
-      if (/^am$/i.test(prodName) || /^aip$/i.test(prodName)) {
-        prodName = 'Aipim'
-      } else if (/^comerfor$/i.test(prodName) || /^couve\s*for$/i.test(prodName)) {
-        prodName = 'Couve-Flor'
-      }
+      const known = resolveKnownProduct(rawProdName)
+      const prodName = known ? known.canonical : rawProdName.toUpperCase()
 
-      if (prodName.length >= 2 && !isHeaderFragment(prodName.toUpperCase())) {
-        result.push(`${prodName.toUpperCase()}: ${qtyStr} ${unit}`)
+      if (prodName.length >= 2 && !isHeaderFragment(prodName)) {
+        result.push(`${prodName}: ${qtyStr} ${unit}`)
         continue
       }
     }
@@ -274,18 +350,20 @@ export function cleanTableOcrText(rawText: string): string {
     )
     if (matchWithUnitInMiddle) {
       const rawProdName = matchWithUnitInMiddle[1].trim()
-      const unit = matchWithUnitInMiddle[2].trim() || 'Kg'
+      let unit = matchWithUnitInMiddle[2].trim() || 'Kg'
       let rawVal = matchWithUnitInMiddle[3].trim()
-      // Se vier sem vírgula como 200, 300, 500, 100 de hortifrúti
       if (rawVal === '200' || rawVal === '300' || rawVal === '500' || rawVal === '100') {
         rawVal = `${rawVal.slice(0, 2)},0`
       } else if (!rawVal.includes(',') && !rawVal.includes('.')) {
         rawVal = `${rawVal},0`
       }
       const qtyStr = formatQuantityDisplay(rawVal)
-      const prodName = normalizeInnerSpaces(rawProdName)
-      if (prodName.length >= 2 && !isHeaderFragment(prodName.toUpperCase())) {
-        result.push(`${prodName.toUpperCase()}: ${qtyStr} ${unit}`)
+      const known = resolveKnownProduct(rawProdName)
+      const prodName = known ? known.canonical : normalizeInnerSpaces(rawProdName).toUpperCase()
+      if (known?.defaultUnit) unit = known.defaultUnit
+
+      if (prodName.length >= 2 && !isHeaderFragment(prodName)) {
+        result.push(`${prodName}: ${qtyStr} ${unit}`)
         continue
       }
     }
@@ -302,12 +380,14 @@ export function cleanTableOcrText(rawText: string): string {
         rawVal = `${rawVal},0`
       }
       const qtyStr = formatQuantityDisplay(rawVal)
-      const unit = matchRow[3]?.trim() || 'Kg'
-      const prodName = normalizeInnerSpaces(rawProdName)
+      let unit = matchRow[3]?.trim() || 'Kg'
+      const known = resolveKnownProduct(rawProdName)
+      const prodName = known ? known.canonical : normalizeInnerSpaces(rawProdName).toUpperCase()
+      if (known?.defaultUnit) unit = known.defaultUnit
 
       // Garante que o nome do produto não seja a palavra pura de título de cabeçalho
-      if (prodName.length >= 2 && !isHeaderFragment(prodName.toUpperCase())) {
-        result.push(`${prodName.toUpperCase()}: ${qtyStr} ${unit}`)
+      if (prodName.length >= 2 && !isHeaderFragment(prodName)) {
+        result.push(`${prodName}: ${qtyStr} ${unit}`)
         continue
       }
     }
@@ -317,15 +397,20 @@ export function cleanTableOcrText(rawText: string): string {
       continue
     }
 
-    // Se a linha tem apenas texto (sem nenhum dígito e sem "ao"), significa produto sem quantidade
-    // (célula cinza/vazia na tabela) ou fragmento residual de cabeçalho — DEVE SER DESCARTADA!
+    // Se a linha tem apenas texto (sem nenhum dígito e sem "ao"):
+    // PRINCÍPIO CRÍTICO: Se contiver um nome de hortifrúti reconhecível do PNAE/SEE DUC,
+    // NUNCA descartar silenciosamente! Emitir com quantidade incerta ? para conferência.
     const hasDigits = /\d/.test(trimmed) || /\bao\b/i.test(trimmed)
     if (!hasDigits) {
-      // Ignora produto sem quantidade ou lixo sem número
+      const knownNoDigits = resolveKnownProduct(trimmed)
+      if (knownNoDigits) {
+        // Quantidade incerta ? para conferência do operador
+        result.push(`${knownNoDigits.canonical}: 1,0? ${knownNoDigits.defaultUnit || 'Kg'}`)
+      }
       continue
     }
 
-    // 4. Se possui dígitos no início (ex: "30,0 Banana" ou "40 KG Aipim" ou "20,0 Batata Doce")
+    // 4. Se possui dígitos no início (ex: "30,0 Banana" ou "40 KG Aipim" ou "20,0 Batata Doce" ou "15 Alface")
     const matchInverted = trimmed.match(
       /^([0-9]+(?:[.,][0-9]+)?\??)(?:\s*([a-zA-Z]+))?\s+([A-Za-zÀ-ÿ0-9\s\-_/]+)$/,
     )
@@ -335,10 +420,14 @@ export function cleanTableOcrText(rawText: string): string {
         rawVal = `${rawVal},0`
       }
       const qtyStr = formatQuantityDisplay(rawVal)
-      const unit = matchInverted[2]?.trim() || 'Kg'
-      const prodName = normalizeInnerSpaces(matchInverted[3])
-      if (prodName.length >= 2 && !isHeaderFragment(prodName.toUpperCase())) {
-        result.push(`${prodName.toUpperCase()}: ${qtyStr} ${unit}`)
+      let unit = matchInverted[2]?.trim() || 'Kg'
+      const rawProd = matchInverted[3]
+      const known = resolveKnownProduct(rawProd)
+      const prodName = known ? known.canonical : normalizeInnerSpaces(rawProd).toUpperCase()
+      if (known?.defaultUnit) unit = known.defaultUnit
+
+      if (prodName.length >= 2 && !isHeaderFragment(prodName)) {
+        result.push(`${prodName}: ${qtyStr} ${unit}`)
         continue
       }
     }
