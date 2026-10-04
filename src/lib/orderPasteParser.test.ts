@@ -213,6 +213,45 @@ TOMATE: 30,0 Kg
       expect(brocolis?.quantity).toBe(50)
     })
 
+    it('deve descartar cabeçalhos, fragmentos e linhas sem quantidade via cleanTableOcrText', async () => {
+      const { cleanTableOcrText } = await import('./imageExtractor')
+      const rawWithHeaderAndEmptyCells = `
+Produtos
+Banana 30,0 Kg
+Unidade BXSTLLS
+Agosto
+$4 21/09
+Batata Doce
+Beterraba
+Brócolis
+Cenoura 10,0 Kg
+Couve Flor
+Inhame
+Laranja
+Ovos 10 Dz
+Pepino
+Repolho
+Tangerina
+Tomate 30,0 Kg
+`
+      const cleaned = cleanTableOcrText(rawWithHeaderAndEmptyCells)
+      expect(cleaned).toContain('BANANA: 30,0 Kg')
+      expect(cleaned).toContain('CENOURA: 10,0 Kg')
+      expect(cleaned).toContain('OVOS: 10 Dz')
+      expect(cleaned).toContain('TOMATE: 30,0 Kg')
+
+      // Não deve conter cabeçalhos nem produtos sem quantidade
+      expect(cleaned).not.toContain('BXSTLLS')
+      expect(cleaned).not.toContain('Agosto')
+      expect(cleaned).not.toContain('$4 21/09')
+      expect(cleaned).not.toContain('Batata Doce')
+      expect(cleaned).not.toContain('Beterraba')
+      expect(cleaned).not.toContain('Brócolis')
+      expect(cleaned).not.toContain('Inhame')
+      expect(cleaned).not.toContain('Pepino')
+      expect(cleaned).not.toContain('Repolho')
+    })
+
     it('deve processar com perfeição o comprovante exato de pedido colado pelo usuário', () => {
       const comprovanteText = `═══════════════════════════════════════
          COMPROVANTE DE PEDIDO         

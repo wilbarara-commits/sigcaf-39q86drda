@@ -59,9 +59,15 @@ routerAdd(
         const agent = $ai.agent('ocr-pedidos-extractor')
         if (agent) {
           const promptMsg =
-            'Abaixo está o texto bruto extraído de uma imagem/foto de tabela de pedido escolar.\n' +
-            'Por favor, formate e transcreva estritamente os produtos que possuem quantidade pedida no formato "PRODUTO: quantidade unidade" (ex.: "BANANA: 30,0 Kg").\n' +
-            'IMPORTANTE: Se a quantidade de uma linha estiver vazia, cinza, zero ou sem valor, IGNORE essa linha (não invente quantidade).\n\n' +
+            'Abaixo está o texto bruto extraído via OCR de uma imagem/foto de tabela de pedido semanal de hortifrúti.\n' +
+            'INSTRUÇÕES ESTRITAS:\n' +
+            '1. Formate e transcreva CADA produto que possua quantidade pedida estritamente no formato:\n' +
+            '   PRODUTO: quantidade unidade (exemplo: "BANANA: 30,0 Kg", "CENOURA: 10,0 Kg", "TOMATE: 30,0 Kg").\n' +
+            '2. Se a quantidade de uma linha da tabela estiver vazia, em branco, cinza, com hífen ou zero, IGNORE e NÃO inclua essa linha.\n' +
+            '3. NUNCA retorne apenas o nome do produto sem dois-pontos e quantidade numérica.\n' +
+            '4. Remova completamente fragmentos de cabeçalho (como "Produtos", "Unidade BXSTLLS", "Agosto", "$4 21/09", "S4 21/09").\n' +
+            '5. Retorne APENAS as linhas finais no formato "PRODUTO: quantidade unidade", uma por linha.\n\n' +
+            'TEXTO OCR DA IMAGEM:\n' +
             textContent
 
           const res = agent.chat({
@@ -71,8 +77,16 @@ routerAdd(
           })
 
           if (res && res.content && res.content.trim()) {
+            // Limpa eventuais cercas markdown ``` caso o modelo tenha envolvido
+            let formatted = res.content.trim()
+            formatted = formatted
+              .replace(/^```[a-z]*\s*/i, '')
+              .replace(/\s*```$/i, '')
+              .trim()
+
+            // Filtra para garantir que apenas linhas com formato de pedido ou não-cabeçalho sejam retornadas
             return e.json(200, {
-              texto: res.content.trim(),
+              texto: formatted,
               origem: 'agente_nativo',
             })
           }
