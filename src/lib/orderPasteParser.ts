@@ -135,7 +135,7 @@ export function extractQuantityAndProductName(rawLine: string): {
 
   // 5. Separador por traço ou dois-pontos com espaços: "Arroz - 5" ou "Arroz : 5" ou "Arroz - 2,5" ou "AIPIM: 1,0 Kg"
   const matchDashOrColon = line.match(
-    /^(.+?)\s*[-:]\s*(\d+(?:[.,]\d+)?)(?:\s*(?:kg|kilo|kilos|quilos|un|unid|und|unidade|unidades|pct|pacote|cx|caixa|l|litro|litros|g|gramas))?$/i,
+    /^(.+?)\s*[-:]\s*(\d+(?:[.,]\d+)?)(?:\s*(?:kg|kilo|kilos|quilos|dz|dúzia|duzia|dúzias|duzias|un|unid|und|unidade|unidades|pct|pacote|cx|caixa|l|litro|litros|g|gramas))?$/i,
   )
   if (matchDashOrColon) {
     const q = parseQuantityToken(matchDashOrColon[2])
@@ -149,7 +149,7 @@ export function extractQuantityAndProductName(rawLine: string): {
   if (line.includes(',')) {
     // Tenta casar nome seguido de vírgula e número decimal: "Arroz, 2,5" ou "Arroz, 5"
     const matchCommaQty = line.match(
-      /^(.+?),\s*(\d+(?:[.,]\d+)?)(?:\s*(?:kg|kilo|kilos|quilos|un|unid|und|unidade|unidades|pct|pacote|cx|caixa|l|litro|litros|g|gramas))?$/i,
+      /^(.+?),\s*(\d+(?:[.,]\d+)?)(?:\s*(?:kg|kilo|kilos|quilos|dz|dúzia|duzia|dúzias|duzias|un|unid|und|unidade|unidades|pct|pacote|cx|caixa|l|litro|litros|g|gramas))?$/i,
     )
     if (matchCommaQty) {
       const q = parseQuantityToken(matchCommaQty[2])
@@ -161,7 +161,7 @@ export function extractQuantityAndProductName(rawLine: string): {
 
   // 7. Quantidade no fim da linha precedida de espaço: "Arroz agulhinha 5" ou "Feijão carioca 2,5"
   const matchEndQty = line.match(
-    /^(.+?)\s+(\d+(?:[.,]\d+)?)(?:\s*(?:kg|kilo|kilos|quilos|un|unid|und|unidade|unidades|pct|pacote|cx|caixa|l|litro|litros|g|gramas))?$/i,
+    /^(.+?)\s+(\d+(?:[.,]\d+)?)(?:\s*(?:kg|kilo|kilos|quilos|dz|dúzia|duzia|dúzias|duzias|un|unid|und|unidade|unidades|pct|pacote|cx|caixa|l|litro|litros|g|gramas))?$/i,
   )
   if (matchEndQty) {
     const q = parseQuantityToken(matchEndQty[2])
@@ -172,7 +172,7 @@ export function extractQuantityAndProductName(rawLine: string): {
 
   // 8. Quantidade no início da linha: "5 Arroz" ou "2,5 Feijão"
   const matchStartQty = line.match(
-    /^(\d+(?:[.,]\d+)?)(?:\s*(?:kg|kilo|kilos|quilos|un|unid|und|unidade|unidades|pct|pacote|cx|caixa|l|litro|litros|g|gramas))?\s+(.+)$/i,
+    /^(\d+(?:[.,]\d+)?)(?:\s*(?:kg|kilo|kilos|quilos|dz|dúzia|duzia|dúzias|duzias|un|unid|und|unidade|unidades|pct|pacote|cx|caixa|l|litro|litros|g|gramas))?\s+(.+)$/i,
   )
   if (matchStartQty) {
     const q = parseQuantityToken(matchStartQty[1])
@@ -186,10 +186,10 @@ export function extractQuantityAndProductName(rawLine: string): {
 
 function parseQuantityToken(token: string): { val: number; raw: string } | null {
   if (!token) return null
-  // Remove unidades comuns coladas ("5kg" -> "5", "2,5un" -> "2,5")
+  // Remove unidades comuns coladas ("5kg" -> "5", "2,5un" -> "2,5", "10dz" -> "10")
   const cleaned = token
     .replace(
-      /(?:kg|kilo|kilos|quilos|un|unid|und|unidade|unidades|pct|pacote|cx|caixa|l|litro|litros|g|gramas)$/i,
+      /(?:kg|kilo|kilos|quilos|dz|dúzia|duzia|dúzias|duzias|un|unid|und|unidade|unidades|pct|pacote|cx|caixa|l|litro|litros|g|gramas)$/i,
       '',
     )
     .trim()
@@ -295,7 +295,7 @@ export function matchCatalogItemTolerant(
   // Limpa ruídos comuns de secretaria
   const cleaned = rawName
     .replace(
-      /\b(kg|kilo|quilos|un|unidade|unidades|unid|und|pct|pacote|cx|caixa|g|gramas)\b/gi,
+      /\b(kg|kilo|kilos|quilos|dz|dúzia|duzia|dúzias|duzias|un|unidade|unidades|unid|und|pct|pacote|cx|caixa|g|gramas)\b/gi,
       ' ',
     )
     .replace(
@@ -404,6 +404,15 @@ export function parsePastedOrderText(
 
     // Linhas vazias são ignoradas sem aviso
     if (!trimmed) return
+
+    // Linhas puramente de cabeçalho de tabela ou sem produto ("Produtos | Unidade | Pedidos")
+    const upper = trimmed.toUpperCase()
+    if (
+      (upper.includes('PRODUTO') && upper.includes('UNIDADE')) ||
+      (upper.startsWith('PRODUTO') && (upper.includes('PEDIDO') || upper.includes('QTDE')))
+    ) {
+      return
+    }
 
     // Se detectou modo comprovante:
     if (isComprovante) {

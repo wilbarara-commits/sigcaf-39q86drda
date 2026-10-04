@@ -488,7 +488,9 @@ export default function Orders() {
       )
     } catch (err: unknown) {
       const message =
-        err instanceof Error ? err.message : 'Falha ao processar e extrair o texto da imagem.'
+        err instanceof Error
+          ? err.message
+          : 'Não foi possível reconhecer texto na imagem — tente uma foto mais nítida ou digite/cole manualmente.'
       setImageExtractError(message)
       toast.error(`Falha no OCR: ${message}`)
     } finally {

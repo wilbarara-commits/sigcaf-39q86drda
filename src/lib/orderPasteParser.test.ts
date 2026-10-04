@@ -82,6 +82,20 @@ describe('orderPasteParser', () => {
       expect(res?.quantity).toBe(5)
     })
 
+    it('deve aceitar unidade dz/dúzia ("Ovos 10 Dz")', () => {
+      const res = extractQuantityAndProductName('Ovos 10 Dz')
+      expect(res).not.toBeNull()
+      expect(res?.productText).toBe('Ovos')
+      expect(res?.quantity).toBe(10)
+    })
+
+    it('deve extrair formato de tabela "PRODUTO: quantidade unidade" (ex: "BANANA: 30,0 Kg")', () => {
+      const res = extractQuantityAndProductName('BANANA: 30,0 Kg')
+      expect(res).not.toBeNull()
+      expect(res?.productText).toBe('BANANA')
+      expect(res?.quantity).toBe(30)
+    })
+
     it('deve retornar null para linhas vazias ou puramente textuais sem quantidade', () => {
       expect(extractQuantityAndProductName('')).toBeNull()
       expect(extractQuantityAndProductName('   ')).toBeNull()
@@ -163,6 +177,40 @@ Arroz Tipo 1 5
       const result = parsePastedOrderText(text, mockCatalog)
       expect(result.matched.length).toBe(1)
       expect(result.unmatched.length).toBe(0)
+    })
+
+    it('deve processar formato de foto de tabela ignorando cabeçalhos e produtos com células vazias', () => {
+      const catalogCustom: OrderPasteCatalogProduct[] = [
+        { productId: 'b1', nome: 'Banana', preco: 4.5, unidade: 'Kg' },
+        { productId: 'b2', nome: 'Batata Doce', preco: 3.8, unidade: 'Kg' },
+        { productId: 'b3', nome: 'Beterraba', preco: 4.0, unidade: 'Kg' },
+        { productId: 'b4', nome: 'Brócolis', preco: 8.0, unidade: 'Kg' },
+        { productId: 'b5', nome: 'Cenoura', preco: 3.5, unidade: 'Kg' },
+        { productId: 'b6', nome: 'Inhame', preco: 6.0, unidade: 'Kg' },
+        { productId: 'b7', nome: 'Laranja', preco: 3.0, unidade: 'Kg' },
+        { productId: 'b8', nome: 'Tomate', preco: 5.5, unidade: 'Kg' },
+      ]
+
+      const tableText = `
+Produtos | Unidade | Pedidos Agosto S4 21/09
+BANANA: 30,0 Kg
+BATATA DOCE: 20,0 Kg
+BETERRABA: 20,0 Kg
+BRÓCOLIS: 50,0 Kg
+CENOURA: 10,0 Kg
+INHAME: 20,0 Kg
+LARANJA: 20,0 Kg
+TOMATE: 30,0 Kg
+`
+      const res = parsePastedOrderText(tableText, catalogCustom)
+      expect(res.unmatched.length).toBe(0)
+      expect(res.matched.length).toBe(8)
+      const banana = res.matched.find((m) => m.productName === 'Banana')
+      expect(banana?.quantity).toBe(30)
+      const tomate = res.matched.find((m) => m.productName === 'Tomate')
+      expect(tomate?.quantity).toBe(30)
+      const brocolis = res.matched.find((m) => m.productName === 'Brócolis')
+      expect(brocolis?.quantity).toBe(50)
     })
 
     it('deve processar com perfeição o comprovante exato de pedido colado pelo usuário', () => {
