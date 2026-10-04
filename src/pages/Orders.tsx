@@ -157,7 +157,7 @@ export default function Orders() {
     Array<{ productId: string; quantity: number; rawInput?: string }>
   >([])
 
-  // Diálogo / Painel de Colar Pedido em lote
+  // Diálogo / Painel de Colar Produtos do Pedido
   const [pasteModalOpen, setPasteModalOpen] = useState(false)
   const [pasteText, setPasteText] = useState('')
   const [pastePreview, setPastePreview] = useState<OrderPasteParseResult | null>(null)
@@ -411,27 +411,27 @@ export default function Orders() {
     )
   }
 
-  // Analisar texto colado pelo usuário
+  // Analisar texto de produtos colado pelo usuário
   const handleProcessPasteText = () => {
     if (!pasteText.trim()) {
-      toast.warning('Cole o texto do pedido para analisar.')
+      toast.warning('Cole o texto ou comprovante com produtos e quantidades para analisar.')
       return
     }
     const result = parsePastedOrderText(pasteText, availableItemsForChamada)
     setPastePreview(result)
 
     if (result.matched.length === 0) {
-      toast.error('Nenhum item reconhecido. Verifique os formatos aceitos.')
+      toast.error('Nenhum produto reconhecido no texto. Verifique os formatos aceitos.')
     } else if (result.unmatched.length > 0) {
       toast.warning(
         `${result.matched.length} produto(s) reconhecido(s), mas ${result.unmatched.length} linha(s) não foram identificadas.`,
       )
     } else {
-      toast.success(`${result.matched.length} item(ns) reconhecido(s) com sucesso!`)
+      toast.success(`${result.matched.length} produto(s) reconhecido(s) com sucesso!`)
     }
   }
 
-  // Confirmar e aplicar itens colados à lista do pedido
+  // Confirmar e aplicar produtos colados exclusivamente à lista de itens do pedido (sem gravar nem fechar o Novo Pedido)
   const handleApplyPastedOrderItems = () => {
     if (!pastePreview || pastePreview.matched.length === 0) return
 
@@ -458,7 +458,9 @@ export default function Orders() {
       return copy
     })
 
-    toast.success(`${pastePreview.matched.length} item(ns) adicionado(s) ao pedido!`)
+    toast.success(
+      `${pastePreview.matched.length} produto(s) adicionado(s) à lista do pedido! Complete os dados e clique em "Salvar Pedido".`,
+    )
     setPasteModalOpen(false)
     setPasteText('')
     setPastePreview(null)
@@ -473,12 +475,17 @@ export default function Orders() {
     }
 
     if (!selectedCicloId || !selectedCiclo) {
-      toast.error('Selecione um ciclo para o pedido.')
+      toast.error('Selecione o ciclo operacional antes de salvar o pedido.')
       return
     }
 
     if (!selectedSchool) {
-      toast.error('Selecione a escola solicitante.')
+      toast.error('Selecione a escola antes de salvar o pedido.')
+      return
+    }
+
+    if (orderItems.length === 0) {
+      toast.error('Adicione pelo menos um produto ao pedido antes de salvar.')
       return
     }
 
@@ -512,9 +519,7 @@ export default function Orders() {
     }
 
     if (validItems.length === 0) {
-      toast.error(
-        'Não é possível criar pedido sem itens ou com quantidade zero. Adicione pelo menos um item válido com quantidade maior que zero.',
-      )
+      toast.error('Adicione pelo menos um produto com quantidade maior que zero antes de salvar.')
       return
     }
 
@@ -1129,9 +1134,9 @@ export default function Orders() {
                         }}
                         disabled={!selectedCicloId || availableItemsForChamada.length === 0}
                         className="h-7 text-xs gap-1 text-primary border border-primary/20 hover:bg-primary/10"
-                        title="Colar texto de pedido com produto e quantidade"
+                        title="Colar produtos do comprovante/planilha para adicionar à lista"
                       >
-                        <ClipboardPaste className="h-3.5 w-3.5" /> Colar Pedido
+                        <ClipboardPaste className="h-3.5 w-3.5" /> Colar Produtos
                       </Button>
                       <Button
                         type="button"
@@ -1248,12 +1253,7 @@ export default function Orders() {
                   >
                     Cancelar
                   </Button>
-                  <Button
-                    type="submit"
-                    disabled={
-                      isSubmitting || !selectedCicloId || !selectedSchool || orderItems.length === 0
-                    }
-                  >
+                  <Button type="submit" disabled={isSubmitting}>
                     {isSubmitting ? (
                       <>
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Salvando...
@@ -1269,7 +1269,7 @@ export default function Orders() {
         </Dialog>
       </div>
 
-      {/* Modal "Colar Pedido" em lote — declarado como irmão de nível raiz para evitar interferência Radix */}
+      {/* Modal "Colar Produtos" — declarado como irmão de nível raiz para evitar interferência Radix */}
       <Dialog open={pasteModalOpen} onOpenChange={setPasteModalOpen}>
         <DialogContent
           className="sm:max-w-[620px] max-h-[90vh] overflow-y-auto"
@@ -1289,13 +1289,14 @@ export default function Orders() {
         >
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-base">
-              <ClipboardPaste className="h-5 w-5 text-primary" /> Colar Itens do Pedido
+              <ClipboardPaste className="h-5 w-5 text-primary" /> Colar Produtos do Pedido
             </DialogTitle>
             <DialogDescription className="text-xs">
-              Cole o texto com produtos e quantidades ou o <strong>Comprovante de Pedido</strong>{' '}
-              gerado pelo formulário. Aceita tabulação (planilha), vírgula, ponto-e-vírgula,
-              &quot;5x Produto&quot;, lista com marcadores (&quot;•&quot;) e sufixo Kg. Preços são
-              soberanos da chamada.
+              Cole produtos e quantidades ou o <strong>Comprovante de Pedido</strong> gerado pelo
+              formulário para adicionar à lista do pedido em criação. Aceita tabulação (planilha),
+              vírgula, ponto-e-vírgula, &quot;5x Produto&quot;, lista com marcadores (&quot;•&quot;)
+              e sufixo Kg. A colagem apenas popula a lista com fusão de quantidades repetidas — a
+              gravação do pedido ocorre exclusivamente pelo botão &quot;Salvar Pedido&quot;.
             </DialogDescription>
           </DialogHeader>
 
@@ -1303,7 +1304,7 @@ export default function Orders() {
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
                 <Label htmlFor="paste-order-text" className="text-xs font-semibold">
-                  Texto do Pedido ou Comprovante Completo
+                  Texto de Produtos ou Comprovante Completo
                 </Label>
                 <span className="text-[11px] text-muted-foreground">
                   Ex: Comprovante com &quot; • AIPIM: 1,0 Kg&quot; ou &quot;Arroz 5&quot;
@@ -1481,7 +1482,7 @@ export default function Orders() {
               onClick={handleApplyPastedOrderItems}
               disabled={!pastePreview || pastePreview.matched.length === 0}
             >
-              Confirmar e Adicionar{' '}
+              Adicionar Produtos à Lista{' '}
               {pastePreview?.matched.length ? `(${pastePreview?.matched.length || 0})` : ''}
             </Button>
           </DialogFooter>

@@ -122,7 +122,7 @@ const MODULES: ModuleSpec[] = [
       'Novo Fluxo de Criação Orientado a Ciclo (v0.0.143): O modal "Lançar Pedido" (/pedidos) é conduzido pelo Ciclo Operacional (selectedCicloId). Lista exclusivamente ciclos com status "coletando" ou "correcao" com rótulo "Ciclo {numero}/{ano} [{chamada}] — {fase}". Na ausência de ciclo aberto em coleta ou correção, exibe Alert âmbar explicativo orientando a abertura em Monitoramento e desabilita escola, itens e submissão.',
       'Chamada Pública Soberana & Badge Contextual (v0.0.143): A Chamada Pública é derivada diretamente do ciclo selecionado (ciclo.chamada_id), exibida em badge destacado no cabeçalho ("Chamada {numero} • {dependencia}"). O seletor manual de contrato foi completamente removido do diálogo.',
       'Escolas Participantes da Chamada (v0.0.143): O seletor de escola apresenta a união desduplicada por ID das escolas vinculadas aos contratos ativos (status="Ativo") da chamada do ciclo selecionado, exibindo Nome, Código INEP (se houver) e Rota Logística associada.',
-      'Funcionalidade "Colar Pedido" em Lote (v0.0.143): Botão dedicado "Colar Pedido" no diálogo "Novo Pedido" que abre modal de colagem direta de texto contendo produto e quantidade. Parser tolerante com suporte a múltiplos formatos por linha: tabulação (planilha/Excel em duas colunas), ponto-e-vírgula, vírgula, notação "5x Produto" e quantidade no início ou fim da linha. Suporta quantidades com múltiplos de 0,5 (usando vírgula ou ponto decimal), preserva preços soberanos da chamada do ciclo, apresenta prévia discriminada de itens reconhecidos com somatório de quantidades para produtos repetidos e lista separadamente linhas não localizadas para conferência.',
+      'Funcionalidade "Colar Produtos" em Lote (v0.0.143 / v0.0.153): Botão dedicado "Colar Produtos" no diálogo "Novo Pedido" que abre modal de colagem direta de texto contendo produto e quantidade ou comprovante de pedido gerado. A ação tem propósito estrito de adicionar/popular produtos na lista de itens do pedido em criação (com fusão somada de itens repetidos, preservando o diálogo aberto e sem submissão precoce). A gravação é exclusiva do botão "Salvar Pedido". O botão Salvar Pedido conta com validação ativa e mensagens orientadoras (ciclo, escola, itens > 0).',
       'Itens da Chamada & Múltiplos de 0,5 (v0.0.143): Os itens e preços unitários são herdados com soberania da Chamada Pública (chamada_itens). As quantidades aceitam múltiplos de 0,5 (step 0.5, ex.: 0,5 / 1,0 / 1,5), com subtotais e valor total recalculados em tempo real na interface.',
       'Gravação Automática com Derivação de Contrato e Rota (v0.0.143): No salvamento, o sistema vincula o pedido diretamente ao ciclo selecionado (ciclo_id) e deriva automaticamente a rota da escola escolhida nos contratos ativos da chamada em segundo plano.',
       'Campos: id, numero, escola_id (FK escolas), ciclo_id (FK ciclos), origem (excel / whatsapp / manual / formulario), rota_id (FK rotas — rota unificada que mapeia a aba de origem e o percurso), validacao (json: status, motivo, detalhes), data_prevista, status (Pendente / Em Rota / Entregue / Cancelado), entregue_em, entregue_por (FK users), motivo_cancelamento, cancelado_em.',
@@ -804,6 +804,30 @@ export function Requirements() {
       {/* 7. Registro de Manutenção e Limpeza de Dados */}
       <SectionTitle>7. Registro de Manutenção & Higienização do Banco de Dados</SectionTitle>
       <div className="space-y-4">
+        {/* Correção do Colar Produtos e Validação Salvar Pedido (v0.0.153) */}
+        <div className="rounded-lg border border-border bg-card p-5 space-y-4">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="text-primary border-primary/30">
+                Release v0.0.153
+              </Badge>
+              <span className="font-semibold text-foreground">
+                Colar Produtos na Lista & Validação Ativa do &quot;Salvar Pedido&quot; (/pedidos)
+              </span>
+            </div>
+            <span className="text-xs text-muted-foreground">Executado (v0.0.153)</span>
+          </div>
+          <p className="text-sm text-foreground/90 leading-relaxed">
+            Correção pontual na tela de Pedidos (<code>Orders.tsx</code>): a colagem passa a ter
+            identidade e rótulo &quot;Colar Produtos&quot;, servindo exclusivamente para popular a
+            lista de itens do pedido em criação (com fusão somada de duplicados), sem fechar o
+            diálogo de Novo Pedido nem gravar nada. O botão &quot;Salvar Pedido&quot; permanece
+            sempre habilitado e realiza validação ativa no clique, exibindo mensagens claras caso
+            falte ciclo operacional, escola ou itens válidos, prevenindo bloqueio silencioso da
+            gravação.
+          </p>
+        </div>
+
         {/* Correção do Cálculo e Exibição de Datas de Despacho por Regra da Chamada (v0.0.147) */}
         <div className="rounded-lg border border-border bg-card p-5 space-y-4">
           <div className="flex items-center justify-between flex-wrap gap-2">
