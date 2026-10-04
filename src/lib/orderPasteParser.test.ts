@@ -302,6 +302,32 @@ Cenoura 10.0
       expect(lines[3]).toBe('CENOURA: 10,0 Kg')
     })
 
+    it('deve processar tabelas OCR reais com colunas desalinhadas e primeira linha Banana preservada', async () => {
+      const { cleanTableOcrText } = await import('./imageExtractor')
+      // Caso idêntico ao OCR real reportado:
+      // "Banana | Kg | 300" e colunas com pipes
+      const rawOcrTable = `
+Produtos Unidade BXSTLLS Agosto S4 21/09
+Banana | Kg | 300
+Batata Doce | Kg | 200
+Beterraba | Kg | 200
+Brócolis | Kg | 500
+Cenoura | Kg | 100
+Inhame | Kg | 200
+Laranja | Kg | 200
+`
+      const cleaned = cleanTableOcrText(rawOcrTable)
+      const lines = cleaned.split('\n')
+
+      expect(lines[0]).toBe('BANANA: 30,0 Kg')
+      expect(lines[1]).toBe('BATATA DOCE: 20,0 Kg')
+      expect(lines[2]).toBe('BETERRABA: 20,0 Kg')
+      expect(lines[3]).toBe('BRÓCOLIS: 50,0 Kg')
+      expect(lines[4]).toBe('CENOURA: 10,0 Kg')
+      expect(lines[5]).toBe('INHAME: 20,0 Kg')
+      expect(lines[6]).toBe('LARANJA: 20,0 Kg')
+    })
+
     it('deve casar no catálogo mesmo se usuário colar nome sem espaço (ex: BATATADOCE)', () => {
       const catalogCustom: OrderPasteCatalogProduct[] = [
         { productId: 'b1', nome: 'Banana Prata', preco: 4.5, unidade: 'Kg' },

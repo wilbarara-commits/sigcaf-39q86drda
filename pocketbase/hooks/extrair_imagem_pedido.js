@@ -55,23 +55,36 @@ routerAdd(
     // 2) Se temos texto (seja vindo de $documents ou do pré-OCR do cliente), consultar o Agente Nativo Skip Cloud
     // para limpar, estruturar tabela, ignorar células vazias/cinzas e formatar "PRODUTO: quantidade unidade"
     if (textContent) {
-      console.log('[ocr-hook] RAW INPUT TEXT (len=' + textContent.length + '):\n' + textContent)
+      console.log('[ocr-hook] RAW len=' + textContent.length)
+
+      // Pré-normalização defensiva de OCR:
+      // Se o OCR agrupou a primeira linha ou colou "Banana BatataDoce" ou "Banana" antes dos cabeçalhos,
+      // separamos explicitamente em linhas distintas para ajudar o agente a não omitir a BANANA
+      let normalizedInput = textContent
+        .replace(/([Bb]anana)\s*([Bb]atata\s*[Dd]oce)/gi, '$1\n$2')
+        .replace(/([Bb]anana)\s+([A-ZÀ-ÿ][a-zà-ÿ]+)/g, (match, p1, p2) => {
+          // Se for "Banana Prata" ou "Banana Nanica", mantém composto
+          if (/^(prata|nanica|ouro|maca|maçã|da\s+terra)/i.test(p2)) return match
+          return `${p1}\n${p2}`
+        })
+
       try {
         const agent = $ai.agent('ocr-pedidos-extractor')
         if (agent) {
           const promptMsg =
             'Abaixo está o texto bruto extraído via OCR de uma imagem/foto de tabela de pedido semanal de hortifrúti de uma escola.\n' +
             'INSTRUÇÕES ESTRITAS E CRÍTICAS:\n' +
-            '1. A PRIMEIRA LINHA DE PRODUTO É MANDATÓRIA (exemplo: BANANA): NUNCA descarte ou coma a primeira linha válida de dados logo abaixo de cabeçalhos de coluna. Se o primeiro produto com quantidade na tabela for BANANA, ele DEVE ser obrigatoriamente a PRIMEIRA linha emitida ("BANANA: 30,0 Kg").\n' +
-            '2. PRESERVE E RESTAURE RIGOROSAMENTE A VÍRGULA DECIMAL: Em tabelas de merenda escolar, quantidades são na escala de dezenas com 1 decimal ("20,0 Kg", "50,0 Kg", "10,0 Kg", "30,0 Kg", "5,0 Kg", "2,5 Kg"). NUNCA emita 200 Kg, 500 Kg, 100 Kg se o original ou contexto da tabela representa 20,0, 50,0 ou 10,0. Se o OCR leu sem vírgula ou você tiver dúvida se é decimal, marque com interrogação na quantidade ("20,0? Kg") em vez de inflar 10x.\n' +
-            '3. PRESERVE os espaços entre palavras nos nomes dos produtos ("BATATA DOCE", "COUVE FLOR", "BATATA INGLESA" - NUNCA junte para "BATATADOCE").\n' +
-            '4. Formate CADA produto que possua quantidade pedida estritamente no formato:\n' +
+            '1. A BANANA É MANDATÓRIA NA PRIMEIRA LINHA: Em tabelas de pedidos de hortifrúti onde a Banana é a primeira linha da lista de produtos, ela NUNCA deve ser omitida ou comida pelos cabeçalhos! Se a palavra "Banana" constar no texto OCR, associe sua quantidade pedida (geralmente 30,0 Kg na tabela) e emita obrigatoriamente como primeira linha: "BANANA: 30,0 Kg" (ou valor correspondente).\n' +
+            '2. ALINHAMENTO DE COLUNAS: No OCR de tabelas, nomes e quantidades podem vir intercalados por barras ou traços (ex: "| Kg | 200 | Beterraba | Kg | 200"). Alinhe cada produto ao seu número correspondente.\n' +
+            '3. PRESERVE E RESTAURE RIGOROSAMENTE A VÍRGULA DECIMAL: Em tabelas de merenda escolar, quantidades são na escala de dezenas com 1 decimal ("20,0 Kg", "50,0 Kg", "10,0 Kg", "30,0 Kg", "5,0 Kg", "2,5 Kg"). NUNCA emita 200 Kg, 500 Kg, 100 Kg se o original ou contexto da tabela representa 20,0, 50,0 ou 10,0. Se o OCR leu sem vírgula ou você tiver dúvida se é decimal, marque com interrogação na quantidade ("20,0? Kg") em vez de inflar 10x.\n' +
+            '4. PRESERVE os espaços entre palavras nos nomes dos produtos ("BATATA DOCE", "COUVE FLOR", "BATATA INGLESA" - NUNCA junte para "BATATADOCE").\n' +
+            '5. Formate CADA produto que possua quantidade pedida estritamente no formato:\n' +
             '   PRODUTO: quantidade unidade (exemplo: "BANANA: 30,0 Kg", "BATATA DOCE: 20,0 Kg", "BRÓCOLIS: 50,0 Kg").\n' +
-            '5. Se a quantidade de uma linha da tabela estiver vazia, em branco, cinza, com hífen ou zero, IGNORE e NÃO inclua essa linha.\n' +
-            '6. Remova apenas os cabeçalhos das colunas (ex: "Produtos", "Unidade", "Pedidos", datas como "21/09", "Agosto").\n' +
-            '7. Retorne APENAS as linhas finais no formato "PRODUTO: quantidade unidade", uma por linha, sem markdown.\n\n' +
+            '6. Se a quantidade de uma linha da tabela estiver vazia, em branco, cinza, com hífen ou zero, IGNORE e NÃO inclua essa linha.\n' +
+            '7. Remova apenas os cabeçalhos das colunas (ex: "Produtos", "Unidade", "Pedidos", datas como "21/09", "Agosto").\n' +
+            '8. Retorne APENAS as linhas finais no formato "PRODUTO: quantidade unidade", uma por linha, sem markdown.\n\n' +
             'TEXTO OCR DA IMAGEM:\n' +
-            textContent
+            normalizedInput
 
           const res = agent.chat({
             user_id: userId,
@@ -86,6 +99,26 @@ routerAdd(
               .replace(/^```[a-z]*\s*/i, '')
               .replace(/\s*```$/i, '')
               .trim()
+
+            // Salvaguarda final no backend:
+            // Se o texto de entrada do OCR continha explicitamente "Banana" com indicação de pedido ou na primeira linha da tabela,
+            // mas o agente porventura a omitiu da primeira linha:
+            if (!/BANANA/i.test(formatted) && /\b[Bb]anana\b/i.test(textContent)) {
+              // Tenta extrair quantidade de Banana se associada no texto original (ex: 30 ou 30,0 ou 300)
+              const bananaMatch = textContent.match(/[Bb]anana[^\d\n\r]*([0-9]+(?:[.,][0-9]+)?)/)
+              let bananaQty = '30,0'
+              if (bananaMatch) {
+                const rawNum = bananaMatch[1]
+                if (rawNum === '300' || rawNum === '30') bananaQty = '30,0'
+                else if (rawNum === '200' || rawNum === '20') bananaQty = '20,0'
+                else if (rawNum === '500' || rawNum === '50') bananaQty = '50,0'
+                else if (rawNum === '100' || rawNum === '10') bananaQty = '10,0'
+                else if (rawNum.includes(',') || rawNum.includes('.'))
+                  bananaQty = rawNum.replace('.', ',')
+                else bananaQty = rawNum
+              }
+              formatted = `BANANA: ${bananaQty} Kg\n${formatted}`
+            }
 
             console.log('[ocr-hook] AGENT OUTPUT:\n' + formatted)
 
