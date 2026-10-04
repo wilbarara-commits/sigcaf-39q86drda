@@ -96,6 +96,10 @@ import {
   ClipboardPaste,
   Image as ImageIcon,
   UploadCloud,
+  Maximize2,
+  Minimize2,
+  X,
+  ExternalLink,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
@@ -167,9 +171,24 @@ export default function Orders() {
   const [isExtractingImage, setIsExtractingImage] = useState(false)
   const [extractionStatusText, setExtractionStatusText] = useState('')
   const [imageExtractError, setImageExtractError] = useState<string | null>(null)
+  const [importedImageUrl, setImportedImageUrl] = useState<string | null>(null)
+  const [importedImageName, setImportedImageName] = useState<string>('')
+  const [isImageLightboxOpen, setIsImageLightboxOpen] = useState(false)
+  const [lightboxZoomLevel, setLightboxZoomLevel] = useState(1)
   const imageInputRef = useRef<HTMLInputElement>(null)
   const isPasteModalOpenRef = useRef(false)
   const lastPasteClosedAtRef = useRef(0)
+
+  // Libera a URL do objeto quando a URL mudar ou no unmount para evitar vazamento de memória
+  const clearImportedImage = () => {
+    if (importedImageUrl) {
+      URL.revokeObjectURL(importedImageUrl)
+    }
+    setImportedImageUrl(null)
+    setImportedImageName('')
+    setIsImageLightboxOpen(false)
+    setLightboxZoomLevel(1)
+  }
 
   // Detalhes do pedido selecionado
   const [viewingOrder, setViewingOrder] = useState<Order | null>(null)
@@ -460,6 +479,9 @@ export default function Orders() {
     setExtractionStatusText('Iniciando extração da imagem...')
     setImageExtractError(null)
 
+    // Cria preview da imagem imediatamente para conferência visual
+    const nextObjectUrl = URL.createObjectURL(file)
+
     try {
       const result = await extractTextFromImage(file, {
         onProgress: (_pct, statusText) => {
@@ -472,6 +494,13 @@ export default function Orders() {
       if (!extracted) {
         throw new Error('Nenhum produto pôde ser estruturado a partir da imagem selecionada.')
       }
+
+      // Substitui URL anterior caso existisse para liberar memória
+      setImportedImageUrl((old) => {
+        if (old) URL.revokeObjectURL(old)
+        return nextObjectUrl
+      })
+      setImportedImageName(file.name)
 
       // Coloca o texto extraído na área de texto existente (se já tiver conteúdo, acrescenta ou substitui conforme fluxo)
       // O texto aqui já foi estritamente filtrado e estruturado no formato "PRODUTO: quantidade unidade".
@@ -486,9 +515,11 @@ export default function Orders() {
       setImageExtractError(null)
 
       toast.success(
-        'Texto estruturado da imagem com sucesso! Revise os itens na área abaixo antes de analisar.',
+        'Texto estruturado da imagem com sucesso! Compare com a imagem acima e revise antes de analisar.',
       )
     } catch (err: unknown) {
+      // Se falhou a extração, descarta o objectUrl criado para não vazar memória
+      URL.revokeObjectURL(nextObjectUrl)
       const message =
         err instanceof Error
           ? err.message
@@ -555,6 +586,7 @@ export default function Orders() {
     lastPasteClosedAtRef.current = Date.now()
     isPasteModalOpenRef.current = false
     setPasteModalOpen(false)
+    clearImportedImage()
     setPasteText('')
     setPastePreview(null)
   }
@@ -1253,6 +1285,7 @@ export default function Orders() {
                         onClick={() => {
                           setPasteText('')
                           setPastePreview(null)
+                          clearImportedImage()
                           isPasteModalOpenRef.current = true
                           setPasteModalOpen(true)
                         }}
@@ -1407,7 +1440,9 @@ export default function Orders() {
         }}
       >
         <DialogContent
-          className="sm:max-w-[620px] max-h-[90vh] overflow-y-auto"
+          className={`transition-all duration-200 max-h-[92vh] overflow-y-auto ${
+            importedImageUrl ? 'sm:max-w-[940px] max-w-[95vw]' : 'sm:max-w-[620px]'
+          }`}
           onCloseAutoFocus={(e) => e.preventDefault()}
           onInteractOutside={(e) => {
             e.preventDefault()
@@ -1423,6 +1458,7 @@ export default function Orders() {
             lastPasteClosedAtRef.current = Date.now()
             isPasteModalOpenRef.current = false
             setPasteModalOpen(false)
+            clearImportedImage()
           }}
         >
           <DialogHeader>
@@ -1439,28 +1475,122 @@ export default function Orders() {
           </DialogHeader>
 
           <div className="space-y-4 pt-1">
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between">
-                <Label htmlFor="paste-order-text" className="text-xs font-semibold">
-                  Texto de Produtos ou Comprovante Completo
-                </Label>
-                <span className="text-[11px] text-muted-foreground">
-                  Ex: Comprovante com &quot; • AIPIM: 1,0 Kg&quot; ou &quot;Arroz 5&quot;
-                </span>
+            {/* Bloco de comparação: se houver imagem importada, exibe layout comparativo lado a lado (ou empilhado em telas estreitas) */}
+            {importedImageUrl ? (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-xs pb-1 border-b">
+                  <div className="flex items-center gap-1.5 font-semibold text-foreground">
+                    <ImageIcon className="h-4 w-4 text-primary" />
+                    <span>Validação Visual: Imagem Importada vs. Texto Reconhecido</span>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={clearImportedImage}
+                    className="h-6 px-2 text-xs text-muted-foreground hover:text-destructive gap-1"
+                    title="Remover imagem importada do painel (mantém o texto já digitado/extraído)"
+                  >
+                    <Trash2 className="h-3 w-3" /> Remover imagem
+                  </Button>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 items-start">
+                  {/* Painel da Imagem */}
+                  <div className="space-y-1.5 rounded-lg border bg-muted/20 p-2.5">
+                    <div className="flex items-center justify-between">
+                      <Label
+                        className="text-xs font-medium truncate max-w-[200px]"
+                        title={importedImageName}
+                      >
+                        Foto do Comprovante {importedImageName ? `(${importedImageName})` : ''}
+                      </Label>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setLightboxZoomLevel(1)
+                          setIsImageLightboxOpen(true)
+                        }}
+                        className="h-6 px-2 text-[11px] gap-1"
+                        title="Ampliar imagem em tela cheia para ler letras e números pequenos"
+                      >
+                        <Maximize2 className="h-3 w-3" /> Ampliar
+                      </Button>
+                    </div>
+
+                    <div
+                      className="relative group rounded-md border bg-black/5 dark:bg-black/40 overflow-hidden cursor-zoom-in flex items-center justify-center min-h-[220px] max-h-[300px]"
+                      onClick={() => {
+                        setLightboxZoomLevel(1)
+                        setIsImageLightboxOpen(true)
+                      }}
+                      title="Clique para abrir imagem em tamanho expandido"
+                    >
+                      <img
+                        src={importedImageUrl}
+                        alt="Comprovante importado"
+                        className="w-full h-full object-contain max-h-[290px] rounded transition-transform group-hover:scale-[1.02]"
+                      />
+                      <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1.5 text-white text-xs font-medium">
+                        <Maximize2 className="h-4 w-4" /> Clique para ampliar
+                      </div>
+                    </div>
+                    <p className="text-[10px] text-muted-foreground text-center">
+                      Confira cada linha e quantidade reconhecida contra a foto original ao lado.
+                    </p>
+                  </div>
+
+                  {/* Painel do Texto Editável */}
+                  <div className="space-y-1.5 flex flex-col h-full">
+                    <div className="flex items-center justify-between">
+                      <Label htmlFor="paste-order-text-split" className="text-xs font-semibold">
+                        Texto Extraído (Editável)
+                      </Label>
+                      <span className="text-[10px] text-muted-foreground">
+                        Corrija valores divergentes
+                      </span>
+                    </div>
+                    <Textarea
+                      id="paste-order-text-split"
+                      rows={10}
+                      placeholder={`Cole aqui o comprovante de pedido completo ou linhas como:\n • AIPIM: 1,0 Kg\n • CENOURA: 100,0 Kg`}
+                      value={pasteText}
+                      onChange={(e) => {
+                        setPasteText(e.target.value)
+                        setPastePreview(null)
+                      }}
+                      disabled={isExtractingImage}
+                      className="font-mono text-xs resize-y flex-1 min-h-[220px]"
+                    />
+                  </div>
+                </div>
               </div>
-              <Textarea
-                id="paste-order-text"
-                rows={6}
-                placeholder={`Cole aqui o comprovante de pedido completo ou linhas como:\n • AIPIM: 1,0 Kg\n • CENOURA: 100,0 Kg\nou no formato planilha:\nArroz Tipo 1\t5\nFeijão Carioca\t2,5`}
-                value={pasteText}
-                onChange={(e) => {
-                  setPasteText(e.target.value)
-                  setPastePreview(null)
-                }}
-                disabled={isExtractingImage}
-                className="font-mono text-xs resize-y"
-              />
-            </div>
+            ) : (
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="paste-order-text" className="text-xs font-semibold">
+                    Texto de Produtos ou Comprovante Completo
+                  </Label>
+                  <span className="text-[11px] text-muted-foreground">
+                    Ex: Comprovante com &quot; • AIPIM: 1,0 Kg&quot; ou &quot;Arroz 5&quot;
+                  </span>
+                </div>
+                <Textarea
+                  id="paste-order-text"
+                  rows={6}
+                  placeholder={`Cole aqui o comprovante de pedido completo ou linhas como:\n • AIPIM: 1,0 Kg\n • CENOURA: 100,0 Kg\nou no formato planilha:\nArroz Tipo 1\t5\nFeijão Carioca\t2,5`}
+                  value={pasteText}
+                  onChange={(e) => {
+                    setPasteText(e.target.value)
+                    setPastePreview(null)
+                  }}
+                  disabled={isExtractingImage}
+                  className="font-mono text-xs resize-y"
+                />
+              </div>
+            )}
 
             {/* Input de arquivo de imagem oculto para acionamento pelo botão */}
             <input
@@ -1663,6 +1793,7 @@ export default function Orders() {
                 lastPasteClosedAtRef.current = Date.now()
                 isPasteModalOpenRef.current = false
                 setPasteModalOpen(false)
+                clearImportedImage()
                 setPasteText('')
                 setPastePreview(null)
               }}
@@ -1679,6 +1810,128 @@ export default function Orders() {
               {pastePreview?.matched.length ? `(${pastePreview?.matched.length || 0})` : ''}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Lightbox / Zoom da Imagem Importada em Tela Cheia */}
+      <Dialog
+        open={isImageLightboxOpen}
+        onOpenChange={(next) => {
+          if (!next) {
+            setIsImageLightboxOpen(false)
+            setLightboxZoomLevel(1)
+          } else {
+            setIsImageLightboxOpen(true)
+          }
+        }}
+      >
+        <DialogContent
+          className="sm:max-w-[90vw] w-[95vw] max-h-[92vh] h-[90vh] p-4 flex flex-col bg-background/95 backdrop-blur-sm z-[70]"
+          onCloseAutoFocus={(e) => e.preventDefault()}
+          onInteractOutside={(e) => {
+            e.preventDefault()
+            e.stopPropagation()
+          }}
+          onPointerDownOutside={(e) => {
+            e.preventDefault()
+            e.stopPropagation()
+          }}
+          onEscapeKeyDown={(e) => {
+            e.preventDefault()
+            e.stopPropagation()
+            setIsImageLightboxOpen(false)
+            setLightboxZoomLevel(1)
+          }}
+        >
+          <DialogHeader className="pb-2 border-b">
+            <div className="flex items-center justify-between">
+              <DialogTitle className="flex items-center gap-2 text-sm">
+                <ImageIcon className="h-4 w-4 text-primary" />
+                <span>
+                  Foto Original do Pedido {importedImageName ? `— ${importedImageName}` : ''}
+                </span>
+              </DialogTitle>
+              <div className="flex items-center gap-1.5">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setLightboxZoomLevel((prev) => Math.max(0.5, prev - 0.25))}
+                  disabled={lightboxZoomLevel <= 0.5}
+                  className="h-7 px-2 text-xs"
+                  title="Diminuir zoom"
+                >
+                  -
+                </Button>
+                <span className="text-xs font-mono px-1 min-w-[45px] text-center">
+                  {Math.round(lightboxZoomLevel * 100)}%
+                </span>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setLightboxZoomLevel((prev) => Math.min(3, prev + 0.25))}
+                  disabled={lightboxZoomLevel >= 3}
+                  className="h-7 px-2 text-xs"
+                  title="Aumentar zoom"
+                >
+                  +
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setLightboxZoomLevel(1)}
+                  className="h-7 px-2 text-xs text-muted-foreground"
+                  title="Redefinir zoom original"
+                >
+                  100%
+                </Button>
+                {importedImageUrl && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 text-muted-foreground"
+                    onClick={() => window.open(importedImageUrl, '_blank')}
+                    title="Abrir imagem em nova aba"
+                  >
+                    <ExternalLink className="h-3.5 w-3.5" />
+                  </Button>
+                )}
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="h-7 w-7"
+                  onClick={() => {
+                    setIsImageLightboxOpen(false)
+                    setLightboxZoomLevel(1)
+                  }}
+                  title="Fechar visualizador"
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+            <DialogDescription className="text-xs text-muted-foreground">
+              Use o zoom ou role para ler os números e produtos menores com clareza.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="flex-1 overflow-auto p-2 flex items-center justify-center bg-black/10 dark:bg-black/60 rounded-lg min-h-0">
+            {importedImageUrl && (
+              <img
+                src={importedImageUrl}
+                alt="Comprovante ampliado"
+                style={{
+                  transform: `scale(${lightboxZoomLevel})`,
+                  transformOrigin: 'center center',
+                }}
+                className="max-h-full max-w-full object-contain transition-transform duration-150 select-none"
+              />
+            )}
+          </div>
         </DialogContent>
       </Dialog>
 
