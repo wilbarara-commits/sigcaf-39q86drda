@@ -59,14 +59,16 @@ routerAdd(
         const agent = $ai.agent('ocr-pedidos-extractor')
         if (agent) {
           const promptMsg =
-            'Abaixo está o texto bruto extraído via OCR de uma imagem/foto de tabela de pedido semanal de hortifrúti.\n' +
-            'INSTRUÇÕES ESTRITAS:\n' +
-            '1. Formate e transcreva CADA produto que possua quantidade pedida estritamente no formato:\n' +
-            '   PRODUTO: quantidade unidade (exemplo: "BANANA: 30,0 Kg", "CENOURA: 10,0 Kg", "TOMATE: 30,0 Kg").\n' +
-            '2. Se a quantidade de uma linha da tabela estiver vazia, em branco, cinza, com hífen ou zero, IGNORE e NÃO inclua essa linha.\n' +
-            '3. NUNCA retorne apenas o nome do produto sem dois-pontos e quantidade numérica.\n' +
-            '4. Remova completamente fragmentos de cabeçalho (como "Produtos", "Unidade BXSTLLS", "Agosto", "$4 21/09", "S4 21/09").\n' +
-            '5. Retorne APENAS as linhas finais no formato "PRODUTO: quantidade unidade", uma por linha.\n\n' +
+            'Abaixo está o texto bruto extraído via OCR de uma imagem/foto de tabela de pedido semanal de hortifrúti de uma escola.\n' +
+            'INSTRUÇÕES ESTRITAS E CRÍTICAS:\n' +
+            '1. NUNCA engula ou remova a primeira linha de dados de produtos! O primeiro produto com quantidade logo após cabeçalhos (como "BANANA: 30,0 Kg") DEVE ser mantido integralmente.\n' +
+            '2. PRESERVE os espaços entre palavras nos nomes dos produtos ("BATATA DOCE", "COUVE FLOR", "BATATA INGLESA" - NUNCA junte para "BATATADOCE").\n' +
+            '3. PRESERVE EXATAMENTE a vírgula decimal como lida na imagem ("20,0", "50,0", "10,0", "2,5"). NUNCA remova a vírgula nem multiplique por 10 (se a célula mostra 20,0, emita "20,0 Kg", NUNCA "200"). Se houver dúvida real na vírgula de um dígito decimal, marque com interrogação ("20,0? Kg") em vez de adivinhar 200.\n' +
+            '4. Formate CADA produto que possua quantidade pedida estritamente no formato:\n' +
+            '   PRODUTO: quantidade unidade (exemplo: "BANANA: 30,0 Kg", "BATATA DOCE: 20,0 Kg", "BRÓCOLIS: 50,0 Kg").\n' +
+            '5. Se a quantidade de uma linha da tabela estiver vazia, em branco, cinza, com hífen ou zero, IGNORE e NÃO inclua essa linha.\n' +
+            '6. Remova apenas os cabeçalhos das colunas (ex: "Produtos", "Unidade", "Pedidos", datas como "21/09", "Agosto").\n' +
+            '7. Retorne APENAS as linhas finais no formato "PRODUTO: quantidade unidade", uma por linha.\n\n' +
             'TEXTO OCR DA IMAGEM:\n' +
             textContent
 

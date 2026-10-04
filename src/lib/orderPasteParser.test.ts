@@ -252,6 +252,63 @@ Tomate 30,0 Kg
       expect(cleaned).not.toContain('Repolho')
     })
 
+    it('deve preservar a PRIMEIRA linha de produto, espaços internos dos nomes e separador decimal exatamente', async () => {
+      const { cleanTableOcrText } = await import('./imageExtractor')
+      // Simula a tabela exata com cabeçalhos seguida da 1ª linha válida (Banana) e produtos compostos com decimais
+      const rawTableText = `
+Produtos | Unidade | Pedidos Agosto S4 21/09
+BANANA: 30,0 Kg
+BATATA DOCE: 20,0 Kg
+BRÓCOLIS: 50,0 Kg
+CENOURA: 10,0 Kg
+COUVE FLOR: 5,0 Kg
+`
+      const cleaned = cleanTableOcrText(rawTableText)
+      const lines = cleaned.split('\n')
+
+      // 1. A primeira linha DEVE ser BANANA (não pode ser engolida)
+      expect(lines[0]).toBe('BANANA: 30,0 Kg')
+
+      // 2. Nomes compostos devem preservar o espaço interno
+      expect(cleaned).toContain('BATATA DOCE: 20,0 Kg')
+      expect(cleaned).not.toContain('BATATADOCE')
+      expect(cleaned).toContain('COUVE FLOR: 5,0 Kg')
+      expect(cleaned).not.toContain('COUVEFLOR')
+
+      // 3. Os decimais devem ser preservados exatamente com vírgula e sem inflar 10x
+      expect(cleaned).toContain('20,0 Kg')
+      expect(cleaned).not.toContain('200 Kg')
+      expect(cleaned).toContain('50,0 Kg')
+      expect(cleaned).not.toContain('500 Kg')
+      expect(cleaned).toContain('10,0 Kg')
+      expect(cleaned).not.toContain('100 Kg')
+    })
+
+    it('deve casar no catálogo mesmo se usuário colar nome sem espaço (ex: BATATADOCE)', () => {
+      const catalogCustom: OrderPasteCatalogProduct[] = [
+        { productId: 'b1', nome: 'Banana Prata', preco: 4.5, unidade: 'Kg' },
+        { productId: 'b2', nome: 'Batata Doce', preco: 3.8, unidade: 'Kg' },
+        { productId: 'b3', nome: 'Couve Flor', preco: 6.0, unidade: 'Kg' },
+      ]
+
+      const textWithoutSpaces = `
+BATATADOCE: 20,0 Kg
+COUVEFLOR: 5,0 Kg
+`
+      const res = parsePastedOrderText(textWithoutSpaces, catalogCustom)
+      expect(res.unmatched.length).toBe(0)
+      expect(res.matched.length).toBe(2)
+      const batata = res.matched.find((m) => m.productId === 'b2')
+      expect(batata).toBeDefined()
+      expect(batata?.productName).toBe('Batata Doce')
+      expect(batata?.quantity).toBe(20)
+
+      const couve = res.matched.find((m) => m.productId === 'b3')
+      expect(couve).toBeDefined()
+      expect(couve?.productName).toBe('Couve Flor')
+      expect(couve?.quantity).toBe(5)
+    })
+
     it('deve processar com perfeição o comprovante exato de pedido colado pelo usuário', () => {
       const comprovanteText = `═══════════════════════════════════════
          COMPROVANTE DE PEDIDO         

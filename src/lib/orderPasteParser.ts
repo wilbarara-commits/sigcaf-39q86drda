@@ -133,12 +133,13 @@ export function extractQuantityAndProductName(rawLine: string): {
     }
   }
 
-  // 5. Separador por traço ou dois-pontos com espaços: "Arroz - 5" ou "Arroz : 5" ou "Arroz - 2,5" ou "AIPIM: 1,0 Kg"
+  // 5. Separador por traço ou dois-pontos com espaços: "Arroz - 5" ou "Arroz : 5" ou "Arroz - 2,5" ou "AIPIM: 1,0 Kg" (aceita opcional '?' de incerteza)
   const matchDashOrColon = line.match(
-    /^(.+?)\s*[-:]\s*(\d+(?:[.,]\d+)?)(?:\s*(?:kg|kilo|kilos|quilos|dz|dúzia|duzia|dúzias|duzias|un|unid|und|unidade|unidades|pct|pacote|cx|caixa|l|litro|litros|g|gramas))?$/i,
+    /^(.+?)\s*[-:]\s*(\d+(?:[.,]\d+)?\??)(?:\s*(?:kg|kilo|kilos|quilos|dz|dúzia|duzia|dúzias|duzias|un|unid|und|unidade|unidades|pct|pacote|cx|caixa|l|litro|litros|g|gramas))?$/i,
   )
   if (matchDashOrColon) {
-    const q = parseQuantityToken(matchDashOrColon[2])
+    const cleanQtyStr = matchDashOrColon[2].replace(/\?/g, '')
+    const q = parseQuantityToken(cleanQtyStr)
     if (q !== null) {
       return { productText: matchDashOrColon[1].trim(), quantity: q.val, rawQtyStr: q.raw }
     }
@@ -339,7 +340,20 @@ export function matchCatalogItemTolerant(
     }
   }
 
-  // 3. Match por inclusão (ordenar por maior comprimento para evitar falsos positivos curtos)
+  // 3. Match se o usuário colou palavras coladas sem espaço (ex: "BATATADOCE" vs "batata doce")
+  const noSpaceCleaned = normCleaned.replace(/\s+/g, '')
+  const noSpaceRaw = normRaw.replace(/\s+/g, '')
+  for (const c of candidates) {
+    const candidateNoSpace = c.normNome.replace(/\s+/g, '')
+    if (
+      candidateNoSpace.length >= 4 &&
+      (candidateNoSpace === noSpaceCleaned || candidateNoSpace === noSpaceRaw)
+    ) {
+      return { product: c.product, matchedVia: 'Nome aproximado (espaços)' }
+    }
+  }
+
+  // 4. Match por inclusão (ordenar por maior comprimento para evitar falsos positivos curtos)
   const sortedByLen = [...candidates].sort((a, b) => b.normNome.length - a.normNome.length)
   for (const c of sortedByLen) {
     if (c.normNome.length >= 3 && normCleaned.length >= 3) {

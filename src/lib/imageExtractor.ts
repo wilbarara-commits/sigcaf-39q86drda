@@ -117,20 +117,37 @@ export function cleanTableOcrText(rawText: string): string {
   const result: string[] = []
 
   // Expressão regular para cabeçalhos ou fragmentos de cabeçalho conhecidos
+  // ATENÇÃO: NUNCA deve descartar uma linha de dados com produto e quantidade válida.
   const isHeaderFragment = (upper: string): boolean => {
     if (!upper) return true
-    if (upper.startsWith('PRODUTO') || upper.startsWith('UNIDADE')) return true
-    if (upper.includes('PRODUTOS') && upper.includes('UNIDADE')) return true
-    if (upper.includes('PEDIDOS') || upper.includes('SEMANA') || upper.includes('QTDE')) return true
+
+    // Se a linha tem produtos ou unidades comuns mas é apenas título de coluna
+    if (/^PRODUTOS?(\s*[|/\\;,\t-]\s*|\s+)UNIDADES?(\s*[|/\\;,\t-]\s*|\s+)/.test(upper)) return true
+    if (/^PRODUTOS?(\s*[|/\\;,\t-]\s*|\s+)?$/.test(upper)) return true
+    if (/^UNIDADES?(\s+[A-Z0-9]+)?$/.test(upper)) return true
+
+    // Se contém termos de cabeçalho de pedido/coluna sem ser produto real
+    if (/^(PEDIDOS?|SEMANA\s*\d*|QTDE|QUANTIDADE)(\s*[|/\\;,\t-]\s*|\s*)$/.test(upper)) return true
+    if (upper.includes('PRODUTOS') && upper.includes('UNIDADE') && upper.includes('PEDIDOS'))
+      return true
+
+    // Meses isolados ou datas isoladas de cabeçalho (ex: "Agosto", "$4 21/09", "21/09/2026")
     if (
-      /^(AGOSTO|SETEMBRO|OUTUBRO|NOVEMBRO|DEZEMBRO|JANEIRO|FEVEREIRO|MARCO|ABRIL|MAIO|JUNHO|JULHO)/.test(
+      /^(AGOSTO|SETEMBRO|OUTUBRO|NOVEMBRO|DEZEMBRO|JANEIRO|FEVEREIRO|MARCO|MARÇO|ABRIL|MAIO|JUNHO|JULHO)(\s+[$S]?\d+.*)?$/.test(
         upper,
       )
-    )
+    ) {
       return true
-    if (/^[$S]\d+[\s\d/]*$/.test(upper) || /^\d{1,2}\/\d{1,2}/.test(upper)) return true
+    }
+    if (/^[$S]\d+[\s\d/]*$/.test(upper) || /^\d{1,2}\/\d{1,2}(\/\d{2,4})?$/.test(upper)) return true
     if (/^UNIDADE\s+[A-Z0-9]+$/i.test(upper)) return true
+
     return false
+  }
+
+  // Normaliza múltiplos espaços internos preservando o espaçamento entre palavras
+  const normalizeInnerSpaces = (name: string): string => {
+    return name.trim().replace(/\s+/g, ' ')
   }
 
   for (const line of lines) {
@@ -138,14 +155,12 @@ export function cleanTableOcrText(rawText: string): string {
     if (!trimmed) continue
 
     const upper = trimmed.toUpperCase()
-    if (isHeaderFragment(upper)) {
-      continue
-    }
 
-    // Se já contém "PRODUTO: quantidade" ou similar
-    const colonMatch = trimmed.match(/^([^:]+):\s*(\d+(?:[.,]\d+)?)(?:\s*([a-zA-Z]+))?$/)
+    // 1. Se já contém "PRODUTO: quantidade" ou similar (ex: "BANANA: 30,0 Kg", "BATATA DOCE: 20,0? Kg")
+    // Preserva exatamente a representação numérica (incluindo vírgula decimal e eventual interrogação de incerteza)
+    const colonMatch = trimmed.match(/^([^:]+):\s*([0-9]+(?:[.,][0-9]+)?\??)(?:\s*([a-zA-Z]+))?$/)
     if (colonMatch) {
-      const prod = colonMatch[1].trim()
+      const prod = normalizeInnerSpaces(colonMatch[1])
       const qty = colonMatch[2].trim()
       const unit = colonMatch[3]?.trim() || 'Kg'
       if (prod && !isHeaderFragment(prod.toUpperCase())) {
@@ -154,15 +169,24 @@ export function cleanTableOcrText(rawText: string): string {
       continue
     }
 
-    // Tenta casar linha horizontal de tabela com produto + quantidade
-    // ex: "Banana 30,0 Kg", "Cenoura 10,0", "Tomate 30,0 Kg", "Ovos 10 Dz"
+    // 2. Se a linha inteira for puramente cabeçalho sem formato de produto:quantidade
+    if (isHeaderFragment(upper)) {
+      continue
+    }
+
+    // 3. Tenta casar linha horizontal de tabela com produto + quantidade
+    // ex: "Banana 30,0 Kg", "Batata Doce 20,0 Kg", "Cenoura 10,0", "Tomate 30,0 Kg", "Ovos 10 Dz"
+    // Preserva rigorosamente os espaços internos no nome do produto
     const matchRow = trimmed.match(
-      /^([A-Za-zÀ-ÿ\s\-_/]+?)(?:\s+|\s*[-–—|]\s*|\t+)(\d+(?:[.,]\d+)?)(?:\s*([a-zA-Z]+))?$/,
+      /^([A-Za-zÀ-ÿ0-9\s\-_/]+?)(?:\s+|\s*[-–—|]\s*|\t+)([0-9]+(?:[.,][0-9]+)?\??)(?:\s*([a-zA-Z]+))?$/,
     )
     if (matchRow) {
-      const prodName = matchRow[1].trim()
+      const rawProdName = matchRow[1].trim()
       const qtyStr = matchRow[2].trim()
       const unit = matchRow[3]?.trim() || 'Kg'
+      const prodName = normalizeInnerSpaces(rawProdName)
+
+      // Garante que não é um falso positivo numérico ou fragmento de cabeçalho
       if (prodName.length >= 2 && !isHeaderFragment(prodName.toUpperCase())) {
         result.push(`${prodName.toUpperCase()}: ${qtyStr} ${unit}`)
         continue
@@ -177,14 +201,14 @@ export function cleanTableOcrText(rawText: string): string {
       continue
     }
 
-    // Se possui dígitos mas em outro formato (ex: "30,0 Banana"), preserva se fizer sentido
+    // 4. Se possui dígitos no início (ex: "30,0 Banana" ou "20,0 Batata Doce")
     const matchInverted = trimmed.match(
-      /^(\d+(?:[.,]\d+)?)(?:\s*([a-zA-Z]+))?\s+([A-Za-zÀ-ÿ\s\-_/]+)$/,
+      /^([0-9]+(?:[.,][0-9]+)?\??)(?:\s*([a-zA-Z]+))?\s+([A-Za-zÀ-ÿ0-9\s\-_/]+)$/,
     )
     if (matchInverted) {
       const qtyStr = matchInverted[1].trim()
       const unit = matchInverted[2]?.trim() || 'Kg'
-      const prodName = matchInverted[3].trim()
+      const prodName = normalizeInnerSpaces(matchInverted[3])
       if (prodName.length >= 2 && !isHeaderFragment(prodName.toUpperCase())) {
         result.push(`${prodName.toUpperCase()}: ${qtyStr} ${unit}`)
         continue
