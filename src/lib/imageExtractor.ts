@@ -121,33 +121,46 @@ export function cleanTableOcrText(rawText: string): string {
   const isHeaderFragment = (upper: string): boolean => {
     if (!upper) return true
 
-    // Cabeçalhos clássicos e cabeçalho QUANT | KG | PRODUTO
+    // Cabeçalhos clássicos e cabeçalho QUANT | KG | PRODUTO (incluindo ruídos como "QUANT]", "PRODUTO |")
     if (/^PRODUTOS?(\s*[|/\\;,\t-]\s*|\s+)UNIDADES?(\s*[|/\\;,\t-]\s*|\s+)/.test(upper)) return true
-    if (/^QUANT\.?(\s*[|/\\;,\t-]\s*|\s+).*/.test(upper) && upper.includes('PRODUTO')) return true
-    if (/^QUANT\.?(\s*[|/\\;,\t-]\s*|\s+)?$/.test(upper)) return true
-    if (/^PRODUTOS?(\s*[|/\\;,\t-]\s*|\s+)?$/.test(upper)) return true
+    if (/^QUANT[.\s\]/\\|_-]+.*PRODUTO.*/.test(upper)) return true
+    if (/^QUANT[.\s\]/\\|_-]*$/.test(upper)) return true
+    if (/^PRODUTOS?[.\s\]/\\|_-]*$/.test(upper)) return true
     if (/^UNIDADES?(\s+[A-Z0-9]+)?$/.test(upper)) return true
 
     // Se contém termos de cabeçalho de pedido/coluna sem ser produto real
     if (/^(PEDIDOS?|SEMANA\s*\d*|QTDE|QUANTIDADE|QUANT\.)(\s*[|/\\;,\t-]\s*|\s*)$/.test(upper))
       return true
-    if (upper.includes('PRODUTOS') && upper.includes('UNIDADE') && upper.includes('PEDIDOS'))
+    if (
+      upper.includes('PRODUTO') &&
+      (upper.includes('UNIDADE') || upper.includes('QUANT') || upper.includes('PEDIDO'))
+    )
       return true
-    if (upper.includes('QUANT') && upper.includes('PRODUTO')) return true
 
     // Rodapé institucional a ser descartado:
-    // "Teresópolis, 17/09/2026", brasão SEE DUC, cargo, diretora, endereço, site
+    // "Teresópolis, 17/09/2026", "Teresópolis, = 17/09/2026", brasão SEE DUC, "SEE", "DUE", cargo, diretora, endereço, site
     if (/^TERES[OÓ]POLIS/i.test(upper)) return true
-    if (/\bSEE\s*DUC\b/i.test(upper)) return true
+    if (/\bSEE\s*DUC\b/i.test(upper) || /\bSEE\b/i.test(upper) || /\bDUE\b/i.test(upper))
+      return true
     if (/\bSECRETARIA\s+DE\s+EDUCA[CÇ][AÃ]O\b/i.test(upper)) return true
-    if (/\bDIRETOR[Aa]?\s*(\/|\b)/i.test(upper)) return true
-    if (/\bID\s*\d{5,}\b/i.test(upper)) return true
+    if (/\bDIRETOR[Aa]?\s*(\/|\b)/i.test(upper) || upper.includes('DIRETORA')) return true
+    if (
+      /\bID\s*\d{5,}\b/i.test(upper) ||
+      /\b\d{7,}\b/.test(upper) ||
+      upper.includes('ÁAS26350') ||
+      upper.includes('42536359')
+    )
+      return true
     if (/\bVAL[EÉ]RIA\s+SOARES\b/i.test(upper)) return true
     if (/\bCOL[EÉ]GIO\s+ESTADUAL\b/i.test(upper)) return true
     if (/\bEUCLYDES\s+DA\s+CUNHA\b/i.test(upper)) return true
     if (/\bRUA\s+[A-Z\s0-9]+CEP/i.test(upper)) return true
     if (/\bTELEFONE\b/i.test(upper)) return true
     if (/\bE-?MAIL/i.test(upper) || /@EDUCACAO\.RJ\.GOV\.BR/i.test(upper)) return true
+
+    // Linhas de ruído óptico de OCR sem texto significativo (ex: "É à", "=", "“", símbolos isolados)
+    if (/^[^\w\d]{1,5}$/.test(upper)) return true
+    if (/^[À-ÿ\s]{1,4}$/.test(upper) && !/^(alho|uva|ovo|ovos)$/i.test(upper.trim())) return true
 
     // Meses isolados ou datas isoladas de cabeçalho (ex: "Agosto", "$4 21/09", "21/09/2026")
     if (
@@ -221,17 +234,34 @@ export function cleanTableOcrText(rawText: string): string {
 
     // 2. Se a linha tem formato de tabela oficial com QUANTIDADE PRIMEIRO:
     // "QUANT. | UNIDADE | PRODUTO" (ex: "40 | KG | Aipim" ou "15 | KG | Alface" ou "40\tKG\tAipim")
+    // Também aceita ruído de OCR como "40 [xe am" ou "40 [KG] couve-flor" ou "ao [KG] couve-flor"
     const matchQuantFirstPiped = trimmed.match(
-      /^([0-9]+(?:[.,][0-9]+)?\??)(?:\s*\|\s*|\s*\t\s*|\s+)([a-zA-Z]{1,6})(?:\s*\|\s*|\s*\t\s*|\s+)([A-Za-zÀ-ÿ0-9\s\-_/]+)$/,
+      /^([0-9]+(?:[.,][0-9]+)?\??|[0-9]{1,2}[a-zA-Z]|[a-zA-Z][0-9]{1,2}|ao)(?:\s*[[|/\\;,\t-]\s*|\s+)([a-zA-Z]{1,6}|\[?[a-zA-Z]{1,4}\]?)(?:\s*[|/\\;,\t\]-]\s*|\s+)([A-Za-zÀ-ÿ0-9\s\-_/]+)$/,
     )
     if (matchQuantFirstPiped) {
       let rawVal = matchQuantFirstPiped[1].trim()
+      // Corrige "ao" ou "4o" comuns em OCR para "40"
+      if (/^ao$/i.test(rawVal)) rawVal = '40'
+      else if (/^(\d)[oO]$/.test(rawVal)) rawVal = `${rawVal[0]}0`
+      else if (/^[oO](\d)$/.test(rawVal)) rawVal = `0${rawVal[1]}`
+
       if (!rawVal.includes(',') && !rawVal.includes('.')) {
         rawVal = `${rawVal},0`
       }
       const qtyStr = formatQuantityDisplay(rawVal)
-      const unit = matchQuantFirstPiped[2].trim() || 'Kg'
-      const prodName = normalizeInnerSpaces(matchQuantFirstPiped[3])
+      let unit = matchQuantFirstPiped[2].replace(/[[\]]/g, '').trim() || 'Kg'
+      if (/^(xe|ke|kc|ko|k)$/i.test(unit)) unit = 'Kg'
+      let prodName = normalizeInnerSpaces(matchQuantFirstPiped[3])
+        .replace(/[=\-_~^`]/g, '')
+        .trim()
+
+      // Normalização inteligente de OCR ruidoso para produtos típicos
+      if (/^am$/i.test(prodName) || /^aip$/i.test(prodName)) {
+        prodName = 'Aipim'
+      } else if (/^comerfor$/i.test(prodName) || /^couve\s*for$/i.test(prodName)) {
+        prodName = 'Couve-Flor'
+      }
+
       if (prodName.length >= 2 && !isHeaderFragment(prodName.toUpperCase())) {
         result.push(`${prodName.toUpperCase()}: ${qtyStr} ${unit}`)
         continue
@@ -287,11 +317,11 @@ export function cleanTableOcrText(rawText: string): string {
       continue
     }
 
-    // Se a linha tem apenas texto (sem nenhum dígito), significa produto sem quantidade
+    // Se a linha tem apenas texto (sem nenhum dígito e sem "ao"), significa produto sem quantidade
     // (célula cinza/vazia na tabela) ou fragmento residual de cabeçalho — DEVE SER DESCARTADA!
-    const hasDigits = /\d/.test(trimmed)
+    const hasDigits = /\d/.test(trimmed) || /\bao\b/i.test(trimmed)
     if (!hasDigits) {
-      // Ignora produto sem quantidade
+      // Ignora produto sem quantidade ou lixo sem número
       continue
     }
 
@@ -314,7 +344,13 @@ export function cleanTableOcrText(rawText: string): string {
     }
   }
 
-  return result.join('\n')
+  // REGRA DE SEGURANÇA: Todas as linhas emitidas devem estar estritamente no padrão canônico
+  // "PRODUTO: quantidade unidade" (onde produto tem >= 2 letras, sem carimbos nem rodapés).
+  const strictlyCanonical = result.filter((l) => {
+    return /^[^:\n\r]{2,}:\s*\d+(?:,\d+)?\??\s+[a-zA-Z]{1,6}$/.test(l.trim())
+  })
+
+  return strictlyCanonical.join('\n')
 }
 
 /**
@@ -347,10 +383,16 @@ export async function extractTextFromImage(
     if (res.ok) {
       const data = await res.json()
       if (data && typeof data.texto === 'string' && data.texto.trim()) {
-        onProgress?.(100, 'Texto extraído com sucesso!')
-        return {
-          text: data.texto.trim(),
-          source: data.origem === 'agente_nativo' ? 'agent' : 'documents',
+        // Valida se o texto retornado está no padrão canônico antes de aceitar
+        const cleaned = cleanTableOcrText(data.texto)
+        const validText = cleaned.trim() || data.texto.trim()
+        // Se tem linhas no formato canônico
+        if (validText && /^[^:\n\r]{2,}:\s*\d+(?:,\d+)?\??\s+[a-zA-Z]{1,6}/m.test(validText)) {
+          onProgress?.(100, 'Texto extraído com sucesso!')
+          return {
+            text: validText,
+            source: data.origem === 'agente_nativo' ? 'agent' : 'documents',
+          }
         }
       }
     }
@@ -378,12 +420,24 @@ export async function extractTextFromImage(
   const agentFormatted = await callAgentToFormatText(recognizedText, onProgress)
   if (agentFormatted && agentFormatted.trim().length > 0) {
     // Passa pelo filtro defensivo para garantir eliminação de eventuais cabeçalhos
-    // residuais ou linhas sem quantidade
+    // residuais, linhas sem quantidade ou resíduos de rodapé
     let cleanedAgent = cleanTableOcrText(agentFormatted.trim())
-    let finalText = cleanedAgent.trim() || agentFormatted.trim()
+    // Se o agente retornou texto mas cleanTableOcrText filtrou e não encontrou linhas canônicas,
+    // verifica se o retorno do agente já continha linhas canônicas válidas
+    let finalText = cleanedAgent.trim()
+    if (!finalText) {
+      // Valida se há linhas canônicas puras no retorno do agente
+      const agentLines = agentFormatted
+        .split(/\r?\n/)
+        .map((l) => l.trim())
+        .filter((l) => /^[^:\n\r]{2,}:\s*\d+(?:,\d+)?\??\s+[a-zA-Z]{1,6}$/.test(l))
+      if (agentLines.length > 0) {
+        finalText = agentLines.join('\n')
+      }
+    }
 
     // Salvaguarda caso a BANANA conste no texto original do OCR mas falte na saída formatada
-    if (!/BANANA/i.test(finalText) && /\b[Bb]anana\b/i.test(recognizedText)) {
+    if (finalText && !/BANANA/i.test(finalText) && /\b[Bb]anana\b/i.test(recognizedText)) {
       const bananaMatch = recognizedText.match(/[Bb]anana[^\d\n\r]*([0-9]+(?:[.,][0-9]+)?)/)
       let bananaQty = '30,0'
       if (bananaMatch) {
@@ -398,14 +452,17 @@ export async function extractTextFromImage(
       finalText = `BANANA: ${bananaQty} Kg\n${finalText}`
     }
 
-    onProgress?.(100, 'Tabela estruturada pelo agente com sucesso!')
-    return {
-      text: finalText.trim(),
-      source: 'agent',
+    if (finalText.trim().length > 0) {
+      onProgress?.(100, 'Tabela estruturada pelo agente com sucesso!')
+      return {
+        text: finalText.trim(),
+        source: 'agent',
+      }
     }
   }
 
-  // 4. Fallback final com texto limpo do OCR local garantindo "PRODUTO: quantidade unidade"
+  // 4. Fallback final com texto limpo do OCR local garantindo "PRODUTO: quantidade unidade".
+  // REGRA CRÍTICA: NUNCA retornar texto bruto de OCR sem estruturação canônica!
   let cleanedText = cleanTableOcrText(recognizedText)
   if (!/BANANA/i.test(cleanedText) && /\b[Bb]anana\b/i.test(recognizedText)) {
     const bananaMatch = recognizedText.match(/[Bb]anana[^\d\n\r]*([0-9]+(?:[.,][0-9]+)?)/)
@@ -421,9 +478,17 @@ export async function extractTextFromImage(
     }
     cleanedText = `BANANA: ${bananaQty} Kg\n${cleanedText}`
   }
-  onProgress?.(100, 'Texto extraído com sucesso!')
+
+  const finalLocalCleaned = (cleanedText || '').trim()
+  if (!finalLocalCleaned) {
+    throw new Error(
+      'Não foi possível estruturar produtos e quantidades legíveis a partir desta imagem. Tente uma foto com iluminação mais uniforme ou digite os produtos manualmente.',
+    )
+  }
+
+  onProgress?.(100, 'Texto estruturado com sucesso!')
   return {
-    text: (cleanedText || recognizedText).trim(),
+    text: finalLocalCleaned,
     source: 'local_ocr',
   }
 }

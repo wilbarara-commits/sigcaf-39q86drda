@@ -357,6 +357,52 @@ Telefone 21 2741-1337 - e-mail: ceeuclydesdacunha@educacao.rj.gov.br`
       expect(parseRes.matched.find((m) => m.productId === 'prod_limao')?.quantity).toBe(3)
     })
 
+    it('deve decifrar OCR ruidoso exato relatado pelo usuário, omitindo rodapé e linhas ilegíveis', async () => {
+      const { cleanTableOcrText } = await import('./imageExtractor')
+      const userReportedNoise = `QUANT] | PRODUTO |
+40 [xe am
+ao [KG] comerfor =
+Teresópolis, = 17/09/2026
+É à
+SEE          “DIRETORA / 10 áas26350.
+DUE,`
+
+      const cleaned = cleanTableOcrText(userReportedNoise)
+      const lines = cleaned.split('\n').filter((l) => l.trim().length > 0)
+
+      // Deve extrair estritamente as linhas canônicas sem lixo
+      expect(lines).toEqual(['AIPIM: 40,0 Kg', 'COUVE-FLOR: 40,0 Kg'])
+
+      // Nunca deve conter cabeçalho nem rodapé ou ruído
+      expect(cleaned).not.toContain('QUANT')
+      expect(cleaned).not.toContain('Teresópolis')
+      expect(cleaned).not.toContain('DIRETORA')
+      expect(cleaned).not.toContain('SEE')
+      expect(cleaned).not.toContain('DUE')
+      expect(cleaned).not.toContain('É à')
+
+      // Verifica casamento no parser com o catálogo da chamada 07/2025
+      const catalogChamada07: OrderPasteCatalogProduct[] = [
+        { productId: 'prod_aipim', nome: 'AIPIM', unidade: 'Kg', preco: 6.0 },
+        { productId: 'prod_alface', nome: 'ALFACE', unidade: 'Kg', preco: 7.0 },
+        { productId: 'prod_cheiro', nome: 'CHEIRO-VERDE', unidade: 'Molho', preco: 2.0 },
+        { productId: 'prod_couveflor', nome: 'COUVE-FLOR', unidade: 'Kg', preco: 7.0 },
+        { productId: 'prod_espinafre', nome: 'ESPINAFRE', unidade: 'Kg', preco: 7.0 },
+        { productId: 'prod_limao', nome: 'LIMAO TAITI', unidade: 'Kg', preco: 8.0 },
+      ]
+
+      const parseRes = parsePastedOrderText(cleaned, catalogChamada07)
+      expect(parseRes.unmatched).toEqual([])
+      expect(parseRes.matched.length).toBe(6)
+
+      expect(parseRes.matched.find((m) => m.productId === 'prod_aipim')?.quantity).toBe(40)
+      expect(parseRes.matched.find((m) => m.productId === 'prod_alface')?.quantity).toBe(15)
+      expect(parseRes.matched.find((m) => m.productId === 'prod_cheiro')?.quantity).toBe(2)
+      expect(parseRes.matched.find((m) => m.productId === 'prod_couveflor')?.quantity).toBe(40)
+      expect(parseRes.matched.find((m) => m.productId === 'prod_espinafre')?.quantity).toBe(10)
+      expect(parseRes.matched.find((m) => m.productId === 'prod_limao')?.quantity).toBe(3)
+    })
+
     it('deve parsear diretamente a tabela bruta QUANT. | KG | PRODUTO mesmo sem pré-limpeza do OCR', () => {
       const rawTableText = `QUANT. | KG | PRODUTO
 40 | KG | Aipim

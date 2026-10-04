@@ -470,10 +470,12 @@ export default function Orders() {
       const extracted = (result.text || '').trim()
 
       if (!extracted) {
-        throw new Error('Nenhum texto pôde ser lido da imagem selecionada.')
+        throw new Error('Nenhum produto pôde ser estruturado a partir da imagem selecionada.')
       }
 
       // Coloca o texto extraído na área de texto existente (se já tiver conteúdo, acrescenta ou substitui conforme fluxo)
+      // O texto aqui já foi estritamente filtrado e estruturado no formato "PRODUTO: quantidade unidade".
+      // Em caso de falha, o bloco catch preserva o texto anterior e NÃO despeja OCR bruto na área.
       setPasteText((prev) => {
         if (!prev.trim()) return extracted
         return `${prev.trim()}\n\n${extracted}`
@@ -484,15 +486,15 @@ export default function Orders() {
       setImageExtractError(null)
 
       toast.success(
-        'Texto extraído da imagem com sucesso! Revise o texto na área abaixo antes de analisar.',
+        'Texto estruturado da imagem com sucesso! Revise os itens na área abaixo antes de analisar.',
       )
     } catch (err: unknown) {
       const message =
         err instanceof Error
           ? err.message
-          : 'Não foi possível reconhecer texto na imagem — tente uma foto mais nítida ou digite/cole manualmente.'
+          : 'Não foi possível reconhecer texto legível na imagem — tente uma foto mais nítida com boa iluminação ou digite/cole manualmente.'
       setImageExtractError(message)
-      toast.error(`Falha no OCR: ${message}`)
+      toast.error(`Falha na extração da imagem: ${message}`, { duration: 6000 })
     } finally {
       setIsExtractingImage(false)
       setExtractionStatusText('')

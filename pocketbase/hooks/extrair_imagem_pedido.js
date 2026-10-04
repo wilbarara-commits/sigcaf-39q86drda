@@ -55,7 +55,7 @@ routerAdd(
     // 2) Se temos texto (seja vindo de $documents ou do pré-OCR do cliente), consultar o Agente Nativo Skip Cloud
     // para limpar, estruturar tabela, ignorar células vazias/cinzas e formatar "PRODUTO: quantidade unidade"
     if (textContent) {
-      console.log('[ocr-hook] RAW len=' + textContent.length)
+      console.log('[ocr-hook] RAW len=' + textContent.length + ' content:\n' + textContent)
 
       // Pré-normalização defensiva de OCR:
       // Se o OCR agrupou a primeira linha ou colou "Banana BatataDoce" ou "Banana" antes dos cabeçalhos,
@@ -72,20 +72,23 @@ routerAdd(
         const agent = $ai.agent('ocr-pedidos-extractor')
         if (agent) {
           const promptMsg =
-            'Abaixo está o texto bruto extraído via OCR de uma imagem/foto de pedido/tabela de hortifrúti de alimentação escolar.\n' +
+            'Abaixo está o texto bruto extraído via OCR de uma foto/imagem de formulário de pedido de alimentação escolar.\n' +
+            'ATENÇÃO: A foto pode conter ruídos ópticos, sombras, marcas de carimbo, assinaturas e colunas com erros de leitura de caracteres (ex: "[xe am" para Kg Aipim, "comerfor" para Couve-Flor, "ao" lido no lugar de 40).\n\n' +
             'INSTRUÇÕES ESTRITAS E CRÍTICAS:\n' +
-            '1. LAYOUT COM QUANTIDADE ANTES DO PRODUTO (QUANT | UNIDADE | PRODUTO):\n' +
-            '   - Em formulários oficiais com colunas "QUANT. | KG | PRODUTO" (ex: "40 | KG | Aipim", "15 | KG | Alface"), identifique que o número na primeira coluna é a quantidade do produto na terceira coluna.\n' +
-            '   - Formate cada item como "PRODUTO: quantidade unidade" (ex: "AIPIM: 40,0 Kg", "ALFACE: 15,0 Kg", "CHEIRO VERDE: 2,0 Kg", "COUVE-FLOR: 40,0 Kg", "ESPINAFRE: 10,0 Kg", "LIMÃO: 3,0 Kg").\n' +
-            '2. DESCARTAR CABEÇALHOS E RODAPÉ INSTITUCIONAL:\n' +
-            '   - Descarte títulos como "QUANT.", "UNIDADE", "PRODUTO".\n' +
-            '   - IGNORE TOTALMENTE o rodapé institucional: cidade+data (ex: "Teresópolis, 17/09/2026"), brasão/logo SEE DUC, assinaturas, nome da diretora ("Valéria Soares da Silva"), cargo ("DIRETORA / ID..."), nome da escola ("Colégio Estadual..."), endereço, CEP, telefone e e-mail institucional.\n' +
-            '3. PRIMEIRA LINHA MANDATÓRIA: Nunca descarte o primeiro produto válido da tabela (seja Aipim, Banana, etc.).\n' +
-            '4. ALINHAMENTO DE COLUNAS: No OCR de tabelas, nomes e quantidades podem vir intercalados por barras ou traços. Alinhe cada produto ao seu número correspondente.\n' +
-            '5. PRESERVE E RESTAURE RIGOROSAMENTE A VÍRGULA DECIMAL: Formate quantidades com vírgula decimal ("40,0 Kg", "15,0 Kg", "2,0 Kg", "2,5 Kg"). NUNCA infle 10x.\n' +
-            '6. PRESERVE os espaços e hífens nos nomes ("CHEIRO VERDE", "COUVE-FLOR", "BATATA DOCE").\n' +
-            '7. Se a quantidade de uma linha da tabela estiver vazia, em branco, cinza, com hífen ou zero, IGNORE e NÃO inclua essa linha.\n' +
-            '8. Retorne APENAS as linhas finais no formato "PRODUTO: quantidade unidade", uma por linha, sem markdown.\n\n' +
+            '1. LAYOUT QUANT | UNIDADE | PRODUTO (QUANTIDADE ANTES DO PRODUTO):\n' +
+            '   - Em formulários com colunas QUANT | PRODUTO (ex: "40 | KG | Aipim", "40 [xe am", "40 [KG] couve-flor"), identifique o número na primeira coluna como quantidade e o hortifrúti na última coluna.\n' +
+            '   - Decifre com inteligência os nomes de hortifrúti corrompidos pelo OCR ("am" / "aip" -> AIPIM, "comerfor" -> COUVE-FLOR, "cheiro" -> CHEIRO VERDE, etc.).\n' +
+            '   - Formate CADA linha canonicamente: PRODUTO: quantidade unidade (ex: "AIPIM: 40,0 Kg", "COUVE-FLOR: 40,0 Kg", "ALFACE: 15,0 Kg").\n' +
+            '2. DESCARTAR CABEÇALHOS, RODAPÉ INSTITUCIONAL E CARIMBOS:\n' +
+            '   - Descarte completamente cabeçalhos: "QUANT", "QUANT]", "PRODUTO", "UNIDADE".\n' +
+            '   - Descarte TOTALMENTE cidade e data (ex: "Teresópolis, = 17/09/2026"), órgãos ("SEE DUC", "SEE", "DUE,"), cargos/IDs/assinaturas ("DIRETORA / ID...", "áas26350"), nomes de escolas e contatos.\n' +
+            '3. OMITIR LINHAS ILEGÍVEIS OU RUÍDO:\n' +
+            '   - Linhas que não sejam produto reconhecível com quantidade (ex: "É à", "DUE", fragmentos soltos) devem ser TOTALMENTE OMITIDAS.\n' +
+            '   - Se uma linha não for decifrável como item de alimentação escolar, NÃO invente e NÃO emita lixo.\n' +
+            '4. PRIMEIRA LINHA MANDATÓRIA: Nunca descarte o primeiro produto válido da tabela.\n' +
+            '5. CASAS DECIMAIS PRESERVADAS: Formate quantidades com vírgula decimal ("40,0 Kg", "15,0 Kg", "2,0 Kg"). NUNCA infle 10x.\n' +
+            '6. PRESERVE os espaços em nomes compostos ("BATATA DOCE", "CHEIRO VERDE", "COUVE-FLOR").\n' +
+            '7. Retorne APENAS as linhas finais no formato "PRODUTO: quantidade unidade", uma por linha, sem markdown (sem ```) e sem nenhum outro texto.\n\n' +
             'TEXTO OCR DA IMAGEM:\n' +
             normalizedInput
 
@@ -135,10 +138,15 @@ routerAdd(
         console.log('[ocr-hook] Falha ao consultar agente nativo:', agentErr?.message || agentErr)
       }
 
-      // Se o agente falhou ou retornou vazio, retorna o próprio texto extraído
-      return e.json(200, {
-        texto: textContent,
-        origem: 'documents',
+      // Se o agente falhou ou retornou vazio:
+      // NUNCA despejar o texto bruto de OCR na resposta como se fosse estruturado!
+      // Se veio de arquivo ($documents), retorna como texto bruto de documento estruturado;
+      // se veio de texto_ocr do cliente, sinaliza falha do agente para que o cliente
+      // aplique seu parser local estruturado ou exiba erro claro ao usuário.
+      return e.json(502, {
+        message: 'O agente de IA não conseguiu estruturar as linhas do pedido a partir da foto.',
+        error: 'agent_failed',
+        raw_text: textContent,
       })
     }
 
