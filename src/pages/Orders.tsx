@@ -94,6 +94,8 @@ import {
   Send,
   PhoneOff,
   ClipboardPaste,
+  Image as ImageIcon,
+  UploadCloud,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
@@ -107,6 +109,7 @@ import {
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { whatsappService } from '@/services/whatsapp-import'
 import { parsePastedOrderText, type OrderPasteParseResult } from '@/lib/orderPasteParser'
+import { extractTextFromImage } from '@/lib/imageExtractor'
 
 export default function Orders() {
   const {
@@ -161,6 +164,10 @@ export default function Orders() {
   const [pasteModalOpen, setPasteModalOpen] = useState(false)
   const [pasteText, setPasteText] = useState('')
   const [pastePreview, setPastePreview] = useState<OrderPasteParseResult | null>(null)
+  const [isExtractingImage, setIsExtractingImage] = useState(false)
+  const [extractionStatusText, setExtractionStatusText] = useState('')
+  const [imageExtractError, setImageExtractError] = useState<string | null>(null)
+  const imageInputRef = useRef<HTMLInputElement>(null)
   const isPasteModalOpenRef = useRef(false)
   const lastPasteClosedAtRef = useRef(0)
 
@@ -425,6 +432,69 @@ export default function Orders() {
         }
       }),
     )
+  }
+
+  // Importação e extração de texto via OCR a partir de arquivo de imagem (.jpg, .jpeg, .png)
+  const handleImageFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    // Limpa o valor do input imediatamente para permitir selecionar a mesma imagem novamente se necessário
+    e.target.value = ''
+
+    if (!file) return
+
+    // Validar tipo de arquivo
+    const validTypes = ['image/jpeg', 'image/jpg', 'image/png']
+    const isImageExt = /\.(jpe?g|png)$/i.test(file.name)
+    if (!validTypes.includes(file.type.toLowerCase()) && !isImageExt) {
+      toast.error('Formato inválido. Por favor, selecione um arquivo JPG ou PNG.')
+      return
+    }
+
+    // Limite razoável de 15MB
+    if (file.size > 15 * 1024 * 1024) {
+      toast.error('Imagem muito grande. O limite máximo é de 15 MB.')
+      return
+    }
+
+    setIsExtractingImage(true)
+    setExtractionStatusText('Iniciando extração da imagem...')
+    setImageExtractError(null)
+
+    try {
+      const result = await extractTextFromImage(file, {
+        onProgress: (_pct, statusText) => {
+          setExtractionStatusText(statusText)
+        },
+      })
+
+      const extracted = (result.text || '').trim()
+
+      if (!extracted) {
+        throw new Error('Nenhum texto pôde ser lido da imagem selecionada.')
+      }
+
+      // Coloca o texto extraído na área de texto existente (se já tiver conteúdo, acrescenta ou substitui conforme fluxo)
+      setPasteText((prev) => {
+        if (!prev.trim()) return extracted
+        return `${prev.trim()}\n\n${extracted}`
+      })
+
+      // Limpa prévia para forçar o usuário a revisar/editar antes de clicar em Analisar Linhas
+      setPastePreview(null)
+      setImageExtractError(null)
+
+      toast.success(
+        'Texto extraído da imagem com sucesso! Revise o texto na área abaixo antes de analisar.',
+      )
+    } catch (err: unknown) {
+      const message =
+        err instanceof Error ? err.message : 'Falha ao processar e extrair o texto da imagem.'
+      setImageExtractError(message)
+      toast.error(`Falha no OCR: ${message}`)
+    } finally {
+      setIsExtractingImage(false)
+      setExtractionStatusText('')
+    }
   }
 
   // Analisar texto de produtos colado pelo usuário
@@ -1383,17 +1453,70 @@ export default function Orders() {
                   setPasteText(e.target.value)
                   setPastePreview(null)
                 }}
+                disabled={isExtractingImage}
                 className="font-mono text-xs resize-y"
               />
             </div>
 
-            <div className="flex justify-end gap-2">
+            {/* Input de arquivo de imagem oculto para acionamento pelo botão */}
+            <input
+              type="file"
+              ref={imageInputRef}
+              accept=".jpg,.jpeg,.png,image/jpeg,image/png"
+              className="hidden"
+              onChange={handleImageFileChange}
+              disabled={isExtractingImage}
+            />
+
+            {/* Alerta de status ou erro de extração de imagem */}
+            {isExtractingImage && (
+              <div className="flex items-center gap-2 p-2.5 rounded-lg border border-primary/30 bg-primary/5 text-xs text-primary">
+                <Loader2 className="h-4 w-4 animate-spin shrink-0" />
+                <span className="font-medium">
+                  {extractionStatusText || 'Extraindo texto da imagem...'}
+                </span>
+              </div>
+            )}
+
+            {imageExtractError && !isExtractingImage && (
+              <Alert className="border-destructive/50 bg-destructive/10 text-destructive text-xs py-2">
+                <AlertTriangle className="h-4 w-4 text-destructive" />
+                <AlertTitle className="text-xs font-semibold">Falha na Extração OCR</AlertTitle>
+                <AlertDescription className="text-xs mt-0.5">
+                  {imageExtractError} O texto atual da área de colagem foi mantido intacto.
+                </AlertDescription>
+              </Alert>
+            )}
+
+            <div className="flex items-center justify-between gap-2 pt-0.5">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => imageInputRef.current?.click()}
+                disabled={isExtractingImage}
+                className="text-xs border-dashed"
+                title="Selecionar imagem JPG ou PNG para extração literal do texto via OCR"
+              >
+                {isExtractingImage ? (
+                  <>
+                    <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin text-primary" />
+                    Processando imagem...
+                  </>
+                ) : (
+                  <>
+                    <ImageIcon className="h-3.5 w-3.5 mr-1.5 text-muted-foreground" />
+                    Importar imagem
+                  </>
+                )}
+              </Button>
+
               <Button
                 type="button"
                 variant="outline"
                 size="sm"
                 onClick={handleProcessPasteText}
-                disabled={!pasteText.trim()}
+                disabled={!pasteText.trim() || isExtractingImage}
                 className="text-xs"
               >
                 <Sparkles className="h-3.5 w-3.5 mr-1" /> Analisar Linhas
