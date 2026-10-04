@@ -284,6 +284,24 @@ COUVE FLOR: 5,0 Kg
       expect(cleaned).not.toContain('100 Kg')
     })
 
+    it('deve converter pontos decimais e normalizar a primeira linha sem dois-pontos logo após o cabeçalho', async () => {
+      const { cleanTableOcrText } = await import('./imageExtractor')
+      const rawHorizontal = `
+Produtos | Unidade | Pedidos
+Banana 30.0 Kg
+Batata Doce 20.0 Kg
+Brócolis 50,0 Kg
+Cenoura 10.0
+`
+      const cleaned = cleanTableOcrText(rawHorizontal)
+      const lines = cleaned.split('\n')
+
+      expect(lines[0]).toBe('BANANA: 30,0 Kg')
+      expect(lines[1]).toBe('BATATA DOCE: 20,0 Kg')
+      expect(lines[2]).toBe('BRÓCOLIS: 50,0 Kg')
+      expect(lines[3]).toBe('CENOURA: 10,0 Kg')
+    })
+
     it('deve casar no catálogo mesmo se usuário colar nome sem espaço (ex: BATATADOCE)', () => {
       const catalogCustom: OrderPasteCatalogProduct[] = [
         { productId: 'b1', nome: 'Banana Prata', preco: 4.5, unidade: 'Kg' },

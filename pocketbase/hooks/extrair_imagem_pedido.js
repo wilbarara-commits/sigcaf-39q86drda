@@ -55,20 +55,21 @@ routerAdd(
     // 2) Se temos texto (seja vindo de $documents ou do pré-OCR do cliente), consultar o Agente Nativo Skip Cloud
     // para limpar, estruturar tabela, ignorar células vazias/cinzas e formatar "PRODUTO: quantidade unidade"
     if (textContent) {
+      console.log('[ocr-hook] RAW INPUT TEXT (len=' + textContent.length + '):\n' + textContent)
       try {
         const agent = $ai.agent('ocr-pedidos-extractor')
         if (agent) {
           const promptMsg =
             'Abaixo está o texto bruto extraído via OCR de uma imagem/foto de tabela de pedido semanal de hortifrúti de uma escola.\n' +
             'INSTRUÇÕES ESTRITAS E CRÍTICAS:\n' +
-            '1. NUNCA engula ou remova a primeira linha de dados de produtos! O primeiro produto com quantidade logo após cabeçalhos (como "BANANA: 30,0 Kg") DEVE ser mantido integralmente.\n' +
-            '2. PRESERVE os espaços entre palavras nos nomes dos produtos ("BATATA DOCE", "COUVE FLOR", "BATATA INGLESA" - NUNCA junte para "BATATADOCE").\n' +
-            '3. PRESERVE EXATAMENTE a vírgula decimal como lida na imagem ("20,0", "50,0", "10,0", "2,5"). NUNCA remova a vírgula nem multiplique por 10 (se a célula mostra 20,0, emita "20,0 Kg", NUNCA "200"). Se houver dúvida real na vírgula de um dígito decimal, marque com interrogação ("20,0? Kg") em vez de adivinhar 200.\n' +
+            '1. A PRIMEIRA LINHA DE PRODUTO É MANDATÓRIA (exemplo: BANANA): NUNCA descarte ou coma a primeira linha válida de dados logo abaixo de cabeçalhos de coluna. Se o primeiro produto com quantidade na tabela for BANANA, ele DEVE ser obrigatoriamente a PRIMEIRA linha emitida ("BANANA: 30,0 Kg").\n' +
+            '2. PRESERVE E RESTAURE RIGOROSAMENTE A VÍRGULA DECIMAL: Em tabelas de merenda escolar, quantidades são na escala de dezenas com 1 decimal ("20,0 Kg", "50,0 Kg", "10,0 Kg", "30,0 Kg", "5,0 Kg", "2,5 Kg"). NUNCA emita 200 Kg, 500 Kg, 100 Kg se o original ou contexto da tabela representa 20,0, 50,0 ou 10,0. Se o OCR leu sem vírgula ou você tiver dúvida se é decimal, marque com interrogação na quantidade ("20,0? Kg") em vez de inflar 10x.\n' +
+            '3. PRESERVE os espaços entre palavras nos nomes dos produtos ("BATATA DOCE", "COUVE FLOR", "BATATA INGLESA" - NUNCA junte para "BATATADOCE").\n' +
             '4. Formate CADA produto que possua quantidade pedida estritamente no formato:\n' +
             '   PRODUTO: quantidade unidade (exemplo: "BANANA: 30,0 Kg", "BATATA DOCE: 20,0 Kg", "BRÓCOLIS: 50,0 Kg").\n' +
             '5. Se a quantidade de uma linha da tabela estiver vazia, em branco, cinza, com hífen ou zero, IGNORE e NÃO inclua essa linha.\n' +
             '6. Remova apenas os cabeçalhos das colunas (ex: "Produtos", "Unidade", "Pedidos", datas como "21/09", "Agosto").\n' +
-            '7. Retorne APENAS as linhas finais no formato "PRODUTO: quantidade unidade", uma por linha.\n\n' +
+            '7. Retorne APENAS as linhas finais no formato "PRODUTO: quantidade unidade", uma por linha, sem markdown.\n\n' +
             'TEXTO OCR DA IMAGEM:\n' +
             textContent
 
@@ -86,7 +87,8 @@ routerAdd(
               .replace(/\s*```$/i, '')
               .trim()
 
-            // Filtra para garantir que apenas linhas com formato de pedido ou não-cabeçalho sejam retornadas
+            console.log('[ocr-hook] AGENT OUTPUT:\n' + formatted)
+
             return e.json(200, {
               texto: formatted,
               origem: 'agente_nativo',

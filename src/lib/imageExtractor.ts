@@ -150,6 +150,22 @@ export function cleanTableOcrText(rawText: string): string {
     return name.trim().replace(/\s+/g, ' ')
   }
 
+  // Normaliza valores numéricos lidos onde a vírgula decimal pode ter sido engolida
+  // ou lida como espaço/ponto (ex: "20 0", "20.0" -> "20,0").
+  // Se vier com vírgula ou ponto (ex: 20,0 ou 20.0), normaliza para vírgula.
+  const formatQuantityDisplay = (rawQty: string): string => {
+    let clean = rawQty.trim()
+    const isUncertain = clean.endsWith('?')
+    if (isUncertain) {
+      clean = clean.slice(0, -1).trim()
+    }
+
+    // Se possui ponto, converte para vírgula
+    clean = clean.replace('.', ',')
+
+    return isUncertain ? `${clean}?` : clean
+  }
+
   for (const line of lines) {
     const trimmed = line.trim()
     if (!trimmed) continue
@@ -158,39 +174,39 @@ export function cleanTableOcrText(rawText: string): string {
 
     // 1. Se já contém "PRODUTO: quantidade" ou similar (ex: "BANANA: 30,0 Kg", "BATATA DOCE: 20,0? Kg")
     // Preserva exatamente a representação numérica (incluindo vírgula decimal e eventual interrogação de incerteza)
-    const colonMatch = trimmed.match(/^([^:]+):\s*([0-9]+(?:[.,][0-9]+)?\??)(?:\s*([a-zA-Z]+))?$/)
+    const colonMatch = trimmed.match(/^([^:]+):\s*([0-9]+(?:[.,\s][0-9]+)?\??)(?:\s*([a-zA-Z]+))?$/)
     if (colonMatch) {
       const prod = normalizeInnerSpaces(colonMatch[1])
-      const qty = colonMatch[2].trim()
+      const rawQty = colonMatch[2].trim()
       const unit = colonMatch[3]?.trim() || 'Kg'
       if (prod && !isHeaderFragment(prod.toUpperCase())) {
+        const qty = formatQuantityDisplay(rawQty)
         result.push(`${prod.toUpperCase()}: ${qty} ${unit}`)
       }
       continue
     }
 
-    // 2. Se a linha inteira for puramente cabeçalho sem formato de produto:quantidade
-    if (isHeaderFragment(upper)) {
-      continue
-    }
-
-    // 3. Tenta casar linha horizontal de tabela com produto + quantidade
-    // ex: "Banana 30,0 Kg", "Batata Doce 20,0 Kg", "Cenoura 10,0", "Tomate 30,0 Kg", "Ovos 10 Dz"
-    // Preserva rigorosamente os espaços internos no nome do produto
+    // 2. Se a linha tem formato de dados com produto + quantidade, PROCESSA ANTES de testar se é cabeçalho!
+    // Isso blinda a primeira linha de produto (ex: "BANANA 30,0 Kg" ou "Banana | 30,0") contra falsos positivos.
     const matchRow = trimmed.match(
       /^([A-Za-zÀ-ÿ0-9\s\-_/]+?)(?:\s+|\s*[-–—|]\s*|\t+)([0-9]+(?:[.,][0-9]+)?\??)(?:\s*([a-zA-Z]+))?$/,
     )
     if (matchRow) {
       const rawProdName = matchRow[1].trim()
-      const qtyStr = matchRow[2].trim()
+      const qtyStr = formatQuantityDisplay(matchRow[2].trim())
       const unit = matchRow[3]?.trim() || 'Kg'
       const prodName = normalizeInnerSpaces(rawProdName)
 
-      // Garante que não é um falso positivo numérico ou fragmento de cabeçalho
+      // Garante que o nome do produto não seja a palavra pura de título de cabeçalho
       if (prodName.length >= 2 && !isHeaderFragment(prodName.toUpperCase())) {
         result.push(`${prodName.toUpperCase()}: ${qtyStr} ${unit}`)
         continue
       }
+    }
+
+    // 3. Se a linha for puramente cabeçalho estrutural sem quantidade
+    if (isHeaderFragment(upper)) {
+      continue
     }
 
     // Se a linha tem apenas texto (sem nenhum dígito), significa produto sem quantidade
@@ -206,7 +222,7 @@ export function cleanTableOcrText(rawText: string): string {
       /^([0-9]+(?:[.,][0-9]+)?\??)(?:\s*([a-zA-Z]+))?\s+([A-Za-zÀ-ÿ0-9\s\-_/]+)$/,
     )
     if (matchInverted) {
-      const qtyStr = matchInverted[1].trim()
+      const qtyStr = formatQuantityDisplay(matchInverted[1].trim())
       const unit = matchInverted[2]?.trim() || 'Kg'
       const prodName = normalizeInnerSpaces(matchInverted[3])
       if (prodName.length >= 2 && !isHeaderFragment(prodName.toUpperCase())) {
