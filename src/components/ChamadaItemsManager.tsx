@@ -275,17 +275,7 @@ export function ChamadaItemsManager({
     onChange(updated)
   }
 
-  // Edição inline de Produto (nome)
-  const handleProdutoChange = (index: number, newProduto: string) => {
-    const updated = items.map((it, idx) => {
-      if (idx !== index) return it
-      return {
-        ...it,
-        produto: newProduto,
-      }
-    })
-    onChange(updated)
-  }
+  // Edição inline de Produto (nome) desativada: nome oficial do produto segue estritamente o catálogo mestre
 
   // Edição inline de AKA/Apelido
   const handleAkaChange = (index: number, newAka: string) => {
@@ -657,14 +647,19 @@ export function ChamadaItemsManager({
     let updatedCount = 0
 
     for (const r of fileParseResult.validRows) {
-      const prodName = r.product?.name || r.rawProduct
-      const key = prodName.trim().toLowerCase()
+      const exactProdName = r.product?.name || r.rawProduct
+      const key = exactProdName.trim().toLowerCase()
       const aka = r.apelidos || ''
       const unidade = r.product?.unit || r.rawUnidade || 'Kg'
       const preco = r.price || 0
 
       if (currentMap.has(key)) {
         const existing = currentMap.get(key)!
+        if (r.product) {
+          existing.productId = r.product.id
+          existing.produto = r.product.name
+          existing.unidade = r.product.unit || existing.unidade
+        }
         existing.preco = preco
         if (aka) existing.aka = aka
         if (unidade) existing.unidade = unidade
@@ -672,9 +667,9 @@ export function ChamadaItemsManager({
       } else {
         currentMap.set(key, {
           productId: r.product?.id,
-          produto: prodName,
+          produto: r.product ? r.product.name : exactProdName,
           aka,
-          unidade,
+          unidade: r.product?.unit || unidade,
           preco,
           quantidadeAgregada: undefined,
         })
@@ -1077,15 +1072,25 @@ export function ChamadaItemsManager({
                         />
                       </TableCell>
 
-                      {/* 2. Nome do Produto (Catálogo / Arquivo Central) */}
+                      {/* 2. Nome do Produto (Catálogo / Arquivo Central) - Somente leitura */}
                       <TableCell className="py-1 px-2">
-                        <Input
-                          value={item.produto || ''}
-                          onChange={(e) => handleProdutoChange(index, e.target.value)}
-                          placeholder="Nome do produto conforme catálogo / arquivo central"
-                          className="h-7 text-xs text-foreground w-full"
-                          title="Nome oficial do produto no arquivo central / catálogo"
-                        />
+                        {(() => {
+                          const catalogProd = item.productId
+                            ? productById.get(item.productId)
+                            : undefined
+                          const displayProductName = catalogProd?.name || item.produto || ''
+                          return (
+                            <Input
+                              value={displayProductName}
+                              readOnly
+                              disabled
+                              tabIndex={-1}
+                              placeholder="Nome oficial do catálogo"
+                              className="h-7 text-xs text-muted-foreground bg-muted/30 border-muted/50 cursor-not-allowed select-none w-full"
+                              title="Nome oficial do catálogo não editável; variações e apelidos devem ser informados no campo AKA (Nome no Contrato / AKA)."
+                            />
+                          )
+                        })()}
                       </TableCell>
 
                       {/* Unidade */}

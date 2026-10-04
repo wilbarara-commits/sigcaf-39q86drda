@@ -284,17 +284,20 @@ export default function Orders() {
 
     if (itemsChamada.length > 0) {
       return itemsChamada.map((ci) => {
-        // Encontrar produto correspondente no catálogo se houver produto_id
+        // Resolução estrita: casar PRIMEIRO por produto_id
         const prod = ci.produto_id ? products.find((p) => p.id === ci.produto_id) : undefined
-        // Se ci.produto_id não existir, tentar casar por nome exato com catálogo
+        // Fallback por nome apenas para legados sem produto_id
         const matchedProd =
           prod ||
-          products.find((p) => p.name.trim().toLowerCase() === ci.produto.trim().toLowerCase())
+          (!ci.produto_id
+            ? products.find((p) => p.name.trim().toLowerCase() === ci.produto.trim().toLowerCase())
+            : undefined)
         const prodId = ci.produto_id || matchedProd?.id || ci.id
+        const nomeOficial = prod?.name || matchedProd?.name || ci.produto || 'Produto'
         return {
           productId: prodId,
-          nome: ci.produto || prod?.name || 'Produto',
-          unidade: ci.unidade || prod?.unit || 'un',
+          nome: nomeOficial,
+          unidade: ci.unidade || prod?.unit || matchedProd?.unit || 'un',
           preco: Number(ci.preco) || 0,
         }
       })
@@ -513,6 +516,16 @@ export default function Orders() {
         )
         return
       }
+
+      // Validar preço da chamada/catálogo
+      const itemCat = availableItemsForChamada.find((p) => p.productId === it.productId)
+      const precoItem = itemCat?.preco || 0
+      if (precoItem <= 0) {
+        const prodNome =
+          itemCat?.nome || products.find((p) => p.id === it.productId)?.name || 'Produto'
+        toast.warning(`O produto "${prodNome}" não possui preço cadastrado na chamada selecionada.`)
+      }
+
       validItems.push({
         productId: it.productId,
         quantity: validRes.numericValue,

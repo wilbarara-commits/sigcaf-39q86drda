@@ -1110,15 +1110,62 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const orderCount = orders.length + 1
     const numero = `ORD-${String(orderCount).padStart(3, '0')}`
 
+    // Resolução de preços soberanos da chamada (ou catálogo mestre se não houver chamada)
+    const targetCicloId = orderData.cicloId || activeCiclo?.id
+    const targetCiclo = ciclos.find((c) => c.id === targetCicloId) || activeCiclo
+    const targetChamadaId = targetCiclo?.chamada_id
+    const itensChamadaAlvo = targetChamadaId
+      ? chamadaItems.filter((ci) => ci.chamada_id === targetChamadaId)
+      : []
+
     const formattedItens = validRawItems.map((it) => {
       const prod = products.find((p) => p.id === it.productId)
+      const nomeProduto = prod?.name || 'Produto'
+
+      let resolvedPrice = 0
+      let achouNaChamada = false
+
+      if (itensChamadaAlvo.length > 0) {
+        // 1. Casamento PRIMEIRO por produto_id
+        let itemChamada = itensChamadaAlvo.find(
+          (ci) => ci.produto_id && ci.produto_id === it.productId,
+        )
+
+        // 2. Fallback por nome apenas para legados sem produto_id
+        if (!itemChamada && prod?.name) {
+          const nomeNorm = prod.name.trim().toLowerCase()
+          itemChamada = itensChamadaAlvo.find((ci) => {
+            const ciNome = (ci.produto || '').trim().toLowerCase()
+            const ciAka = (ci.aka || '').trim().toLowerCase()
+            return ciNome === nomeNorm || (ciAka && ciAka === nomeNorm)
+          })
+        }
+
+        if (itemChamada) {
+          achouNaChamada = true
+          resolvedPrice = Number(itemChamada.preco) || 0
+        }
+      }
+
+      // Se não havia chamada ou não achou na chamada, fallback para preço base do produto mestre
+      if (!achouNaChamada) {
+        resolvedPrice = Number(prod?.price) || 0
+      }
+
+      // Se o item da chamada não for encontrado ou o preço for <= 0: exibir toast de aviso nomeando o produto
+      if (resolvedPrice <= 0) {
+        toast.warning(
+          `O produto "${nomeProduto}" não possui preço cadastrado na chamada selecionada.`,
+        )
+      }
+
       return {
         id: it.productId,
         productId: it.productId,
-        name: prod?.name || 'Produto',
+        name: nomeProduto,
         quantidade: it.quantity,
-        preco_unitario: prod?.price || 0,
-        price: prod?.price || 0,
+        preco_unitario: resolvedPrice,
+        price: resolvedPrice,
       }
     })
 
@@ -2779,12 +2826,53 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return false
     }
 
+    const targetCiclo = targetOrder.cicloId
+      ? ciclos.find((c) => c.id === targetOrder.cicloId)
+      : activeCiclo
+    const targetChamadaId = targetCiclo?.chamada_id
+    const itensChamadaAlvo = targetChamadaId
+      ? chamadaItems.filter((ci) => ci.chamada_id === targetChamadaId)
+      : []
+
     const formattedPayloadItems = validItems.map((it) => {
       const prod = products.find((p) => p.id === it.productId)
+      const nomeProduto = prod?.name || 'Produto'
+
+      let resolvedPrice = 0
+      let achouNaChamada = false
+
+      if (itensChamadaAlvo.length > 0) {
+        let itemChamada = itensChamadaAlvo.find(
+          (ci) => ci.produto_id && ci.produto_id === it.productId,
+        )
+        if (!itemChamada && prod?.name) {
+          const nomeNorm = prod.name.trim().toLowerCase()
+          itemChamada = itensChamadaAlvo.find((ci) => {
+            const ciNome = (ci.produto || '').trim().toLowerCase()
+            const ciAka = (ci.aka || '').trim().toLowerCase()
+            return ciNome === nomeNorm || (ciAka && ciAka === nomeNorm)
+          })
+        }
+        if (itemChamada) {
+          achouNaChamada = true
+          resolvedPrice = Number(itemChamada.preco) || 0
+        }
+      }
+
+      if (!achouNaChamada) {
+        resolvedPrice = Number(prod?.price) || 0
+      }
+
+      if (resolvedPrice <= 0) {
+        toast.warning(
+          `O produto "${nomeProduto}" não possui preço cadastrado na chamada selecionada.`,
+        )
+      }
+
       return {
         produto_id: it.productId,
         quantidade: it.quantity,
-        preco_unitario: prod?.price || 0,
+        preco_unitario: resolvedPrice,
       }
     })
 
@@ -2792,9 +2880,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     // Optimistic
     let newTotal = 0
-    const newItems = validItems.map((it) => {
+    const newItems = validItems.map((it, idx) => {
       const prod = products.find((p) => p.id === it.productId)
-      const preco = prod?.price || 0
+      const preco = formattedPayloadItems[idx]?.preco_unitario || 0
       newTotal += preco * it.quantity
       return {
         id: `it-${it.productId}`,
