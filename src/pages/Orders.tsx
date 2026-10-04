@@ -110,6 +110,7 @@ import {
   validateQuantityStepHalf,
   formatQuantityOnBlur,
 } from '@/lib/decimalUtils'
+import { QuantityStepper } from '@/components/QuantityStepper'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { whatsappService } from '@/services/whatsapp-import'
 import { parsePastedOrderText, type OrderPasteParseResult } from '@/lib/orderPasteParser'
@@ -2019,35 +2020,25 @@ export default function Orders() {
                 )
               })()}
 
-            {/* Campo 2: Quantidade (múltiplos de 0,5) */}
+            {/* Campo 2: Quantidade com Stepper (±10, ±1, ±0,5 — mínimo 0,5) */}
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
                 <Label htmlFor="add-prod-qty" className="text-xs font-semibold">
-                  Quantidade (
-                  {availableItemsForChamada.find((p) => p.productId === selectedProductToAdd)
-                    ?.unidade || 'un'}
-                  ) <span className="text-destructive">*</span>
+                  Quantidade <span className="text-destructive">*</span>
                 </Label>
                 <span className="text-[10px] text-muted-foreground">
-                  Múltiplos de 0,5 (ex: 0,5 / 1,0 / 1,5 / 2,0)
+                  Botões de incremento/decremento ou digitação manual
                 </span>
               </div>
-              <Input
+              <QuantityStepper
                 id="add-prod-qty"
-                type="text"
-                inputMode="decimal"
-                className="h-9 text-xs font-mono"
-                placeholder="1,0"
                 value={productToAddQuantityInput}
-                onChange={(e) => {
-                  const normalized = normalizeDecimalTyping(e.target.value)
-                  setProductToAddQuantityInput(normalized)
-                }}
-                onBlur={() => {
-                  const formatted = formatQuantityOnBlur(productToAddQuantityInput)
-                  setProductToAddQuantityInput(formatted)
-                }}
-                required
+                onChange={setProductToAddQuantityInput}
+                min={0.5}
+                unit={
+                  availableItemsForChamada.find((p) => p.productId === selectedProductToAdd)
+                    ?.unidade || 'un'
+                }
               />
             </div>
 
