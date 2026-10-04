@@ -33,7 +33,7 @@ import {
 import {
   formatIntervaloCiclo,
   formatDespachoAmigavel,
-  getDespachoPrevistoCiclo,
+  getDespachoEfetivoCiclo,
   extractCicloCodigo,
   formatFaseAmigavel,
 } from '@/lib/cicloUtils'

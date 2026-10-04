@@ -399,23 +399,41 @@ export function calcularCicloSemanal(referencia: Date | string = new Date()): Ci
  * A partir da data de início de um ciclo (ou da data de referência), retorna
  * a data prevista de despacho (segunda-feira da semana do ciclo).
  */
-export function getDespachoPrevistoCiclo(dataInicio: Date | string): Date {
+export function getDespachoPrevistoCiclo(
+  dataInicio: Date | string,
+  regra?: RegraDiasChamada,
+): Date {
   const d = parseDateSegura(dataInicio)
+  if (regra?.diaDespacho) {
+    const diaInicioNum = normalizarDiaSemanaNum(regra.diaInicio ?? d.getUTCDay())
+    const diaDespachoNum = normalizarDiaSemanaNum(regra.diaDespacho)
+    const diffDespacho = (diaDespachoNum - diaInicioNum + 7) % 7
+    return new Date(
+      Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + diffDespacho, 12, 0, 0, 0),
+    )
+  }
   const info = calcularCicloSemanal(d)
   return info.segundaDespacho
 }
 
 /**
- * Retorna a data de despacho (segunda-feira) efetiva de um ciclo,
- * respeitando com prioridade o snapshot gravado no banco ou calculando
- * a partir das datas do ciclo.
+ * Retorna a data de despacho/entrega efetiva de um ciclo,
+ * respeitando com prioridade:
+ * 1. O campo explícito data_despacho no ciclo;
+ * 2. O snapshot com despacho_previsto gravado;
+ * 3. A data_inicio combinada com a regra de dias gravada no snapshot ou padrão.
  */
 export function getDespachoEfetivoCiclo(
   ciclo?: {
     data_inicio?: string
     data_fim?: string
     data_despacho?: string
-    snapshot?: { despacho_previsto_segunda?: string } | any
+    snapshot?:
+      | {
+          despacho_previsto_segunda?: string
+          regra_dias?: RegraDiasChamada
+        }
+      | any
   } | null,
 ): Date {
   if (!ciclo) return new Date()
@@ -432,10 +450,11 @@ export function getDespachoEfetivoCiclo(
 
   // 3. Se houver data de início
   if (ciclo.data_inicio) {
-    return getDespachoPrevistoCiclo(ciclo.data_inicio)
+    const regra = ciclo.snapshot?.regra_dias
+    return getDespachoPrevistoCiclo(ciclo.data_inicio, regra)
   }
 
-  // 4. Se houver data de fim (terça-feira -> segunda é véspera: -1 dia)
+  // 4. Se houver data de fim (fallback: véspera)
   if (ciclo.data_fim) {
     const fim = parseDateSegura(ciclo.data_fim)
     return new Date(fim.getFullYear(), fim.getMonth(), fim.getDate() - 1, 12, 0, 0, 0)
@@ -444,22 +463,47 @@ export function getDespachoEfetivoCiclo(
   return new Date()
 }
 
+const DIAS_SEMANA_NOMES_COMPLETOS: Record<number, string> = {
+  0: 'Domingo',
+  1: 'Segunda-feira',
+  2: 'Terça-feira',
+  3: 'Quarta-feira',
+  4: 'Quinta-feira',
+  5: 'Sexta-feira',
+  6: 'Sábado',
+}
+
+const DIAS_SEMANA_ABREVIADOS: Record<number, string> = {
+  0: 'Dom',
+  1: 'Seg',
+  2: 'Ter',
+  3: 'Qua',
+  4: 'Qui',
+  5: 'Sex',
+  6: 'Sáb',
+}
+
 /**
- * Formata a data de despacho para exibição amigável nas telas, ex.: "Seg, 21/09" ou "Segunda-feira, 21/09/2026"
+ * Formata a data de despacho/entrega para exibição amigável nas telas,
+ * respeitando o dia da semana real da data (ex.: "Ter, 06/10" ou "Terça-feira, 06/10/2026",
+ * "Seg, 21/09" ou "Segunda-feira, 21/09/2026").
  */
 export function formatDespachoAmigavel(
   dataDespacho: Date | string,
   extenso: boolean = false,
 ): string {
   const d = parseDateSegura(dataDespacho)
+  const diaNum = d.getDay()
   const dia = String(d.getDate()).padStart(2, '0')
   const mes = String(d.getMonth() + 1).padStart(2, '0')
   const ano = d.getFullYear()
 
   if (extenso) {
-    return `Segunda-feira, ${dia}/${mes}/${ano}`
+    const nomeSemana = DIAS_SEMANA_NOMES_COMPLETOS[diaNum] || 'Segunda-feira'
+    return `${nomeSemana}, ${dia}/${mes}/${ano}`
   }
-  return `Seg, ${dia}/${mes}`
+  const abrevSemana = DIAS_SEMANA_ABREVIADOS[diaNum] || 'Seg'
+  return `${abrevSemana}, ${dia}/${mes}`
 }
 
 /**
@@ -761,6 +805,26 @@ export function sugerirProximoCiclo(
   // Se houver ciclo mais recente:
   if (maisRecente) {
     const parsed = parseNumeroEAnoCiclo(maisRecente.nome)
+    const anoAtualCiclo = parsed?.ano || dHoje.getFullYear()
+    const proxNumero = parsed && parsed.ano === anoAtualCiclo ? parsed.numero + 1 : 1
+
+    // Se temos a regra da chamada, calculamos exatamente pelas regras e semana
+    if (regraChamada) {
+      const calc = calcularDatasCicloPorSemana(proxNumero, anoAtualCiclo, regraChamada)
+      return {
+        ano: anoAtualCiclo,
+        numeroSemana: proxNumero,
+        codigoCiclo: calc.codigoCiclo,
+        nomeCicloPadrao: calc.nomeCicloPadrao,
+        quartaInicio: calc.dataInicio,
+        tercaFim: calc.dataFim,
+        segundaDespacho: calc.dataDespacho,
+        dataInicioIso: calc.dataInicioIso,
+        dataFimIso: calc.dataFimIso,
+        dataDespachoIso: calc.dataDespachoIso,
+      }
+    }
+
     let quartaBase: Date
 
     if (maisRecente.data_inicio) {
@@ -789,8 +853,8 @@ export function sugerirProximoCiclo(
     const proxQuarta = new Date(Date.UTC(anoQuarta, mesQuarta, diaQuarta + 7, 0, 0, 0, 0))
 
     const anoProx = proxQuarta.getUTCFullYear()
-    const proxNumero = parsed && parsed.ano === anoProx ? parsed.numero + 1 : 1
-    const numFmt = String(proxNumero).padStart(2, '0')
+    const proxNumFallback = parsed && parsed.ano === anoProx ? parsed.numero + 1 : 1
+    const numFmt = String(proxNumFallback).padStart(2, '0')
     const codigoCiclo = `${numFmt}/${anoProx}`
     const nomeCicloPadrao = `Ciclo ${codigoCiclo}`
 
@@ -822,7 +886,7 @@ export function sugerirProximoCiclo(
 
     return {
       ano: anoProx,
-      numeroSemana: proxNumero,
+      numeroSemana: proxNumFallback,
       codigoCiclo,
       nomeCicloPadrao,
       quartaInicio: proxQuarta,

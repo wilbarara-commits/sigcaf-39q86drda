@@ -136,9 +136,9 @@ export function AbrirCicloDialog({
   }, [open, chamadaIdInicial, chamadas, chamadasAtivas, ciclos])
 
   // Recalcular datas IMEDIATAMENTE quando o número da semana ou a chamada mudar
-  const handleRecalcularDatas = (novoNumSemanaStr: string, chId: string) => {
+  const handleRecalcularDatas = (novoNumSemanaStr: string, chId: string, anoForcado?: number) => {
     const numInt = parseInt(novoNumSemanaStr.trim(), 10)
-    const anoInt = parseInt(anoCiclo.trim() || String(new Date().getFullYear()), 10)
+    const anoInt = anoForcado ?? parseInt(anoCiclo.trim() || String(new Date().getFullYear()), 10)
     const ch = chamadas.find((c) => c.id === chId)
     const regra = {
       diaInicio: ch?.dia_inicio_ciclo || 'quarta',
@@ -158,13 +158,27 @@ export function AbrirCicloDialog({
     }
   }
 
-  // Mudança de chamada
+  // Mudança de chamada: atualiza sugestão de semana/ano de acordo com a chamada selecionada
   const handleChamadaChange = (newChId: string) => {
     setSelectedChamadaId(newChId)
-    // Se já tiver número, recalcula datas para a regra da nova chamada
-    if (numeroCiclo) {
-      handleRecalcularDatas(numeroCiclo, newChId)
+    const targetCh = chamadas.find((c) => c.id === newChId)
+    const regra = {
+      diaInicio: targetCh?.dia_inicio_ciclo || 'quarta',
+      diaDespacho: targetCh?.dia_despacho_ciclo || 'segunda',
+      diaFim: targetCh?.dia_fim_ciclo || 'terca',
     }
+    const info = sugerirProximoCiclo(ciclos, new Date(), newChId, regra)
+    setNumeroCiclo(String(info.numeroSemana))
+    setAnoCiclo(String(info.ano))
+
+    const calc = calcularDatasCicloPorSemana(info.numeroSemana, info.ano, regra)
+    const dIni = calc.dataInicioIso.split('T')[0]
+    const dFim = calc.dataFimIso.split('T')[0]
+    const dDesp = calc.dataDespachoIso.split('T')[0]
+    setDataInicio(dIni)
+    setDataFim(dFim)
+    setDataDespacho(dDesp)
+    setSemanaCalculadaRef({ inicioRef: dIni, fimRef: dFim })
   }
 
   // Sanitizador do número do ciclo: apenas dígitos

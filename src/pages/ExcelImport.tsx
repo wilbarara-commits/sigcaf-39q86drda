@@ -75,7 +75,7 @@ import type { ImportacaoRecord, EscolaTipo } from '@/lib/types'
 import {
   formatIntervaloCiclo,
   formatDespachoAmigavel,
-  getDespachoPrevistoCiclo,
+  getDespachoEfetivoCiclo,
   calcularProximoCicloParaAbertura,
   formatFaseAmigavel,
   sugerirProximoCiclo,
@@ -2417,11 +2417,7 @@ export default function ExcelImport() {
                           cicloAtivoDoContrato.data_fim,
                         )}{' '}
                         — Despacho:{' '}
-                        {formatDespachoAmigavel(
-                          cicloAtivoDoContrato.snapshot?.despacho_previsto_segunda ||
-                            getDespachoPrevistoCiclo(cicloAtivoDoContrato.data_inicio),
-                        )}
-                        )
+                        {formatDespachoAmigavel(getDespachoEfetivoCiclo(cicloAtivoDoContrato))})
                       </span>
                     )}{' '}
                     | Contrato: <strong>{selectedContract?.numero || '—'}</strong>

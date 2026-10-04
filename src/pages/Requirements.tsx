@@ -197,7 +197,7 @@ const MODULES: ModuleSpec[] = [
     details: [
       'Ciclo por Chamada Pública (v0.0.127): Cada ciclo operacional pertence obrigatoriamente a uma Chamada Pública (campo `chamada_id` em `ciclos`). O sistema garante no máximo 1 ciclo ativo por chamada pública em paralelo, permitindo que chamadas distintas (ex.: Municipal e Estadual) operem seus ciclos de forma totalmente independente.',
       'Número do Ciclo = Semana ISO do Ano (v0.0.127): O número sugerido do ciclo corresponde ao número da semana do ano (ISO-8601, semana 1 a 53), editável pelo usuário com bloqueio estrito contra duplicidade de número+ano dentro do sistema.',
-      '3 Dias Configuráveis por Chamada (v0.0.127): A regra semanal de cada chamada define 3 marcos operacionais: dia de início (abertura), dia de despacho/entrega e dia de fim (encerramento da semana operacional), padronizados como Quarta / Segunda / Terça e parametrizáveis por chamada.',
+      '3 Dias Configuráveis por Chamada (v0.0.127 / v0.0.147): A regra semanal de cada chamada define 3 marcos operacionais: dia de início (abertura), dia de despacho/entrega e dia de fim (encerramento da semana operacional), parametrizáveis por chamada (ex.: Quarta/Segunda/Terça na Chamada Municipal 01/2025; Quarta/Terça/Terça na Chamada Estadual 07/2025). O cálculo automático e a exibição de despacho/entrega em todas as telas respeitam soberanamente os dias cadastrados na chamada correspondente.',
       'Ajuste Manual de Datas com Validação da Mesma Semana (v0.0.127): O usuário pode ajustar manualmente as datas do ciclo ao criá-lo ou editá-lo, com validação estrita de pertencimento à mesma semana operacional e respeito à cronologia início ≤ despacho ≤ fim. O ajuste manual é válido exclusivamente para aquele ciclo específico, sem alterar a regra padrão da chamada.',
       'Cadeia Real de Fases Operacionais: Coletando → Correção → Coleta Encerrada → Fechado (+ estado terminal Cancelado). O ciclo só FECHA após o armazenamento de TODOS os atestos das entregas realizadas; "Fechado" é estado do CICLO, não da coleta.',
       'Ciclo por Chamada com Fase Única & Aposentadoria de ciclo_contratos (v0.0.140): Cada ciclo pertence diretamente a uma Chamada Pública (campo chamada_id). Sua fase e status (`status` em `ciclos`) governam uniformemente toda a chamada e todos os seus contratos participantes (coletando → correcao → coleta_encerrada → fechado / cancelado). A antiga coleção intermediária `ciclo_contratos` foi definitivamente aposentada e removida (migration 0112), eliminando redundância e complexidade obsoletas: os contratos participantes derivam dinamicamente da chamada do ciclo.',
@@ -804,6 +804,69 @@ export function Requirements() {
       {/* 7. Registro de Manutenção e Limpeza de Dados */}
       <SectionTitle>7. Registro de Manutenção & Higienização do Banco de Dados</SectionTitle>
       <div className="space-y-4">
+        {/* Correção do Cálculo e Exibição de Datas de Despacho por Regra da Chamada (v0.0.147) */}
+        <div className="rounded-lg border border-border bg-card p-5 space-y-4">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="text-primary border-primary/30">
+                Release v0.0.147
+              </Badge>
+              <span className="font-semibold text-foreground">
+                Correção de Cálculo e Exibição de Datas de Ciclo por Chamada (Migration 0115)
+              </span>
+            </div>
+            <span className="text-xs text-muted-foreground">Executado (v0.0.147)</span>
+          </div>
+          <p className="text-sm text-foreground/90 leading-relaxed">
+            Correção abrangente no cálculo de datas de ciclos a partir da regra de dias da Chamada
+            Pública (<code>chamadas.dia_despacho_ciclo</code>), na exibição de despacho nas telas
+            operacionais (Monitoramento, Histórico de Ciclos, Consolidação e Importação) e nos dados
+            gravados. Anteriormente, funções de exibição (<code>formatDespachoAmigavel</code>) e
+            sugestão de ciclo forçavam o texto literal &quot;Segunda-feira&quot;, desconsiderando
+            chamadas cujo despacho/entrega está configurado para outro dia da semana (ex.: Chamada
+            07/2025 Estadual, cujo despacho ocorre na terça-feira).
+          </p>
+          <div className="grid sm:grid-cols-2 gap-4 text-sm">
+            <div className="rounded-md border border-border/60 bg-muted/20 p-3 space-y-1.5">
+              <span className="font-medium text-destructive">Causas Raízes Eliminadas:</span>
+              <ul className="space-y-1 text-xs text-muted-foreground">
+                <li>
+                  • Rótulo fixo &quot;Segunda-feira&quot; / &quot;Seg&quot; em
+                  formatDespachoAmigavel sem inspecionar a data real
+                </li>
+                <li>
+                  • Fallback de getDespachoEfetivoCiclo ignorando regraDiasChamada no cálculo de
+                  dataInicio
+                </li>
+                <li>
+                  • Troca de chamada no diálogo de criação sem recalcular a sugestão de semana/datas
+                </li>
+                <li>
+                  • Ciclo 40/2026 gravado com despacho na segunda 05/10/2026 em vez de terça
+                  06/10/2026
+                </li>
+              </ul>
+            </div>
+            <div className="rounded-md border border-primary/30 bg-primary/5 p-3 space-y-1.5">
+              <span className="font-medium text-primary">Correções Implementadas:</span>
+              <ul className="space-y-1 text-xs text-foreground/80">
+                <li>
+                  • Formatação sensível ao dia da semana real (Terça-feira 06/10/2026 para a Chamada
+                  07/2025)
+                </li>
+                <li>• Sincronia perfeita entre prévia e gravação do AbrirCicloDialog</li>
+                <li>
+                  • Migração 0115 atualizando o Ciclo 40/2026 para despacho e fim em 06/10/2026
+                  (terça)
+                </li>
+                <li>
+                  • Cobertura de testes unitários em Vitest validando regras de dias e formatação
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
         {/* Reestruturação do Diálogo Novo Pedido Orientado a Ciclo (v0.0.143) */}
         <div className="rounded-lg border border-border bg-card p-5 space-y-4">
           <div className="flex items-center justify-between flex-wrap gap-2">

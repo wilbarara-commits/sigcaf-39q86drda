@@ -48,7 +48,7 @@ import {
   formatDespachoAmigavel,
   formatIntervaloCiclo,
   calcularCicloSemanal,
-  getDespachoPrevistoCiclo,
+  getDespachoEfetivoCiclo,
   isCicloNaoTerminal,
   calcularDiasAtrasoFechamento,
   formatFaseAmigavel,
@@ -356,9 +356,7 @@ export default function CycleHistory() {
                       )
                     }
 
-                    const despachoDate = c.snapshot?.despacho_previsto_segunda
-                      ? new Date(c.snapshot.despacho_previsto_segunda)
-                      : getDespachoPrevistoCiclo(c.data_inicio)
+                    const despachoDate = getDespachoEfetivoCiclo(c)
 
                     return (
                       <TableRow key={c.id}>
@@ -472,11 +470,7 @@ export default function CycleHistory() {
                 formatIntervaloCiclo(selectedCiclo.data_inicio, selectedCiclo.data_fim)}{' '}
               • Despacho previsto:{' '}
               {selectedCiclo &&
-                formatDespachoAmigavel(
-                  selectedCiclo.snapshot?.despacho_previsto_segunda ||
-                    getDespachoPrevistoCiclo(selectedCiclo.data_inicio),
-                  true,
-                )}{' '}
+                formatDespachoAmigavel(getDespachoEfetivoCiclo(selectedCiclo), true)}{' '}
               • Status: {selectedCiclo?.status}
             </DialogDescription>
           </DialogHeader>

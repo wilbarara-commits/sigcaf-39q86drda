@@ -21,7 +21,7 @@ import { MonthlyReportButton } from '@/components/MonthlyReportButton'
 import {
   formatIntervaloCiclo,
   formatDespachoAmigavel,
-  getDespachoPrevistoCiclo,
+  getDespachoEfetivoCiclo,
   isCicloNaoTerminal,
   formatFaseAmigavel,
 } from '@/lib/cicloUtils'
@@ -384,11 +384,7 @@ export default function Index() {
                       Previsão de Despacho em Rota
                     </span>
                     <strong className="text-emerald-700 dark:text-emerald-400 font-semibold">
-                      {formatDespachoAmigavel(
-                        activeCiclo.snapshot?.despacho_previsto_segunda ||
-                          getDespachoPrevistoCiclo(activeCiclo.data_inicio),
-                        true,
-                      )}
+                      {formatDespachoAmigavel(getDespachoEfetivoCiclo(activeCiclo), true)}
                     </strong>
                   </div>
                 </div>

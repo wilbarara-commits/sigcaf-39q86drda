@@ -35,7 +35,7 @@ import { toast } from 'sonner'
 import {
   formatIntervaloCiclo,
   formatDespachoAmigavel,
-  getDespachoPrevistoCiclo,
+  getDespachoEfetivoCiclo,
   isCicloNaoTerminal,
   calcularDiasAtrasoFechamento,
   formatFaseAmigavel,
@@ -452,11 +452,7 @@ export default function Monitoring() {
                     {formatIntervaloCiclo(selectedCiclo.data_inicio, selectedCiclo.data_fim)}) •
                     Despacho previsto para{' '}
                     <span className="inline-flex items-center font-semibold text-emerald-700 dark:text-emerald-400">
-                      {formatDespachoAmigavel(
-                        selectedCiclo.snapshot?.despacho_previsto_segunda ||
-                          getDespachoPrevistoCiclo(selectedCiclo.data_inicio),
-                        true,
-                      )}
+                      {formatDespachoAmigavel(getDespachoEfetivoCiclo(selectedCiclo), true)}
                     </span>{' '}
                     • Fluxo Operacional: <em>Coletando → Correção → Coleta Encerrada → Fechado</em>
                   </>

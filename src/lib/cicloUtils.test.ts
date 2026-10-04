@@ -7,6 +7,7 @@ import {
   validarAjusteManualDatasCiclo,
   getCicloAtivo,
   getCiclosAtivosPorChamada,
+  formatDespachoAmigavel,
 } from './cicloUtils'
 
 describe('cicloUtils - numeração livre e validações de ciclo', () => {
@@ -63,6 +64,27 @@ describe('cicloUtils - numeração livre e validações de ciclo', () => {
     expect(res.dataInicioIso.startsWith('2026-10-07')).toBe(true)
     expect(res.dataDespachoIso.startsWith('2026-10-12')).toBe(true)
     expect(res.dataFimIso.startsWith('2026-10-13')).toBe(true)
+  })
+
+  it('deve calcular corretamente chamada 07/2025 com despacho e entrega na terça-feira', () => {
+    const res = calcularDatasCicloPorSemana(40, 2026, {
+      diaInicio: 'quarta',
+      diaDespacho: 'terca',
+      diaFim: 'terca',
+    })
+
+    expect(res.codigoCiclo).toBe('40/2026')
+    expect(res.nomeCicloPadrao).toBe('Ciclo 40/2026')
+    // Início: quarta 30/09/2026
+    expect(res.dataInicioIso.startsWith('2026-09-30')).toBe(true)
+    // Despacho: terça 06/10/2026 (6 dias após quarta)
+    expect(res.dataDespachoIso.startsWith('2026-10-06')).toBe(true)
+    // Fim: terça 06/10/2026
+    expect(res.dataFimIso.startsWith('2026-10-06')).toBe(true)
+
+    // Formatação amigável respeita a terça-feira
+    expect(formatDespachoAmigavel(res.dataDespachoIso, true)).toBe('Terça-feira, 06/10/2026')
+    expect(formatDespachoAmigavel(res.dataDespachoIso, false)).toBe('Ter, 06/10')
   })
 
   it('deve validar o ajuste manual das datas respeitando a ordem e limites da semana', () => {
