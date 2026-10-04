@@ -304,13 +304,41 @@ export const contratosService = {
       return await pb
         .collection('contrato_escolas')
         .update<ContratoEscolaRecord>(existing[0].id, payload)
-    } else {
-      return await pb.collection('contrato_escolas').create<ContratoEscolaRecord>({
-        contrato_id: contratoId,
-        escola_id: escolaId,
-        ...payload,
-      })
     }
+
+    // Se não achar vínculo do par (contratoId, escolaId), buscar outros contratos da mesma chamada_id
+    // e procurar vínculo ativo da mesma escola com QUALQUER um deles para evitar duplicidade de vínculo na chamada
+    try {
+      const contratoAlvo = await pb.collection('contratos').getOne<ContratoRecord>(contratoId)
+      if (contratoAlvo.chamada_id) {
+        const contratosMesmaChamada = await pb.collection('contratos').getFullList<ContratoRecord>({
+          filter: `chamada_id = "${contratoAlvo.chamada_id}"`,
+        })
+        const contratosIds = contratosMesmaChamada.map((c) => c.id)
+        if (contratosIds.length > 0) {
+          const filterContratos = contratosIds.map((id) => `contrato_id = "${id}"`).join(' || ')
+          const vinculosMesmaChamada = await pb
+            .collection('contrato_escolas')
+            .getFullList<ContratoEscolaRecord>({
+              filter: `escola_id = "${escolaId}" && (${filterContratos}) && (encerrado_em = "" || encerrado_em = null)`,
+              sort: 'created',
+            })
+          if (vinculosMesmaChamada.length > 0) {
+            return await pb
+              .collection('contrato_escolas')
+              .update<ContratoEscolaRecord>(vinculosMesmaChamada[0].id, payload)
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Erro ao verificar vínculos existentes da escola na chamada:', err)
+    }
+
+    return await pb.collection('contrato_escolas').create<ContratoEscolaRecord>({
+      contrato_id: contratoId,
+      escola_id: escolaId,
+      ...payload,
+    })
   },
 
   async updateEscolaRotaLogisticaByContratoEscola(

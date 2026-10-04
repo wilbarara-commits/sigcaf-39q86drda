@@ -811,12 +811,15 @@ export default function Producao() {
               )
               const contratosIdsSet = new Set(contratosDestaChamada.map((c) => c.id))
 
-              // Escolas agregadas: vínculos vivos em contrato_escolas dos contratos com chamada_id = chamada em edição
+              // Escolas agregadas: escolas ÚNICAS com vínculos ativos em contrato_escolas dos contratos com chamada_id = chamada em edição
               // contractSchools do context são os vínculos de contrato_escolas carregados
               const vinculosEscolasChamada = contractSchools.filter(
                 (ce) => contratosIdsSet.has(ce.contrato_id) && !ce.encerrado_em,
               )
-              const totalEscolasAgregadas = vinculosEscolasChamada.length
+              const escolasUnicasIds = new Set(
+                vinculosEscolasChamada.map((ce) => ce.escola_id).filter(Boolean),
+              )
+              const totalEscolasAgregadas = escolasUnicasIds.size
 
               // Rotas logísticas da chamada
               const rawRoutes = rotasLogisticas.filter(
