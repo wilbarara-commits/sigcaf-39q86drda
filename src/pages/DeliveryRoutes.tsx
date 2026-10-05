@@ -62,6 +62,7 @@ import {
   ChevronDown,
   ChevronRight,
   Share2,
+  Users,
 } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { RouteMapView } from '@/components/RouteMapView'
@@ -78,11 +79,18 @@ import {
   type ResultadoOtimizacaoRota,
 } from '@/lib/routeOptimization'
 import { RouteOptimizationDialog } from '@/components/RouteOptimizationDialog'
+import { MotoristasManagerDialog } from '@/components/MotoristasManagerDialog'
+import { DespachoMotoristaModal } from '@/components/DespachoMotoristaModal'
+import { motoristasService } from '@/services/motoristas'
+import { rotaDespachosService, entregaRegistrosService } from '@/services/rota-despachos'
 import {
   MOTIVOS_LOGISTICOS_CANCELAMENTO,
   type MotivoLogisticoCancelamento,
   type Order,
   type RotaLogisticaRecord,
+  type MotoristaRecord,
+  type RotaDespachoRecord,
+  type EntregaRegistroRecord,
 } from '@/lib/types'
 
 /**
@@ -246,6 +254,50 @@ export default function DeliveryRoutes() {
   const [unmatchedPastedLines, setUnmatchedPastedLines] = useState<string[]>([])
   const [pastedMatchFeedback, setPastedMatchFeedback] = useState<string | null>(null)
   const [batchImportFileModalOpen, setBatchImportFileModalOpen] = useState(false)
+
+  // Estado para gestão de motoristas e despacho com token/whatsapp
+  const [motoristasManagerOpen, setMotoristasManagerOpen] = useState(false)
+  const [despachoMotoristaOpen, setDespachoMotoristaOpen] = useState(false)
+  const [selectedRotaForDriverModal, setSelectedRotaForDriverModal] =
+    useState<RotaLogisticaRecord | null>(null)
+  const [motoristasList, setMotoristasList] = useState<MotoristaRecord[]>([])
+  const [despachosAtivosMap, setDespachosAtivosMap] = useState<Record<string, RotaDespachoRecord>>(
+    {},
+  )
+  const [registrosEntregasMap, setRegistrosEntregasMap] = useState<
+    Record<string, EntregaRegistroRecord[]>
+  >({})
+  const [visualizandoAssinaturaUrl, setVisualizandoAssinaturaUrl] = useState<string | null>(null)
+
+  // Carregar lista de motoristas e despachos ativos
+  const carregarMotoristasEDespachos = async () => {
+    try {
+      const motList = await motoristasService.getAll()
+      setMotoristasList(motList)
+
+      const mapDesp: Record<string, RotaDespachoRecord> = {}
+      const mapRegs: Record<string, EntregaRegistroRecord[]> = {}
+
+      for (const r of rotasLogisticas) {
+        const desp = await rotaDespachosService.getAtivoByRota(r.id)
+        if (desp) {
+          mapDesp[r.id] = desp
+        }
+        const regs = await entregaRegistrosService.getByRota(r.id)
+        if (regs.length > 0) {
+          mapRegs[r.id] = regs
+        }
+      }
+      setDespachosAtivosMap(mapDesp)
+      setRegistrosEntregasMap(mapRegs)
+    } catch (e) {
+      console.warn('Erro ao carregar dados de motoristas/despachos:', e)
+    }
+  }
+
+  useEffect(() => {
+    carregarMotoristasEDespachos()
+  }, [rotasLogisticas])
 
   // Estado para confirmação de despacho da rota inteira
   const [dispatchConfirmOpen, setDispatchConfirmOpen] = useState(false)
@@ -1236,6 +1288,16 @@ export default function DeliveryRoutes() {
             </SelectContent>
           </Select>
 
+          <Button
+            onClick={() => setMotoristasManagerOpen(true)}
+            variant="outline"
+            size="sm"
+            className="gap-1.5 shrink-0 text-foreground border-border hover:bg-muted"
+            title="Cadastrar e gerenciar motoristas da cooperativa"
+          >
+            <Users className="h-4 w-4 text-primary" /> Motoristas
+          </Button>
+
           {selectedChamadaId !== 'todas' && (
             <Button
               onClick={handleOpenCreateRoute}
@@ -1465,6 +1527,37 @@ export default function DeliveryRoutes() {
                     </div>
 
                     <div className="flex items-center gap-1.5 shrink-0">
+                      {/* Botão Despachar / Redisparar Rota para Motorista (WhatsApp + Link) */}
+                      {(() => {
+                        const despAtivo = despachosAtivosMap[item.rota.id]
+                        const isDespachado = Boolean(despAtivo)
+                        return (
+                          <Button
+                            size="sm"
+                            variant={isDespachado ? 'outline' : 'default'}
+                            className={`h-8 text-xs gap-1.5 font-bold ${
+                              isDespachado
+                                ? 'border-amber-400 text-amber-900 dark:text-amber-200 bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/40'
+                                : 'bg-primary hover:bg-primary/90 text-primary-foreground'
+                            }`}
+                            onClick={() => {
+                              setSelectedRotaForDriverModal(item.rota)
+                              setDespachoMotoristaOpen(true)
+                            }}
+                            title={
+                              isDespachado
+                                ? 'Rota despachada: ver link, copiar mensagem ou redisparar (renovar token)'
+                                : 'Despachar rota para o motorista com link e mensagem pronta de WhatsApp'
+                            }
+                          >
+                            <Truck className="h-3.5 w-3.5" />
+                            <span>
+                              {isDespachado ? 'Despachado (Redisparar)' : 'Despachar Rota'}
+                            </span>
+                          </Button>
+                        )
+                      })()}
+
                       {/* Botão Colocar em Rota (Rota Inteira) - Disponível apenas quando a rota não está em execução */}
                       {!hasEmRota &&
                         hasPendentes &&
@@ -1999,10 +2092,71 @@ export default function DeliveryRoutes() {
                                               {parada.contratoNumero}
                                             </Badge>
                                           )}
+
+                                          {/* Status de entrega pelo motorista */}
+                                          {(() => {
+                                            const rotaRegs =
+                                              registrosEntregasMap[item.rota.id] || []
+                                            const regParada = rotaRegs.find(
+                                              (rg) => rg.escola_id === parada.escolaId,
+                                            )
+                                            if (!regParada) return null
+
+                                            const horaEnt = regParada.confirmado_em
+                                              ? new Date(
+                                                  regParada.confirmado_em,
+                                                ).toLocaleTimeString('pt-BR', {
+                                                  hour: '2-digit',
+                                                  minute: '2-digit',
+                                                })
+                                              : null
+
+                                            return (
+                                              <div className="flex items-center gap-1 shrink-0">
+                                                <Badge className="bg-emerald-600 hover:bg-emerald-600 text-white text-[9px] px-1.5 py-0 gap-1 font-semibold">
+                                                  <CheckCircle2 className="h-2.5 w-2.5" />
+                                                  <span>
+                                                    {horaEnt ? `Entregue ${horaEnt}` : 'Entregue'}
+                                                  </span>
+                                                </Badge>
+                                                {regParada.assinatura && (
+                                                  <Button
+                                                    type="button"
+                                                    variant="outline"
+                                                    size="sm"
+                                                    onClick={(e) => {
+                                                      e.stopPropagation()
+                                                      setVisualizandoAssinaturaUrl(
+                                                        regParada.assinatura || null,
+                                                      )
+                                                    }}
+                                                    className="h-5 px-1.5 text-[9px] border-emerald-400 text-emerald-800 dark:text-emerald-300 hover:bg-emerald-50"
+                                                    title="Ver assinatura do recebedor"
+                                                  >
+                                                    Assinatura
+                                                  </Button>
+                                                )}
+                                              </div>
+                                            )
+                                          })()}
                                         </div>
                                         <p className="text-[10px] text-muted-foreground truncate">
                                           {parada.endereco || 'Endereço não informado'}
                                         </p>
+                                        {(() => {
+                                          const rotaRegs = registrosEntregasMap[item.rota.id] || []
+                                          const regParada = rotaRegs.find(
+                                            (rg) => rg.escola_id === parada.escolaId,
+                                          )
+                                          if (regParada?.observacao) {
+                                            return (
+                                              <p className="text-[9px] text-slate-600 dark:text-slate-400 italic truncate mt-0.5">
+                                                Obs: {regParada.observacao}
+                                              </p>
+                                            )
+                                          }
+                                          return null
+                                        })()}
                                       </div>
                                     </div>
 
@@ -2947,6 +3101,91 @@ Ou apenas o nome da escola copiado do Excel/Word`}
         onApply={handleApplyOptimization}
         isApplying={isApplyingOptimization}
       />
+
+      {/* MODAL: Gestão de Motoristas */}
+      <MotoristasManagerDialog
+        open={motoristasManagerOpen}
+        onOpenChange={setMotoristasManagerOpen}
+        onMotoristasChanged={carregarMotoristasEDespachos}
+      />
+
+      {/* MODAL: Despacho para Motorista com Link / WhatsApp */}
+      <DespachoMotoristaModal
+        open={despachoMotoristaOpen}
+        onOpenChange={setDespachoMotoristaOpen}
+        rota={selectedRotaForDriverModal}
+        ciclo={activeCiclo}
+        chamada={currentChamada}
+        totalEntregas={
+          selectedRotaForDriverModal
+            ? paradasRota.filter(
+                (p) =>
+                  (p.rota_id || (p as any).rota_logistica_id) === selectedRotaForDriverModal.id,
+              ).length
+            : 0
+        }
+        motoristas={motoristasList}
+        despachoAtivo={
+          selectedRotaForDriverModal
+            ? despachosAtivosMap[selectedRotaForDriverModal.id] || null
+            : null
+        }
+        onDespachoSucesso={async (novoDespacho) => {
+          if (selectedRotaForDriverModal) {
+            setDespachosAtivosMap((prev) => ({
+              ...prev,
+              [selectedRotaForDriverModal.id]: novoDespacho,
+            }))
+          }
+          await carregarMotoristasEDespachos()
+        }}
+        onGerenciarMotoristas={() => {
+          setDespachoMotoristaOpen(false)
+          setMotoristasManagerOpen(true)
+        }}
+      />
+
+      {/* MODAL: Visualização ampliada da assinatura do recebedor */}
+      <Dialog
+        open={Boolean(visualizandoAssinaturaUrl)}
+        onOpenChange={(open) => {
+          if (!open) setVisualizandoAssinaturaUrl(null)
+        }}
+      >
+        <DialogContent className="sm:max-w-[420px]">
+          <DialogHeader>
+            <DialogTitle className="text-sm font-bold flex items-center gap-2">
+              <FileCheck2 className="h-4 w-4 text-emerald-600" />
+              Assinatura do Recebedor na Escola
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              Comprovante de entrega assinado digitalmente no celular pelo recebedor.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="p-3 bg-white border rounded-lg flex items-center justify-center min-h-[160px]">
+            {visualizandoAssinaturaUrl && (
+              <img
+                src={visualizandoAssinaturaUrl}
+                alt="Assinatura"
+                className="max-h-56 max-w-full object-contain"
+              />
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setVisualizandoAssinaturaUrl(null)}
+              className="text-xs"
+            >
+              Fechar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

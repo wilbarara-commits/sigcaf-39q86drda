@@ -519,3 +519,55 @@ export interface ConfiguracoesRecord {
   created?: string
   updated?: string
 }
+
+export interface MotoristaRecord {
+  id: string
+  nome: string
+  telefone?: string
+  ativo: boolean
+  observacoes?: string
+  created?: string
+  updated?: string
+}
+
+export interface RotaDespachoRecord {
+  id: string
+  rota_id: string
+  motorista_id?: string
+  token: string
+  ativo: boolean
+  despachado_em?: string
+  renovado_em?: string
+  ciclo_id?: string
+  chamada_id?: string
+  expand?: {
+    rota_id?: RotaRecord
+    motorista_id?: MotoristaRecord
+    ciclo_id?: CicloRecord
+    chamada_id?: ChamadaRecord
+  }
+  created?: string
+  updated?: string
+}
+
+export interface EntregaRegistroRecord {
+  id: string
+  rota_id: string
+  escola_id: string
+  motorista_id?: string
+  despacho_id?: string
+  chegada_em?: string
+  confirmado_em?: string
+  assinatura?: string // dataURL (imagem base64)
+  observacao?: string
+  status_sync?: 'sincronizado' | 'pendente' | string
+  client_uid?: string
+  expand?: {
+    rota_id?: RotaRecord
+    escola_id?: EscolaRecord
+    motorista_id?: MotoristaRecord
+    despacho_id?: RotaDespachoRecord
+  }
+  created?: string
+  updated?: string
+}

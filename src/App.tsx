@@ -28,6 +28,7 @@ import Profile from './pages/Profile'
 import UsersPage from './pages/Users'
 import SettingsPage from './pages/Settings'
 import SchoolOrderForm from './pages/SchoolOrderForm'
+import { MotoristaPortal } from './pages/MotoristaPortal'
 
 const App = () => (
   <AuthProvider>
@@ -39,6 +40,9 @@ const App = () => (
           <Routes>
             {/* Rota pública de login */}
             <Route path="/login" element={<Login />} />
+
+            {/* Rota pública do portal do motorista (sem login, acesso via token) */}
+            <Route path="/motorista" element={<MotoristaPortal />} />
 
             {/* Rota pública do formulário de pedidos da escola (sem login) */}
             <Route path="/formulario/:token" element={<SchoolOrderForm />} />

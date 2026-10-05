@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-05T07:20:16.107Z",
+  "generatedAt": "2026-10-05T08:13:02.822Z",
   "collections": [
     {
       "name": "users",
@@ -1494,6 +1494,238 @@
       "indexes": [
         "CREATE INDEX idx_chamada_itens_chamada ON chamada_itens (chamada_id)",
         "CREATE INDEX idx_chamada_itens_produto ON chamada_itens (produto)"
+      ]
+    },
+    {
+      "name": "motoristas",
+      "type": "base",
+      "apiRules": {
+        "list": "",
+        "view": "",
+        "create": "@request.auth.id != \"\"",
+        "update": "@request.auth.id != \"\"",
+        "delete": "@request.auth.id != \"\""
+      },
+      "fields": [
+        {
+          "name": "nome",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "telefone",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "ativo",
+          "type": "bool",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "observacoes",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": [
+        "CREATE INDEX idx_motoristas_ativo ON motoristas (ativo)",
+        "CREATE INDEX idx_motoristas_nome ON motoristas (nome)"
+      ]
+    },
+    {
+      "name": "rota_despachos",
+      "type": "base",
+      "apiRules": {
+        "list": "",
+        "view": "",
+        "create": "",
+        "update": "",
+        "delete": "@request.auth.id != \"\""
+      },
+      "fields": [
+        {
+          "name": "rota_id",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "rotas"
+        },
+        {
+          "name": "motorista_id",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "motoristas"
+        },
+        {
+          "name": "token",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "ativo",
+          "type": "bool",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "despachado_em",
+          "type": "date",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "renovado_em",
+          "type": "date",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "ciclo_id",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "ciclos"
+        },
+        {
+          "name": "chamada_id",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "chamadas"
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": []
+    },
+    {
+      "name": "entrega_registros",
+      "type": "base",
+      "apiRules": {
+        "list": "",
+        "view": "",
+        "create": "",
+        "update": "",
+        "delete": "@request.auth.id != \"\""
+      },
+      "fields": [
+        {
+          "name": "rota_id",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "rotas"
+        },
+        {
+          "name": "escola_id",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "escolas"
+        },
+        {
+          "name": "motorista_id",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "motoristas"
+        },
+        {
+          "name": "despacho_id",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "rota_despachos"
+        },
+        {
+          "name": "chegada_em",
+          "type": "date",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "confirmado_em",
+          "type": "date",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "assinatura",
+          "type": "editor",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "observacao",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "status_sync",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "client_uid",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": [
+        "CREATE INDEX idx_entrega_reg_rota ON entrega_registros (rota_id)",
+        "CREATE INDEX idx_entrega_reg_escola ON entrega_registros (escola_id)",
+        "CREATE INDEX idx_entrega_reg_despacho ON entrega_registros (despacho_id)",
+        "CREATE INDEX idx_entrega_reg_client_uid ON entrega_registros (client_uid)"
       ]
     }
   ]

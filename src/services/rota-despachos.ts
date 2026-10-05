@@ -1,0 +1,286 @@
+import pb from '@/lib/pocketbase/client'
+import type {
+  RotaDespachoRecord,
+  EntregaRegistroRecord,
+  RotaRecord,
+  ParadaRotaRecord,
+  EscolaRecord,
+} from '@/lib/types'
+
+/**
+ * Gera um token longo, URL-safe e criptograficamente aleatório
+ */
+export function generateDriverToken(): string {
+  const bytes = new Uint8Array(24)
+  if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
+    crypto.getRandomValues(bytes)
+  } else {
+    for (let i = 0; i < 24; i++) {
+      bytes[i] = Math.floor(Math.random() * 256)
+    }
+  }
+  const hex = Array.from(bytes)
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('')
+  return `mot_${hex}`
+}
+
+/**
+ * Monta o texto pronto da mensagem do WhatsApp para copiar
+ */
+export function buildDriverWhatsAppMessage(options: {
+  rotaNome: string
+  cicloCodigo?: string
+  totalEntregas: number
+  token: string
+  origin?: string
+}): string {
+  const base =
+    options.origin ||
+    (typeof window !== 'undefined' && window.location?.origin ? window.location.origin : '')
+  const link = `${base}/motorista?token=${options.token}`
+  const cicloInfo = options.cicloCodigo ? ` — Ciclo ${options.cicloCodigo}` : ''
+  const entregasText =
+    options.totalEntregas === 1 ? '1 entrega' : `${options.totalEntregas} entregas`
+
+  return `*${options.rotaNome}*${cicloInfo} — ${entregasText}.\nAcompanhe e registre as entregas pelo link:\n${link}`
+}
+
+export interface MotoristaPortalData {
+  despacho: RotaDespachoRecord
+  rota: RotaRecord
+  paradas: Array<
+    ParadaRotaRecord & {
+      escola?: EscolaRecord
+      registro?: EntregaRegistroRecord
+    }
+  >
+}
+
+export const rotaDespachosService = {
+  /**
+   * Busca o despacho ativo mais recente de uma rota
+   */
+  async getAtivoByRota(rotaId: string): Promise<RotaDespachoRecord | null> {
+    try {
+      const records = await pb.collection('rota_despachos').getList<RotaDespachoRecord>(1, 1, {
+        filter: `rota_id = "${rotaId}" && ativo = true`,
+        sort: '-despachado_em,-created',
+        expand: 'motorista_id,rota_id,ciclo_id,chamada_id',
+      })
+      return records.items[0] || null
+    } catch (err) {
+      console.error('Erro ao buscar despacho ativo por rota:', err)
+      return null
+    }
+  },
+
+  /**
+   * Busca o histórico de despachos de uma rota
+   */
+  async getHistoricoByRota(rotaId: string): Promise<RotaDespachoRecord[]> {
+    try {
+      return await pb.collection('rota_despachos').getFullList<RotaDespachoRecord>({
+        filter: `rota_id = "${rotaId}"`,
+        sort: '-created',
+        expand: 'motorista_id',
+      })
+    } catch {
+      return []
+    }
+  },
+
+  /**
+   * Busca dados pelo token (página pública do motorista)
+   * Se o token existir mas ativo === false, retorna { status: 'renovado', record }
+   * Se não existir, retorna { status: 'invalido' }
+   */
+  async getByToken(
+    tokenStr: string,
+  ): Promise<{ status: 'valido' | 'renovado' | 'invalido'; record?: RotaDespachoRecord }> {
+    try {
+      const clean = (tokenStr || '').trim()
+      if (!clean) return { status: 'invalido' }
+
+      const record = await pb
+        .collection('rota_despachos')
+        .getFirstListItem<RotaDespachoRecord>(`token = "${clean}"`, {
+          expand: 'rota_id,motorista_id,ciclo_id,chamada_id',
+        })
+
+      if (!record.ativo) {
+        return { status: 'renovado', record }
+      }
+      return { status: 'valido', record }
+    } catch {
+      return { status: 'invalido' }
+    }
+  },
+
+  /**
+   * Despacha uma rota pela 1ª vez ou redispara renovando o token
+   */
+  async despacharOuRenovar(data: {
+    rotaId: string
+    motoristaId?: string
+    cicloId?: string
+    chamadaId?: string
+    isRedisparo?: boolean
+  }): Promise<RotaDespachoRecord> {
+    const nowIso = new Date().toISOString()
+    const newToken = generateDriverToken()
+
+    // 1. Se houver despachos ativos anteriores desta rota, desativa-os (invalidação / renovação)
+    try {
+      const anteriores = await pb.collection('rota_despachos').getFullList<RotaDespachoRecord>({
+        filter: `rota_id = "${data.rotaId}" && ativo = true`,
+      })
+      for (const ant of anteriores) {
+        await pb.collection('rota_despachos').update(ant.id, {
+          ativo: false,
+          renovado_em: nowIso,
+        })
+      }
+    } catch (err) {
+      console.warn('Aviso ao desativar despachos anteriores:', err)
+    }
+
+    // 2. Cria o novo registro de despacho com o token exclusivo
+    return await pb.collection('rota_despachos').create<RotaDespachoRecord>({
+      rota_id: data.rotaId,
+      motorista_id: data.motoristaId || undefined,
+      ciclo_id: data.cicloId || undefined,
+      chamada_id: data.chamadaId || undefined,
+      token: newToken,
+      ativo: true,
+      despachado_em: nowIso,
+      renovado_em: data.isRedisparo ? nowIso : undefined,
+    })
+  },
+
+  /**
+   * Carrega os dados completos para a tela pública do motorista:
+   * rota, paradas com escolas ordenadas e registros de entrega já realizados.
+   */
+  async carregarPortalMotorista(despacho: RotaDespachoRecord): Promise<MotoristaPortalData> {
+    const rotaId = despacho.rota_id
+    const rota = await pb.collection('rotas').getOne<RotaRecord>(rotaId, {
+      expand: 'chamada_id,contrato_id',
+    })
+
+    const paradas = await pb.collection('paradas_rota').getFullList<ParadaRotaRecord>({
+      filter: `rota_id = "${rotaId}"`,
+      sort: 'ordem',
+      expand: 'escola_id',
+    })
+
+    // Buscar registros de entrega já existentes para esta rota
+    let registros: EntregaRegistroRecord[] = []
+    try {
+      registros = await pb.collection('entrega_registros').getFullList<EntregaRegistroRecord>({
+        filter: `rota_id = "${rotaId}"`,
+        sort: '-confirmado_em',
+      })
+    } catch (err) {
+      console.warn('Não foi possível carregar registros prévios de entrega:', err)
+    }
+
+    const registrosPorEscola = new Map<string, EntregaRegistroRecord>()
+    for (const reg of registros) {
+      if (!registrosPorEscola.has(reg.escola_id)) {
+        registrosPorEscola.set(reg.escola_id, reg)
+      }
+    }
+
+    const paradasCompletas = paradas.map((p) => ({
+      ...p,
+      escola: p.expand?.escola_id,
+      registro: registrosPorEscola.get(p.escola_id),
+    }))
+
+    return {
+      despacho,
+      rota,
+      paradas: paradasCompletas,
+    }
+  },
+}
+
+export const entregaRegistrosService = {
+  /**
+   * Lista todos os registros de uma rota
+   */
+  async getByRota(rotaId: string): Promise<EntregaRegistroRecord[]> {
+    try {
+      return await pb.collection('entrega_registros').getFullList<EntregaRegistroRecord>({
+        filter: `rota_id = "${rotaId}"`,
+        sort: 'confirmado_em,created',
+        expand: 'escola_id,motorista_id',
+      })
+    } catch {
+      return []
+    }
+  },
+
+  /**
+   * Salva registro de entrega (com proteção contra duplicidade por client_uid ou rota+escola)
+   */
+  async salvarRegistro(data: {
+    rota_id: string
+    escola_id: string
+    motorista_id?: string
+    despacho_id?: string
+    chegada_em?: string
+    confirmado_em?: string
+    assinatura?: string
+    observacao?: string
+    status_sync?: string
+    client_uid?: string
+  }): Promise<EntregaRegistroRecord> {
+    // Se vier client_uid, tenta atualizar ou evitar duplicação
+    if (data.client_uid) {
+      try {
+        const existList = await pb
+          .collection('entrega_registros')
+          .getList<EntregaRegistroRecord>(1, 1, {
+            filter: `client_uid = "${data.client_uid}"`,
+          })
+        if (existList.items.length > 0) {
+          const id = existList.items[0].id
+          return await pb.collection('entrega_registros').update<EntregaRegistroRecord>(id, {
+            ...data,
+            status_sync: 'sincronizado',
+          })
+        }
+      } catch {
+        /* intentionally ignored */
+      }
+    }
+
+    // Checar se já existe registro desta escola na mesma rota e despacho
+    if (data.rota_id && data.escola_id) {
+      try {
+        const filterStr = data.despacho_id
+          ? `rota_id = "${data.rota_id}" && escola_id = "${data.escola_id}" && despacho_id = "${data.despacho_id}"`
+          : `rota_id = "${data.rota_id}" && escola_id = "${data.escola_id}"`
+        const exist = await pb
+          .collection('entrega_registros')
+          .getList<EntregaRegistroRecord>(1, 1, { filter: filterStr, sort: '-created' })
+        if (exist.items.length > 0) {
+          const id = exist.items[0].id
+          return await pb.collection('entrega_registros').update<EntregaRegistroRecord>(id, {
+            ...data,
+            status_sync: 'sincronizado',
+          })
+        }
+      } catch {
+        /* intentionally ignored */
+      }
+    }
+
+    return await pb.collection('entrega_registros').create<EntregaRegistroRecord>({
+      ...data,
+      status_sync: 'sincronizado',
+    })
+  },
+}
