@@ -311,8 +311,9 @@ export default function CycleHistory() {
                     const isAtivo = activeCiclo?.id === c.id
                     const statusDerivado = derivarStatusCiclo(c.status)
                     const isNaoTerminal = isCicloNaoTerminal(statusDerivado)
-                    const isPendente = isNaoTerminal && !isAtivo
                     const diasAtraso = calcularDiasAtrasoFechamento(c.data_fim)
+                    // Um ciclo só tem fechamento pendente/atrasado se estiver em fase não terminal E com data fim no passado
+                    const isPendente = isNaoTerminal && diasAtraso > 0
 
                     // Resumo da fase do ciclo
                     const resumoFases = gerarResumoFasesCiclo(c)

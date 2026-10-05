@@ -145,13 +145,29 @@ export default function Monitoring() {
     return derivarStatusCiclo(selectedCiclo?.status)
   }, [selectedCiclo])
 
-  const isSelectedAtivo = activeCiclo?.id === selectedCiclo?.id
+  // Ciclo ativo da chamada do ciclo selecionado (ou fallback no ativo geral)
+  const isSelectedAtivo = useMemo(() => {
+    if (!selectedCiclo) return false
+    if (selectedCiclo.chamada_id) {
+      const cicloAtivoChamada = ciclos
+        .filter((c) => c.chamada_id === selectedCiclo.chamada_id && isCicloNaoTerminal(c.status))
+        .sort((a, b) => {
+          const tA = new Date(a.created || a.data_inicio).getTime()
+          const tB = new Date(b.created || b.data_inicio).getTime()
+          return tB - tA
+        })[0]
+      return cicloAtivoChamada?.id === selectedCiclo.id
+    }
+    return activeCiclo?.id === selectedCiclo.id
+  }, [selectedCiclo, ciclos, activeCiclo])
 
-  // Badge derivado de atraso
-  const isFechamentoPendente = Boolean(
-    selectedCiclo && isCicloNaoTerminal(currentFase) && !isSelectedAtivo,
-  )
+  // Badge derivado de atraso:
+  // Apenas se o ciclo for não-terminal e a data de fechamento estiver REALMENTE no passado (diasAtraso > 0).
+  // Um ciclo em andamento com data de fim futura JAMAIS exibe alerta de fechamento pendente/atrasado.
   const diasAtraso = selectedCiclo ? calcularDiasAtrasoFechamento(selectedCiclo.data_fim) : 0
+  const isFechamentoPendente = Boolean(
+    selectedCiclo && isCicloNaoTerminal(currentFase) && diasAtraso > 0,
+  )
 
   // Pedidos do ciclo selecionado (pertencem ao ciclo da chamada)
   const cicloOrders = useMemo(() => {
@@ -275,7 +291,17 @@ export default function Monitoring() {
 
     setUpdating(true)
     try {
-      await updateCicloStatus(selectedCiclo.id, tokenFase)
+      const ok = await updateCicloStatus(selectedCiclo.id, tokenFase)
+      if (ok) {
+        if (tokenFase === 'coleta_encerrada') {
+          toast.success(
+            `Coleta encerrada para o ciclo ${selectedCiclo.nome}! Despacho e rotas liberados.`,
+          )
+        }
+      }
+    } catch (err: any) {
+      console.error('Erro ao atualizar status do ciclo:', err)
+      toast.error('Erro ao encerrar coleta do ciclo.')
     } finally {
       setUpdating(false)
     }
@@ -440,7 +466,10 @@ export default function Monitoring() {
                   </Badge>
                 )}
                 {isFechamentoPendente && (
-                  <Badge className="bg-amber-600 hover:bg-amber-700 text-xs">
+                  <Badge
+                    className="bg-amber-600 hover:bg-amber-700 text-xs"
+                    title={`Ciclo com fechamento vencido há ${diasAtraso} dia(s). Finalize as entregas e atestos para fechar o ciclo.`}
+                  >
                     Fechamento Pendente (atrasado {diasAtraso} dias)
                   </Badge>
                 )}
@@ -514,11 +543,25 @@ export default function Monitoring() {
                 size="sm"
                 variant={currentFase === 'coletando' ? 'default' : 'outline'}
                 className="w-full text-xs"
-                disabled={updating || currentFase === 'coletando' || currentFase === 'cancelado'}
+                disabled={
+                  updating ||
+                  currentFase === 'coletando' ||
+                  currentFase === 'cancelado' ||
+                  currentFase === 'fechado'
+                }
+                title={
+                  currentFase === 'fechado'
+                    ? 'Ciclo já fechado'
+                    : currentFase === 'cancelado'
+                      ? 'Ciclo cancelado'
+                      : currentFase === 'coletando'
+                        ? 'Fase Coletando já está ativa'
+                        : 'Retornar para a fase Coletando'
+                }
                 onClick={() => handleChangeFase('coletando')}
               >
                 {currentFase === 'coletando' ? 'Fase Ativa' : 'Mudar para Coletando'}
-              </Button>
+              </Button>{' '}
             </div>
 
             {/* Fase 2: Correção */}
@@ -545,11 +588,25 @@ export default function Monitoring() {
                 size="sm"
                 variant={currentFase === 'correcao' ? 'default' : 'outline'}
                 className="w-full text-xs"
-                disabled={updating || currentFase === 'correcao' || currentFase === 'cancelado'}
+                disabled={
+                  updating ||
+                  currentFase === 'correcao' ||
+                  currentFase === 'cancelado' ||
+                  currentFase === 'fechado'
+                }
+                title={
+                  currentFase === 'fechado'
+                    ? 'Ciclo já fechado'
+                    : currentFase === 'cancelado'
+                      ? 'Ciclo cancelado'
+                      : currentFase === 'correcao'
+                        ? 'Fase Correção já está ativa'
+                        : 'Mudar para a fase Correção'
+                }
                 onClick={() => handleChangeFase('correcao')}
               >
                 {currentFase === 'correcao' ? 'Fase Ativa' : 'Mudar para Correção'}
-              </Button>
+              </Button>{' '}
             </div>
 
             {/* Fase 3: Coleta Encerrada */}
@@ -583,11 +640,25 @@ export default function Monitoring() {
                       size="sm"
                       variant={isColetaEncerrada ? 'default' : 'outline'}
                       className="w-full text-xs"
-                      disabled={updating || isColetaEncerrada || currentFase === 'cancelado'}
+                      disabled={
+                        updating ||
+                        isColetaEncerrada ||
+                        currentFase === 'cancelado' ||
+                        currentFase === 'fechado'
+                      }
+                      title={
+                        currentFase === 'fechado'
+                          ? 'Ciclo já fechado (coleta já foi concluída)'
+                          : currentFase === 'cancelado'
+                            ? 'Ciclo cancelado'
+                            : isColetaEncerrada
+                              ? 'Fase Coleta Encerrada já está ativa'
+                              : 'Encerrar coleta de pedidos e habilitar montagem e despacho de rotas'
+                      }
                       onClick={() => handleChangeFase('coleta_encerrada')}
                     >
                       {isColetaEncerrada ? 'Fase Ativa' : 'Encerrar Coleta'}
-                    </Button>
+                    </Button>{' '}
                     {isColetaEncerrada && (
                       <Button
                         size="sm"
@@ -635,10 +706,17 @@ export default function Monitoring() {
                 variant={currentFase === 'fechado' ? 'default' : 'outline'}
                 className="w-full text-xs"
                 disabled={updating || currentFase === 'fechado' || currentFase === 'cancelado'}
+                title={
+                  currentFase === 'fechado'
+                    ? 'Ciclo já fechado'
+                    : currentFase === 'cancelado'
+                      ? 'Ciclo cancelado'
+                      : 'Fechar ciclo em definitivo após conclusão das entregas e atestos'
+                }
                 onClick={() => handleChangeFase('fechado')}
               >
                 {currentFase === 'fechado' ? 'Fase Ativa' : 'Fechar'}
-              </Button>
+              </Button>{' '}
             </div>
           </div>
         </CardContent>

@@ -8,6 +8,8 @@ import {
   getCicloAtivo,
   getCiclosAtivosPorChamada,
   formatDespachoAmigavel,
+  calcularDiasAtrasoFechamento,
+  isCicloNaoTerminal,
 } from './cicloUtils'
 
 describe('cicloUtils - numeração livre e validações de ciclo', () => {
@@ -157,5 +159,49 @@ describe('cicloUtils - numeração livre e validações de ciclo', () => {
     expect(sugestao.numeroSemana).toBe(39)
     expect(sugestao.ano).toBe(2026)
     expect(sugestao.nomeCicloPadrao).toBe('Ciclo 39/2026')
+  })
+
+  it('calcularDiasAtrasoFechamento só retorna atraso > 0 para datas de fim estritamente no passado', () => {
+    // Data futura em relação a agora
+    const dataFutura = new Date()
+    dataFutura.setDate(dataFutura.getDate() + 10)
+    const atrasoFuturo = calcularDiasAtrasoFechamento(dataFutura.toISOString())
+    expect(atrasoFuturo).toBe(0)
+
+    // Data passada em relação a agora (ex: 5 dias atrás)
+    const dataPassada = new Date()
+    dataPassada.setDate(dataPassada.getDate() - 5)
+    const atrasoPassado = calcularDiasAtrasoFechamento(dataPassada.toISOString())
+    expect(atrasoPassado).toBeGreaterThanOrEqual(5)
+
+    // Ciclo 40/2026 com fim em outubro de 2026 não deve estar atrasado no ano corrente
+    const fimCiclo40 = '2026-10-06 23:59:59.000Z'
+    // Se a data de hoje for anterior a 06/10/2026, atraso deve ser 0
+    if (new Date() < new Date(fimCiclo40)) {
+      expect(calcularDiasAtrasoFechamento(fimCiclo40)).toBe(0)
+    }
+  })
+
+  it('isCicloNaoTerminal reconhece coletando, correcao e coleta_encerrada como não-terminais e fechado/cancelado como terminais', () => {
+    expect(isCicloNaoTerminal('coletando')).toBe(true)
+    expect(isCicloNaoTerminal('correcao')).toBe(true)
+    expect(isCicloNaoTerminal('coleta_encerrada')).toBe(true)
+    expect(isCicloNaoTerminal('coletado')).toBe(true)
+
+    expect(isCicloNaoTerminal('fechado')).toBe(false)
+    expect(isCicloNaoTerminal('cancelado')).toBe(false)
+  })
+
+  it('ciclo não-terminal com data de término futura não deve ser marcado como fechamento pendente', () => {
+    const dataFimFutura = '2026-10-06 23:59:59.000Z'
+    const diasAtraso = calcularDiasAtrasoFechamento(dataFimFutura)
+    const fase = 'coleta_encerrada'
+    const isNaoTerminal = isCicloNaoTerminal(fase)
+
+    // Regra corrigida: fechamento pendente exige fase não terminal E diasAtraso > 0
+    const isFechamentoPendente = isNaoTerminal && diasAtraso > 0
+    if (new Date() < new Date(dataFimFutura)) {
+      expect(isFechamentoPendente).toBe(false)
+    }
   })
 })
