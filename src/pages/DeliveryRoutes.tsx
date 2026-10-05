@@ -63,6 +63,7 @@ import {
   ChevronRight,
   Share2,
   Users,
+  Camera,
 } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { RouteMapView } from '@/components/RouteMapView'
@@ -269,6 +270,7 @@ export default function DeliveryRoutes() {
     Record<string, EntregaRegistroRecord[]>
   >({})
   const [visualizandoAssinaturaUrl, setVisualizandoAssinaturaUrl] = useState<string | null>(null)
+  const [visualizandoFotoUrl, setVisualizandoFotoUrl] = useState<string | null>(null)
 
   // Carregar lista de motoristas e despachos ativos
   const carregarMotoristasEDespachos = async () => {
@@ -2116,6 +2118,21 @@ export default function DeliveryRoutes() {
                                                     Assinatura
                                                   </Button>
                                                 )}
+                                                {regParada.foto && (
+                                                  <Button
+                                                    type="button"
+                                                    variant="outline"
+                                                    size="sm"
+                                                    onClick={(e) => {
+                                                      e.stopPropagation()
+                                                      setVisualizandoFotoUrl(regParada.foto || null)
+                                                    }}
+                                                    className="h-5 px-1.5 text-[9px] border-blue-400 text-blue-800 dark:text-blue-300 hover:bg-blue-50 gap-0.5"
+                                                    title="Ver foto do material entregue"
+                                                  >
+                                                    <span>📷</span> Foto
+                                                  </Button>
+                                                )}
                                               </div>
                                             )
                                           })()}
@@ -3193,6 +3210,48 @@ Ou apenas o nome da escola copiado do Excel/Word`}
               variant="outline"
               size="sm"
               onClick={() => setVisualizandoAssinaturaUrl(null)}
+              className="text-xs"
+            >
+              Fechar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* MODAL: Visualização ampliada da foto do material entregue */}
+      <Dialog
+        open={Boolean(visualizandoFotoUrl)}
+        onOpenChange={(open) => {
+          if (!open) setVisualizandoFotoUrl(null)
+        }}
+      >
+        <DialogContent className="sm:max-w-[540px]">
+          <DialogHeader>
+            <DialogTitle className="text-sm font-bold flex items-center gap-2">
+              <Camera className="h-4 w-4 text-blue-600" />
+              Foto do Material Entregue
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              Registro fotográfico anexado pelo motorista no momento da entrega.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="p-2 bg-slate-950 border rounded-lg flex items-center justify-center min-h-[220px]">
+            {visualizandoFotoUrl && (
+              <img
+                src={visualizandoFotoUrl}
+                alt="Foto do Material Entregue"
+                className="max-h-[70vh] max-w-full object-contain rounded"
+              />
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setVisualizandoFotoUrl(null)}
               className="text-xs"
             >
               Fechar

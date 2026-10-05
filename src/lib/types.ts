@@ -560,6 +560,8 @@ export interface EntregaRegistroRecord {
   confirmado_em?: string
   assinatura?: string // dataURL (imagem base64)
   observacao?: string
+  foto?: string // dataURL (imagem base64 compactada)
+  foto_file?: string // nome do arquivo gerado pelo PocketBase
   status_sync?: 'sincronizado' | 'pendente' | string
   client_uid?: string
   expand?: {

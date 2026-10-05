@@ -10,6 +10,7 @@ export interface FilaEntregaItem {
   confirmado_em: string
   assinatura?: string
   observacao?: string
+  foto?: string // dataURL (base64) compactada para resiliência offline
   status_sync: 'pendente' | 'sincronizado' | 'erro'
   tentativas: number
   criado_em: string

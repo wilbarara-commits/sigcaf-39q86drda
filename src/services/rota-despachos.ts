@@ -278,6 +278,9 @@ export const entregaRegistrosService = {
   /**
    * Salva registro de entrega (com proteção contra duplicidade por client_uid ou rota+escola)
    */
+  /**
+   * Salva registro de entrega (com proteção contra duplicidade por client_uid ou rota+escola)
+   */
   async salvarRegistro(data: {
     rota_id: string
     escola_id: string
@@ -287,9 +290,15 @@ export const entregaRegistrosService = {
     confirmado_em?: string
     assinatura?: string
     observacao?: string
+    foto?: string
     status_sync?: string
     client_uid?: string
   }): Promise<EntregaRegistroRecord> {
+    const payload: Record<string, any> = {
+      ...data,
+      status_sync: 'sincronizado',
+    }
+
     // Se vier client_uid, tenta atualizar ou evitar duplicação
     if (data.client_uid) {
       try {
@@ -300,10 +309,7 @@ export const entregaRegistrosService = {
           })
         if (existList.items.length > 0) {
           const id = existList.items[0].id
-          return await pb.collection('entrega_registros').update<EntregaRegistroRecord>(id, {
-            ...data,
-            status_sync: 'sincronizado',
-          })
+          return await pb.collection('entrega_registros').update<EntregaRegistroRecord>(id, payload)
         }
       } catch {
         /* intentionally ignored */
@@ -321,19 +327,13 @@ export const entregaRegistrosService = {
           .getList<EntregaRegistroRecord>(1, 1, { filter: filterStr, sort: '-created' })
         if (exist.items.length > 0) {
           const id = exist.items[0].id
-          return await pb.collection('entrega_registros').update<EntregaRegistroRecord>(id, {
-            ...data,
-            status_sync: 'sincronizado',
-          })
+          return await pb.collection('entrega_registros').update<EntregaRegistroRecord>(id, payload)
         }
       } catch {
         /* intentionally ignored */
       }
     }
 
-    return await pb.collection('entrega_registros').create<EntregaRegistroRecord>({
-      ...data,
-      status_sync: 'sincronizado',
-    })
+    return await pb.collection('entrega_registros').create<EntregaRegistroRecord>(payload)
   },
 }

@@ -287,6 +287,37 @@ export async function obterRotaEstradaEmRotaOSRM(
   }
 }
 
+/**
+ * Obtém a rota rodoviária direta entre dois pontos específicos (ex: Ponto Atual/Depósito -> Próxima Entrega).
+ * Ideal para o Portal do Motorista.
+ */
+export async function obterTrechoDiretoOSRM(
+  origem: LatLngCoord,
+  destino: LatLngCoord,
+  options?: { timeoutMs?: number },
+): Promise<{
+  coordinates: [number, number][]
+  distanciaKm: number
+  duracaoMinutos: number
+  viaEstrada: true
+} | null> {
+  const timeoutMs = options?.timeoutMs ?? 8000
+  const cacheKey = `trecho:${origem.latitude.toFixed(5)},${origem.longitude.toFixed(5)};${destino.latitude.toFixed(5)},${destino.longitude.toFixed(5)}`
+
+  try {
+    const res = await fetchOsrmDrivingRoute([origem, destino], timeoutMs)
+    if (!res) return null
+    return {
+      coordinates: res.coordinates,
+      distanciaKm: res.distanceMeters / 1000,
+      duracaoMinutos: Math.round(res.durationSeconds / 60),
+      viaEstrada: true,
+    }
+  } catch {
+    return null
+  }
+}
+
 export async function obterRotaEstradaOSRM(
   deposito: LatLngCoord,
   paradas: LatLngCoord[],

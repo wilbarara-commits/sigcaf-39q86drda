@@ -43,8 +43,16 @@ import {
   FileCheck,
   Check,
   Loader2,
+  Camera,
+  Image as ImageIcon,
+  Trash2,
+  Navigation,
 } from 'lucide-react'
 import { toast } from '@/hooks/use-toast'
+import { MotoristaTrechoMapa } from '@/components/MotoristaTrechoMapa'
+import { compressImage } from '@/lib/imageCompressor'
+import { extrairCoordenadas, DEPOSITO_CENTRAL } from '@/lib/routeOptimization'
+import { configuracoesService } from '@/services/configuracoes'
 
 export const MotoristaPortal: React.FC = () => {
   const [searchParams] = useSearchParams()
@@ -59,10 +67,30 @@ export const MotoristaPortal: React.FC = () => {
   const [isSyncing, setIsSyncing] = useState(false)
   const [filaLocal, setFilaLocal] = useState<FilaEntregaItem[]>([])
 
+  // Coordenadas do Depósito da Cooperativa e GPS do Motorista
+  const [depositoConfig, setDepositoConfig] = useState<{
+    latitude: number
+    longitude: number
+    nome: string
+    isCadastrado: boolean
+  }>({
+    latitude: DEPOSITO_CENTRAL.latitude,
+    longitude: DEPOSITO_CENTRAL.longitude,
+    nome: DEPOSITO_CENTRAL.nome,
+    isCadastrado: false,
+  })
+  const [gpsMotorista, setGpsMotorista] = useState<{
+    latitude: number
+    longitude: number
+  } | null>(null)
+  const [origemTipo, setOrigemTipo] = useState<'deposito' | 'motorista'>('motorista')
+
   // Modal de registro de entrega por parada
   const [selectedParada, setSelectedParada] = useState<MotoristaPortalParada | null>(null)
   const [chegadaEm, setChegadaEm] = useState<string>('')
   const [assinaturaDataUrl, setAssinaturaDataUrl] = useState<string | undefined>(undefined)
+  const [fotoDataUrl, setFotoDataUrl] = useState<string | undefined>(undefined)
+  const [isProcessingFoto, setIsProcessingFoto] = useState(false)
   const [observacao, setObservacao] = useState<string>('')
   const [isSavingEntrega, setIsSavingEntrega] = useState(false)
 
@@ -85,6 +113,62 @@ export const MotoristaPortal: React.FC = () => {
       window.removeEventListener('offline', handleOffline)
     }
   }, [token])
+
+  // Carregar configurações do depósito da cooperativa e GPS atual
+  useEffect(() => {
+    // 1. Depósito da Cooperativa
+    configuracoesService
+      .get()
+      .then((cfg) => {
+        if (cfg) {
+          const coords = extrairCoordenadas(cfg.deposito_latitude, cfg.deposito_longitude)
+          if (coords) {
+            setDepositoConfig({
+              latitude: coords.latitude,
+              longitude: coords.longitude,
+              nome: cfg.deposito_nome?.trim() || 'Depósito Cooperativa',
+              isCadastrado: true,
+            })
+            // Se houver depósito cadastrado, permite alternar
+            return
+          }
+        }
+        setDepositoConfig({
+          latitude: DEPOSITO_CENTRAL.latitude,
+          longitude: DEPOSITO_CENTRAL.longitude,
+          nome: DEPOSITO_CENTRAL.nome,
+          isCadastrado: false,
+        })
+      })
+      .catch(() => {
+        setDepositoConfig({
+          latitude: DEPOSITO_CENTRAL.latitude,
+          longitude: DEPOSITO_CENTRAL.longitude,
+          nome: DEPOSITO_CENTRAL.nome,
+          isCadastrado: false,
+        })
+      })
+
+    // 2. Geolocation atual do celular do motorista
+    if (typeof navigator !== 'undefined' && 'geolocation' in navigator) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          setGpsMotorista({
+            latitude: pos.coords.latitude,
+            longitude: pos.coords.longitude,
+          })
+          setOrigemTipo('motorista')
+        },
+        () => {
+          // Fallback se recusado ou sem permissão
+          setOrigemTipo('deposito')
+        },
+        { enableHighAccuracy: true, timeout: 7000 },
+      )
+    } else {
+      setOrigemTipo('deposito')
+    }
+  }, [])
 
   // Carregar dados da rota pelo token
   const carregarDados = useCallback(
@@ -160,6 +244,7 @@ export const MotoristaPortal: React.FC = () => {
           chegada_em: item.chegada_em,
           confirmado_em: item.confirmado_em,
           assinatura: item.assinatura,
+          foto: item.foto,
           observacao: item.observacao,
           client_uid: item.client_uid,
         })
@@ -204,7 +289,40 @@ export const MotoristaPortal: React.FC = () => {
     const nowIso = new Date().toISOString()
     setChegadaEm(parada.registro?.chegada_em || nowIso)
     setAssinaturaDataUrl(parada.registro?.assinatura || undefined)
+    setFotoDataUrl(parada.registro?.foto || undefined)
     setObservacao(parada.registro?.observacao || '')
+  }
+
+  // Manipular captura/anexo de foto do material entregue
+  const handleFotoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    setIsProcessingFoto(true)
+    try {
+      // Compactar no cliente antes de salvar em base64: max ~1280px e JPEG ~0.8
+      const res = await compressImage(file, { maxWidth: 1280, maxHeight: 1280, quality: 0.8 })
+      setFotoDataUrl(res.dataUrl)
+      toast({
+        title: 'Foto anexada',
+        description: 'Foto compactada e pronta para o comprovante.',
+      })
+    } catch (err) {
+      console.error('Erro ao processar foto:', err)
+      toast({
+        variant: 'destructive',
+        title: 'Falha na foto',
+        description: 'Não foi possível carregar a imagem. Tente novamente.',
+      })
+    } finally {
+      setIsProcessingFoto(false)
+      // Limpar input para permitir re-seleção se necessário
+      e.target.value = ''
+    }
+  }
+
+  const handleRemoverFoto = () => {
+    setFotoDataUrl(undefined)
   }
 
   // Confirmar registro de entrega: grava AUTOMATICAMENTE horário de confirmação
@@ -223,6 +341,7 @@ export const MotoristaPortal: React.FC = () => {
       chegada_em: chegadaEm || nowIso,
       confirmado_em: nowIso,
       assinatura: assinaturaDataUrl,
+      foto: fotoDataUrl,
       observacao: observacao.trim() || undefined,
       status_sync: (navigator.onLine ? 'pendente' : 'pendente') as 'pendente',
     }
@@ -251,6 +370,7 @@ export const MotoristaPortal: React.FC = () => {
                     chegada_em: chegadaEm || nowIso,
                     confirmado_em: nowIso,
                     assinatura: assinaturaDataUrl,
+                    foto: fotoDataUrl,
                     observacao: observacao.trim() || undefined,
                     status_sync: 'pendente',
                   },
@@ -271,6 +391,7 @@ export const MotoristaPortal: React.FC = () => {
             chegada_em: chegadaEm || nowIso,
             confirmado_em: nowIso,
             assinatura: assinaturaDataUrl,
+            foto: fotoDataUrl,
             observacao: observacao.trim() || undefined,
             client_uid: clientUid,
           })
@@ -324,6 +445,70 @@ export const MotoristaPortal: React.FC = () => {
   const pendentesSyncCount = useMemo(() => {
     return filaLocal.filter((f) => f.status_sync === 'pendente').length
   }, [filaLocal])
+
+  // Próxima entrega pendente na ordem da rota
+  const proximaParadaPendente = useMemo(() => {
+    if (!data?.paradas) return null
+    return (
+      data.paradas.find((p) => {
+        const estaEntregueNoBanco = Boolean(p.registro?.confirmado_em)
+        const estaEntregueNaFila = filaLocal.some(
+          (f) => f.escola_id === p.escola_id && f.confirmado_em,
+        )
+        return !estaEntregueNoBanco && !estaEntregueNaFila
+      }) || null
+    )
+  }, [data, filaLocal])
+
+  // Coordenadas válidas para o trecho
+  const trechoOrigemInfo = useMemo(() => {
+    if (origemTipo === 'motorista' && gpsMotorista) {
+      return {
+        latitude: gpsMotorista.latitude,
+        longitude: gpsMotorista.longitude,
+        tipo: 'motorista' as const,
+        nome: 'Sua Localização Atual (GPS)',
+      }
+    }
+    return {
+      latitude: depositoConfig.latitude,
+      longitude: depositoConfig.longitude,
+      tipo: 'deposito' as const,
+      nome: depositoConfig.nome,
+    }
+  }, [origemTipo, gpsMotorista, depositoConfig])
+
+  const trechoDestinoInfo = useMemo(() => {
+    if (!proximaParadaPendente) return null
+    const esc = proximaParadaPendente.escola
+    const coords = extrairCoordenadas(esc?.latitude, esc?.longitude)
+    if (!coords) return null
+    const escNome = esc?.nome || (esc as any)?.name || 'Próxima Parada'
+    const escEnd = esc?.endereco || (esc as any)?.address || ''
+    return {
+      latitude: coords.latitude,
+      longitude: coords.longitude,
+      nome: escNome,
+      ordem: proximaParadaPendente.ordem,
+      endereco: escEnd,
+    }
+  }, [proximaParadaPendente])
+
+  // Link do Google Maps do trecho (origem -> destino)
+  const googleMapsTrechoUrl = useMemo(() => {
+    if (!trechoDestinoInfo) return ''
+    const destStr = `${trechoDestinoInfo.latitude},${trechoDestinoInfo.longitude}`
+    const origStr = `${trechoOrigemInfo.latitude},${trechoOrigemInfo.longitude}`
+    return `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(
+      origStr,
+    )}&destination=${encodeURIComponent(destStr)}&travelmode=driving`
+  }, [trechoOrigemInfo, trechoDestinoInfo])
+
+  const podeAlternarOrigem = Boolean(gpsMotorista && depositoConfig.isCadastrado)
+
+  const handleAlternarOrigem = () => {
+    setOrigemTipo((prev) => (prev === 'motorista' ? 'deposito' : 'motorista'))
+  }
 
   // Formatação de hora simples
   const formatTime = (iso?: string) => {
@@ -480,6 +665,48 @@ export const MotoristaPortal: React.FC = () => {
             </div>
           </CardHeader>
         </Card>
+
+        {/* SEÇÃO DO MAPA DO TRECHO (Origem -> Próxima Entrega Pendente) */}
+        {trechoDestinoInfo ? (
+          <div className="space-y-1.5">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground px-1 flex items-center justify-between">
+              <span>Mapa do Trecho a Percorrer</span>
+              <span className="text-[11px] font-semibold text-primary">
+                Próxima: Parada #{trechoDestinoInfo.ordem}
+              </span>
+            </h3>
+            <MotoristaTrechoMapa
+              origem={trechoOrigemInfo}
+              destino={trechoDestinoInfo}
+              todasParadas={data.paradas.map((p) => {
+                const c = extrairCoordenadas(p.escola?.latitude, p.escola?.longitude)
+                return {
+                  latitude: c ? c.latitude : undefined,
+                  longitude: c ? c.longitude : undefined,
+                  nome: p.escola?.nome || 'Escola',
+                  ordem: p.ordem,
+                  entregue: Boolean(
+                    p.registro?.confirmado_em ||
+                    filaLocal.some((f) => f.escola_id === p.escola_id && f.confirmado_em),
+                  ),
+                }
+              })}
+              onAlternarOrigem={handleAlternarOrigem}
+              podeAlternarOrigem={podeAlternarOrigem}
+              googleMapsUrl={googleMapsTrechoUrl}
+            />{' '}
+          </div>
+        ) : contagemEntregas.feitas > 0 && contagemEntregas.feitas >= contagemEntregas.total ? (
+          <Card className="p-4 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-300 dark:border-emerald-800 text-center">
+            <CheckCircle2 className="h-8 w-8 text-emerald-600 mx-auto mb-1.5" />
+            <h4 className="font-bold text-sm text-emerald-900 dark:text-emerald-200">
+              Todas as entregas da rota foram concluídas!
+            </h4>
+            <p className="text-xs text-emerald-700 dark:text-emerald-400 mt-0.5">
+              Excelente trabalho! Retorne ao depósito ou informe à central.
+            </p>
+          </Card>
+        ) : null}
 
         {/* Lista de Paradas na Ordem */}
         <div className="space-y-3">
@@ -714,6 +941,81 @@ export const MotoristaPortal: React.FC = () => {
                 onChange={(dataUrl) => setAssinaturaDataUrl(dataUrl)}
                 disabled={isSavingEntrega}
               />
+            </div>
+
+            {/* Foto do Material Entregue (Câmera ou Arquivo) */}
+            <div className="space-y-2 pt-1 border-t">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                  <Camera className="h-4 w-4 text-primary" />
+                  Foto do Material Entregue (Opcional)
+                </Label>
+                {fotoDataUrl && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleRemoverFoto}
+                    disabled={isSavingEntrega || isProcessingFoto}
+                    className="h-6 px-2 text-[11px] text-destructive hover:bg-destructive/10 gap-1"
+                  >
+                    <Trash2 className="h-3 w-3" />
+                    Remover
+                  </Button>
+                )}
+              </div>
+
+              {fotoDataUrl ? (
+                <div className="relative rounded-lg overflow-hidden border border-slate-200 dark:border-slate-800 bg-slate-950 flex flex-col items-center justify-center">
+                  <img
+                    src={fotoDataUrl}
+                    alt="Foto do Material Entregue"
+                    className="max-h-56 w-auto object-contain rounded-md"
+                  />
+                  <div className="absolute bottom-1 right-1 bg-black/60 text-white text-[10px] px-1.5 py-0.5 rounded">
+                    Compactada (~1280px)
+                  </div>
+                </div>
+              ) : (
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <label className="flex-1 cursor-pointer">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      capture="environment"
+                      onChange={handleFotoChange}
+                      disabled={isSavingEntrega || isProcessingFoto}
+                      className="hidden"
+                    />
+                    <div className="flex items-center justify-center gap-2 p-3 rounded-lg border-2 border-dashed border-slate-300 dark:border-slate-700 hover:border-primary bg-slate-50 dark:bg-slate-900 text-xs font-medium text-slate-700 dark:text-slate-300 transition-colors">
+                      {isProcessingFoto ? (
+                        <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                      ) : (
+                        <Camera className="h-4 w-4 text-primary" />
+                      )}
+                      <span>Tirar Foto (Câmera)</span>
+                    </div>
+                  </label>
+
+                  <label className="flex-1 cursor-pointer">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleFotoChange}
+                      disabled={isSavingEntrega || isProcessingFoto}
+                      className="hidden"
+                    />
+                    <div className="flex items-center justify-center gap-2 p-3 rounded-lg border-2 border-dashed border-slate-300 dark:border-slate-700 hover:border-primary bg-slate-50 dark:bg-slate-900 text-xs font-medium text-slate-700 dark:text-slate-300 transition-colors">
+                      {isProcessingFoto ? (
+                        <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                      ) : (
+                        <ImageIcon className="h-4 w-4 text-primary" />
+                      )}
+                      <span>Escolher da Galeria</span>
+                    </div>
+                  </label>
+                </div>
+              )}
             </div>
 
             {/* Observação opcional */}
