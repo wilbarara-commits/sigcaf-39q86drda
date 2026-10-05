@@ -57,6 +57,7 @@ import {
   resolverDepositoCentral,
 } from '@/lib/routeOptimization'
 import { configuracoesService } from '@/services/configuracoes'
+import { APP_VERSION } from '@/lib/version'
 
 export const MotoristaPortal: React.FC = () => {
   const [searchParams] = useSearchParams()
@@ -526,7 +527,10 @@ export const MotoristaPortal: React.FC = () => {
 
   if (tokenStatus === 'renovado') {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4 relative">
+        <div className="absolute top-3 right-4 text-[11px] font-mono font-medium text-slate-500 bg-slate-200/70 dark:bg-slate-800/70 border border-slate-300/60 dark:border-slate-700/60 rounded px-2 py-0.5 shadow-2xs">
+          SIGCAF v{APP_VERSION}
+        </div>
         <Card className="max-w-md w-full border-amber-300 shadow-md">
           <CardHeader className="text-center pb-2">
             <AlertTriangle className="h-12 w-12 text-amber-500 mx-auto mb-2" />
@@ -548,7 +552,10 @@ export const MotoristaPortal: React.FC = () => {
 
   if (tokenStatus === 'invalido' || !data) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4 relative">
+        <div className="absolute top-3 right-4 text-[11px] font-mono font-medium text-slate-500 bg-slate-200/70 dark:bg-slate-800/70 border border-slate-300/60 dark:border-slate-700/60 rounded px-2 py-0.5 shadow-2xs">
+          SIGCAF v{APP_VERSION}
+        </div>
         <Card className="max-w-md w-full border-destructive/40 shadow-md">
           <CardHeader className="text-center pb-2">
             <AlertTriangle className="h-12 w-12 text-destructive mx-auto mb-2" />
@@ -584,6 +591,12 @@ export const MotoristaPortal: React.FC = () => {
         <div className="flex items-center gap-2">
           {isOnline ? <Wifi className="h-4 w-4" /> : <WifiOff className="h-4 w-4" />}
           <span>{isOnline ? 'Online (Conectado)' : 'Offline (Modo sem sinal ativo)'}</span>
+          <span
+            className="hidden sm:inline-flex items-center text-[10px] font-mono font-medium px-1.5 py-0.5 rounded bg-black/15 text-white/90 border border-white/20 ml-1"
+            title={`Versão do Sistema: SIGCAF v${APP_VERSION}`}
+          >
+            SIGCAF v{APP_VERSION}
+          </span>
         </div>
 
         <div className="flex items-center gap-2">
@@ -613,21 +626,32 @@ export const MotoristaPortal: React.FC = () => {
         <Card className="border-t-4 border-t-primary shadow-sm bg-white dark:bg-slate-900">
           <CardHeader className="pb-3">
             <div className="flex items-start justify-between gap-2">
-              <div>
-                <Badge variant="outline" className="text-primary font-bold mb-1">
-                  PORTAL DO MOTORISTA
-                </Badge>
-                <CardTitle className="text-xl sm:text-2xl font-bold flex items-center gap-2">
-                  <Truck className="h-6 w-6 text-primary" />
-                  {data.rota.nome}
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2 flex-wrap mb-1">
+                  <Badge variant="outline" className="text-primary font-bold">
+                    PORTAL DO MOTORISTA
+                  </Badge>
+                  <span
+                    className="inline-flex items-center text-[11px] font-mono font-medium text-slate-600 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded px-2 py-0.5 shadow-2xs"
+                    title={`Versão do Sistema: SIGCAF v${APP_VERSION}`}
+                  >
+                    SIGCAF v{APP_VERSION}
+                  </span>
+                </div>
+                <CardTitle className="text-xl sm:text-2xl font-bold flex items-center gap-2 truncate">
+                  <Truck className="h-6 w-6 text-primary shrink-0" />
+                  <span className="truncate">{data.rota.nome}</span>
                 </CardTitle>
                 <CardDescription className="text-xs text-muted-foreground mt-0.5">
                   Motorista: <strong className="text-foreground">{motoristaNome}</strong>
                   {chamadaOuCiclo && ` • ${chamadaOuCiclo}`}
+                  <span className="sm:hidden block mt-0.5 text-[11px] font-mono font-medium text-slate-500 dark:text-slate-400">
+                    SIGCAF v{APP_VERSION}
+                  </span>
                 </CardDescription>
               </div>
 
-              <div className="text-right shrink-0">
+              <div className="text-right shrink-0 pl-2">
                 <div className="text-2xl sm:text-3xl font-black text-primary">
                   {contagemEntregas.feitas}
                   <span className="text-sm font-normal text-muted-foreground">
