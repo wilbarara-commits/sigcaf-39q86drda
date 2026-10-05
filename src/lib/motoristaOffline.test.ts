@@ -62,6 +62,19 @@ describe('Motorista - Geração de Token e Mensagem WhatsApp', () => {
     expect(msg).toContain('11 entregas')
     expect(msg).toContain('https://sigcaf.coop.br/motorista?token=mot_abcdef123456')
   })
+
+  it('não duplica o prefixo Ciclo se cicloCodigo já contiver "Ciclo"', () => {
+    const msg = buildDriverWhatsAppMessage({
+      rotaNome: 'Rota Centro-Norte',
+      cicloCodigo: 'Ciclo 40/2026',
+      totalEntregas: 5,
+      token: 'mot_abcdef123456',
+      origin: 'https://sigcaf.coop.br',
+    })
+
+    expect(msg).toContain('— Ciclo 40/2026')
+    expect(msg).not.toContain('Ciclo Ciclo')
+  })
 })
 
 describe('Motorista - Fila Offline e Sincronização', () => {

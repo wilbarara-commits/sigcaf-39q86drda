@@ -84,9 +84,10 @@ export const DespachoMotoristaModal: React.FC<DespachoMotoristaModalProps> = ({
 
       // Se já houver despacho ativo, reconstrói a mensagem pronta atual
       if (despachoAtivo?.token) {
+        const cicloCodigo = ciclo?.nome || (ciclo as any)?.numero || chamada?.chamada
         const msg = buildDriverWhatsAppMessage({
           rotaNome: rota.nome,
-          cicloCodigo: ciclo?.numero || chamada?.chamada,
+          cicloCodigo,
           totalEntregas,
           token: despachoAtivo.token,
         })
@@ -138,9 +139,10 @@ export const DespachoMotoristaModal: React.FC<DespachoMotoristaModalProps> = ({
         isRedisparo,
       })
 
+      const cicloCodigo = ciclo?.nome || (ciclo as any)?.numero || chamada?.chamada
       const msg = buildDriverWhatsAppMessage({
         rotaNome: rota.nome,
-        cicloCodigo: ciclo?.numero || chamada?.chamada,
+        cicloCodigo,
         totalEntregas,
         token: novoDespacho.token,
       })
@@ -202,7 +204,11 @@ export const DespachoMotoristaModal: React.FC<DespachoMotoristaModalProps> = ({
           </DialogTitle>
           <DialogDescription className="text-xs">
             Rota <strong>{rota?.nome}</strong> • {totalEntregas} entrega(s)
-            {ciclo?.numero ? ` • Ciclo ${ciclo.numero}` : ''}
+            {ciclo?.nome
+              ? ` • ${ciclo.nome}`
+              : (ciclo as any)?.numero
+                ? ` • Ciclo ${(ciclo as any).numero}`
+                : ''}
           </DialogDescription>
         </DialogHeader>
 

@@ -401,8 +401,12 @@ export const MotoristaPortal: React.FC = () => {
   }
 
   const motoristaNome = data.despacho.expand?.motorista_id?.nome || 'Motorista'
-  const chamadaOuCiclo =
-    data.despacho.expand?.ciclo_id?.numero || data.despacho.expand?.chamada_id?.chamada || ''
+  const cicloNome =
+    (data.despacho.expand?.ciclo_id as any)?.nome ||
+    (data.despacho.expand?.ciclo_id as any)?.numero ||
+    ''
+  const chamadaNome = data.despacho.expand?.chamada_id?.chamada || ''
+  const chamadaOuCiclo = cicloNome || chamadaNome
 
   return (
     <div className="min-h-screen bg-slate-100 dark:bg-slate-950 pb-16">
@@ -511,15 +515,38 @@ export const MotoristaPortal: React.FC = () => {
               )
               const statusSyncItem = filaItem?.status_sync || parada.registro?.status_sync
 
+              // Resolução defensiva de campos da escola (compatível com EscolaRecord real e UI School)
+              const escolaNome =
+                escola?.nome ||
+                (escola as any)?.name ||
+                (escola as any)?.nome_escola ||
+                'Escola sem nome'
+
+              const escolaEndereco =
+                escola?.endereco || (escola as any)?.address || (escola as any)?.logradouro || ''
+
+              const escolaBairro = escola?.bairro || ''
+              const enderecoCompleto = [escolaEndereco, escolaBairro].filter(Boolean).join(' - ')
+
+              const escolaTelefone = escola?.telefone || (escola as any)?.contact || ''
+              const escolaContatoNome = escola?.contato || (escola as any)?.contatoResponsavel || ''
+              const infoContato = [
+                escolaTelefone,
+                escolaContatoNome ? `(${escolaContatoNome})` : '',
+              ]
+                .filter(Boolean)
+                .join(' ')
+
               // Monta link do Google Maps para a escola se houver endereço ou coordenadas
               let mapsUrl = ''
               if (escola?.latitude && escola?.longitude) {
                 mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
                   `${escola.latitude},${escola.longitude}`,
                 )}`
-              } else if (escola?.address) {
+              } else if (enderecoCompleto || escolaEndereco || escolaNome) {
+                const buscaMaps = enderecoCompleto || escolaEndereco || escolaNome
                 mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
-                  escola.address,
+                  buscaMaps,
                 )}`
               }
 
@@ -548,19 +575,19 @@ export const MotoristaPortal: React.FC = () => {
 
                         <div className="min-w-0">
                           <h4 className="font-bold text-base text-foreground leading-snug">
-                            {escola?.name || 'Escola sem nome'}
+                            {escolaNome}
                           </h4>
 
-                          {escola?.address && (
+                          {enderecoCompleto && (
                             <p className="text-xs text-muted-foreground mt-0.5 flex items-start gap-1">
                               <MapPin className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" />
-                              <span className="line-clamp-2">{escola.address}</span>
+                              <span className="line-clamp-2">{enderecoCompleto}</span>
                             </p>
                           )}
 
-                          {escola?.contact && (
+                          {infoContato && (
                             <p className="text-[11px] text-muted-foreground mt-0.5">
-                              Contato: {escola.contact}
+                              Contato: {infoContato}
                             </p>
                           )}
                         </div>
@@ -652,7 +679,10 @@ export const MotoristaPortal: React.FC = () => {
               Registrar Entrega
             </DialogTitle>
             <DialogDescription className="text-xs">
-              {selectedParada?.escola?.name} (Parada #{selectedParada?.ordem})
+              {selectedParada?.escola?.nome ||
+                (selectedParada?.escola as any)?.name ||
+                'Escola'}{' '}
+              (Parada #{selectedParada?.ordem})
             </DialogDescription>
           </DialogHeader>
 

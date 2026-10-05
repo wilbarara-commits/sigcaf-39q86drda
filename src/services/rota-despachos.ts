@@ -39,7 +39,15 @@ export function buildDriverWhatsAppMessage(options: {
     options.origin ||
     (typeof window !== 'undefined' && window.location?.origin ? window.location.origin : '')
   const link = `${base}/motorista?token=${options.token}`
-  const cicloInfo = options.cicloCodigo ? ` — Ciclo ${options.cicloCodigo}` : ''
+  let cicloInfo = ''
+  if (options.cicloCodigo) {
+    const limpo = options.cicloCodigo.trim()
+    if (/^ciclo\b/i.test(limpo)) {
+      cicloInfo = ` — ${limpo}`
+    } else {
+      cicloInfo = ` — Ciclo ${limpo}`
+    }
+  }
   const entregasText =
     options.totalEntregas === 1 ? '1 entrega' : `${options.totalEntregas} entregas`
 
