@@ -61,6 +61,7 @@ import {
   ListOrdered,
   ChevronDown,
   ChevronRight,
+  Share2,
 } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { RouteMapView } from '@/components/RouteMapView'
@@ -1048,6 +1049,92 @@ export default function DeliveryRoutes() {
     }
   }
 
+  // Copiar link da rota no Google Maps
+  const handleCopyGoogleMapsRoute = async (
+    rotaNome: string,
+    paradas: Array<{
+      escolaId: string
+      nome: string
+      endereco: string
+      alunos?: number
+      ordem: number
+      contratoNumero?: string
+      latitude?: string | number | null
+      longitude?: string | number | null
+    }>,
+  ) => {
+    if (!paradas || paradas.length === 0) {
+      toast.error('Nenhuma parada cadastrada nesta rota.')
+      return
+    }
+
+    const validWaypoints: string[] = []
+    let semCoordsCount = 0
+
+    // Manter estritamente a ordem atual das paradas (sem reordenar / renumerar)
+    for (const p of paradas) {
+      const coords = extrairCoordenadas(p.latitude, p.longitude)
+      if (coords) {
+        // Normalizar com ponto decimal e sem espaços
+        const latStr = coords.latitude.toString().replace(',', '.')
+        const lngStr = coords.longitude.toString().replace(',', '.')
+        validWaypoints.push(`${latStr},${lngStr}`)
+      } else {
+        semCoordsCount++
+      }
+    }
+
+    if (validWaypoints.length === 0) {
+      toast.error('Nenhuma escola desta rota possui coordenadas geográficas cadastradas.')
+      return
+    }
+
+    const mapsUrl = `https://www.google.com/maps/dir/${validWaypoints.join('/')}`
+
+    // Copiar com fallback resiliente
+    let copied = false
+    try {
+      if (navigator?.clipboard?.writeText) {
+        await navigator.clipboard.writeText(mapsUrl)
+        copied = true
+      }
+    } catch {
+      // Ignora erro nativo e tenta fallback
+    }
+
+    if (!copied) {
+      try {
+        const textarea = document.createElement('textarea')
+        textarea.value = mapsUrl
+        textarea.style.position = 'fixed'
+        textarea.style.left = '-9999px'
+        textarea.style.top = '-9999px'
+        document.body.appendChild(textarea)
+        textarea.focus()
+        textarea.select()
+        copied = document.execCommand('copy')
+        document.body.removeChild(textarea)
+      } catch {
+        copied = false
+      }
+    }
+
+    if (!copied) {
+      toast.error('Não foi possível copiar o link para a área de transferência.')
+      return
+    }
+
+    if (semCoordsCount > 0) {
+      const total = paradas.length
+      const comCoord = validWaypoints.length
+      toast.warning(
+        `Copiado com ${comCoord} de ${total} paradas — ${semCoordsCount} escola(s) sem coordenadas`,
+      )
+    } else {
+      toast.success('Link da rota copiado!')
+    }
+  }
+
   // Otimização de Rota: Calcular e abrir diálogo de sugestão
   const handleOpenOptimizationDialog = (
     rota: RotaLogisticaRecord,
@@ -1703,6 +1790,23 @@ export default function DeliveryRoutes() {
                             Mapa
                           </Button>
                         </div>
+
+                        {/* Botão Copiar Rota (Google Maps) */}
+                        {item.paradasOrdenadas.length > 0 && (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="h-7 text-xs gap-1.5 text-foreground border-border hover:bg-muted"
+                            title="Copiar link das paradas ordenadas no Google Maps"
+                            onClick={() =>
+                              handleCopyGoogleMapsRoute(item.rota.nome, item.paradasOrdenadas)
+                            }
+                          >
+                            <Share2 className="h-3.5 w-3.5 text-muted-foreground" />
+                            <span>Copiar rota (Google Maps)</span>
+                          </Button>
+                        )}
 
                         {/* Botão de Sugestão de Rota Otimizada */}
                         {item.paradasOrdenadas.length > 0 &&

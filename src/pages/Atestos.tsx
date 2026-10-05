@@ -196,6 +196,7 @@ export default function Atestos() {
       )
 
       const contrato = contracts.find((c) => c.id === rota.contrato_id)
+      const chamada = chamadas.find((ch) => ch.id === (rota as any).chamada_id)
 
       // Quantos pedidos da rota já têm atesto emitido vs quantos faltam
       const pedidosComAtesto = pedidosParaRotaGenerica.filter((o) =>
@@ -208,6 +209,7 @@ export default function Atestos() {
       return {
         rota,
         contrato,
+        chamada,
         isEntregue,
         isEmRota,
         ultimoDespacho,
@@ -1764,12 +1766,25 @@ export default function Atestos() {
                                       )}
                                     </div>
                                     <p className="text-xs text-muted-foreground mt-0.5">
-                                      Contrato:{' '}
-                                      <span className="font-medium text-foreground">
-                                        {r.contrato?.numero || 'Sem contrato'}
-                                      </span>
-                                      {r.contrato?.numero_chamada &&
-                                        ` • Chamada: ${r.contrato.numero_chamada}`}
+                                      {r.contrato?.numero ? (
+                                        <>
+                                          Contrato:{' '}
+                                          <span className="font-medium text-foreground">
+                                            {r.contrato.numero}
+                                          </span>
+                                          {r.contrato.numero_chamada &&
+                                            ` • Chamada: ${r.contrato.numero_chamada}`}
+                                        </>
+                                      ) : (
+                                        <>
+                                          Chamada:{' '}
+                                          <span className="font-medium text-foreground">
+                                            {r.chamada?.chamada ||
+                                              (r.rota as any).chamadaNumero ||
+                                              'Sem chamada'}
+                                          </span>
+                                        </>
+                                      )}
                                     </p>
                                   </div>
                                   <div className="text-right text-xs">
@@ -1854,18 +1869,42 @@ export default function Atestos() {
                               <div className="max-h-44 overflow-y-auto space-y-1 pr-1 text-xs">
                                 {pedidosExibicao.map((ord, idx) => {
                                   const jaTemAtesto = atestos.some((a) => a.orderId === ord.id)
+                                  // Resolver contrato do vínculo escola × chamada da rota
+                                  const chamadaIdRota = (rotaSel.rota as any).chamada_id
+                                  const vinculoEscolaChamada = contractSchools.find((cs) => {
+                                    if (cs.escola_id !== ord.schoolId) return false
+                                    if (!chamadaIdRota) return true
+                                    const c = contracts.find((cnt) => cnt.id === cs.contrato_id)
+                                    return c?.chamada_id === chamadaIdRota
+                                  })
+                                  const contratoVinculo = vinculoEscolaChamada
+                                    ? contracts.find(
+                                        (c) => c.id === vinculoEscolaChamada.contrato_id,
+                                      )
+                                    : null
+                                  const contratoNumeroVinculo = contratoVinculo?.numero
+
                                   return (
                                     <div
                                       key={ord.id}
                                       className="flex items-center justify-between p-1.5 rounded bg-background border text-[11.5px]"
                                     >
-                                      <div className="flex items-center gap-2">
+                                      <div className="flex items-center gap-2 min-w-0">
                                         <span className="h-5 w-5 rounded-full bg-primary/10 text-primary font-bold flex items-center justify-center text-[10px] shrink-0">
                                           {idx + 1}
                                         </span>
-                                        <span className="font-medium text-foreground line-clamp-1">
+                                        <span className="font-medium text-foreground truncate">
                                           {ord.schoolName}
                                         </span>
+                                        {contratoNumeroVinculo ? (
+                                          <span className="text-[10.5px] font-mono text-muted-foreground shrink-0">
+                                            Contrato: {contratoNumeroVinculo}
+                                          </span>
+                                        ) : (
+                                          <span className="text-[10.5px] text-muted-foreground/60 italic shrink-0">
+                                            Sem contrato
+                                          </span>
+                                        )}
                                       </div>
                                       <div className="flex items-center gap-2 shrink-0">
                                         <span className="text-[11px] text-muted-foreground">
