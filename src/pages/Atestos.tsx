@@ -85,8 +85,9 @@ export default function Atestos() {
   const [downloadingId, setDownloadingId] = useState<string | null>(null)
   const [confirmingId, setConfirmingId] = useState<string | null>(null)
 
-  // Estados para emissão/impressão por Rota Entregue em lote
+  // Estados para emissão/impressão por Rota em lote
   const [routeBatchModalOpen, setRouteBatchModalOpen] = useState(false)
+  const [routeBatchMode, setRouteBatchMode] = useState<'em_rota' | 'entregue'>('em_rota')
   const [selectedRotaId, setSelectedRotaId] = useState<string>('')
   const [isGeneratingRouteBatch, setIsGeneratingRouteBatch] = useState(false)
   const [batchProgress, setBatchProgress] = useState<string>('')
@@ -110,13 +111,17 @@ export default function Atestos() {
     return configuracoesService.getLogoUrl(config)
   }, [config])
 
-  // Pedidos entregues sem atesto emitido (regra de negócio estrita)
+  // Pedidos elegíveis para emissão de atesto: agora disponíveis quando colocados "Em Rota" OU "Entregue" (sem atesto já emitido)
   const pendingOrders = useMemo(() => {
-    return orders.filter((o) => o.status === 'Entregue' && !atestos.find((a) => a.orderId === o.id))
+    return orders.filter(
+      (o) =>
+        (o.status === 'Em Rota' || o.status === 'Entregue') &&
+        !atestos.find((a) => a.orderId === o.id),
+    )
   }, [orders, atestos])
 
-  // Rotas com status "Entregue" (via despacho entregue ou com pedidos entregues na rota)
-  const deliveredRoutesData = useMemo(() => {
+  // Dados consolidados de todas as rotas (em rota ou entregues)
+  const routesData = useMemo(() => {
     return rotasLogisticas.map((rota) => {
       const paradasCadastradas = paradasRota
         .filter((p) => (p.rota_id || (p as any).rota_logistica_id) === rota.id)
@@ -130,10 +135,16 @@ export default function Atestos() {
           escolaIdsDaRota.has(o.schoolId) || o.rotaLogisticaId === rota.id || o.rotaId === rota.id,
       )
 
-      // Apenas pedidos entregues da rota
+      // Pedidos entregues
       const pedidosEntregues = pedidosDaRota.filter((o) => o.status === 'Entregue')
+      // Pedidos em rota (despachados / em trânsito)
+      const pedidosEmRota = pedidosDaRota.filter((o) => o.status === 'Em Rota')
+      // Pedidos elegíveis para emissão prévia de rota: "Em Rota" OU "Entregue" (ativos para transporte/entrega)
+      const pedidosAtivosRota = pedidosDaRota.filter(
+        (o) => o.status === 'Em Rota' || o.status === 'Entregue',
+      )
 
-      // Verificar se a rota possui despacho entregue ou se possui pedidos entregues
+      // Verificar despacho da rota
       const despachosDaRota = despachos
         .filter((d) => (d.rota_id || (d as any).rota_logistica_id) === rota.id)
         .sort((a, b) => new Date(b.data_despacho).getTime() - new Date(a.data_despacho).getTime())
@@ -144,6 +155,11 @@ export default function Atestos() {
         (pedidosEntregues.length > 0 &&
           pedidosDaRota.every((p) => p.status === 'Entregue' || p.status === 'Cancelado'))
 
+      const isEmRota =
+        ultimoDespacho?.status === 'Em Rota' ||
+        pedidosEmRota.length > 0 ||
+        (pedidosDaRota.some((p) => p.status === 'Em Rota') && !isEntregue)
+
       // Mapeamento de paradas e ordenação
       const paradaOrdemMap = new Map<string, number>()
       paradasCadastradas.forEach((p, idx) => {
@@ -153,27 +169,38 @@ export default function Atestos() {
         )
       })
 
-      // Ordenar pedidos estritamente pela ordem de entrega das paradas
-      const pedidosOrdenados = [...pedidosEntregues].sort((a, b) => {
-        const ordemA = paradaOrdemMap.has(a.schoolId)
-          ? (paradaOrdemMap.get(a.schoolId) as number)
-          : 9999
-        const ordemB = paradaOrdemMap.has(b.schoolId)
-          ? (paradaOrdemMap.get(b.schoolId) as number)
-          : 9999
-        if (ordemA !== ordemB) {
-          return ordemA - ordemB
-        }
-        return (a.schoolName || '').localeCompare(b.schoolName || '')
-      })
+      const ordenarPorParada = (list: Order[]) => {
+        return [...list].sort((a, b) => {
+          const ordemA = paradaOrdemMap.has(a.schoolId)
+            ? (paradaOrdemMap.get(a.schoolId) as number)
+            : 9999
+          const ordemB = paradaOrdemMap.has(b.schoolId)
+            ? (paradaOrdemMap.get(b.schoolId) as number)
+            : 9999
+          if (ordemA !== ordemB) {
+            return ordemA - ordemB
+          }
+          return (a.schoolName || '').localeCompare(b.schoolName || '')
+        })
+      }
+
+      const pedidosEntreguesOrdenados = ordenarPorParada(pedidosEntregues)
+      const pedidosEmRotaOrdenados = ordenarPorParada(
+        pedidosEmRota.length > 0 ? pedidosEmRota : pedidosAtivosRota,
+      )
+      const pedidosParaRotaGenerica = ordenarPorParada(
+        pedidosAtivosRota.length > 0
+          ? pedidosAtivosRota
+          : pedidosDaRota.filter((p) => p.status !== 'Cancelado'),
+      )
 
       const contrato = contracts.find((c) => c.id === rota.contrato_id)
 
-      // Quantos pedidos já têm atesto emitido vs quantos faltam emitir
-      const pedidosComAtesto = pedidosOrdenados.filter((o) =>
+      // Quantos pedidos da rota já têm atesto emitido vs quantos faltam
+      const pedidosComAtesto = pedidosParaRotaGenerica.filter((o) =>
         atestos.some((a) => a.orderId === o.id),
       )
-      const pedidosSemAtesto = pedidosOrdenados.filter(
+      const pedidosSemAtesto = pedidosParaRotaGenerica.filter(
         (o) => !atestos.some((a) => a.orderId === o.id),
       )
 
@@ -181,21 +208,42 @@ export default function Atestos() {
         rota,
         contrato,
         isEntregue,
+        isEmRota,
         ultimoDespacho,
         totalParadas: paradasCadastradas.length,
         pedidosDaRota,
-        pedidosEntregues: pedidosOrdenados,
+        pedidosEntregues: pedidosEntreguesOrdenados,
+        pedidosEmRota: pedidosEmRotaOrdenados,
+        pedidosParaRota: pedidosParaRotaGenerica,
         pedidosComAtesto,
         pedidosSemAtesto,
-        temPedidosEntregues: pedidosOrdenados.length > 0,
+        temPedidosEntregues: pedidosEntreguesOrdenados.length > 0,
+        temPedidosEmRota: pedidosEmRotaOrdenados.length > 0,
+        temPedidosParaRota: pedidosParaRotaGenerica.length > 0,
       }
     })
   }, [rotasLogisticas, paradasRota, orders, despachos, contracts, atestos])
 
-  // Filtrar apenas rotas elegíveis: com status entregue e que possuam pedidos entregues
+  // Rotas elegíveis por modo:
+  // 1. Modo 'em_rota': rotas que estão "Em Rota" ou possuem pedidos em rota/programados
+  const eligibleActiveRoutes = useMemo(() => {
+    return routesData.filter((r) => (r.isEmRota || r.temPedidosEmRota) && r.temPedidosParaRota)
+  }, [routesData])
+
+  // 2. Modo 'entregue': rotas com status entregue e que possuam pedidos entregues
   const eligibleDeliveredRoutes = useMemo(() => {
-    return deliveredRoutesData.filter((r) => r.isEntregue && r.temPedidosEntregues)
-  }, [deliveredRoutesData])
+    return routesData.filter((r) => r.isEntregue && r.temPedidosEntregues)
+  }, [routesData])
+
+  // Rotas disponíveis de acordo com o modo selecionado
+  const displayedBatchRoutes = useMemo(() => {
+    if (routeBatchMode === 'em_rota') {
+      return eligibleActiveRoutes.length > 0
+        ? eligibleActiveRoutes
+        : routesData.filter((r) => r.temPedidosParaRota)
+    }
+    return eligibleDeliveredRoutes
+  }, [routeBatchMode, eligibleActiveRoutes, eligibleDeliveredRoutes, routesData])
 
   // Localizar contrato e número da chamada pública para uma escola
   const getNumeroChamadaForSchool = (schoolId: string): string => {
@@ -233,86 +281,83 @@ export default function Atestos() {
       ? contracts.find((c) => c.id === schoolLink.contrato_id)
       : contracts.find((c) => c.status === 'Ativo')
     const linkedContractId = linkedContract?.id
+    const contratoNumero = linkedContract?.numero || undefined
 
     const isCentralizado = linkedContract?.modalidade_pedido === 'centralizado'
 
-    // Metadados específicos de contrato centralizado:
+    // Metadados operacionais do documento (Ciclo, Contrato, Parada e Rota):
     // 1. Ciclo
     let cicloNome: string | undefined
-    if (isCentralizado) {
-      if (order.cicloId) {
-        const foundCiclo = ciclos.find((c) => c.id === order.cicloId)
-        if (foundCiclo?.nome) {
-          cicloNome = foundCiclo.nome
-        }
+    if (order.cicloId) {
+      const foundCiclo = ciclos.find((c) => c.id === order.cicloId)
+      if (foundCiclo?.nome) {
+        cicloNome = foundCiclo.nome
       }
-      if (!cicloNome && activeCiclo?.nome) {
-        cicloNome = activeCiclo.nome
-      }
+    }
+    if (!cicloNome && activeCiclo?.nome) {
+      cicloNome = activeCiclo.nome
     }
 
     // 2. Parada e Rota
     let rotaNome: string | undefined
     let numeroParada: number | undefined
 
-    if (isCentralizado) {
-      // Procurar a parada da escola na rota
-      const todasParadasDaEscola = paradasRota.filter((p) => p.escola_id === order.schoolId)
-      let paradaMatched = todasParadasDaEscola[0]
+    // Procurar a parada da escola na rota
+    const todasParadasDaEscola = paradasRota.filter((p) => p.escola_id === order.schoolId)
+    let paradaMatched = todasParadasDaEscola[0]
 
-      const targetRotaId =
-        order.rotaId ||
-        order.rotaLogisticaId ||
-        schoolLink?.rota_id ||
-        (schoolLink as any)?.rota_logistica_id
+    const targetRotaId =
+      order.rotaId ||
+      order.rotaLogisticaId ||
+      schoolLink?.rota_id ||
+      (schoolLink as any)?.rota_logistica_id
 
-      if (targetRotaId) {
-        paradaMatched =
-          todasParadasDaEscola.find(
-            (p) => (p.rota_id || (p as any).rota_logistica_id) === targetRotaId,
-          ) || paradaMatched
+    if (targetRotaId) {
+      paradaMatched =
+        todasParadasDaEscola.find(
+          (p) => (p.rota_id || (p as any).rota_logistica_id) === targetRotaId,
+        ) || paradaMatched
+    }
+
+    if (paradaMatched) {
+      numeroParada = paradaMatched.ordem
+      const matchedRotaId = paradaMatched.rota_id || (paradaMatched as any).rota_logistica_id
+      const rl =
+        rotas.find((r) => r.id === matchedRotaId) ||
+        rotasLogisticas.find((r) => r.id === matchedRotaId)
+      if (rl?.nome) {
+        rotaNome = rl.nome
       }
+    }
 
-      if (paradaMatched) {
-        numeroParada = paradaMatched.ordem
-        const matchedRotaId = paradaMatched.rota_id || (paradaMatched as any).rota_logistica_id
-        const rl =
-          rotas.find((r) => r.id === matchedRotaId) ||
-          rotasLogisticas.find((r) => r.id === matchedRotaId)
-        if (rl?.nome) {
-          rotaNome = rl.nome
+    // Fallback para nome da Rota caso a rota não tenha sido encontrada ou parada ainda não criada
+    if (!rotaNome) {
+      if (order.rotaId) {
+        const foundRota = rotas.find((r) => r.id === order.rotaId)
+        if (foundRota?.nome) {
+          rotaNome = foundRota.nome
         }
       }
-
-      // Fallback para nome da Rota caso a rota não tenha sido encontrada ou parada ainda não criada
-      if (!rotaNome) {
-        if (order.rotaId) {
-          const foundRota = rotas.find((r) => r.id === order.rotaId)
-          if (foundRota?.nome) {
-            rotaNome = foundRota.nome
-          }
+      if (!rotaNome && order.rotaLogisticaId) {
+        const foundRl = rotas.find((r) => r.id === order.rotaLogisticaId)
+        if (foundRl?.nome) {
+          rotaNome = foundRl.nome
         }
-        if (!rotaNome && order.rotaLogisticaId) {
-          const foundRl = rotas.find((r) => r.id === order.rotaLogisticaId)
-          if (foundRl?.nome) {
-            rotaNome = foundRl.nome
-          }
+      }
+      if (!rotaNome && schoolLink?.rota_id) {
+        const foundRl = rotas.find((r) => r.id === schoolLink.rota_id)
+        if (foundRl?.nome) {
+          rotaNome = foundRl.nome
         }
-        if (!rotaNome && schoolLink?.rota_id) {
-          const foundRl = rotas.find((r) => r.id === schoolLink.rota_id)
-          if (foundRl?.nome) {
-            rotaNome = foundRl.nome
-          }
+      }
+      if (!rotaNome && (schoolLink as any)?.rota_logistica_id) {
+        const foundRl = rotas.find((r) => r.id === (schoolLink as any).rota_logistica_id)
+        if (foundRl?.nome) {
+          rotaNome = foundRl.nome
         }
-        if (!rotaNome && (schoolLink as any)?.rota_logistica_id) {
-          const foundRl = rotas.find((r) => r.id === (schoolLink as any).rota_logistica_id)
-          if (foundRl?.nome) {
-            rotaNome = foundRl.nome
-          }
-        }
-        if (!rotaNome && (schoolLink as any)?.rota?.trim()) {
-          rotaNome = (schoolLink as any).rota.trim()
-        }
+      }
+      if (!rotaNome && (schoolLink as any)?.rota?.trim()) {
+        rotaNome = (schoolLink as any).rota.trim()
       }
     }
 
@@ -377,6 +422,7 @@ export default function Atestos() {
       logoUrl: logoUrl || undefined,
       isCentralizado,
       cicloNome,
+      contratoNumero,
       rotaNome,
       numeroParada,
     }
@@ -755,21 +801,32 @@ export default function Atestos() {
     }
   }
 
-  // 5. Emitir e Imprimir todos os atestos de uma ROTA ENTREGUE em um único PDF em ordem de entrega
+  // 5. Emitir e Imprimir todos os atestos de uma ROTA (Em Rota ou Entregue)
+  // Regra do novo fluxo:
+  // - Modo 'em_rota': gera 2 PÁGINAS POR ESCOLA (v1 para a escola, v2 para a cooperativa assinada)
+  //   indicando no rodapé: Ciclo [ciclo] · Contrato [contrato] · Parada [N] — v1 (ou v2)
+  // - Modo 'entregue': gera 1 página por escola (retrocompatibilidade)
   const handleEmitirEImprimirRota = async () => {
     if (!selectedRotaId) {
-      toast.error('Selecione uma rota entregue.')
+      toast.error('Selecione uma rota.')
       return
     }
 
-    const rotaData = deliveredRoutesData.find((r) => r.rota.id === selectedRotaId)
+    const rotaData = routesData.find((r) => r.rota.id === selectedRotaId)
     if (!rotaData) {
       toast.error('Dados da rota não encontrados.')
       return
     }
 
-    if (rotaData.pedidosEntregues.length === 0) {
-      toast.error('Esta rota não possui pedidos entregues para emitir atestos.')
+    const pedidosParaProcessar =
+      routeBatchMode === 'entregue' ? rotaData.pedidosEntregues : rotaData.pedidosParaRota
+
+    if (pedidosParaProcessar.length === 0) {
+      toast.error(
+        routeBatchMode === 'entregue'
+          ? 'Esta rota não possui pedidos entregues para emitir atestos.'
+          : 'Esta rota não possui pedidos em rota ou programados para emissão.',
+      )
       return
     }
 
@@ -778,7 +835,6 @@ export default function Atestos() {
 
     try {
       // 1. Garantir que os pedidos da rota sem atesto sejam emitidos primeiro no banco
-      const pedidosParaProcessar = rotaData.pedidosEntregues
       let emitidosNovosCount = 0
 
       // Clonar a lista de atestos em memória para controle incremental do número de atesto
@@ -824,7 +880,11 @@ export default function Atestos() {
         }
       }
 
-      setBatchProgress('Montando PDF único consolidado em ordem de entrega...')
+      setBatchProgress(
+        routeBatchMode === 'em_rota'
+          ? 'Montando PDF consolidado (2 páginas por escola: v1 Escola e v2 Cooperativa)...'
+          : 'Montando PDF único consolidado em ordem de entrega...',
+      )
 
       // 2. Montar documentos em estrita ordem de entrega da rota
       const batchDocumentDataList: AtestoDocumentData[] = []
@@ -836,8 +896,22 @@ export default function Atestos() {
           `AT-${String(currentAtestosSnapshot.length + 1).padStart(3, '0')}`
         const dataDoc = atestoDoPedido?.date || new Date().toISOString()
 
-        const docData = prepareDocumentData(order, numeroAtesto, dataDoc)
-        batchDocumentDataList.push(docData)
+        const baseDocData = prepareDocumentData(order, numeroAtesto, dataDoc)
+
+        if (routeBatchMode === 'em_rota') {
+          // Requisito 3: Duas páginas por escola (v1 = escola, v2 = cooperativa)
+          batchDocumentDataList.push({
+            ...baseDocData,
+            via: 'v1',
+          })
+          batchDocumentDataList.push({
+            ...baseDocData,
+            via: 'v2',
+          })
+        } else {
+          // Modo entregue legado: 1 página por escola
+          batchDocumentDataList.push(baseDocData)
+        }
       }
 
       // 3. Criar PDF consolidado único contendo todas as páginas
@@ -849,7 +923,8 @@ export default function Atestos() {
 
       // Também disponibilizar download do arquivo com nome bem formatado
       const safeRotaNome = rotaData.rota.nome.replace(/[^a-zA-Z0-9_-]/g, '_')
-      const pdfFileName = `Atestos_Rota_${safeRotaNome}_Entregue.pdf`
+      const sufixoTipo = routeBatchMode === 'em_rota' ? 'Em_Rota_2Vias' : 'Entregue'
+      const pdfFileName = `Atestos_Rota_${safeRotaNome}_${sufixoTipo}.pdf`
       try {
         batchDoc.save(pdfFileName)
       } catch (errSave) {
@@ -865,12 +940,16 @@ export default function Atestos() {
         setTimeout(() => window.URL.revokeObjectURL(blobUrl), 1000)
       }
 
+      const totalEscolas = pedidosParaProcessar.length
+      const totalPaginas = batchDocumentDataList.length
       toast.success(
-        `PDF gerado com sucesso! ${batchDocumentDataList.length} atesto(s) da Rota "${rotaData.rota.nome}" consolidados em ordem de entrega. ${
-          emitidosNovosCount > 0
-            ? `(${emitidosNovosCount} novo(s) atesto(s) gravado(s) no sistema).`
-            : ''
-        }`,
+        routeBatchMode === 'em_rota'
+          ? `PDF gerado com sucesso! ${totalEscolas} escola(s) com 2 vias (v1 e v2 = ${totalPaginas} páginas) para a Rota "${rotaData.rota.nome}". ${
+              emitidosNovosCount > 0 ? `(${emitidosNovosCount} novo(s) atesto(s) gravado(s)).` : ''
+            }`
+          : `PDF gerado com sucesso! ${totalEscolas} atesto(s) da Rota "${rotaData.rota.nome}" consolidados em ordem de entrega. ${
+              emitidosNovosCount > 0 ? `(${emitidosNovosCount} novo(s) atesto(s) gravado(s)).` : ''
+            }`,
       )
 
       setRouteBatchModalOpen(false)
@@ -920,13 +999,35 @@ export default function Atestos() {
           </p>
         </div>
 
-        {/* Botão em lote: Emitir e Imprimir por Rota Entregue */}
-        <div className="flex items-center gap-2 shrink-0">
+        {/* Botões de emissão por rota: Por Rota (Novo) e Por Rota Entregue */}
+        <div className="flex flex-wrap items-center gap-2 shrink-0">
           <Button
             className="bg-primary hover:bg-primary/90 text-primary-foreground gap-2 font-medium shadow-xs"
             onClick={() => {
+              setRouteBatchMode('em_rota')
+              const candidate =
+                eligibleActiveRoutes[0]?.rota.id || displayedBatchRoutes[0]?.rota.id || ''
+              setSelectedRotaId(candidate)
+              setRouteBatchModalOpen(true)
+            }}
+            disabled={isLoading || isConfigLoading}
+            title="Emite e imprime 2 páginas por escola (v1 e v2) para o motorista levar na rota"
+          >
+            <Truck className="h-4 w-4" />
+            <span>Imprimir Atestos por Rota</span>
+            {eligibleActiveRoutes.length > 0 && (
+              <Badge className="ml-1 bg-white/20 hover:bg-white/30 text-white text-[11px] px-1.5 py-0 h-5">
+                {eligibleActiveRoutes.length}
+              </Badge>
+            )}
+          </Button>
+
+          <Button
+            variant="outline"
+            className="gap-2 font-medium shadow-xs border-muted-foreground/30 hover:bg-muted"
+            onClick={() => {
+              setRouteBatchMode('entregue')
               if (eligibleDeliveredRoutes.length > 0) {
-                // Auto-selecionar a primeira se não tiver selecionado
                 if (
                   !selectedRotaId ||
                   !eligibleDeliveredRoutes.some((r) => r.rota.id === selectedRotaId)
@@ -937,11 +1038,12 @@ export default function Atestos() {
               setRouteBatchModalOpen(true)
             }}
             disabled={isLoading || isConfigLoading}
+            title="Emite e imprime atestos das rotas que já foram concluídas/entregues"
           >
-            <Truck className="h-4 w-4" />
-            <span>Imprimir Atestos por Rota Entregue</span>
+            <Printer className="h-4 w-4" />
+            <span>Por Rota Entregue</span>
             {eligibleDeliveredRoutes.length > 0 && (
-              <Badge className="ml-1 bg-white/20 hover:bg-white/30 text-white text-[11px] px-1.5 py-0 h-5">
+              <Badge variant="secondary" className="ml-1 text-[11px] px-1.5 py-0 h-5">
                 {eligibleDeliveredRoutes.length}
               </Badge>
             )}
@@ -949,14 +1051,14 @@ export default function Atestos() {
         </div>
       </div>
 
-      {/* Bloco: Pedidos Entregues Aguardando Emissão */}
+      {/* Bloco: Pedidos Disponíveis para Emissão (Em Rota ou Entregues) */}
       {pendingOrders.length > 0 ? (
         <Card className="border-emerald-500/30 bg-emerald-50/20 dark:bg-emerald-950/10 shadow-sm">
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between flex-wrap gap-2">
               <CardTitle className="text-base flex items-center gap-2 text-emerald-800 dark:text-emerald-400">
-                <FileCheck className="h-5 w-5 text-emerald-600" /> Pedidos Entregues Aguardando
-                Emissão de Atesto
+                <FileCheck className="h-5 w-5 text-emerald-600" /> Pedidos Prontos para Emissão de
+                Atesto
               </CardTitle>
               <Badge
                 variant="outline"
@@ -966,9 +1068,11 @@ export default function Atestos() {
               </Badge>
             </div>
             <p className="text-xs text-muted-foreground">
-              Regra de negócio: Apenas pedidos com status <strong>"Entregue"</strong> e sem atesto
-              vinculado são listados aqui. Clique em <strong>"Visualizar e Emitir"</strong> para
-              revisar o documento oficial em modelo A4 antes de gravar.
+              Regra de negócio: Os atestos ficam disponíveis para emissão assim que a entrega é
+              colocada <strong>"Em Rota"</strong> (para o motorista levar e colher a assinatura) ou
+              quando marcada como <strong>"Entregue"</strong>. Clique em{' '}
+              <strong>"Visualizar e Emitir"</strong> para revisar o documento oficial antes de
+              gravar.
             </p>
           </CardHeader>
           <CardContent>
@@ -976,6 +1080,7 @@ export default function Atestos() {
               {pendingOrders.map((order) => {
                 const totalKg = order.items.reduce((s, it) => s + (Number(it.quantity) || 0), 0)
                 const chamada = getNumeroChamadaForSchool(order.schoolId)
+                const isEmRotaOrder = order.status === 'Em Rota'
 
                 return (
                   <div
@@ -985,16 +1090,32 @@ export default function Atestos() {
                     <div className="space-y-1.5 mb-3">
                       <div className="flex items-start justify-between gap-2">
                         <p className="font-semibold text-sm line-clamp-1">{order.schoolName}</p>
-                        <Badge className="bg-emerald-600 text-[10px] h-4 shrink-0">Entregue</Badge>
+                        <Badge
+                          className={
+                            isEmRotaOrder
+                              ? 'bg-amber-600 text-white text-[10px] h-4 shrink-0'
+                              : 'bg-emerald-600 text-white text-[10px] h-4 shrink-0'
+                          }
+                        >
+                          {order.status}
+                        </Badge>
                       </div>
                       <p className="text-xs text-muted-foreground">
                         Pedido:{' '}
                         <span className="font-semibold text-foreground">
                           {order.numero || order.id}
                         </span>
-                        {order.entregue_em && (
-                          <span> • {new Date(order.entregue_em).toLocaleDateString('pt-BR')}</span>
-                        )}
+                        {order.entregue_em ? (
+                          <span>
+                            {' '}
+                            • Entregue em {new Date(order.entregue_em).toLocaleDateString('pt-BR')}
+                          </span>
+                        ) : order.date ? (
+                          <span>
+                            {' '}
+                            • Previsto {new Date(order.date).toLocaleDateString('pt-BR')}
+                          </span>
+                        ) : null}
                       </p>
                       <div className="text-[11px] text-muted-foreground flex flex-wrap gap-x-3 gap-y-1 pt-1 border-t">
                         <span>
@@ -1024,10 +1145,11 @@ export default function Atestos() {
         <Card className="border-dashed bg-muted/20">
           <CardContent className="py-6 text-center text-xs text-muted-foreground flex flex-col items-center justify-center gap-1.5">
             <Check className="h-5 w-5 text-emerald-600" />
-            <span>Nenhum pedido entregue aguardando emissão de atesto no momento.</span>
+            <span>Nenhum pedido aguardando emissão de atesto no momento.</span>
             <span className="text-[11px]">
-              Para emitir um novo atesto, confirme primeiro a entrega do pedido na tela de{' '}
-              <strong>Pedidos</strong> ou <strong>Rotas de Entrega</strong>.
+              Os atestos ficam disponíveis para emissão assim que os pedidos forem colocados{' '}
+              <strong>"Em Rota"</strong> ou confirmados como <strong>"Entregue"</strong> na tela de{' '}
+              <strong>Rotas de Entrega</strong> ou <strong>Pedidos</strong>.
             </span>
           </CardContent>
         </Card>
@@ -1236,8 +1358,10 @@ export default function Atestos() {
                     dataEmissao={docDataPreview.dataEmissao}
                     isCentralizado={docDataPreview.isCentralizado}
                     cicloNome={docDataPreview.cicloNome}
+                    contratoNumero={docDataPreview.contratoNumero}
                     rotaNome={docDataPreview.rotaNome}
                     numeroParada={docDataPreview.numeroParada}
+                    via={docDataPreview.via}
                     itemsOverride={docDataPreview.items}
                   />
                   {/* Ações do Modal */}
@@ -1340,8 +1464,10 @@ export default function Atestos() {
                       dataEmissao={docDataView.dataEmissao}
                       isCentralizado={docDataView.isCentralizado}
                       cicloNome={docDataView.cicloNome}
+                      contratoNumero={docDataView.contratoNumero}
                       rotaNome={docDataView.rotaNome}
                       numeroParada={docDataView.numeroParada}
+                      via={docDataView.via}
                       itemsOverride={docDataView.items}
                     />
                   )
@@ -1408,7 +1534,7 @@ export default function Atestos() {
       </Dialog>
 
       {/* ========================================================================= */}
-      {/* MODAL 3: EMISSÃO E IMPRESSÃO DE TODOS OS ATESTOS POR ROTA ENTREGUE        */}
+      {/* MODAL 3: EMISSÃO E IMPRESSÃO DE ATESTOS POR ROTA (EM ROTA OU ENTREGUE)     */}
       {/* ========================================================================= */}
       <Dialog
         open={routeBatchModalOpen}
@@ -1416,46 +1542,116 @@ export default function Atestos() {
           if (!open && !isGeneratingRouteBatch) setRouteBatchModalOpen(false)
         }}
       >
-        <DialogContent className="sm:max-w-[650px] max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-[680px] max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-lg font-bold flex items-center gap-2">
               <Truck className="h-5 w-5 text-primary" />
-              <span>Emitir e Imprimir Atestos por Rota Entregue</span>
+              <span>
+                {routeBatchMode === 'em_rota'
+                  ? 'Imprimir Atestos por Rota (2 Páginas por Escola: v1 e v2)'
+                  : 'Emitir e Imprimir Atestos por Rota Entregue'}
+              </span>
             </DialogTitle>
             <DialogDescription className="text-xs">
-              Gera em um <strong>ÚNICO PDF</strong> todos os termos de recebimento da rota
-              selecionada, em estrita <strong>ordem de entrega das paradas</strong>. Pedidos
-              entregues sem atesto serão emitidos e arquivados automaticamente.
+              {routeBatchMode === 'em_rota' ? (
+                <>
+                  Emite os atestos das entregas da rota para o motorista levar e colher a assinatura
+                  da escola. Cada escola gera <strong>DUAS PÁGINAS</strong> (<strong>v1</strong> via
+                  da escola e <strong>v2</strong> via da cooperativa que volta assinada), ordenadas
+                  pela <strong>sequência de entrega</strong>.
+                </>
+              ) : (
+                <>
+                  Gera em um <strong>ÚNICO PDF</strong> todos os termos de recebimento das entregas
+                  já concluídas na rota selecionada, em estrita{' '}
+                  <strong>ordem de entrega das paradas</strong>.
+                </>
+              )}
             </DialogDescription>
           </DialogHeader>
 
+          {/* Abas de Alternância de Modo */}
+          <div className="flex border-b pt-1 gap-2">
+            <button
+              type="button"
+              className={`pb-2 text-xs font-semibold border-b-2 px-3 transition-colors ${
+                routeBatchMode === 'em_rota'
+                  ? 'border-primary text-primary'
+                  : 'border-transparent text-muted-foreground hover:text-foreground'
+              }`}
+              onClick={() => {
+                if (!isGeneratingRouteBatch) {
+                  setRouteBatchMode('em_rota')
+                  const candidate =
+                    eligibleActiveRoutes[0]?.rota.id ||
+                    routesData.find((r) => r.temPedidosParaRota)?.rota.id ||
+                    ''
+                  setSelectedRotaId(candidate)
+                }
+              }}
+            >
+              Rotas em Andamento / Em Rota (2 vias: v1 e v2)
+            </button>
+            <button
+              type="button"
+              className={`pb-2 text-xs font-semibold border-b-2 px-3 transition-colors ${
+                routeBatchMode === 'entregue'
+                  ? 'border-primary text-primary'
+                  : 'border-transparent text-muted-foreground hover:text-foreground'
+              }`}
+              onClick={() => {
+                if (!isGeneratingRouteBatch) {
+                  setRouteBatchMode('entregue')
+                  const candidate = eligibleDeliveredRoutes[0]?.rota.id || ''
+                  setSelectedRotaId(candidate)
+                }
+              }}
+            >
+              Rotas Entregues (Concluídas)
+            </button>
+          </div>
+
           <div className="space-y-4 py-2">
-            {eligibleDeliveredRoutes.length === 0 ? (
+            {displayedBatchRoutes.length === 0 ? (
               <div className="p-6 text-center rounded-lg border border-dashed bg-muted/30 space-y-2">
                 <AlertCircle className="h-8 w-8 text-amber-500 mx-auto" />
                 <p className="text-sm font-semibold text-foreground">
-                  Nenhuma rota entregue com pedidos disponíveis
+                  {routeBatchMode === 'em_rota'
+                    ? 'Nenhuma rota com entregas em rota ou programadas'
+                    : 'Nenhuma rota entregue com pedidos disponíveis'}
                 </p>
                 <p className="text-xs text-muted-foreground max-w-md mx-auto">
-                  Para utilizar esta função, certifique-se de que a rota teve seu despacho marcado
-                  como <strong>"Entregue"</strong> na tela de <strong>Rotas de Entrega</strong> e
-                  possui pedidos com status <strong>"Entregue"</strong>.
+                  {routeBatchMode === 'em_rota'
+                    ? 'Despache uma rota na tela de "Rotas de Entrega" (botão "Colocar em Rota") para liberar a emissão prévia de atestos em duas vias para o motorista.'
+                    : 'Para esta opção, certifique-se de que a rota teve seu despacho finalizado como "Entregue".'}
                 </p>
               </div>
             ) : (
               <>
                 {/* Seletor de Rota */}
                 <div className="space-y-2">
-                  <label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
-                    <Layers className="h-3.5 w-3.5 text-primary" />
-                    Selecione a Rota Entregue:
+                  <label className="text-xs font-semibold text-foreground flex items-center justify-between">
+                    <span className="flex items-center gap-1.5">
+                      <Layers className="h-3.5 w-3.5 text-primary" />
+                      Selecione a Rota:
+                    </span>
+                    {routeBatchMode === 'em_rota' && (
+                      <span className="text-[11px] font-normal text-primary">
+                        Opção: 2 páginas por escola (v1 e v2 no rodapé)
+                      </span>
+                    )}
                   </label>
                   <div className="grid grid-cols-1 gap-2">
-                    {eligibleDeliveredRoutes.map((r) => {
+                    {displayedBatchRoutes.map((r) => {
                       const isSelected = selectedRotaId === r.rota.id
+                      const pedidosAlvo =
+                        routeBatchMode === 'entregue' ? r.pedidosEntregues : r.pedidosParaRota
+
                       const despDataStr = r.ultimoDespacho?.data_despacho
                         ? new Date(r.ultimoDespacho.data_despacho).toLocaleDateString('pt-BR')
-                        : 'Entregue'
+                        : r.isEmRota
+                          ? 'Em Rota'
+                          : 'Programada'
 
                       return (
                         <div
@@ -1475,7 +1671,17 @@ export default function Atestos() {
                                 <span className="font-bold text-sm text-foreground">
                                   {r.rota.nome}
                                 </span>
-                                <Badge className="bg-emerald-600 text-[10px] h-4">Entregue</Badge>
+                                {r.isEntregue ? (
+                                  <Badge className="bg-emerald-600 text-[10px] h-4">Entregue</Badge>
+                                ) : r.isEmRota ? (
+                                  <Badge className="bg-amber-600 text-white text-[10px] h-4">
+                                    Em Rota
+                                  </Badge>
+                                ) : (
+                                  <Badge variant="outline" className="text-[10px] h-4">
+                                    Programada
+                                  </Badge>
+                                )}
                               </div>
                               <p className="text-xs text-muted-foreground mt-0.5">
                                 Contrato:{' '}
@@ -1488,10 +1694,12 @@ export default function Atestos() {
                             </div>
                             <div className="text-right text-xs">
                               <span className="font-semibold text-primary">
-                                {r.pedidosEntregues.length} pedido(s)
+                                {pedidosAlvo.length} escola(s)
                               </span>
                               <p className="text-[11px] text-muted-foreground">
-                                {r.totalParadas} parada(s)
+                                {routeBatchMode === 'em_rota'
+                                  ? `${pedidosAlvo.length * 2} páginas (v1 + v2)`
+                                  : `${pedidosAlvo.length} página(s)`}
                               </p>
                             </div>
                           </div>
@@ -1535,26 +1743,30 @@ export default function Atestos() {
                 {/* Resumo da Sequência de Entrega */}
                 {selectedRotaId &&
                   (() => {
-                    const rotaSel = eligibleDeliveredRoutes.find(
-                      (r) => r.rota.id === selectedRotaId,
-                    )
+                    const rotaSel = displayedBatchRoutes.find((r) => r.rota.id === selectedRotaId)
                     if (!rotaSel) return null
+
+                    const pedidosExibicao =
+                      routeBatchMode === 'entregue'
+                        ? rotaSel.pedidosEntregues
+                        : rotaSel.pedidosParaRota
 
                     return (
                       <div className="rounded-lg border bg-muted/20 p-3 space-y-2">
                         <div className="flex items-center justify-between text-xs">
                           <span className="font-semibold text-foreground flex items-center gap-1">
                             <MapPin className="h-3.5 w-3.5 text-primary" />
-                            Ordem de Entrega das Paradas ({rotaSel.pedidosEntregues.length} atestos
-                            no PDF):
+                            Ordem de Entrega das Paradas ({pedidosExibicao.length} escola(s)):
                           </span>
-                          <span className="text-[11px] text-muted-foreground">
-                            1 página por atesto
+                          <span className="text-[11px] text-muted-foreground font-medium">
+                            {routeBatchMode === 'em_rota'
+                              ? '2 páginas por escola (v1 Escola + v2 Cooperativa)'
+                              : '1 página por atesto'}
                           </span>
                         </div>
 
                         <div className="max-h-44 overflow-y-auto space-y-1 pr-1 text-xs">
-                          {rotaSel.pedidosEntregues.map((ord, idx) => {
+                          {pedidosExibicao.map((ord, idx) => {
                             const jaTemAtesto = atestos.some((a) => a.orderId === ord.id)
                             return (
                               <div
@@ -1573,6 +1785,14 @@ export default function Atestos() {
                                   <span className="text-[11px] text-muted-foreground">
                                     Ped: {ord.numero || ord.id}
                                   </span>
+                                  {routeBatchMode === 'em_rota' && (
+                                    <Badge
+                                      variant="secondary"
+                                      className="text-[9px] h-4 bg-primary/10 text-primary border-primary/20"
+                                    >
+                                      v1 + v2
+                                    </Badge>
+                                  )}
                                   {jaTemAtesto ? (
                                     <Badge
                                       variant="outline"
@@ -1628,7 +1848,7 @@ export default function Atestos() {
               className="bg-primary hover:bg-primary/90 text-primary-foreground gap-1.5"
               onClick={handleEmitirEImprimirRota}
               disabled={
-                isGeneratingRouteBatch || eligibleDeliveredRoutes.length === 0 || !selectedRotaId
+                isGeneratingRouteBatch || displayedBatchRoutes.length === 0 || !selectedRotaId
               }
             >
               {isGeneratingRouteBatch ? (
@@ -1636,10 +1856,15 @@ export default function Atestos() {
                   <Loader2 className="h-4 w-4 animate-spin" />
                   Emitindo e Consolidando PDF...
                 </>
+              ) : routeBatchMode === 'em_rota' ? (
+                <>
+                  <Printer className="h-4 w-4" />
+                  Imprimir Atestos da Rota (2 Páginas / Escola)
+                </>
               ) : (
                 <>
                   <Printer className="h-4 w-4" />
-                  Emitir e Imprimir Rota Completa (PDF Único)
+                  Emitir e Imprimir Rota Entregue (PDF Único)
                 </>
               )}
             </Button>
@@ -1663,8 +1888,10 @@ interface DocumentoOficialViewProps {
   dataEmissao: Date | string
   isCentralizado?: boolean
   cicloNome?: string
+  contratoNumero?: string
   rotaNome?: string
   numeroParada?: number
+  via?: 'v1' | 'v2'
   itemsOverride?: Array<{ nome: string; quantidade: number }>
 }
 
@@ -1677,8 +1904,10 @@ function DocumentoOficialView({
   dataEmissao,
   isCentralizado,
   cicloNome,
+  contratoNumero,
   rotaNome,
   numeroParada,
+  via,
   itemsOverride,
 }: DocumentoOficialViewProps) {
   const nomeCoop = config?.nome_cooperativa || 'CooperGestão — Cooperativa Agrícola Familiar'
@@ -1867,29 +2096,58 @@ function DocumentoOficialView({
         </p>
       </div>
 
-      {/* 6. Rodapé do documento para contratos centralizados (apenas valores separados por traços) */}
+      {/* 6. Rodapé do documento com identificação ciclo, contrato, parada e via (v1/v2) */}
       {(() => {
         const hasParada =
           numeroParada !== undefined && numeroParada !== null && String(numeroParada).trim() !== ''
         const hasCiclo = Boolean(cicloNome && cicloNome.trim())
+        const hasContrato = Boolean(contratoNumero && contratoNumero.trim())
         const hasRota = Boolean(rotaNome && rotaNome.trim())
-        if (!isCentralizado || (!hasCiclo && !hasRota && !hasParada)) {
+        const hasVia = Boolean(via)
+
+        if (!hasCiclo && !hasContrato && !hasRota && !hasParada && !hasVia) {
           return null
         }
-        const rodapeParts: string[] = []
-        if (hasCiclo) {
-          const rawCiclo = cicloNome!.trim()
-          const matchCodigo = rawCiclo.match(/(\d{1,2}\/\d{4})/)
-          rodapeParts.push(matchCodigo ? matchCodigo[1] : rawCiclo)
+
+        let rodapeText = ''
+
+        if (hasContrato || hasVia) {
+          const parts: string[] = []
+          if (hasCiclo) {
+            const rawCiclo = cicloNome!.trim()
+            const matchCodigo = rawCiclo.match(/(\d{1,2}\/\d{4})/)
+            const cod = matchCodigo ? matchCodigo[1] : rawCiclo
+            parts.push(cod.startsWith('Ciclo') ? cod : `Ciclo ${cod}`)
+          }
+          if (hasContrato) {
+            const rawContrato = contratoNumero!.trim()
+            parts.push(rawContrato.startsWith('Contrato') ? rawContrato : `Contrato ${rawContrato}`)
+          }
+          if (hasParada) {
+            parts.push(`Parada ${String(numeroParada).trim()}`)
+          } else if (hasRota) {
+            parts.push(rotaNome!.trim())
+          }
+
+          const baseInfo = parts.join(' · ')
+          rodapeText = hasVia ? (baseInfo ? `${baseInfo} — ${via}` : via || '') : baseInfo
+        } else if (isCentralizado) {
+          const rodapeParts: string[] = []
+          if (hasCiclo) {
+            const rawCiclo = cicloNome!.trim()
+            const matchCodigo = rawCiclo.match(/(\d{1,2}\/\d{4})/)
+            rodapeParts.push(matchCodigo ? matchCodigo[1] : rawCiclo)
+          }
+          if (hasRota) rodapeParts.push(rotaNome!.trim())
+          if (hasParada) rodapeParts.push(String(numeroParada).trim())
+          rodapeText = rodapeParts.join(' - ')
         }
-        if (hasRota) rodapeParts.push(rotaNome!.trim())
-        if (hasParada) rodapeParts.push(String(numeroParada).trim())
+
+        if (!rodapeText.trim()) return null
 
         return (
           <div className="pt-3 border-t border-slate-200 text-center">
-            <p className="text-[11px] text-slate-500 font-medium tracking-wide">
-              {rodapeParts.join(' - ')}
-            </p>
+            <p className="text-[11px] text-slate-500 font-medium tracking-wide">{rodapeText}</p>
           </div>
         )
       })()}

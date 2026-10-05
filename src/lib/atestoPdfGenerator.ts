@@ -49,8 +49,10 @@ export interface AtestoDocumentData {
   // Metadados específicos para contratos na modalidade centralizada
   isCentralizado?: boolean
   cicloNome?: string
+  contratoNumero?: string
   rotaNome?: string
   numeroParada?: number
+  via?: 'v1' | 'v2'
 }
 
 /**
@@ -459,32 +461,65 @@ export async function renderAtestoPageToDoc(
   doc.setFontSize(isDense ? 9 : 10)
   doc.text(nomeEscola.toUpperCase(), sigX, textY, { align: 'center' })
 
-  // 6. RODAPÉ DO DOCUMENTO PARA CONTRATO CENTRALIZADO:
-  // No rodapé do atesto, apenas os valores separados por traços (sem rótulos), ex.: "37/2026 - ROTA A - 7"
+  // 6. RODAPÉ DO DOCUMENTO PARA CONTRATO CENTRALIZADO / EM ROTA:
+  // Indicado no rodapé: ciclo contrato parada (e via v1 ou v2 quando definida)
+  // Ex: "Ciclo 40/2026 · Contrato C-2026-02-05 · Parada 3 — v1" ou formato legado resumido se não houver rótulos
   const hasParada =
     data.numeroParada !== undefined &&
     data.numeroParada !== null &&
     String(data.numeroParada).trim() !== ''
   const hasCiclo = Boolean(data.cicloNome && data.cicloNome.trim())
+  const hasContrato = Boolean(data.contratoNumero && data.contratoNumero.trim())
   const hasRota = Boolean(data.rotaNome && data.rotaNome.trim())
+  const hasVia = Boolean(data.via)
 
-  if (data.isCentralizado && (hasCiclo || hasRota || hasParada)) {
-    const rodapeParts: string[] = []
-    if (hasCiclo) {
-      const rawCiclo = data.cicloNome!.trim()
-      // Se vier "Ciclo 37/2026 - Teste Operacional" ou "Ciclo 37/2026", extrair o código numérico "37/2026"
-      const matchCodigo = rawCiclo.match(/(\d{1,2}\/\d{4})/)
-      rodapeParts.push(matchCodigo ? matchCodigo[1] : rawCiclo)
-    }
-    if (hasRota) {
-      rodapeParts.push(data.rotaNome!.trim())
-    }
-    if (hasParada) {
-      rodapeParts.push(String(data.numeroParada).trim())
+  if (hasCiclo || hasContrato || hasRota || hasParada || hasVia) {
+    let rodapeText = ''
+
+    // Se temos contratoNumero ou via explicitamente informados, usar a identificação padronizada
+    // "Ciclo 40/2026 · Contrato C-2026-02-05 · Parada 3 — v1"
+    if (hasContrato || hasVia) {
+      const parts: string[] = []
+      if (hasCiclo) {
+        const rawCiclo = data.cicloNome!.trim()
+        const matchCodigo = rawCiclo.match(/(\d{1,2}\/\d{4})/)
+        const cod = matchCodigo ? matchCodigo[1] : rawCiclo
+        parts.push(cod.startsWith('Ciclo') ? cod : `Ciclo ${cod}`)
+      }
+      if (hasContrato) {
+        const rawContrato = data.contratoNumero!.trim()
+        parts.push(rawContrato.startsWith('Contrato') ? rawContrato : `Contrato ${rawContrato}`)
+      }
+      if (hasParada) {
+        parts.push(`Parada ${String(data.numeroParada).trim()}`)
+      } else if (hasRota) {
+        parts.push(data.rotaNome!.trim())
+      }
+
+      const baseInfo = parts.join(' · ')
+      if (hasVia) {
+        rodapeText = baseInfo ? `${baseInfo} — ${data.via}` : data.via || ''
+      } else {
+        rodapeText = baseInfo
+      }
+    } else if (data.isCentralizado && (hasCiclo || hasRota || hasParada)) {
+      // Formato compacto legado mantido para retrocompatibilidade: "37/2026 - ROTA A - 7"
+      const rodapeParts: string[] = []
+      if (hasCiclo) {
+        const rawCiclo = data.cicloNome!.trim()
+        const matchCodigo = rawCiclo.match(/(\d{1,2}\/\d{4})/)
+        rodapeParts.push(matchCodigo ? matchCodigo[1] : rawCiclo)
+      }
+      if (hasRota) {
+        rodapeParts.push(data.rotaNome!.trim())
+      }
+      if (hasParada) {
+        rodapeParts.push(String(data.numeroParada).trim())
+      }
+      rodapeText = rodapeParts.join(' - ')
     }
 
-    if (rodapeParts.length > 0) {
-      const rodapeText = rodapeParts.join(' - ')
+    if (rodapeText.trim().length > 0) {
       // Posicionar no rodapé inferior da folha A4 (pageHeight = 297mm)
       const pageHeight = doc.internal.pageSize.getHeight() // 297mm
       const footerY = Math.max(textY + 10, pageHeight - (isDense ? 10 : 12))
