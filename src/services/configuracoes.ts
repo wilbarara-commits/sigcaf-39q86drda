@@ -23,6 +23,18 @@ export const configuracoesService = {
         deposito_nome: item.deposito_nome || '',
         deposito_latitude: item.deposito_latitude || '',
         deposito_longitude: item.deposito_longitude || '',
+        atesto_vias:
+          item.atesto_vias !== undefined && item.atesto_vias !== null
+            ? Number(item.atesto_vias)
+            : 2,
+        atesto_via1_rotulo:
+          item.atesto_via1_rotulo !== undefined && item.atesto_via1_rotulo !== null
+            ? item.atesto_via1_rotulo
+            : 'Escola',
+        atesto_via2_rotulo:
+          item.atesto_via2_rotulo !== undefined && item.atesto_via2_rotulo !== null
+            ? item.atesto_via2_rotulo
+            : 'Cooperativa',
         created: item.created,
         updated: item.updated,
       }
@@ -83,6 +95,18 @@ export const configuracoesService = {
           deposito_nome: updated.deposito_nome || '',
           deposito_latitude: updated.deposito_latitude || '',
           deposito_longitude: updated.deposito_longitude || '',
+          atesto_vias:
+            updated.atesto_vias !== undefined && updated.atesto_vias !== null
+              ? Number(updated.atesto_vias)
+              : 2,
+          atesto_via1_rotulo:
+            updated.atesto_via1_rotulo !== undefined && updated.atesto_via1_rotulo !== null
+              ? updated.atesto_via1_rotulo
+              : 'Escola',
+          atesto_via2_rotulo:
+            updated.atesto_via2_rotulo !== undefined && updated.atesto_via2_rotulo !== null
+              ? updated.atesto_via2_rotulo
+              : 'Cooperativa',
           created: updated.created,
           updated: updated.updated,
         }
@@ -111,6 +135,18 @@ export const configuracoesService = {
       deposito_nome: created.deposito_nome || '',
       deposito_latitude: created.deposito_latitude || '',
       deposito_longitude: created.deposito_longitude || '',
+      atesto_vias:
+        created.atesto_vias !== undefined && created.atesto_vias !== null
+          ? Number(created.atesto_vias)
+          : 2,
+      atesto_via1_rotulo:
+        created.atesto_via1_rotulo !== undefined && created.atesto_via1_rotulo !== null
+          ? created.atesto_via1_rotulo
+          : 'Escola',
+      atesto_via2_rotulo:
+        created.atesto_via2_rotulo !== undefined && created.atesto_via2_rotulo !== null
+          ? created.atesto_via2_rotulo
+          : 'Cooperativa',
       created: created.created,
       updated: created.updated,
     }

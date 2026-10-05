@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-05T06:43:43.468Z",
+  "generatedAt": "2026-10-05T07:04:42.772Z",
   "collections": [
     {
       "name": "users",
@@ -1107,6 +1107,24 @@
         },
         {
           "name": "deposito_longitude",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "atesto_vias",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "atesto_via1_rotulo",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "atesto_via2_rotulo",
           "type": "text",
           "required": false,
           "system": false

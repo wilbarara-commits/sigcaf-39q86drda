@@ -513,6 +513,9 @@ export interface ConfiguracoesRecord {
   deposito_nome?: string
   deposito_latitude?: string
   deposito_longitude?: string
+  atesto_vias?: number // 1 ou 2 (default 2)
+  atesto_via1_rotulo?: string // default "Escola", pode ser vazio
+  atesto_via2_rotulo?: string // default "Cooperativa", pode ser vazio
   created?: string
   updated?: string
 }

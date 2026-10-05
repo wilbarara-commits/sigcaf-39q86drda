@@ -52,7 +52,9 @@ export interface AtestoDocumentData {
   contratoNumero?: string
   rotaNome?: string
   numeroParada?: number
-  via?: 'v1' | 'v2'
+  via?: string // 'v1' | 'v2' ou rótulo customizado (ex: 'Escola', 'Cooperativa')
+  viaRotulo?: string // rótulo customizado explícito (ex: "Escola", "Cooperativa"), se houver
+  totalVias?: number // 1 ou 2 vias (default 2)
 }
 
 /**
@@ -471,14 +473,38 @@ export async function renderAtestoPageToDoc(
   const hasCiclo = Boolean(data.cicloNome && data.cicloNome.trim())
   const hasContrato = Boolean(data.contratoNumero && data.contratoNumero.trim())
   const hasRota = Boolean(data.rotaNome && data.rotaNome.trim())
-  const hasVia = Boolean(data.via)
+  const hasVia = Boolean(data.via && data.via.trim())
+  const hasViaRotulo = Boolean(data.viaRotulo && data.viaRotulo.trim())
 
-  if (hasCiclo || hasContrato || hasRota || hasParada || hasVia) {
+  // Marcador de via formatado para o rodapé
+  // Regras da especificação:
+  // - Se vias = 2: marcador no rodapé usa rótulo configurado (ou viaRotulo, ou via). Se estiver em branco (ou igual a v1/v2), usa "v1" / "v2" como neutro.
+  // - Se vias = 1: se houver rótulo configurado, usa o rótulo; se em branco, sem marcador de via.
+  let marcadorViaFormatado = ''
+  const isTotalVias1 = data.totalVias === 1
+  if (isTotalVias1) {
+    if (hasViaRotulo) {
+      marcadorViaFormatado = data.viaRotulo!.trim()
+    } else if (hasVia && data.via!.trim() !== 'v1' && data.via!.trim() !== 'v2') {
+      marcadorViaFormatado = data.via!.trim()
+    }
+  } else {
+    // 2 vias (ou default)
+    if (hasViaRotulo) {
+      marcadorViaFormatado = data.viaRotulo!.trim()
+    } else if (hasVia) {
+      marcadorViaFormatado = data.via!.trim()
+    }
+  }
+
+  const hasMarcadorVia = Boolean(marcadorViaFormatado)
+
+  if (hasCiclo || hasContrato || hasRota || hasParada || hasMarcadorVia || hasVia) {
     let rodapeText = ''
 
-    // Se temos contratoNumero ou via explicitamente informados, usar a identificação padronizada
-    // "Ciclo 40/2026 · Contrato C-2026-02-05 · Parada 3 — v1"
-    if (hasContrato || hasVia) {
+    // Se temos contratoNumero ou via/marcador explicitamente informados, usar a identificação padronizada
+    // "Ciclo 40/2026 · Contrato C-2026-02-05 · Parada 3 — Escola"
+    if (hasContrato || hasMarcadorVia || hasVia) {
       const parts: string[] = []
       if (hasCiclo) {
         const rawCiclo = data.cicloNome!.trim()
@@ -497,8 +523,8 @@ export async function renderAtestoPageToDoc(
       }
 
       const baseInfo = parts.join(' · ')
-      if (hasVia) {
-        rodapeText = baseInfo ? `${baseInfo} — ${data.via}` : data.via || ''
+      if (hasMarcadorVia) {
+        rodapeText = baseInfo ? `${baseInfo} — ${marcadorViaFormatado}` : marcadorViaFormatado
       } else {
         rodapeText = baseInfo
       }

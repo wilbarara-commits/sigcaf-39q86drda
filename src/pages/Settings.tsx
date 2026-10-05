@@ -65,6 +65,11 @@ export default function SettingsPage() {
   const [depositoLatitude, setDepositoLatitude] = useState(String(DEPOSITO_CENTRAL.latitude))
   const [depositoLongitude, setDepositoLongitude] = useState(String(DEPOSITO_CENTRAL.longitude))
 
+  // Configurações de Emissão de Atestos
+  const [atestoVias, setAtestoVias] = useState<number>(2)
+  const [atestoVia1Rotulo, setAtestoVia1Rotulo] = useState<string>('Escola')
+  const [atestoVia2Rotulo, setAtestoVia2Rotulo] = useState<string>('Cooperativa')
+
   const loadConfiguracoes = () => {
     return configuracoesService
       .get()
@@ -92,6 +97,17 @@ export default function SettingsPage() {
             data.deposito_longitude !== undefined && data.deposito_longitude !== ''
               ? String(data.deposito_longitude)
               : String(DEPOSITO_CENTRAL.longitude),
+          )
+          setAtestoVias(data.atesto_vias === 1 ? 1 : 2)
+          setAtestoVia1Rotulo(
+            data.atesto_via1_rotulo !== undefined && data.atesto_via1_rotulo !== null
+              ? data.atesto_via1_rotulo
+              : 'Escola',
+          )
+          setAtestoVia2Rotulo(
+            data.atesto_via2_rotulo !== undefined && data.atesto_via2_rotulo !== null
+              ? data.atesto_via2_rotulo
+              : 'Cooperativa',
           )
         }
         setIsLoading(false)
@@ -163,6 +179,9 @@ export default function SettingsPage() {
         formData.append('deposito_nome', nomeDepFinal)
         formData.append('deposito_latitude', latFinal)
         formData.append('deposito_longitude', lonFinal)
+        formData.append('atesto_vias', String(atestoVias))
+        formData.append('atesto_via1_rotulo', atestoVia1Rotulo)
+        formData.append('atesto_via2_rotulo', atestoVia2Rotulo)
         saved = await configuracoesService.save(formData, config?.id)
       } else if (logoRemoved) {
         // No PocketBase, passar null ou string vazia no campo file remove o arquivo existente
@@ -179,6 +198,9 @@ export default function SettingsPage() {
         formData.append('deposito_nome', nomeDepFinal)
         formData.append('deposito_latitude', latFinal)
         formData.append('deposito_longitude', lonFinal)
+        formData.append('atesto_vias', String(atestoVias))
+        formData.append('atesto_via1_rotulo', atestoVia1Rotulo)
+        formData.append('atesto_via2_rotulo', atestoVia2Rotulo)
         saved = await configuracoesService.save(formData, config?.id)
       } else {
         saved = await configuracoesService.save(
@@ -194,6 +216,9 @@ export default function SettingsPage() {
             deposito_nome: nomeDepFinal,
             deposito_latitude: latFinal,
             deposito_longitude: lonFinal,
+            atesto_vias: atestoVias,
+            atesto_via1_rotulo: atestoVia1Rotulo,
+            atesto_via2_rotulo: atestoVia2Rotulo,
           },
           config?.id,
         )
@@ -480,6 +505,149 @@ export default function SettingsPage() {
                   />
                 </div>
               </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Card: Configuração de Emissão de Atestos */}
+        <Card className="border-border shadow-sm border-l-4 border-l-emerald-600">
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <FileText className="h-5 w-5 text-emerald-600" />
+              <CardTitle className="text-base font-semibold">
+                Emissão de Atestos (Termo de Recebimento)
+              </CardTitle>
+            </div>
+            <CardDescription>
+              Defina a quantidade de vias impressas por escola e os respectivos rótulos exibidos no
+              rodapé do PDF oficial (ex.: &quot;Escola&quot; e &quot;Cooperativa&quot;).
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {/* Seletor de 1 ou 2 vias */}
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Quantidade de Vias por Escola</Label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => setAtestoVias(1)}
+                  className={`flex items-start gap-3 p-3.5 rounded-lg border text-left transition-all ${
+                    atestoVias === 1
+                      ? 'border-emerald-600 bg-emerald-50/50 dark:bg-emerald-950/20 ring-1 ring-emerald-600'
+                      : 'border-border bg-card hover:border-emerald-500/40'
+                  }`}
+                >
+                  <div
+                    className={`h-4 w-4 rounded-full border mt-0.5 flex items-center justify-center shrink-0 ${
+                      atestoVias === 1
+                        ? 'border-emerald-600 bg-emerald-600'
+                        : 'border-muted-foreground'
+                    }`}
+                  >
+                    {atestoVias === 1 && <span className="h-1.5 w-1.5 rounded-full bg-white" />}
+                  </div>
+                  <div className="space-y-0.5">
+                    <p className="font-semibold text-sm text-foreground">1 Via (Página Única)</p>
+                    <p className="text-xs text-muted-foreground">
+                      Gera apenas 1 folha oficial por escola na impressão por rota.
+                    </p>
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setAtestoVias(2)}
+                  className={`flex items-start gap-3 p-3.5 rounded-lg border text-left transition-all ${
+                    atestoVias === 2
+                      ? 'border-emerald-600 bg-emerald-50/50 dark:bg-emerald-950/20 ring-1 ring-emerald-600'
+                      : 'border-border bg-card hover:border-emerald-500/40'
+                  }`}
+                >
+                  <div
+                    className={`h-4 w-4 rounded-full border mt-0.5 flex items-center justify-center shrink-0 ${
+                      atestoVias === 2
+                        ? 'border-emerald-600 bg-emerald-600'
+                        : 'border-muted-foreground'
+                    }`}
+                  >
+                    {atestoVias === 2 && <span className="h-1.5 w-1.5 rounded-full bg-white" />}
+                  </div>
+                  <div className="space-y-0.5">
+                    <p className="font-semibold text-sm text-foreground">
+                      2 Vias (Padrão Operacional)
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Gera 2 folhas por escola (uma para a escola e outra para a cooperativa).
+                    </p>
+                  </div>
+                </button>
+              </div>
+            </div>
+
+            {/* Rótulos das vias */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+              <div className="space-y-2">
+                <Label htmlFor="atestoVia1Rotulo">
+                  Rótulo da Via 1{' '}
+                  <span className="text-muted-foreground font-normal">(opcional)</span>
+                </Label>
+                <Input
+                  id="atestoVia1Rotulo"
+                  value={atestoVia1Rotulo}
+                  onChange={(e) => setAtestoVia1Rotulo(e.target.value)}
+                  placeholder="Escola"
+                />
+                <p className="text-[11px] text-muted-foreground">
+                  Identificador que aparece no rodapé do documento. Padrão: &quot;Escola&quot;. Pode
+                  ficar em branco.
+                </p>
+              </div>
+
+              {atestoVias === 2 && (
+                <div className="space-y-2">
+                  <Label htmlFor="atestoVia2Rotulo">
+                    Rótulo da Via 2{' '}
+                    <span className="text-muted-foreground font-normal">(opcional)</span>
+                  </Label>
+                  <Input
+                    id="atestoVia2Rotulo"
+                    value={atestoVia2Rotulo}
+                    onChange={(e) => setAtestoVia2Rotulo(e.target.value)}
+                    placeholder="Cooperativa"
+                  />
+                  <p className="text-[11px] text-muted-foreground">
+                    Identificador da segunda folha no rodapé. Padrão: &quot;Cooperativa&quot;. Pode
+                    ficar em branco.
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Texto de Ajuda / Exemplo */}
+            <div className="p-3 rounded-lg bg-muted/40 border border-border text-xs space-y-1 text-muted-foreground">
+              <p className="font-semibold text-foreground flex items-center gap-1.5">
+                <FileText className="h-3.5 w-3.5 text-emerald-600" />
+                Exemplo de rodapé gerado no PDF:
+              </p>
+              {atestoVias === 2 ? (
+                <p className="font-mono text-[11px] text-foreground bg-background p-2 rounded border">
+                  Página 1: Ciclo 40/2026 · Contrato C-2026-02-05 · Parada 3 —{' '}
+                  {atestoVia1Rotulo.trim() || 'v1'}
+                  <br />
+                  Página 2: Ciclo 40/2026 · Contrato C-2026-02-05 · Parada 3 —{' '}
+                  {atestoVia2Rotulo.trim() || 'v2'}
+                </p>
+              ) : (
+                <p className="font-mono text-[11px] text-foreground bg-background p-2 rounded border">
+                  Página 1: Ciclo 40/2026 · Contrato C-2026-02-05 · Parada 3
+                  {atestoVia1Rotulo.trim() ? ` — ${atestoVia1Rotulo.trim()}` : ''}
+                </p>
+              )}
+              <p className="text-[11px]">
+                O rótulo aparece no rodapé de cada página do PDF. Caso o campo fique em branco em 2
+                vias, o sistema utilizará neutralmente &quot;v1&quot; e &quot;v2&quot; para evitar
+                confusão entre as vias.
+              </p>
             </div>
           </CardContent>
         </Card>

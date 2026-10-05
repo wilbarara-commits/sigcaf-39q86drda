@@ -70,4 +70,105 @@ describe('atestoPdfGenerator', () => {
     // 2 páginas no documento
     expect(batchDoc.getNumberOfPages()).toBe(2)
   })
+
+  it('suporta 2 vias com rótulos default (v1/v2 quando em branco)', async () => {
+    const baseSample: AtestoDocumentData = {
+      numeroAtesto: 'AT-010',
+      numeroChamada: '01/2026',
+      nomeEscola: 'Escola Municipal B',
+      nomeCooperativa: 'Coop',
+      siglaCooperativa: 'COOP',
+      cidadeUf: 'RJ',
+      dataEmissao: new Date(),
+      items: [{ nome: 'Batata', quantidade: 30 }],
+      cicloNome: 'Ciclo 40/2026',
+      contratoNumero: 'C-2026-02-05',
+      numeroParada: 3,
+      totalVias: 2,
+    }
+
+    const docV1 = await createOfficialAtestoPdf({ ...baseSample, via: 'v1' })
+    const docV2 = await createOfficialAtestoPdf({ ...baseSample, via: 'v2' })
+
+    expect(docV1).toBeDefined()
+    expect(docV2).toBeDefined()
+    expect(docV1.getNumberOfPages()).toBe(1)
+    expect(docV2.getNumberOfPages()).toBe(1)
+  })
+
+  it('suporta 2 vias com rótulos customizados no rodapé (ex.: Escola e Cooperativa)', async () => {
+    const baseSample: AtestoDocumentData = {
+      numeroAtesto: 'AT-020',
+      numeroChamada: '01/2026',
+      nomeEscola: 'Escola Estadual C',
+      nomeCooperativa: 'Coop',
+      siglaCooperativa: 'COOP',
+      cidadeUf: 'RJ',
+      dataEmissao: new Date(),
+      items: [{ nome: 'Cenoura', quantidade: 20 }],
+      cicloNome: 'Ciclo 40/2026',
+      contratoNumero: 'C-2026-02-05',
+      numeroParada: 4,
+      totalVias: 2,
+    }
+
+    const docEscola = await createOfficialAtestoPdf({
+      ...baseSample,
+      viaRotulo: 'Escola',
+      via: 'Escola',
+    })
+    const docCoop = await createOfficialAtestoPdf({
+      ...baseSample,
+      viaRotulo: 'Cooperativa',
+      via: 'Cooperativa',
+    })
+
+    expect(docEscola).toBeDefined()
+    expect(docCoop).toBeDefined()
+
+    const batch = await createBatchAtestosPdf([
+      { ...baseSample, viaRotulo: 'Escola', via: 'Escola' },
+      { ...baseSample, viaRotulo: 'Cooperativa', via: 'Cooperativa' },
+    ])
+    expect(batch).toBeDefined()
+    expect(batch.getNumberOfPages()).toBe(2)
+  })
+
+  it('suporta 1 via gerando página única com ou sem rótulo', async () => {
+    const baseSample: AtestoDocumentData = {
+      numeroAtesto: 'AT-030',
+      numeroChamada: '01/2026',
+      nomeEscola: 'Escola Municipal D',
+      nomeCooperativa: 'Coop',
+      siglaCooperativa: 'COOP',
+      cidadeUf: 'RJ',
+      dataEmissao: new Date(),
+      items: [{ nome: 'Alface', quantidade: 10 }],
+      cicloNome: 'Ciclo 40/2026',
+      contratoNumero: 'C-2026-02-05',
+      numeroParada: 5,
+      totalVias: 1,
+    }
+
+    // Sem rótulo
+    const docSemRotulo = await createOfficialAtestoPdf(baseSample)
+    expect(docSemRotulo).toBeDefined()
+    expect(docSemRotulo.getNumberOfPages()).toBe(1)
+
+    // Com rótulo
+    const docComRotulo = await createOfficialAtestoPdf({
+      ...baseSample,
+      viaRotulo: 'Escola',
+      via: 'Escola',
+    })
+    expect(docComRotulo).toBeDefined()
+    expect(docComRotulo.getNumberOfPages()).toBe(1)
+
+    // Lote de 1 via
+    const batch1Via = await createBatchAtestosPdf([
+      { ...baseSample, viaRotulo: 'Escola', via: 'Escola' },
+    ])
+    expect(batch1Via).toBeDefined()
+    expect(batch1Via.getNumberOfPages()).toBe(1)
+  })
 })

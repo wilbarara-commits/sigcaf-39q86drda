@@ -410,6 +410,12 @@ export default function Atestos() {
             },
           ]
 
+    const totalVias = config?.atesto_vias === 1 ? 1 : 2
+    const via1Rotulo =
+      config?.atesto_via1_rotulo !== undefined && config?.atesto_via1_rotulo !== null
+        ? config.atesto_via1_rotulo
+        : 'Escola'
+
     return {
       numeroAtesto,
       numeroChamada,
@@ -425,6 +431,9 @@ export default function Atestos() {
       contratoNumero,
       rotaNome,
       numeroParada,
+      totalVias,
+      // Se vias = 1 e tiver rótulo configurado, usar como default para atesto individual
+      viaRotulo: totalVias === 1 ? via1Rotulo.trim() || undefined : undefined,
     }
   }
 
@@ -899,15 +908,42 @@ export default function Atestos() {
         const baseDocData = prepareDocumentData(order, numeroAtesto, dataDoc)
 
         if (routeBatchMode === 'em_rota') {
-          // Requisito 3: Duas páginas por escola (v1 = escola, v2 = cooperativa)
-          batchDocumentDataList.push({
-            ...baseDocData,
-            via: 'v1',
-          })
-          batchDocumentDataList.push({
-            ...baseDocData,
-            via: 'v2',
-          })
+          // Respeita configuração de vias (1 ou 2) e rótulos
+          const viasConfig = config?.atesto_vias === 1 ? 1 : 2
+          const rotuloVia1Config =
+            config?.atesto_via1_rotulo !== undefined && config?.atesto_via1_rotulo !== null
+              ? config.atesto_via1_rotulo.trim()
+              : 'Escola'
+          const rotuloVia2Config =
+            config?.atesto_via2_rotulo !== undefined && config?.atesto_via2_rotulo !== null
+              ? config.atesto_via2_rotulo.trim()
+              : 'Cooperativa'
+
+          if (viasConfig === 1) {
+            // 1 via: rótulo se houver, ou sem marcador se em branco
+            batchDocumentDataList.push({
+              ...baseDocData,
+              totalVias: 1,
+              viaRotulo: rotuloVia1Config || undefined,
+              via: rotuloVia1Config || undefined,
+            })
+          } else {
+            // 2 vias: rótulos configurados ou fallback para 'v1' / 'v2' se em branco
+            const marcador1 = rotuloVia1Config || 'v1'
+            const marcador2 = rotuloVia2Config || 'v2'
+            batchDocumentDataList.push({
+              ...baseDocData,
+              totalVias: 2,
+              viaRotulo: marcador1,
+              via: marcador1,
+            })
+            batchDocumentDataList.push({
+              ...baseDocData,
+              totalVias: 2,
+              viaRotulo: marcador2,
+              via: marcador2,
+            })
+          }
         } else {
           // Modo entregue legado: 1 página por escola
           batchDocumentDataList.push(baseDocData)
@@ -942,9 +978,10 @@ export default function Atestos() {
 
       const totalEscolas = pedidosParaProcessar.length
       const totalPaginas = batchDocumentDataList.length
+      const viasConfig = config?.atesto_vias === 1 ? 1 : 2
       toast.success(
         routeBatchMode === 'em_rota'
-          ? `PDF gerado com sucesso! ${totalEscolas} escola(s) com 2 vias (v1 e v2 = ${totalPaginas} páginas) para a Rota "${rotaData.rota.nome}". ${
+          ? `PDF gerado com sucesso! ${totalEscolas} escola(s) (${viasConfig === 1 ? '1 via' : '2 vias'} = ${totalPaginas} página(s)) para a Rota "${rotaData.rota.nome}". ${
               emitidosNovosCount > 0 ? `(${emitidosNovosCount} novo(s) atesto(s) gravado(s)).` : ''
             }`
           : `PDF gerado com sucesso! ${totalEscolas} atesto(s) da Rota "${rotaData.rota.nome}" consolidados em ordem de entrega. ${
@@ -1543,332 +1580,387 @@ export default function Atestos() {
         }}
       >
         <DialogContent className="sm:max-w-[680px] max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="text-lg font-bold flex items-center gap-2">
-              <Truck className="h-5 w-5 text-primary" />
-              <span>
-                {routeBatchMode === 'em_rota'
-                  ? 'Imprimir Atestos por Rota (2 Páginas por Escola: v1 e v2)'
-                  : 'Emitir e Imprimir Atestos por Rota Entregue'}
-              </span>
-            </DialogTitle>
-            <DialogDescription className="text-xs">
-              {routeBatchMode === 'em_rota' ? (
-                <>
-                  Emite os atestos das entregas da rota para o motorista levar e colher a assinatura
-                  da escola. Cada escola gera <strong>DUAS PÁGINAS</strong> (<strong>v1</strong> via
-                  da escola e <strong>v2</strong> via da cooperativa que volta assinada), ordenadas
-                  pela <strong>sequência de entrega</strong>.
-                </>
-              ) : (
-                <>
-                  Gera em um <strong>ÚNICO PDF</strong> todos os termos de recebimento das entregas
-                  já concluídas na rota selecionada, em estrita{' '}
-                  <strong>ordem de entrega das paradas</strong>.
-                </>
-              )}
-            </DialogDescription>
-          </DialogHeader>
+          {(() => {
+            const viasConfig = config?.atesto_vias === 1 ? 1 : 2
+            const via1RotuloConfig =
+              config?.atesto_via1_rotulo !== undefined && config?.atesto_via1_rotulo !== null
+                ? config.atesto_via1_rotulo.trim()
+                : 'Escola'
+            const via2RotuloConfig =
+              config?.atesto_via2_rotulo !== undefined && config?.atesto_via2_rotulo !== null
+                ? config.atesto_via2_rotulo.trim()
+                : 'Cooperativa'
+            const rotulo1Desc = via1RotuloConfig || 'v1'
+            const rotulo2Desc = via2RotuloConfig || 'v2'
 
-          {/* Abas de Alternância de Modo */}
-          <div className="flex border-b pt-1 gap-2">
-            <button
-              type="button"
-              className={`pb-2 text-xs font-semibold border-b-2 px-3 transition-colors ${
-                routeBatchMode === 'em_rota'
-                  ? 'border-primary text-primary'
-                  : 'border-transparent text-muted-foreground hover:text-foreground'
-              }`}
-              onClick={() => {
-                if (!isGeneratingRouteBatch) {
-                  setRouteBatchMode('em_rota')
-                  const candidate =
-                    eligibleActiveRoutes[0]?.rota.id ||
-                    routesData.find((r) => r.temPedidosParaRota)?.rota.id ||
-                    ''
-                  setSelectedRotaId(candidate)
-                }
-              }}
-            >
-              Rotas em Andamento / Em Rota (2 vias: v1 e v2)
-            </button>
-            <button
-              type="button"
-              className={`pb-2 text-xs font-semibold border-b-2 px-3 transition-colors ${
-                routeBatchMode === 'entregue'
-                  ? 'border-primary text-primary'
-                  : 'border-transparent text-muted-foreground hover:text-foreground'
-              }`}
-              onClick={() => {
-                if (!isGeneratingRouteBatch) {
-                  setRouteBatchMode('entregue')
-                  const candidate = eligibleDeliveredRoutes[0]?.rota.id || ''
-                  setSelectedRotaId(candidate)
-                }
-              }}
-            >
-              Rotas Entregues (Concluídas)
-            </button>
-          </div>
-
-          <div className="space-y-4 py-2">
-            {displayedBatchRoutes.length === 0 ? (
-              <div className="p-6 text-center rounded-lg border border-dashed bg-muted/30 space-y-2">
-                <AlertCircle className="h-8 w-8 text-amber-500 mx-auto" />
-                <p className="text-sm font-semibold text-foreground">
-                  {routeBatchMode === 'em_rota'
-                    ? 'Nenhuma rota com entregas em rota ou programadas'
-                    : 'Nenhuma rota entregue com pedidos disponíveis'}
-                </p>
-                <p className="text-xs text-muted-foreground max-w-md mx-auto">
-                  {routeBatchMode === 'em_rota'
-                    ? 'Despache uma rota na tela de "Rotas de Entrega" (botão "Colocar em Rota") para liberar a emissão prévia de atestos em duas vias para o motorista.'
-                    : 'Para esta opção, certifique-se de que a rota teve seu despacho finalizado como "Entregue".'}
-                </p>
-              </div>
-            ) : (
+            return (
               <>
-                {/* Seletor de Rota */}
-                <div className="space-y-2">
-                  <label className="text-xs font-semibold text-foreground flex items-center justify-between">
-                    <span className="flex items-center gap-1.5">
-                      <Layers className="h-3.5 w-3.5 text-primary" />
-                      Selecione a Rota:
+                <DialogHeader>
+                  <DialogTitle className="text-lg font-bold flex items-center gap-2">
+                    <Truck className="h-5 w-5 text-primary" />
+                    <span>
+                      {routeBatchMode === 'em_rota'
+                        ? viasConfig === 1
+                          ? `Imprimir Atestos por Rota (1 Página por Escola${via1RotuloConfig ? `: ${via1RotuloConfig}` : ''})`
+                          : `Imprimir Atestos por Rota (2 Páginas por Escola: ${rotulo1Desc} e ${rotulo2Desc})`
+                        : 'Emitir e Imprimir Atestos por Rota Entregue'}
                     </span>
-                    {routeBatchMode === 'em_rota' && (
-                      <span className="text-[11px] font-normal text-primary">
-                        Opção: 2 páginas por escola (v1 e v2 no rodapé)
-                      </span>
-                    )}
-                  </label>
-                  <div className="grid grid-cols-1 gap-2">
-                    {displayedBatchRoutes.map((r) => {
-                      const isSelected = selectedRotaId === r.rota.id
-                      const pedidosAlvo =
-                        routeBatchMode === 'entregue' ? r.pedidosEntregues : r.pedidosParaRota
-
-                      const despDataStr = r.ultimoDespacho?.data_despacho
-                        ? new Date(r.ultimoDespacho.data_despacho).toLocaleDateString('pt-BR')
-                        : r.isEmRota
-                          ? 'Em Rota'
-                          : 'Programada'
-
-                      return (
-                        <div
-                          key={r.rota.id}
-                          onClick={() => {
-                            if (!isGeneratingRouteBatch) setSelectedRotaId(r.rota.id)
-                          }}
-                          className={`p-3 rounded-lg border text-left cursor-pointer transition-all ${
-                            isSelected
-                              ? 'border-primary bg-primary/5 shadow-xs ring-1 ring-primary'
-                              : 'hover:border-primary/50 bg-card'
-                          }`}
-                        >
-                          <div className="flex items-start justify-between gap-2">
-                            <div>
-                              <div className="flex items-center gap-2">
-                                <span className="font-bold text-sm text-foreground">
-                                  {r.rota.nome}
-                                </span>
-                                {r.isEntregue ? (
-                                  <Badge className="bg-emerald-600 text-[10px] h-4">Entregue</Badge>
-                                ) : r.isEmRota ? (
-                                  <Badge className="bg-amber-600 text-white text-[10px] h-4">
-                                    Em Rota
-                                  </Badge>
-                                ) : (
-                                  <Badge variant="outline" className="text-[10px] h-4">
-                                    Programada
-                                  </Badge>
-                                )}
-                              </div>
-                              <p className="text-xs text-muted-foreground mt-0.5">
-                                Contrato:{' '}
-                                <span className="font-medium text-foreground">
-                                  {r.contrato?.numero || 'Sem contrato'}
-                                </span>
-                                {r.contrato?.numero_chamada &&
-                                  ` • Chamada: ${r.contrato.numero_chamada}`}
-                              </p>
-                            </div>
-                            <div className="text-right text-xs">
-                              <span className="font-semibold text-primary">
-                                {pedidosAlvo.length} escola(s)
-                              </span>
-                              <p className="text-[11px] text-muted-foreground">
-                                {routeBatchMode === 'em_rota'
-                                  ? `${pedidosAlvo.length * 2} páginas (v1 + v2)`
-                                  : `${pedidosAlvo.length} página(s)`}
-                              </p>
-                            </div>
-                          </div>
-
-                          {/* Detalhes de pendência de emissão */}
-                          <div className="mt-2.5 pt-2 border-t flex flex-wrap items-center justify-between gap-2 text-[11px] text-muted-foreground">
-                            <span className="flex items-center gap-1">
-                              <Calendar className="h-3 w-3" />
-                              Despacho: {despDataStr}
-                            </span>
-                            <div className="flex items-center gap-2">
-                              <span>
-                                Já emitidos:{' '}
-                                <strong className="text-emerald-600">
-                                  {r.pedidosComAtesto.length}
-                                </strong>
-                              </span>
-                              {r.pedidosSemAtesto.length > 0 ? (
-                                <Badge
-                                  variant="outline"
-                                  className="text-amber-600 border-amber-300 text-[10px] h-4"
-                                >
-                                  {r.pedidosSemAtesto.length} a gerar agora
-                                </Badge>
-                              ) : (
-                                <Badge
-                                  variant="outline"
-                                  className="text-emerald-700 border-emerald-300 text-[10px] h-4"
-                                >
-                                  Todos gerados
-                                </Badge>
-                              )}
-                            </div>
-                          </div>
-                        </div>
+                  </DialogTitle>
+                  <DialogDescription className="text-xs">
+                    {routeBatchMode === 'em_rota' ? (
+                      viasConfig === 1 ? (
+                        <>
+                          Emite os atestos das entregas da rota para o motorista levar e colher a
+                          assinatura da escola. Cada escola gera <strong>1 PÁGINA</strong>
+                          {via1RotuloConfig ? (
+                            <>
+                              {' '}
+                              (com identificação <strong>{via1RotuloConfig}</strong> no rodapé)
+                            </>
+                          ) : null}
+                          , ordenadas pela <strong>sequência de entrega</strong>.
+                        </>
+                      ) : (
+                        <>
+                          Emite os atestos das entregas da rota para o motorista levar e colher a
+                          assinatura da escola. Cada escola gera <strong>DUAS PÁGINAS</strong> (
+                          <strong>{rotulo1Desc}</strong> e <strong>{rotulo2Desc}</strong> que volta
+                          assinada), ordenadas pela <strong>sequência de entrega</strong>.
+                        </>
                       )
-                    })}
-                  </div>
+                    ) : (
+                      <>
+                        Gera em um <strong>ÚNICO PDF</strong> todos os termos de recebimento das
+                        entregas já concluídas na rota selecionada, em estrita{' '}
+                        <strong>ordem de entrega das paradas</strong>.
+                      </>
+                    )}
+                  </DialogDescription>
+                </DialogHeader>
+
+                {/* Abas de Alternância de Modo */}
+                <div className="flex border-b pt-1 gap-2">
+                  <button
+                    type="button"
+                    className={`pb-2 text-xs font-semibold border-b-2 px-3 transition-colors ${
+                      routeBatchMode === 'em_rota'
+                        ? 'border-primary text-primary'
+                        : 'border-transparent text-muted-foreground hover:text-foreground'
+                    }`}
+                    onClick={() => {
+                      if (!isGeneratingRouteBatch) {
+                        setRouteBatchMode('em_rota')
+                        const candidate =
+                          eligibleActiveRoutes[0]?.rota.id ||
+                          routesData.find((r) => r.temPedidosParaRota)?.rota.id ||
+                          ''
+                        setSelectedRotaId(candidate)
+                      }
+                    }}
+                  >
+                    {viasConfig === 1
+                      ? `Rotas em Andamento / Em Rota (1 via${via1RotuloConfig ? `: ${via1RotuloConfig}` : ''})`
+                      : `Rotas em Andamento / Em Rota (2 vias: ${rotulo1Desc} e ${rotulo2Desc})`}
+                  </button>
+                  <button
+                    type="button"
+                    className={`pb-2 text-xs font-semibold border-b-2 px-3 transition-colors ${
+                      routeBatchMode === 'entregue'
+                        ? 'border-primary text-primary'
+                        : 'border-transparent text-muted-foreground hover:text-foreground'
+                    }`}
+                    onClick={() => {
+                      if (!isGeneratingRouteBatch) {
+                        setRouteBatchMode('entregue')
+                        const candidate = eligibleDeliveredRoutes[0]?.rota.id || ''
+                        setSelectedRotaId(candidate)
+                      }
+                    }}
+                  >
+                    Rotas Entregues (Concluídas)
+                  </button>
                 </div>
 
-                {/* Resumo da Sequência de Entrega */}
-                {selectedRotaId &&
-                  (() => {
-                    const rotaSel = displayedBatchRoutes.find((r) => r.rota.id === selectedRotaId)
-                    if (!rotaSel) return null
-
-                    const pedidosExibicao =
-                      routeBatchMode === 'entregue'
-                        ? rotaSel.pedidosEntregues
-                        : rotaSel.pedidosParaRota
-
-                    return (
-                      <div className="rounded-lg border bg-muted/20 p-3 space-y-2">
-                        <div className="flex items-center justify-between text-xs">
-                          <span className="font-semibold text-foreground flex items-center gap-1">
-                            <MapPin className="h-3.5 w-3.5 text-primary" />
-                            Ordem de Entrega das Paradas ({pedidosExibicao.length} escola(s)):
+                <div className="space-y-4 py-2">
+                  {displayedBatchRoutes.length === 0 ? (
+                    <div className="p-6 text-center rounded-lg border border-dashed bg-muted/30 space-y-2">
+                      <AlertCircle className="h-8 w-8 text-amber-500 mx-auto" />
+                      <p className="text-sm font-semibold text-foreground">
+                        {routeBatchMode === 'em_rota'
+                          ? 'Nenhuma rota com entregas em rota ou programadas'
+                          : 'Nenhuma rota entregue com pedidos disponíveis'}
+                      </p>
+                      <p className="text-xs text-muted-foreground max-w-md mx-auto">
+                        {routeBatchMode === 'em_rota'
+                          ? `Despache uma rota na tela de "Rotas de Entrega" (botão "Colocar em Rota") para liberar a emissão prévia de atestos em ${viasConfig === 1 ? 'via única' : 'duas vias'} para o motorista.`
+                          : 'Para esta opção, certifique-se de que a rota teve seu despacho finalizado como "Entregue".'}
+                      </p>
+                    </div>
+                  ) : (
+                    <>
+                      {/* Seletor de Rota */}
+                      <div className="space-y-2">
+                        <label className="text-xs font-semibold text-foreground flex items-center justify-between">
+                          <span className="flex items-center gap-1.5">
+                            <Layers className="h-3.5 w-3.5 text-primary" />
+                            Selecione a Rota:
                           </span>
-                          <span className="text-[11px] text-muted-foreground font-medium">
-                            {routeBatchMode === 'em_rota'
-                              ? '2 páginas por escola (v1 Escola + v2 Cooperativa)'
-                              : '1 página por atesto'}
-                          </span>
-                        </div>
+                          {routeBatchMode === 'em_rota' && (
+                            <span className="text-[11px] font-normal text-primary">
+                              {viasConfig === 1
+                                ? `Opção: 1 página por escola${via1RotuloConfig ? ` (${via1RotuloConfig})` : ''}`
+                                : `Opção: 2 páginas por escola (${rotulo1Desc} e ${rotulo2Desc} no rodapé)`}
+                            </span>
+                          )}
+                        </label>
+                        <div className="grid grid-cols-1 gap-2">
+                          {displayedBatchRoutes.map((r) => {
+                            const isSelected = selectedRotaId === r.rota.id
+                            const pedidosAlvo =
+                              routeBatchMode === 'entregue' ? r.pedidosEntregues : r.pedidosParaRota
 
-                        <div className="max-h-44 overflow-y-auto space-y-1 pr-1 text-xs">
-                          {pedidosExibicao.map((ord, idx) => {
-                            const jaTemAtesto = atestos.some((a) => a.orderId === ord.id)
+                            const despDataStr = r.ultimoDespacho?.data_despacho
+                              ? new Date(r.ultimoDespacho.data_despacho).toLocaleDateString('pt-BR')
+                              : r.isEmRota
+                                ? 'Em Rota'
+                                : 'Programada'
+
+                            const paginasCalculadas =
+                              routeBatchMode === 'em_rota'
+                                ? pedidosAlvo.length * viasConfig
+                                : pedidosAlvo.length
+
                             return (
                               <div
-                                key={ord.id}
-                                className="flex items-center justify-between p-1.5 rounded bg-background border text-[11.5px]"
+                                key={r.rota.id}
+                                onClick={() => {
+                                  if (!isGeneratingRouteBatch) setSelectedRotaId(r.rota.id)
+                                }}
+                                className={`p-3 rounded-lg border text-left cursor-pointer transition-all ${
+                                  isSelected
+                                    ? 'border-primary bg-primary/5 shadow-xs ring-1 ring-primary'
+                                    : 'hover:border-primary/50 bg-card'
+                                }`}
                               >
-                                <div className="flex items-center gap-2">
-                                  <span className="h-5 w-5 rounded-full bg-primary/10 text-primary font-bold flex items-center justify-center text-[10px] shrink-0">
-                                    {idx + 1}
-                                  </span>
-                                  <span className="font-medium text-foreground line-clamp-1">
-                                    {ord.schoolName}
-                                  </span>
+                                <div className="flex items-start justify-between gap-2">
+                                  <div>
+                                    <div className="flex items-center gap-2">
+                                      <span className="font-bold text-sm text-foreground">
+                                        {r.rota.nome}
+                                      </span>
+                                      {r.isEntregue ? (
+                                        <Badge className="bg-emerald-600 text-[10px] h-4">
+                                          Entregue
+                                        </Badge>
+                                      ) : r.isEmRota ? (
+                                        <Badge className="bg-amber-600 text-white text-[10px] h-4">
+                                          Em Rota
+                                        </Badge>
+                                      ) : (
+                                        <Badge variant="outline" className="text-[10px] h-4">
+                                          Programada
+                                        </Badge>
+                                      )}
+                                    </div>
+                                    <p className="text-xs text-muted-foreground mt-0.5">
+                                      Contrato:{' '}
+                                      <span className="font-medium text-foreground">
+                                        {r.contrato?.numero || 'Sem contrato'}
+                                      </span>
+                                      {r.contrato?.numero_chamada &&
+                                        ` • Chamada: ${r.contrato.numero_chamada}`}
+                                    </p>
+                                  </div>
+                                  <div className="text-right text-xs">
+                                    <span className="font-semibold text-primary">
+                                      {pedidosAlvo.length} escola(s)
+                                    </span>
+                                    <p className="text-[11px] text-muted-foreground">
+                                      {routeBatchMode === 'em_rota'
+                                        ? viasConfig === 1
+                                          ? `${paginasCalculadas} página(s)`
+                                          : `${paginasCalculadas} páginas (${rotulo1Desc} + ${rotulo2Desc})`
+                                        : `${pedidosAlvo.length} página(s)`}
+                                    </p>
+                                  </div>
                                 </div>
-                                <div className="flex items-center gap-2 shrink-0">
-                                  <span className="text-[11px] text-muted-foreground">
-                                    Ped: {ord.numero || ord.id}
+
+                                {/* Detalhes de pendência de emissão */}
+                                <div className="mt-2.5 pt-2 border-t flex flex-wrap items-center justify-between gap-2 text-[11px] text-muted-foreground">
+                                  <span className="flex items-center gap-1">
+                                    <Calendar className="h-3 w-3" />
+                                    Despacho: {despDataStr}
                                   </span>
-                                  {routeBatchMode === 'em_rota' && (
-                                    <Badge
-                                      variant="secondary"
-                                      className="text-[9px] h-4 bg-primary/10 text-primary border-primary/20"
-                                    >
-                                      v1 + v2
-                                    </Badge>
-                                  )}
-                                  {jaTemAtesto ? (
-                                    <Badge
-                                      variant="outline"
-                                      className="text-emerald-600 border-emerald-300 text-[9px] h-4"
-                                    >
-                                      Atesto OK
-                                    </Badge>
-                                  ) : (
-                                    <Badge
-                                      variant="outline"
-                                      className="text-amber-600 border-amber-300 text-[9px] h-4"
-                                    >
-                                      Novo
-                                    </Badge>
-                                  )}
+                                  <div className="flex items-center gap-2">
+                                    <span>
+                                      Já emitidos:{' '}
+                                      <strong className="text-emerald-600">
+                                        {r.pedidosComAtesto.length}
+                                      </strong>
+                                    </span>
+                                    {r.pedidosSemAtesto.length > 0 ? (
+                                      <Badge
+                                        variant="outline"
+                                        className="text-amber-600 border-amber-300 text-[10px] h-4"
+                                      >
+                                        {r.pedidosSemAtesto.length} a gerar agora
+                                      </Badge>
+                                    ) : (
+                                      <Badge
+                                        variant="outline"
+                                        className="text-emerald-700 border-emerald-300 text-[10px] h-4"
+                                      >
+                                        Todos gerados
+                                      </Badge>
+                                    )}
+                                  </div>
                                 </div>
                               </div>
                             )
                           })}
                         </div>
                       </div>
-                    )
-                  })()}
 
-                {/* Barra de Progresso / Feedback */}
-                {isGeneratingRouteBatch && (
-                  <div className="p-3 rounded-lg border border-primary/20 bg-primary/5 space-y-2">
-                    <div className="flex items-center gap-2 text-xs font-semibold text-primary">
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      <span>{batchProgress || 'Processando atestos...'}</span>
-                    </div>
-                    <p className="text-[11px] text-muted-foreground">
-                      Por favor aguarde enquanto os documentos são gerados, timbrados e consolidados
-                      em um único arquivo PDF.
-                    </p>
-                  </div>
-                )}
+                      {/* Resumo da Sequência de Entrega */}
+                      {selectedRotaId &&
+                        (() => {
+                          const rotaSel = displayedBatchRoutes.find(
+                            (r) => r.rota.id === selectedRotaId,
+                          )
+                          if (!rotaSel) return null
+
+                          const pedidosExibicao =
+                            routeBatchMode === 'entregue'
+                              ? rotaSel.pedidosEntregues
+                              : rotaSel.pedidosParaRota
+
+                          return (
+                            <div className="rounded-lg border bg-muted/20 p-3 space-y-2">
+                              <div className="flex items-center justify-between text-xs">
+                                <span className="font-semibold text-foreground flex items-center gap-1">
+                                  <MapPin className="h-3.5 w-3.5 text-primary" />
+                                  Ordem de Entrega das Paradas ({pedidosExibicao.length} escola(s)):
+                                </span>
+                                <span className="text-[11px] text-muted-foreground font-medium">
+                                  {routeBatchMode === 'em_rota'
+                                    ? viasConfig === 1
+                                      ? '1 página por escola'
+                                      : `2 páginas por escola (via 1: ${rotulo1Desc} + via 2: ${rotulo2Desc})`
+                                    : '1 página por atesto'}
+                                </span>
+                              </div>
+
+                              <div className="max-h-44 overflow-y-auto space-y-1 pr-1 text-xs">
+                                {pedidosExibicao.map((ord, idx) => {
+                                  const jaTemAtesto = atestos.some((a) => a.orderId === ord.id)
+                                  return (
+                                    <div
+                                      key={ord.id}
+                                      className="flex items-center justify-between p-1.5 rounded bg-background border text-[11.5px]"
+                                    >
+                                      <div className="flex items-center gap-2">
+                                        <span className="h-5 w-5 rounded-full bg-primary/10 text-primary font-bold flex items-center justify-center text-[10px] shrink-0">
+                                          {idx + 1}
+                                        </span>
+                                        <span className="font-medium text-foreground line-clamp-1">
+                                          {ord.schoolName}
+                                        </span>
+                                      </div>
+                                      <div className="flex items-center gap-2 shrink-0">
+                                        <span className="text-[11px] text-muted-foreground">
+                                          Ped: {ord.numero || ord.id}
+                                        </span>
+                                        {routeBatchMode === 'em_rota' && (
+                                          <Badge
+                                            variant="secondary"
+                                            className="text-[9px] h-4 bg-primary/10 text-primary border-primary/20"
+                                          >
+                                            {viasConfig === 1
+                                              ? '1 via'
+                                              : `${rotulo1Desc} + ${rotulo2Desc}`}
+                                          </Badge>
+                                        )}
+                                        {jaTemAtesto ? (
+                                          <Badge
+                                            variant="outline"
+                                            className="text-emerald-600 border-emerald-300 text-[9px] h-4"
+                                          >
+                                            Atesto OK
+                                          </Badge>
+                                        ) : (
+                                          <Badge
+                                            variant="outline"
+                                            className="text-amber-600 border-amber-300 text-[9px] h-4"
+                                          >
+                                            Novo
+                                          </Badge>
+                                        )}
+                                      </div>
+                                    </div>
+                                  )
+                                })}
+                              </div>
+                            </div>
+                          )
+                        })()}
+
+                      {/* Barra de Progresso / Feedback */}
+                      {isGeneratingRouteBatch && (
+                        <div className="p-3 rounded-lg border border-primary/20 bg-primary/5 space-y-2">
+                          <div className="flex items-center gap-2 text-xs font-semibold text-primary">
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                            <span>{batchProgress || 'Processando atestos...'}</span>
+                          </div>
+                          <p className="text-[11px] text-muted-foreground">
+                            Por favor aguarde enquanto os documentos são gerados, timbrados e
+                            consolidados em um único arquivo PDF.
+                          </p>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+
+                <DialogFooter className="gap-2 sm:gap-0">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setRouteBatchModalOpen(false)}
+                    disabled={isGeneratingRouteBatch}
+                  >
+                    Cancelar
+                  </Button>
+                  <Button
+                    size="sm"
+                    className="bg-primary hover:bg-primary/90 text-primary-foreground gap-1.5"
+                    onClick={handleEmitirEImprimirRota}
+                    disabled={
+                      isGeneratingRouteBatch || displayedBatchRoutes.length === 0 || !selectedRotaId
+                    }
+                  >
+                    {isGeneratingRouteBatch ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Emitindo e Consolidando PDF...
+                      </>
+                    ) : routeBatchMode === 'em_rota' ? (
+                      <>
+                        <Printer className="h-4 w-4" />
+                        {viasConfig === 1
+                          ? 'Imprimir Atestos da Rota (1 Página / Escola)'
+                          : 'Imprimir Atestos da Rota (2 Páginas / Escola)'}
+                      </>
+                    ) : (
+                      <>
+                        <Printer className="h-4 w-4" />
+                        Emitir e Imprimir Rota Entregue (PDF Único)
+                      </>
+                    )}
+                  </Button>
+                </DialogFooter>
               </>
-            )}
-          </div>
-
-          <DialogFooter className="gap-2 sm:gap-0">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setRouteBatchModalOpen(false)}
-              disabled={isGeneratingRouteBatch}
-            >
-              Cancelar
-            </Button>
-            <Button
-              size="sm"
-              className="bg-primary hover:bg-primary/90 text-primary-foreground gap-1.5"
-              onClick={handleEmitirEImprimirRota}
-              disabled={
-                isGeneratingRouteBatch || displayedBatchRoutes.length === 0 || !selectedRotaId
-              }
-            >
-              {isGeneratingRouteBatch ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Emitindo e Consolidando PDF...
-                </>
-              ) : routeBatchMode === 'em_rota' ? (
-                <>
-                  <Printer className="h-4 w-4" />
-                  Imprimir Atestos da Rota (2 Páginas / Escola)
-                </>
-              ) : (
-                <>
-                  <Printer className="h-4 w-4" />
-                  Emitir e Imprimir Rota Entregue (PDF Único)
-                </>
-              )}
-            </Button>
-          </DialogFooter>
+            )
+          })()}
         </DialogContent>
       </Dialog>
     </div>
@@ -1891,7 +1983,9 @@ interface DocumentoOficialViewProps {
   contratoNumero?: string
   rotaNome?: string
   numeroParada?: number
-  via?: 'v1' | 'v2'
+  via?: string
+  viaRotulo?: string
+  totalVias?: number
   itemsOverride?: Array<{ nome: string; quantidade: number }>
 }
 
@@ -1908,6 +2002,8 @@ function DocumentoOficialView({
   rotaNome,
   numeroParada,
   via,
+  viaRotulo,
+  totalVias,
   itemsOverride,
 }: DocumentoOficialViewProps) {
   const nomeCoop = config?.nome_cooperativa || 'CooperGestão — Cooperativa Agrícola Familiar'
@@ -2103,15 +2199,35 @@ function DocumentoOficialView({
         const hasCiclo = Boolean(cicloNome && cicloNome.trim())
         const hasContrato = Boolean(contratoNumero && contratoNumero.trim())
         const hasRota = Boolean(rotaNome && rotaNome.trim())
-        const hasVia = Boolean(via)
+        const hasVia = Boolean(via && via.trim())
+        const hasViaRotulo = Boolean(viaRotulo && viaRotulo.trim())
 
-        if (!hasCiclo && !hasContrato && !hasRota && !hasParada && !hasVia) {
+        // Marcador de via do rodapé
+        let marcadorVia = ''
+        const isTotalVias1 = totalVias === 1
+        if (isTotalVias1) {
+          if (hasViaRotulo) {
+            marcadorVia = viaRotulo!.trim()
+          } else if (hasVia && via!.trim() !== 'v1' && via!.trim() !== 'v2') {
+            marcadorVia = via!.trim()
+          }
+        } else {
+          if (hasViaRotulo) {
+            marcadorVia = viaRotulo!.trim()
+          } else if (hasVia) {
+            marcadorVia = via!.trim()
+          }
+        }
+
+        const hasMarcadorVia = Boolean(marcadorVia)
+
+        if (!hasCiclo && !hasContrato && !hasRota && !hasParada && !hasMarcadorVia && !hasVia) {
           return null
         }
 
         let rodapeText = ''
 
-        if (hasContrato || hasVia) {
+        if (hasContrato || hasMarcadorVia || hasVia) {
           const parts: string[] = []
           if (hasCiclo) {
             const rawCiclo = cicloNome!.trim()
@@ -2130,7 +2246,11 @@ function DocumentoOficialView({
           }
 
           const baseInfo = parts.join(' · ')
-          rodapeText = hasVia ? (baseInfo ? `${baseInfo} — ${via}` : via || '') : baseInfo
+          rodapeText = hasMarcadorVia
+            ? baseInfo
+              ? `${baseInfo} — ${marcadorVia}`
+              : marcadorVia
+            : baseInfo
         } else if (isCentralizado) {
           const rodapeParts: string[] = []
           if (hasCiclo) {
