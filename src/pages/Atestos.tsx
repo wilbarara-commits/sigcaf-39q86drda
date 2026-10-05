@@ -61,6 +61,7 @@ export default function Atestos() {
   const {
     atestos,
     orders,
+    chamadas,
     contracts,
     contractSchools,
     contractItems,
