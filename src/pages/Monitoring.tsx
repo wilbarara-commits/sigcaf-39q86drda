@@ -341,8 +341,17 @@ export default function Monitoring() {
           </div>
 
           {/* Botão ABRIR CICLO */}
-          <Button onClick={() => setAbrirCicloOpen(true)} className="gap-2 h-9">
-            <CalendarPlus className="h-4 w-4" /> Abrir Ciclo
+          <Button
+            onClick={() => setAbrirCicloOpen(true)}
+            className="h-auto py-1.5 px-3 gap-3 group"
+          >
+            <div className="h-12 w-12 rounded-xl bg-primary/20 text-primary-foreground dark:text-primary flex items-center justify-center transition-all group-hover:scale-105 group-hover:border group-hover:border-primary/40 shrink-0">
+              <CalendarPlus className="h-6 w-6 stroke-[1.8]" />
+            </div>
+            <div className="text-left">
+              <div className="font-semibold text-sm leading-tight">Abrir Ciclo</div>
+              <div className="text-[11px] opacity-80 font-normal">Novo ciclo por chamada</div>
+            </div>
           </Button>
 
           {/* Botão Cancelar Ciclo (cancela o ciclo selecionado da chamada) */}
@@ -493,7 +502,9 @@ export default function Monitoring() {
                 <span className="text-xs font-bold uppercase tracking-wider text-blue-600">
                   Fase 1
                 </span>
-                <Clock className="h-4 w-4 text-blue-600" />
+                <div className="h-8 w-8 rounded-lg bg-blue-100 dark:bg-blue-900/50 text-blue-600 flex items-center justify-center">
+                  <Clock className="h-4 w-4 stroke-[1.8]" />
+                </div>
               </div>
               <h3 className="font-semibold text-base mb-1">Coletando</h3>
               <p className="text-xs text-muted-foreground mb-3">
@@ -522,7 +533,9 @@ export default function Monitoring() {
                 <span className="text-xs font-bold uppercase tracking-wider text-amber-600">
                   Fase 2
                 </span>
-                <AlertTriangle className="h-4 w-4 text-amber-600" />
+                <div className="h-8 w-8 rounded-lg bg-amber-100 dark:bg-amber-900/50 text-amber-600 flex items-center justify-center">
+                  <AlertTriangle className="h-4 w-4 stroke-[1.8]" />
+                </div>
               </div>
               <h3 className="font-semibold text-base mb-1">Correção</h3>
               <p className="text-xs text-muted-foreground mb-3">
@@ -557,7 +570,9 @@ export default function Monitoring() {
                     <span className="text-xs font-bold uppercase tracking-wider text-purple-600">
                       Fase 3
                     </span>
-                    <Truck className="h-4 w-4 text-purple-600" />
+                    <div className="h-8 w-8 rounded-lg bg-purple-100 dark:bg-purple-900/50 text-purple-600 flex items-center justify-center">
+                      <Truck className="h-4 w-4 stroke-[1.8]" />
+                    </div>
                   </div>
                   <h3 className="font-semibold text-base mb-1">Coleta Encerrada</h3>
                   <p className="text-xs text-muted-foreground mb-3">
@@ -607,7 +622,9 @@ export default function Monitoring() {
                 <span className="text-xs font-bold uppercase tracking-wider text-emerald-600">
                   Fase 4
                 </span>
-                <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                <div className="h-8 w-8 rounded-lg bg-emerald-100 dark:bg-emerald-900/50 text-emerald-600 flex items-center justify-center">
+                  <CheckCircle2 className="h-4 w-4 stroke-[1.8]" />
+                </div>
               </div>
               <h3 className="font-semibold text-base mb-1">Fechado</h3>
               <p className="text-xs text-muted-foreground mb-3">

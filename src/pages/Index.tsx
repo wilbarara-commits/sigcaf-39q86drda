@@ -18,6 +18,11 @@ import {
   Layers,
   ChevronRight,
   ExternalLink,
+  BadgeCheck,
+  ShoppingBasket,
+  FileSignature,
+  Megaphone,
+  CalendarRange,
 } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { MonthlyReportButton } from '@/components/MonthlyReportButton'
@@ -286,14 +291,14 @@ export default function Index() {
     {
       title: 'Pedidos Pendentes',
       value: pendingOrders,
-      icon: ShoppingCart,
-      color: 'text-secondary',
-      bg: 'bg-secondary/10',
+      icon: ShoppingBasket,
+      color: 'text-primary',
+      bg: 'bg-primary/10',
     },
     {
       title: 'Contratos Ativos',
       value: activeContracts,
-      icon: FileText,
+      icon: FileSignature,
       color: 'text-primary',
       bg: 'bg-primary/10',
     },
@@ -303,9 +308,9 @@ export default function Index() {
       subtext: `${chamadasAtivasStats.comCiclo} com ciclo em andamento • ${chamadasAtivasStats.semCiclo} sem ciclo`,
       badge:
         chamadasAtivasStats.comCiclo > 0 ? `${chamadasAtivasStats.comCiclo} em ciclo` : undefined,
-      icon: Layers,
-      color: 'text-indigo-600 dark:text-indigo-400',
-      bg: 'bg-indigo-600/10 dark:bg-indigo-400/10',
+      icon: Megaphone,
+      color: 'text-primary',
+      bg: 'bg-primary/10',
       linkTo: '/chamadas',
     },
     {
@@ -314,8 +319,8 @@ export default function Index() {
       subtext: `${formattedPercent} do total do mês (${formattedReceitaTotal})`,
       badge: formattedPercent,
       icon: PackageCheck,
-      color: 'text-emerald-600',
-      bg: 'bg-emerald-600/10',
+      color: 'text-primary',
+      bg: 'bg-primary/10',
     },
   ]
 
@@ -356,13 +361,37 @@ export default function Index() {
           <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
           <p className="text-muted-foreground">Resumo das atividades da cooperativa.</p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-3">
           <MonthlyReportButton variant="outline" size="default" />
-          <Button asChild variant="outline">
-            <Link to="/atestos">Emitir Atesto</Link>
+          <Button
+            asChild
+            variant="outline"
+            className="h-auto py-1.5 px-3 hover:border-primary/40 group"
+          >
+            <Link to="/atestos" className="flex items-center gap-3">
+              <div className="h-12 w-12 rounded-xl bg-primary/10 text-primary flex items-center justify-center transition-all group-hover:scale-105 group-hover:border group-hover:border-primary/40 shrink-0">
+                <BadgeCheck className="h-6 w-6 stroke-[1.8]" />
+              </div>
+              <div className="text-left">
+                <div className="font-semibold text-sm leading-tight text-foreground">
+                  Emitir Atesto
+                </div>
+                <div className="text-[11px] text-muted-foreground font-normal">
+                  Comprovante de entrega
+                </div>
+              </div>
+            </Link>
           </Button>
-          <Button asChild>
-            <Link to="/pedidos">Novo Pedido</Link>
+          <Button asChild className="h-auto py-1.5 px-3 group">
+            <Link to="/pedidos" className="flex items-center gap-3">
+              <div className="h-12 w-12 rounded-xl bg-primary/20 text-primary-foreground dark:text-primary flex items-center justify-center transition-all group-hover:scale-105 group-hover:border group-hover:border-primary/40 shrink-0">
+                <ShoppingBasket className="h-6 w-6 stroke-[1.8]" />
+              </div>
+              <div className="text-left">
+                <div className="font-semibold text-sm leading-tight">Novo Pedido</div>
+                <div className="text-[11px] opacity-80 font-normal">Lançar no ciclo ativo</div>
+              </div>
+            </Link>
           </Button>
         </div>
       </div>
@@ -383,8 +412,8 @@ export default function Index() {
                     <ArrowRight className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
                   )}
                 </CardTitle>
-                <div className={`p-2 rounded-full ${m.bg}`}>
-                  <m.icon className={`h-4 w-4 ${m.color}`} />
+                <div className="h-12 w-12 rounded-xl bg-primary/10 text-primary flex items-center justify-center transition-all hover:scale-105 hover:border hover:border-primary/40 shrink-0">
+                  <m.icon className="h-6 w-6 stroke-[1.8]" />
                 </div>
               </CardHeader>
               <CardContent>
@@ -433,13 +462,22 @@ export default function Index() {
       {/* Seção de Ciclos Operacionais Ativos (um por chamada) */}
       <div className="space-y-3">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Calendar className="h-5 w-5 text-primary" />
-            <h2 className="text-lg font-semibold tracking-tight">Ciclos Operacionais Ativos</h2>
-            <Badge variant="secondary" className="font-semibold text-xs">
-              {activeCiclosList.length}{' '}
-              {activeCiclosList.length === 1 ? 'ciclo em andamento' : 'ciclos em andamento'}
-            </Badge>
+          <div className="flex items-center gap-3">
+            <div className="h-12 w-12 rounded-xl bg-primary/10 text-primary flex items-center justify-center transition-all hover:scale-105 hover:border hover:border-primary/40 shrink-0">
+              <CalendarRange className="h-6 w-6 stroke-[1.8]" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h2 className="text-lg font-semibold tracking-tight">Ciclos Operacionais Ativos</h2>
+                <Badge variant="secondary" className="font-semibold text-xs">
+                  {activeCiclosList.length}{' '}
+                  {activeCiclosList.length === 1 ? 'ciclo em andamento' : 'ciclos em andamento'}
+                </Badge>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Ciclos em andamento por chamada pública
+              </p>
+            </div>
           </div>
           <div className="flex items-center gap-2">
             <Button variant="ghost" size="sm" asChild className="text-xs text-primary gap-1">
@@ -599,15 +637,19 @@ export default function Index() {
       {/* Visão Rápida de Chamadas Ativas e Status de Ciclo */}
       <Card>
         <CardHeader className="pb-3">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-            <div>
-              <CardTitle className="text-base flex items-center gap-2">
-                <Layers className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
-                Chamadas Públicas Ativas
-              </CardTitle>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                Relação das chamadas com e sem ciclos operacionais em andamento.
-              </p>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="h-12 w-12 rounded-xl bg-primary/10 text-primary flex items-center justify-center transition-all hover:scale-105 hover:border hover:border-primary/40 shrink-0">
+                <Megaphone className="h-6 w-6 stroke-[1.8]" />
+              </div>
+              <div>
+                <CardTitle className="text-base flex items-center gap-2">
+                  Chamadas Públicas Ativas
+                </CardTitle>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Relação das chamadas com e sem ciclos operacionais em andamento.
+                </p>
+              </div>
             </div>
             <div className="flex items-center gap-2">
               <Badge variant="outline" className="text-xs font-medium">
@@ -712,7 +754,17 @@ export default function Index() {
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         <Card className="lg:col-span-2">
           <CardHeader>
-            <CardTitle>Entregas Recentes</CardTitle>
+            <div className="flex items-center gap-3">
+              <div className="h-12 w-12 rounded-xl bg-primary/10 text-primary flex items-center justify-center transition-all hover:scale-105 hover:border hover:border-primary/40 shrink-0">
+                <Truck className="h-6 w-6 stroke-[1.8]" />
+              </div>
+              <div>
+                <CardTitle>Entregas Recentes</CardTitle>
+                <p className="text-xs text-muted-foreground">
+                  Últimos pedidos registrados e status de entrega
+                </p>
+              </div>
+            </div>
           </CardHeader>
           <CardContent>
             {isLoading ? (
@@ -731,8 +783,8 @@ export default function Index() {
                     className="flex items-center justify-between p-3 rounded-lg border bg-card hover:bg-muted/50 transition-colors"
                   >
                     <div className="flex items-center gap-3">
-                      <div className="bg-primary/10 p-2 rounded-full">
-                        <School className="h-4 w-4 text-primary" />
+                      <div className="h-12 w-12 rounded-xl bg-primary/10 text-primary flex items-center justify-center transition-all hover:scale-105 hover:border hover:border-primary/40 shrink-0">
+                        <School className="h-6 w-6 stroke-[1.8]" />
                       </div>
                       <div>
                         <p className="font-medium">{order.schoolName}</p>

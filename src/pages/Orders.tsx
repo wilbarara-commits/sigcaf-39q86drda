@@ -100,6 +100,7 @@ import {
   Minimize2,
   X,
   ExternalLink,
+  ShoppingBasket,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
@@ -1161,13 +1162,23 @@ export default function Orders() {
         <Dialog open={open} onOpenChange={handleOpenDialog}>
           <DialogTrigger asChild>
             <Button
-              className="gap-2"
+              className="h-auto py-1.5 px-3 gap-3 group"
               onClick={() => {
                 resetOrderForm()
                 setOpen(true)
               }}
             >
-              <Plus className="h-4 w-4" /> Lançar Pedido
+              <div className="h-12 w-12 rounded-xl bg-primary/20 text-primary-foreground dark:text-primary flex items-center justify-center transition-all group-hover:scale-105 group-hover:border group-hover:border-primary/40 shrink-0">
+                <ShoppingBasket className="h-6 w-6 stroke-[1.8]" />
+              </div>
+              <div className="text-left">
+                <div className="font-semibold text-sm leading-tight flex items-center gap-1.5">
+                  <Plus className="h-4 w-4 shrink-0" /> Lançar Pedido
+                </div>
+                <div className="text-[11px] opacity-80 font-normal">
+                  Novo pedido no ciclo da chamada
+                </div>
+              </div>
             </Button>
           </DialogTrigger>
           <DialogContent
@@ -1198,10 +1209,19 @@ export default function Orders() {
             }}
           >
             <DialogHeader>
-              <div className="flex items-center justify-between pr-6 gap-2">
-                <DialogTitle className="flex items-center gap-2 text-base">
-                  <ShoppingCart className="h-5 w-5 text-primary" /> Novo Pedido
-                </DialogTitle>
+              <div className="flex items-center justify-between pr-6 gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="h-12 w-12 rounded-xl bg-primary/10 text-primary flex items-center justify-center transition-all hover:scale-105 hover:border hover:border-primary/40 shrink-0">
+                    <ShoppingBasket className="h-6 w-6 stroke-[1.8]" />
+                  </div>
+                  <div>
+                    <DialogTitle className="text-base">Novo Pedido</DialogTitle>
+                    <DialogDescription className="text-xs mt-0.5">
+                      Selecione o ciclo em andamento e informe a escola e os itens do pedido com
+                      base nos preços da chamada.
+                    </DialogDescription>
+                  </div>
+                </div>
                 {/* PASSO 2 — Chamada derivada do ciclo com badge no cabeçalho */}
                 {selectedChamada && (
                   <Badge
@@ -1215,10 +1235,6 @@ export default function Orders() {
                   </Badge>
                 )}
               </div>
-              <DialogDescription className="text-xs">
-                Selecione o ciclo em andamento e informe a escola e os itens do pedido com base nos
-                preços da chamada.
-              </DialogDescription>
             </DialogHeader>
 
             {/* PASSO 1: Alerta âmbar caso não haja ciclos abertos em coleta ou correcao */}
