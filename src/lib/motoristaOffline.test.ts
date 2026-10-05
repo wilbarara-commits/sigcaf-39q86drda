@@ -242,3 +242,165 @@ describe('Motorista - Fila Offline e Sincronização', () => {
     expect(recuperado?.rota.nome).toBe('Rota Sul')
   })
 })
+
+describe('Motorista - Regras do Trecho a Percorrer (Última entregue -> Próxima pendente)', () => {
+  interface ParadaMock {
+    id: string
+    escola_id: string
+    ordem: number
+    escola?: {
+      nome: string
+      latitude?: number | string
+      longitude?: number | string
+    }
+    registro?: {
+      confirmado_em?: string
+    }
+  }
+
+  function calcularTrechoOrigemDestino(
+    paradas: ParadaMock[],
+    filaLocal: Array<{ escola_id: string; confirmado_em?: string }>,
+    depositoConfig: { latitude: number; longitude: number; nome: string },
+  ) {
+    // 1. Próxima entrega pendente na ordem da rota
+    const proximaPendente =
+      paradas.find((p) => {
+        const estaEntregueNoBanco = Boolean(p.registro?.confirmado_em)
+        const estaEntregueNaFila = filaLocal.some(
+          (f) => f.escola_id === p.escola_id && f.confirmado_em,
+        )
+        return !estaEntregueNoBanco && !estaEntregueNaFila
+      }) || null
+
+    // 2. Última parada fechada (já entregue)
+    const entregues = paradas
+      .filter((p) => {
+        const estaEntregueNoBanco = Boolean(p.registro?.confirmado_em)
+        const estaEntregueNaFila = filaLocal.some(
+          (f) => f.escola_id === p.escola_id && f.confirmado_em,
+        )
+        return estaEntregueNoBanco || estaEntregueNaFila
+      })
+      .sort((a, b) => b.ordem - a.ordem)
+
+    const ultimaEntregue = entregues[0] || null
+
+    // 3. Origem do trecho
+    let origem = {
+      latitude: depositoConfig.latitude,
+      longitude: depositoConfig.longitude,
+      tipo: 'deposito' as const,
+      nome: depositoConfig.nome,
+      ordem: undefined as number | undefined,
+    }
+
+    if (ultimaEntregue && ultimaEntregue.escola?.latitude && ultimaEntregue.escola?.longitude) {
+      origem = {
+        latitude: Number(ultimaEntregue.escola.latitude),
+        longitude: Number(ultimaEntregue.escola.longitude),
+        tipo: 'parada_anterior' as any,
+        nome: ultimaEntregue.escola.nome,
+        ordem: ultimaEntregue.ordem,
+      }
+    }
+
+    // 4. Destino do trecho
+    const destino = proximaPendente
+      ? {
+          latitude: Number(proximaPendente.escola?.latitude),
+          longitude: Number(proximaPendente.escola?.longitude),
+          nome: proximaPendente.escola?.nome || 'Escola',
+          ordem: proximaPendente.ordem,
+        }
+      : null
+
+    return {
+      origem,
+      destino,
+      todasEntregues: !proximaPendente && paradas.length > 0,
+    }
+  }
+
+  const depositoTeste = {
+    latitude: -22.260264,
+    longitude: -42.738042,
+    nome: 'Depósito Central Cooperativa',
+  }
+
+  const paradasMock: ParadaMock[] = [
+    {
+      id: 'p1',
+      escola_id: 'esc_1',
+      ordem: 1,
+      escola: { nome: 'Escola A', latitude: -22.25, longitude: -42.73 },
+    },
+    {
+      id: 'p2',
+      escola_id: 'esc_2',
+      ordem: 2,
+      escola: { nome: 'Escola B', latitude: -22.24, longitude: -42.72 },
+    },
+    {
+      id: 'p3',
+      escola_id: 'esc_3',
+      ordem: 3,
+      escola: { nome: 'Escola C', latitude: -22.23, longitude: -42.71 },
+    },
+  ]
+
+  it('antes da primeira entrega: origem é o Depósito Central e destino é a Parada #1', () => {
+    const res = calcularTrechoOrigemDestino(paradasMock, [], depositoTeste)
+
+    expect(res.origem.tipo).toBe('deposito')
+    expect(res.origem.nome).toBe('Depósito Central Cooperativa')
+    expect(res.origem.latitude).toBe(depositoTeste.latitude)
+    expect(res.destino?.ordem).toBe(1)
+    expect(res.destino?.nome).toBe('Escola A')
+    expect(res.todasEntregues).toBe(false)
+  })
+
+  it('após entregar a Parada #1: origem passa a ser a Parada #1 e destino a Parada #2', () => {
+    const paradasComUmaEntregue = paradasMock.map((p) =>
+      p.ordem === 1 ? { ...p, registro: { confirmado_em: '2026-04-10T08:30:00Z' } } : p,
+    )
+
+    const res = calcularTrechoOrigemDestino(paradasComUmaEntregue, [], depositoTeste)
+
+    expect(res.origem.tipo).toBe('parada_anterior')
+    expect(res.origem.ordem).toBe(1)
+    expect(res.origem.nome).toBe('Escola A')
+    expect(res.origem.latitude).toBe(-22.25)
+    expect(res.destino?.ordem).toBe(2)
+    expect(res.destino?.nome).toBe('Escola B')
+    expect(res.todasEntregues).toBe(false)
+  })
+
+  it('após entregar a Parada #2 via fila offline: origem é a Parada #2 e destino a Parada #3', () => {
+    const paradasComUmaNoBanco = paradasMock.map((p) =>
+      p.ordem === 1 ? { ...p, registro: { confirmado_em: '2026-04-10T08:30:00Z' } } : p,
+    )
+    const filaOffline = [{ escola_id: 'esc_2', confirmado_em: '2026-04-10T09:10:00Z' }]
+
+    const res = calcularTrechoOrigemDestino(paradasComUmaNoBanco, filaOffline, depositoTeste)
+
+    expect(res.origem.tipo).toBe('parada_anterior')
+    expect(res.origem.ordem).toBe(2)
+    expect(res.origem.nome).toBe('Escola B')
+    expect(res.destino?.ordem).toBe(3)
+    expect(res.destino?.nome).toBe('Escola C')
+    expect(res.todasEntregues).toBe(false)
+  })
+
+  it('quando todas as paradas foram entregues: destino é nulo e sinaliza todasEntregues = true', () => {
+    const paradasTodasEntregues = paradasMock.map((p) => ({
+      ...p,
+      registro: { confirmado_em: '2026-04-10T11:00:00Z' },
+    }))
+
+    const res = calcularTrechoOrigemDestino(paradasTodasEntregues, [], depositoTeste)
+
+    expect(res.destino).toBeNull()
+    expect(res.todasEntregues).toBe(true)
+  })
+})

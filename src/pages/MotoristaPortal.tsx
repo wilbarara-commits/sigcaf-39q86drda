@@ -51,7 +51,11 @@ import {
 import { toast } from '@/hooks/use-toast'
 import { MotoristaTrechoMapa } from '@/components/MotoristaTrechoMapa'
 import { compressImage } from '@/lib/imageCompressor'
-import { extrairCoordenadas, DEPOSITO_CENTRAL } from '@/lib/routeOptimization'
+import {
+  extrairCoordenadas,
+  DEPOSITO_CENTRAL,
+  resolverDepositoCentral,
+} from '@/lib/routeOptimization'
 import { configuracoesService } from '@/services/configuracoes'
 
 export const MotoristaPortal: React.FC = () => {
@@ -67,7 +71,7 @@ export const MotoristaPortal: React.FC = () => {
   const [isSyncing, setIsSyncing] = useState(false)
   const [filaLocal, setFilaLocal] = useState<FilaEntregaItem[]>([])
 
-  // Coordenadas do Depósito da Cooperativa e GPS do Motorista
+  // Coordenadas do Depósito Central da Cooperativa (das configurações do sistema)
   const [depositoConfig, setDepositoConfig] = useState<{
     latitude: number
     longitude: number
@@ -79,11 +83,6 @@ export const MotoristaPortal: React.FC = () => {
     nome: DEPOSITO_CENTRAL.nome,
     isCadastrado: false,
   })
-  const [gpsMotorista, setGpsMotorista] = useState<{
-    latitude: number
-    longitude: number
-  } | null>(null)
-  const [origemTipo, setOrigemTipo] = useState<'deposito' | 'motorista'>('motorista')
 
   // Modal de registro de entrega por parada
   const [selectedParada, setSelectedParada] = useState<MotoristaPortalParada | null>(null)
@@ -114,30 +113,20 @@ export const MotoristaPortal: React.FC = () => {
     }
   }, [token])
 
-  // Carregar configurações do depósito da cooperativa e GPS atual
+  // Carregar configurações do depósito da cooperativa (Depósito Central único das configurações)
   useEffect(() => {
-    // 1. Depósito da Cooperativa
     configuracoesService
       .get()
       .then((cfg) => {
-        if (cfg) {
-          const coords = extrairCoordenadas(cfg.deposito_latitude, cfg.deposito_longitude)
-          if (coords) {
-            setDepositoConfig({
-              latitude: coords.latitude,
-              longitude: coords.longitude,
-              nome: cfg.deposito_nome?.trim() || 'Depósito Cooperativa',
-              isCadastrado: true,
-            })
-            // Se houver depósito cadastrado, permite alternar
-            return
-          }
-        }
+        const depResolvido = resolverDepositoCentral(cfg)
+        const coordsCadastradas = Boolean(
+          cfg && extrairCoordenadas(cfg.deposito_latitude, cfg.deposito_longitude),
+        )
         setDepositoConfig({
-          latitude: DEPOSITO_CENTRAL.latitude,
-          longitude: DEPOSITO_CENTRAL.longitude,
-          nome: DEPOSITO_CENTRAL.nome,
-          isCadastrado: false,
+          latitude: depResolvido.latitude,
+          longitude: depResolvido.longitude,
+          nome: depResolvido.nome,
+          isCadastrado: coordsCadastradas,
         })
       })
       .catch(() => {
@@ -148,26 +137,6 @@ export const MotoristaPortal: React.FC = () => {
           isCadastrado: false,
         })
       })
-
-    // 2. Geolocation atual do celular do motorista
-    if (typeof navigator !== 'undefined' && 'geolocation' in navigator) {
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          setGpsMotorista({
-            latitude: pos.coords.latitude,
-            longitude: pos.coords.longitude,
-          })
-          setOrigemTipo('motorista')
-        },
-        () => {
-          // Fallback se recusado ou sem permissão
-          setOrigemTipo('deposito')
-        },
-        { enableHighAccuracy: true, timeout: 7000 },
-      )
-    } else {
-      setOrigemTipo('deposito')
-    }
   }, [])
 
   // Carregar dados da rota pelo token
@@ -460,23 +429,50 @@ export const MotoristaPortal: React.FC = () => {
     )
   }, [data, filaLocal])
 
-  // Coordenadas válidas para o trecho
+  // Última parada FECHADA (já entregue) na ordem da rota
+  const ultimaParadaEntregue = useMemo(() => {
+    if (!data?.paradas) return null
+    // Filtra todas as paradas já entregues e pega a de maior ordem (última entregue)
+    const entregues = data.paradas
+      .filter((p) => {
+        const estaEntregueNoBanco = Boolean(p.registro?.confirmado_em)
+        const estaEntregueNaFila = filaLocal.some(
+          (f) => f.escola_id === p.escola_id && f.confirmado_em,
+        )
+        return estaEntregueNoBanco || estaEntregueNaFila
+      })
+      .sort((a, b) => b.ordem - a.ordem)
+
+    return entregues[0] || null
+  }, [data, filaLocal])
+
+  // Coordenadas válidas para o trecho:
+  // - Antes da primeira entrega: origem = Depósito Central (das configurações)
+  // - Depois de entregar a parada N: origem = parada N (a última entregue)
+  // - Se a última parada não tiver coordenadas válidas: fallback seguro para o depósito central
   const trechoOrigemInfo = useMemo(() => {
-    if (origemTipo === 'motorista' && gpsMotorista) {
-      return {
-        latitude: gpsMotorista.latitude,
-        longitude: gpsMotorista.longitude,
-        tipo: 'motorista' as const,
-        nome: 'Sua Localização Atual (GPS)',
+    if (ultimaParadaEntregue) {
+      const esc = ultimaParadaEntregue.escola
+      const coords = extrairCoordenadas(esc?.latitude, esc?.longitude)
+      if (coords) {
+        const escNome = esc?.nome || (esc as any)?.name || `Parada #${ultimaParadaEntregue.ordem}`
+        return {
+          latitude: coords.latitude,
+          longitude: coords.longitude,
+          tipo: 'parada_anterior' as const,
+          nome: escNome,
+          ordem: ultimaParadaEntregue.ordem,
+        }
       }
     }
+
     return {
       latitude: depositoConfig.latitude,
       longitude: depositoConfig.longitude,
       tipo: 'deposito' as const,
       nome: depositoConfig.nome,
     }
-  }, [origemTipo, gpsMotorista, depositoConfig])
+  }, [ultimaParadaEntregue, depositoConfig])
 
   const trechoDestinoInfo = useMemo(() => {
     if (!proximaParadaPendente) return null
@@ -496,19 +492,13 @@ export const MotoristaPortal: React.FC = () => {
 
   // Link do Google Maps do trecho (origem -> destino)
   const googleMapsTrechoUrl = useMemo(() => {
-    if (!trechoDestinoInfo) return ''
+    if (!trechoDestinoInfo || !trechoOrigemInfo) return ''
     const destStr = `${trechoDestinoInfo.latitude},${trechoDestinoInfo.longitude}`
     const origStr = `${trechoOrigemInfo.latitude},${trechoOrigemInfo.longitude}`
     return `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(
       origStr,
     )}&destination=${encodeURIComponent(destStr)}&travelmode=driving`
   }, [trechoOrigemInfo, trechoDestinoInfo])
-
-  const podeAlternarOrigem = Boolean(gpsMotorista && depositoConfig.isCadastrado)
-
-  const handleAlternarOrigem = () => {
-    setOrigemTipo((prev) => (prev === 'motorista' ? 'deposito' : 'motorista'))
-  }
 
   // Formatação de hora simples
   const formatTime = (iso?: string) => {
@@ -691,8 +681,6 @@ export const MotoristaPortal: React.FC = () => {
                   ),
                 }
               })}
-              onAlternarOrigem={handleAlternarOrigem}
-              podeAlternarOrigem={podeAlternarOrigem}
               googleMapsUrl={googleMapsTrechoUrl}
             />{' '}
           </div>

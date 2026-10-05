@@ -3,16 +3,16 @@ import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-
 import L from 'leaflet'
 import { LatLngCoord, obterTrechoDiretoOSRM } from '@/services/osrm'
 import { calcularDistanciaHaversineKm } from '@/lib/routeOptimization'
-import { Warehouse, MapPin, Navigation, ExternalLink, Loader2, Compass } from 'lucide-react'
-import { Button } from '@/components/ui/button'
+import { Warehouse, CheckCircle2, Navigation, ExternalLink, Loader2 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 
 export interface MotoristaTrechoMapaProps {
   origem: {
     latitude: number
     longitude: number
-    tipo: 'deposito' | 'motorista'
+    tipo: 'deposito' | 'parada_anterior' | 'motorista'
     nome: string
+    ordem?: number
   }
   destino: {
     latitude: number
@@ -28,16 +28,20 @@ export interface MotoristaTrechoMapaProps {
     ordem: number
     entregue: boolean
   }>
+  /** Mantido opcional para retrocompatibilidade caso outro componente invoque */
   onAlternarOrigem?: () => void
   podeAlternarOrigem?: boolean
   googleMapsUrl: string
 }
 
-function createOrigemIcon(tipo: 'deposito' | 'motorista') {
+function createOrigemIcon(tipo: 'deposito' | 'parada_anterior' | 'motorista', ordem?: number) {
   const isDeposito = tipo === 'deposito'
-  const bg = isDeposito ? '#0f172a' : '#2563eb'
-  const border = isDeposito ? '#38bdf8' : '#60a5fa'
-  const iconEmoji = isDeposito ? '🏛️' : '📍'
+  const bg = isDeposito ? '#0f172a' : '#047857'
+  const border = isDeposito ? '#38bdf8' : '#34d399'
+
+  const content = isDeposito
+    ? '🏛️'
+    : `<div style="display:flex;flex-direction:column;align-items:center;line-height:1;font-weight:800;font-size:11px;"><span>✓</span><span style="font-size:9px;">#${ordem ?? ''}</span></div>`
 
   return L.divIcon({
     className: 'custom-origem-marker',
@@ -53,10 +57,10 @@ function createOrigemIcon(tipo: 'deposito' | 'motorista') {
         color: #ffffff;
         border: 2.5px solid ${border};
         box-shadow: 0 4px 10px rgba(0,0,0,0.35);
-        font-size: 16px;
+        font-size: 15px;
         cursor: pointer;
       ">
-        ${iconEmoji}
+        ${content}
       </div>
     `,
     iconSize: [36, 36],
@@ -157,8 +161,8 @@ export const MotoristaTrechoMapa: React.FC<MotoristaTrechoMapaProps> = ({
   origem,
   destino,
   todasParadas = [],
-  onAlternarOrigem,
-  podeAlternarOrigem = false,
+  onAlternarOrigem: _onAlternarOrigem,
+  podeAlternarOrigem: _podeAlternarOrigem = false,
   googleMapsUrl,
 }) => {
   const [routeCoords, setRouteCoords] = useState<[number, number][] | null>(null)
@@ -241,43 +245,42 @@ export const MotoristaTrechoMapa: React.FC<MotoristaTrechoMapaProps> = ({
       {/* Barra de controle e resumo do trecho atual */}
       <div className="p-3 bg-slate-900 text-white flex flex-wrap items-center justify-between gap-2 text-xs">
         <div className="flex items-center gap-2 flex-wrap">
-          <Badge className="bg-red-600 hover:bg-red-600 text-white text-[11px] px-2 py-0.5 font-bold gap-1">
+          <Badge className="bg-red-600 hover:bg-red-600 text-white text-[11px] px-2 py-0.5 font-bold gap-1 shadow-xs">
             <Navigation className="h-3.5 w-3.5" />
             Próxima Entrega
             {destino.ordem ? ` (#${destino.ordem})` : ''}
           </Badge>
-          <span className="font-semibold text-slate-200 truncate max-w-[200px] sm:max-w-[280px]">
+          <span className="font-semibold text-slate-100 truncate max-w-[240px] sm:max-w-[340px]">
             {destino.nome}
           </span>
         </div>
 
-        {/* Alternador de Origem (Do depósito vs Da minha localização) */}
-        {podeAlternarOrigem && onAlternarOrigem && (
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={onAlternarOrigem}
-            className="h-7 text-[11px] bg-slate-800 border-slate-700 text-slate-200 hover:bg-slate-700 hover:text-white gap-1"
-          >
-            <Compass className="h-3 w-3 text-sky-400" />
-            <span>Origem: {origem.tipo === 'deposito' ? 'Depósito' : 'GPS Atual'}</span>
-          </Button>
-        )}
+        {/* Indicador do Trecho */}
+        <div className="text-[11px] text-slate-300 flex items-center gap-1.5 font-medium">
+          <span className="text-slate-400">Trecho:</span>
+          <span className="bg-slate-800 border border-slate-700 px-2 py-0.5 rounded text-sky-300 font-semibold">
+            {origem.tipo === 'deposito'
+              ? 'Depósito Central'
+              : `Parada #${origem.ordem || 'Anterior'}`}{' '}
+            → Parada #{destino.ordem ?? 'Próxima'}
+          </span>
+        </div>
       </div>
 
       {/* Caixa de Métricas do Trecho (Distância e Previsão) */}
       <div className="px-3 py-2 bg-slate-50 dark:bg-slate-950 border-b flex flex-wrap items-center justify-between gap-2 text-xs">
         <div className="flex items-center gap-3 flex-wrap">
           <div className="flex items-center gap-1.5 text-muted-foreground">
-            <span className="text-[11px]">De:</span>
+            <span className="text-[11px]">Partida:</span>
             <strong className="text-foreground flex items-center gap-1">
               {origem.tipo === 'deposito' ? (
                 <Warehouse className="h-3.5 w-3.5 text-sky-600" />
               ) : (
-                <MapPin className="h-3.5 w-3.5 text-blue-600" />
+                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
               )}
-              {origem.nome}
+              {origem.tipo === 'parada_anterior' && origem.ordem
+                ? `Parada #${origem.ordem} (${origem.nome})`
+                : origem.nome}
             </strong>
           </div>
 
@@ -338,12 +341,22 @@ export const MotoristaTrechoMapa: React.FC<MotoristaTrechoMapaProps> = ({
           {/* Marcador de Origem */}
           <Marker
             position={[origem.latitude, origem.longitude]}
-            icon={createOrigemIcon(origem.tipo)}
+            icon={createOrigemIcon(origem.tipo, origem.ordem)}
           >
             <Popup>
-              <div className="text-xs p-1">
-                <strong>Origem: {origem.nome}</strong>
-                <p className="text-[10px] text-muted-foreground">Ponto de partida do trecho</p>
+              <div className="text-xs p-1 space-y-0.5">
+                <strong>
+                  Origem do trecho:{' '}
+                  {origem.tipo === 'deposito'
+                    ? 'Depósito Central'
+                    : `Parada #${origem.ordem || 'Anterior'}`}
+                </strong>
+                <p className="text-[11px] text-slate-800">{origem.nome}</p>
+                <p className="text-[10px] text-muted-foreground">
+                  {origem.tipo === 'deposito'
+                    ? 'Ponto de partida inicial da rota'
+                    : 'Última parada entregue'}
+                </p>
               </div>
             </Popup>
           </Marker>
