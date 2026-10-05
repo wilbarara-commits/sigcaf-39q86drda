@@ -1405,11 +1405,23 @@ export default function DeliveryRoutes() {
                         <CardTitle className="text-lg flex items-center gap-2 text-foreground font-bold">
                           <Truck className="h-5 w-5 text-primary" /> {item.rota.nome}
                         </CardTitle>
-                        {hasEmRota && (
-                          <Badge className="bg-amber-600 hover:bg-amber-600 text-white text-[10px] animate-pulse">
-                            Em Rota
-                          </Badge>
-                        )}
+                        {(() => {
+                          const despAtivo = despachosAtivosMap[item.rota.id]
+                          const isDespachadoConfirmado =
+                            Boolean(despAtivo) ||
+                            item.ultimoDespacho?.status === 'Em Rota' ||
+                            item.pedidosEmRota.length > 0
+
+                          return isDespachadoConfirmado ? (
+                            <Badge className="bg-amber-600 hover:bg-amber-600 text-white text-[10px] animate-pulse">
+                              Em Rota
+                            </Badge>
+                          ) : (
+                            <Badge variant="outline" className="text-muted-foreground text-[10px]">
+                              Aguardando Despacho
+                            </Badge>
+                          )
+                        })()}
                       </div>
                       <CardDescription className="text-xs mt-0.5 flex flex-wrap items-center gap-1.5">
                         <span>
@@ -1518,7 +1530,10 @@ export default function DeliveryRoutes() {
                     const isFaseColeta = faseNorm === 'coletando' || faseNorm === 'correcao'
                     const faseAmigavel = formatFaseAmigavel(faseCiclo)
                     const despAtivo = despachosAtivosMap[item.rota.id]
-                    const isDespachado = Boolean(despAtivo)
+                    const isDespachadoConfirmado =
+                      Boolean(despAtivo) ||
+                      item.ultimoDespacho?.status === 'Em Rota' ||
+                      item.pedidosEmRota.length > 0
                     const hasPedidosAtivos = totalEmTransito > 0
 
                     let textoStatusControle = 'Rota aguardando despacho da central'
@@ -1530,11 +1545,10 @@ export default function DeliveryRoutes() {
                       textoStatusControle = 'Rota sem pedidos ativos para entrega'
                     }
 
-                    // Validação do botão "Despachar Rota"
+                    // Validação do botão "Despachar Rota" (Estágio 1)
                     let despachoBotaoDesabilitado = false
-                    let despachoBotaoTooltip = isDespachado
-                      ? 'Rota despachada: ver link, copiar mensagem ou redisparar (renovar token)'
-                      : 'Despachar rota para o motorista com link e mensagem pronta de WhatsApp'
+                    let despachoBotaoTooltip =
+                      'Despachar rota para o motorista com link e mensagem pronta de WhatsApp'
 
                     if (!isFaseElegivel) {
                       despachoBotaoDesabilitado = true
@@ -1557,103 +1571,47 @@ export default function DeliveryRoutes() {
                         </div>
 
                         <div className="flex items-center gap-1.5 shrink-0">
-                          {/* Botão Despachar / Redisparar Rota para Motorista (WhatsApp + Link) */}
-                          <Button
-                            size="sm"
-                            disabled={despachoBotaoDesabilitado}
-                            variant={isDespachado ? 'outline' : 'default'}
-                            className={`h-8 text-xs gap-1.5 font-bold disabled:opacity-50 ${
-                              isDespachado
-                                ? 'border-amber-400 text-amber-900 dark:text-amber-200 bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/40'
-                                : 'bg-primary hover:bg-primary/90 text-primary-foreground'
-                            }`}
-                            onClick={() => {
-                              setSelectedRotaForDriverModal(item.rota)
-                              setDespachoMotoristaOpen(true)
-                            }}
-                            title={despachoBotaoTooltip}
-                          >
-                            <Truck className="h-3.5 w-3.5" />
-                            <span>
-                              {isDespachado ? 'Despachado (Redisparar)' : 'Despachar Rota'}
-                            </span>
-                          </Button>
-
-                          {/* Botão Colocar em Rota (Rota Inteira) - Disponível apenas quando a rota não está em execução */}
-                          {!hasEmRota &&
-                            hasPendentes &&
-                            (() => {
-                              let faseMotivoBloqueio = ''
-                              const despachoBloqueado = item.pedidosPendentes.some((ped) => {
-                                const pedCiclo =
-                                  ciclos.find((c) => c.id === ped.cicloId) || cicloAtivoChamada
-                                if (
-                                  !pedCiclo ||
-                                  pedCiclo.status === 'fechado' ||
-                                  pedCiclo.status === 'cancelado'
-                                ) {
-                                  faseMotivoBloqueio = pedCiclo?.status || 'fechado'
-                                  return true
-                                }
-
-                                const linkEscola = contractSchools.find(
-                                  (cs) => cs.escola_id === ped.schoolId,
-                                )
-                                const contratoId =
-                                  linkEscola?.contrato_id ||
-                                  item.rota.contrato_id ||
-                                  contracts.find((cnt) =>
-                                    cnt.escolas.some((e) => e.escolaId === ped.schoolId),
-                                  )?.id
-
-                                if (!contratoId) {
-                                  faseMotivoBloqueio = 'sem_contrato'
-                                  return true
-                                }
-
-                                const fase = pedCiclo.status
-                                const elegivel = isFaseElegivelParaDespacho(fase)
-                                if (!elegivel) {
-                                  faseMotivoBloqueio = fase || 'coletando'
-                                }
-                                return !elegivel
-                              })
-
-                              let tooltipTitle =
-                                'Despacha a rota inteira: todos os pedidos passam de Pendente para Em Rota'
-                              if (despachoBloqueado) {
-                                if (faseMotivoBloqueio === 'fechado') {
-                                  tooltipTitle = 'Ciclo já fechado para este contrato'
-                                } else if (faseMotivoBloqueio === 'cancelado') {
-                                  tooltipTitle = 'Ciclo/contrato cancelado'
-                                } else {
-                                  tooltipTitle = `Despacho liberado após o encerramento da coleta (fase atual da chamada: ${formatFaseAmigavel(faseMotivoBloqueio)})`
-                                }
-                              }
-
-                              return (
-                                <Button
-                                  size="sm"
-                                  disabled={despachoBloqueado}
-                                  className="h-8 text-xs bg-amber-600 hover:bg-amber-700 text-white gap-1 disabled:opacity-50"
-                                  onClick={() => handleOpenDispatch(item.rota)}
-                                  title={tooltipTitle}
-                                >
-                                  <Play className="h-3.5 w-3.5" /> Colocar em Rota
-                                </Button>
-                              )
-                            })()}
-
-                          {/* Botão Rota Entregue (Operação Offline da Rota Inteira) */}
-                          {hasEmRota && (
+                          {!isDespachadoConfirmado ? (
+                            /* ESTÁGIO 1 — NÃO despachado: APENAS o botão "Despachar Rota" */
                             <Button
                               size="sm"
-                              className="h-8 text-xs bg-emerald-600 hover:bg-emerald-700 text-white gap-1 font-semibold"
-                              onClick={() => handleOpenDeliverWholeRoute(item.rota)}
-                              title="Confirma o retorno do veículo: marca TODOS os pedidos Em Rota como Entregue"
+                              disabled={despachoBotaoDesabilitado}
+                              className="h-8 text-xs gap-1.5 font-bold disabled:opacity-50 bg-primary hover:bg-primary/90 text-primary-foreground"
+                              onClick={() => {
+                                setSelectedRotaForDriverModal(item.rota)
+                                setDespachoMotoristaOpen(true)
+                              }}
+                              title={despachoBotaoTooltip}
                             >
-                              <CheckCircle2 className="h-3.5 w-3.5" /> Rota Entregue
+                              <Truck className="h-3.5 w-3.5" />
+                              <span>Despachar Rota</span>
                             </Button>
+                          ) : (
+                            /* ESTÁGIO 2 — despachado confirmado: Botão "Reenviar Link Motorista" + Botão "Rota Entregue" */
+                            <>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-8 text-xs gap-1.5 font-bold border-amber-400 text-amber-900 dark:text-amber-200 bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/40"
+                                onClick={() => {
+                                  setSelectedRotaForDriverModal(item.rota)
+                                  setDespachoMotoristaOpen(true)
+                                }}
+                                title="Rota despachada: ver link, copiar mensagem ou redisparar (renovar token)"
+                              >
+                                <Share2 className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
+                                <span>Reenviar Link Motorista</span>
+                              </Button>
+
+                              <Button
+                                size="sm"
+                                className="h-8 text-xs bg-emerald-600 hover:bg-emerald-700 text-white gap-1 font-semibold"
+                                onClick={() => handleOpenDeliverWholeRoute(item.rota)}
+                                title="Confirma o retorno do veículo: marca TODOS os pedidos Em Rota como Entregue"
+                              >
+                                <CheckCircle2 className="h-3.5 w-3.5" /> Rota Entregue
+                              </Button>
+                            </>
                           )}
                         </div>
                       </div>
