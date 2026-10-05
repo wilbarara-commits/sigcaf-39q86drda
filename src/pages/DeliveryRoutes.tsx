@@ -581,12 +581,18 @@ export default function DeliveryRoutes() {
   const handleConfirmDispatch = async () => {
     if (!rotaToDispatch) return
 
-    // Regra D: Despacho ("Colocar em Rota"): só habilitado quando o ciclo do pedido estiver FECHADO;
-    // caso contrário desabilitado com explicação "Despacho liberado após o fechamento do ciclo".
-    // Identificar os pedidos pendentes desta rota
+    // Validação estrita: rota deve possuir paradas gravadas (collection paradas_rota)
     const paradasCadastradas = paradasRota.filter(
       (p) => (p.rota_id || (p as any).rota_logistica_id) === rotaToDispatch.id,
     )
+    if (paradasCadastradas.length === 0) {
+      toast.error('Monte o roteamento da rota antes de despachar (nenhuma parada definida).')
+      return
+    }
+
+    // Regra D: Despacho ("Colocar em Rota"): só habilitado quando o ciclo do pedido estiver FECHADO;
+    // caso contrário desabilitado com explicação "Despacho liberado após o fechamento do ciclo".
+    // Identificar os pedidos pendentes desta rota
     const escolaIdsDaRota = new Set(paradasCadastradas.map((p) => p.escola_id))
     const pedidosPendentesRota = orders.filter(
       (o) =>
@@ -1535,12 +1541,16 @@ export default function DeliveryRoutes() {
                       item.ultimoDespacho?.status === 'Em Rota' ||
                       item.pedidosEmRota.length > 0
                     const hasPedidosAtivos = totalEmTransito > 0
+                    const hasParadas = item.paradasOrdenadas.length > 0
 
                     let textoStatusControle = 'Rota aguardando despacho da central'
                     if (item.ultimoDespacho) {
                       textoStatusControle = `Último despacho: ${new Date(item.ultimoDespacho.data_despacho).toLocaleDateString('pt-BR')} (${item.ultimoDespacho.status})`
                     } else if (isFaseColeta || !isFaseElegivel) {
                       textoStatusControle = `Coleta em andamento — despacho liberado após encerramento da coleta da chamada (${faseAmigavel})`
+                    } else if (!hasParadas) {
+                      textoStatusControle =
+                        'Rota sem paradas gravadas — monte o roteamento antes de despachar'
                     } else if (!hasPedidosAtivos) {
                       textoStatusControle = 'Rota sem pedidos ativos para entrega'
                     }
@@ -1553,6 +1563,10 @@ export default function DeliveryRoutes() {
                     if (!isFaseElegivel) {
                       despachoBotaoDesabilitado = true
                       despachoBotaoTooltip = `Despacho liberado após o encerramento da coleta da chamada (fase atual: ${faseAmigavel})`
+                    } else if (!hasParadas) {
+                      despachoBotaoDesabilitado = true
+                      despachoBotaoTooltip =
+                        'Monte o roteamento da rota antes de despachar (nenhuma parada definida)'
                     } else if (!hasPedidosAtivos) {
                       despachoBotaoDesabilitado = true
                       despachoBotaoTooltip =
@@ -3111,6 +3125,14 @@ Ou apenas o nome da escola copiado do Excel/Word`}
                       .some((p) => p.escola_id === o.schoolId)),
               ).length ||
               paradasRota.filter(
+                (p) =>
+                  (p.rota_id || (p as any).rota_logistica_id) === selectedRotaForDriverModal.id,
+              ).length
+            : 0
+        }
+        totalParadas={
+          selectedRotaForDriverModal
+            ? paradasRota.filter(
                 (p) =>
                   (p.rota_id || (p as any).rota_logistica_id) === selectedRotaForDriverModal.id,
               ).length

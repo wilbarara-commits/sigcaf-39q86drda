@@ -50,6 +50,7 @@ interface DespachoMotoristaModalProps {
   ciclo: CicloRecord | null
   chamada?: ChamadaRecord | null
   totalEntregas: number
+  totalParadas?: number
   motoristas: MotoristaRecord[]
   despachoAtivo: RotaDespachoRecord | null
   onDespachoSucesso: (despacho: RotaDespachoRecord) => void
@@ -63,6 +64,7 @@ export const DespachoMotoristaModal: React.FC<DespachoMotoristaModalProps> = ({
   ciclo,
   chamada,
   totalEntregas,
+  totalParadas = 0,
   motoristas,
   despachoAtivo,
   onDespachoSucesso,
@@ -131,6 +133,7 @@ export const DespachoMotoristaModal: React.FC<DespachoMotoristaModalProps> = ({
   const faseCiclo = ciclo?.status
   const isElegivelDespacho = isFaseElegivelParaDespacho(faseCiclo)
   const faseAtualFormatada = formatFaseAmigavel(faseCiclo)
+  const hasParadas = totalParadas > 0
 
   const handleExecutarDespacho = async (isRedisparo: boolean) => {
     if (!rota) return
@@ -139,6 +142,15 @@ export const DespachoMotoristaModal: React.FC<DespachoMotoristaModalProps> = ({
       toast({
         title: 'Despacho não permitido',
         description: `Despacho liberado apenas após o encerramento da coleta (fase atual da chamada: ${faseAtualFormatada}).`,
+        variant: 'destructive',
+      })
+      return
+    }
+
+    if (!hasParadas) {
+      toast({
+        title: 'Despacho não permitido',
+        description: 'Monte o roteamento da rota antes de despachar (nenhuma parada definida).',
         variant: 'destructive',
       })
       return
@@ -326,18 +338,31 @@ export const DespachoMotoristaModal: React.FC<DespachoMotoristaModalProps> = ({
             </div>
           )}
 
+          {/* Alerta de bloqueio caso a rota não possua paradas gravadas */}
+          {isElegivelDespacho && !hasParadas && (
+            <div className="p-2.5 rounded-lg border bg-amber-50 dark:bg-amber-950/40 border-amber-300 dark:border-amber-800 text-amber-900 dark:text-amber-200 text-xs flex items-center gap-2">
+              <AlertCircle className="h-4 w-4 shrink-0 text-amber-600" />
+              <span>
+                Despacho bloqueado: monte o roteamento da rota antes de despachar (nenhuma parada
+                definida).
+              </span>
+            </div>
+          )}
+
           {/* Botões de Ação de Despacho / Redisparo */}
           <div className="flex items-center gap-2">
             {!jaDespachada ? (
               <Button
                 type="button"
-                disabled={isProcessing || !isElegivelDespacho}
+                disabled={isProcessing || !isElegivelDespacho || !hasParadas}
                 onClick={() => handleExecutarDespacho(false)}
                 className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-bold h-9 text-xs gap-1.5 shadow-xs disabled:opacity-50"
                 title={
                   !isElegivelDespacho
                     ? `Despacho liberado após o encerramento da coleta (fase atual da chamada: ${faseAtualFormatada})`
-                    : 'Despachar rota para o motorista com link e mensagem pronta de WhatsApp'
+                    : !hasParadas
+                      ? 'Monte o roteamento da rota antes de despachar (nenhuma parada definida)'
+                      : 'Despachar rota para o motorista com link e mensagem pronta de WhatsApp'
                 }
               >
                 {isProcessing ? (
@@ -354,13 +379,15 @@ export const DespachoMotoristaModal: React.FC<DespachoMotoristaModalProps> = ({
               <Button
                 type="button"
                 variant="outline"
-                disabled={isProcessing || !isElegivelDespacho}
+                disabled={isProcessing || !isElegivelDespacho || !hasParadas}
                 onClick={() => handleExecutarDespacho(true)}
                 className="w-full border-amber-400 text-amber-800 dark:text-amber-300 hover:bg-amber-50 h-9 text-xs gap-1.5 font-semibold disabled:opacity-50"
                 title={
                   !isElegivelDespacho
                     ? `Despacho liberado após o encerramento da coleta (fase atual da chamada: ${faseAtualFormatada})`
-                    : 'Invalida o token anterior e gera um novo link para o motorista'
+                    : !hasParadas
+                      ? 'Monte o roteamento da rota antes de despachar (nenhuma parada definida)'
+                      : 'Invalida o token anterior e gera um novo link para o motorista'
                 }
               >
                 {isProcessing ? (
