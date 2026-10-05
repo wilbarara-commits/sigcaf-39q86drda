@@ -7,6 +7,8 @@ import type {
   ChamadaRecord,
 } from '@/lib/types'
 import { rotaDespachosService, buildDriverWhatsAppMessage } from '@/services/rota-despachos'
+import { isFaseElegivelParaDespacho } from '@/pages/DeliveryRoutes'
+import { formatFaseAmigavel } from '@/lib/cicloUtils'
 import {
   Dialog,
   DialogContent,
@@ -126,8 +128,22 @@ export const DespachoMotoristaModal: React.FC<DespachoMotoristaModalProps> = ({
     }
   }
 
+  const faseCiclo = ciclo?.status
+  const isElegivelDespacho = isFaseElegivelParaDespacho(faseCiclo)
+  const faseAtualFormatada = formatFaseAmigavel(faseCiclo)
+
   const handleExecutarDespacho = async (isRedisparo: boolean) => {
     if (!rota) return
+
+    if (!isElegivelDespacho) {
+      toast({
+        title: 'Despacho não permitido',
+        description: `Despacho liberado apenas após o encerramento da coleta (fase atual da chamada: ${faseAtualFormatada}).`,
+        variant: 'destructive',
+      })
+      return
+    }
+
     setIsProcessing(true)
 
     try {
@@ -298,14 +314,31 @@ export const DespachoMotoristaModal: React.FC<DespachoMotoristaModalProps> = ({
             </div>
           )}
 
+          {/* Alerta de bloqueio caso a fase não seja elegível para despacho */}
+          {!isElegivelDespacho && (
+            <div className="p-2.5 rounded-lg border bg-amber-50 dark:bg-amber-950/40 border-amber-300 dark:border-amber-800 text-amber-900 dark:text-amber-200 text-xs flex items-center gap-2">
+              <AlertCircle className="h-4 w-4 shrink-0 text-amber-600" />
+              <span>
+                Despacho bloqueado: a chamada vinculada está na fase{' '}
+                <strong>{faseAtualFormatada}</strong>. O despacho é liberado apenas após o
+                encerramento da coleta (fase Coleta Encerrada).
+              </span>
+            </div>
+          )}
+
           {/* Botões de Ação de Despacho / Redisparo */}
           <div className="flex items-center gap-2">
             {!jaDespachada ? (
               <Button
                 type="button"
-                disabled={isProcessing}
+                disabled={isProcessing || !isElegivelDespacho}
                 onClick={() => handleExecutarDespacho(false)}
-                className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-bold h-9 text-xs gap-1.5 shadow-xs"
+                className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-bold h-9 text-xs gap-1.5 shadow-xs disabled:opacity-50"
+                title={
+                  !isElegivelDespacho
+                    ? `Despacho liberado após o encerramento da coleta (fase atual da chamada: ${faseAtualFormatada})`
+                    : 'Despachar rota para o motorista com link e mensagem pronta de WhatsApp'
+                }
               >
                 {isProcessing ? (
                   <>
@@ -321,10 +354,14 @@ export const DespachoMotoristaModal: React.FC<DespachoMotoristaModalProps> = ({
               <Button
                 type="button"
                 variant="outline"
-                disabled={isProcessing}
+                disabled={isProcessing || !isElegivelDespacho}
                 onClick={() => handleExecutarDespacho(true)}
-                className="w-full border-amber-400 text-amber-800 dark:text-amber-300 hover:bg-amber-50 h-9 text-xs gap-1.5 font-semibold"
-                title="Invalida o token anterior e gera um novo link para o motorista"
+                className="w-full border-amber-400 text-amber-800 dark:text-amber-300 hover:bg-amber-50 h-9 text-xs gap-1.5 font-semibold disabled:opacity-50"
+                title={
+                  !isElegivelDespacho
+                    ? `Despacho liberado após o encerramento da coleta (fase atual da chamada: ${faseAtualFormatada})`
+                    : 'Invalida o token anterior e gera um novo link para o motorista'
+                }
               >
                 {isProcessing ? (
                   <>
