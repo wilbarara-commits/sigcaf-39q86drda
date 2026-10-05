@@ -44,6 +44,7 @@ import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 import { useAuth } from '@/context/auth-context'
 import { useApp } from '@/context/app-context'
+import { APP_VERSION } from '@/lib/version'
 import { toast } from 'sonner'
 import { ChangePasswordDialog } from '@/components/ChangePasswordDialog'
 
@@ -238,6 +239,12 @@ export default function Layout() {
               </div>
             </div>
           </Link>
+
+          {/* Versão do sistema discreta no rodapé da barra lateral */}
+          <div className="mt-2 pt-2 border-t border-border/40 flex items-center justify-between text-[10px] text-muted-foreground/70 px-1 font-mono">
+            <span>SIGCAF</span>
+            <span title={`Versão do Sistema: v${APP_VERSION}`}>v{APP_VERSION}</span>
+          </div>
         </div>
       </aside>
 
@@ -324,6 +331,12 @@ export default function Layout() {
                         <LogOut className="h-3.5 w-3.5 mr-1" /> Sair
                       </Button>
                     </div>
+                  </div>
+
+                  {/* Versão do sistema no menu móvel */}
+                  <div className="mt-2 pt-2 border-t border-border/40 flex items-center justify-between text-[10px] text-muted-foreground/70 px-1 font-mono">
+                    <span>SIGCAF</span>
+                    <span title={`Versão do Sistema: v${APP_VERSION}`}>v{APP_VERSION}</span>
                   </div>
                 </div>
               </SheetContent>
@@ -472,6 +485,10 @@ export default function Layout() {
                   <LogOut className="mr-2 h-4 w-4" />
                   <span>Sair da conta</span>
                 </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <div className="px-2 py-1 text-[10px] text-muted-foreground/70 font-mono text-center">
+                  SIGCAF v{APP_VERSION}
+                </div>
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
