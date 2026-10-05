@@ -293,6 +293,36 @@ function aplicar2OptComOrigem(
  * 6. Calcula a distância estimada partindo do Depósito Central (depósito -> primeira parada -> subsequentes).
  * 7. Monta o comparativo completo (atual vs sugerido partindo do depósito, distâncias km, badges).
  */
+/**
+ * Constrói a URL universal do Google Maps com trajeto traçado (origem -> destino).
+ * Suporta coordenadas {latitude, longitude} ou string de endereço/busca.
+ * Utiliza ponto decimal para números.
+ * Formato universal: https://www.google.com/maps/dir/?api=1&origin=LAT1,LNG1&destination=LAT2,LNG2
+ */
+export function buildGoogleMapsRouteUrl(
+  origem: { latitude: number; longitude: number } | string,
+  destino: { latitude: number; longitude: number } | string,
+): string {
+  const formatPoint = (pt: { latitude: number; longitude: number } | string): string => {
+    if (typeof pt === 'string') {
+      return pt.trim()
+    }
+    // Garante que o separador decimal seja ponto e não vírgula
+    const lat = pt.latitude.toFixed(6).replace(',', '.')
+    const lng = pt.longitude.toFixed(6).replace(',', '.')
+    return `${lat},${lng}`
+  }
+
+  const origStr = formatPoint(origem)
+  const destStr = formatPoint(destino)
+
+  if (!origStr || !destStr) return ''
+
+  return `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(
+    origStr,
+  )}&destination=${encodeURIComponent(destStr)}`
+}
+
 export function otimizarSequenciaParadas(
   paradasOriginais: ParadaOtimizavel[],
   origemCustomizada?: CoordenadaGeo & { nome?: string },

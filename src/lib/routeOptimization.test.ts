@@ -4,6 +4,7 @@ import {
   extrairCoordenadas,
   otimizarSequenciaParadas,
   resolverDepositoCentral,
+  buildGoogleMapsRouteUrl,
   DEPOSITO_CENTRAL,
   type ParadaOtimizavel,
 } from './routeOptimization'
@@ -210,8 +211,38 @@ describe('routeOptimization', () => {
       const resultadoCustom = otimizarSequenciaParadas(paradas, depositoCustomizado)
       expect(resultadoCustom.depositoPartida.nome).toBe('Galpão Regional Sul')
       expect(resultadoCustom.paradasSugeridas[0].escolaId).toBe('1')
+    })
+  })
 
-      // Testar helper resolverDepositoCentral com campos nulos/vazios
+  describe('buildGoogleMapsRouteUrl', () => {
+    it('deve gerar URL do Google Maps com api=1, origin e destination com ponto decimal', () => {
+      const url = buildGoogleMapsRouteUrl(
+        { latitude: -22.2858, longitude: -42.5312 },
+        { latitude: -22.3125, longitude: -42.551 },
+      )
+      expect(url).toBe(
+        'https://www.google.com/maps/dir/?api=1&origin=-22.285800%2C-42.531200&destination=-22.312500%2C-42.551000',
+      )
+      expect(decodeURIComponent(url)).toBe(
+        'https://www.google.com/maps/dir/?api=1&origin=-22.285800,-42.531200&destination=-22.312500,-42.551000',
+      )
+    })
+
+    it('deve suportar strings como origem e destino', () => {
+      const url = buildGoogleMapsRouteUrl('Depósito Central', 'Rua das Flores, 100')
+      expect(url).toContain('https://www.google.com/maps/dir/?api=1')
+      expect(url).toContain('origin=Dep%C3%B3sito%20Central')
+      expect(url).toContain('destination=Rua%20das%20Flores%2C%20100')
+    })
+
+    it('retorna string vazia se origem ou destino forem vazios', () => {
+      expect(buildGoogleMapsRouteUrl('', { latitude: -22.28, longitude: -42.53 })).toBe('')
+      expect(buildGoogleMapsRouteUrl({ latitude: -22.28, longitude: -42.53 }, '')).toBe('')
+    })
+  })
+
+  describe('resolverDepositoCentral', () => {
+    it('testa helper resolverDepositoCentral com campos nulos/vazios', () => {
       const resolvidoPadrao = resolverDepositoCentral(null)
       expect(resolvidoPadrao.nome).toBe(DEPOSITO_CENTRAL.nome)
       expect(resolvidoPadrao.latitude).toBe(DEPOSITO_CENTRAL.latitude)

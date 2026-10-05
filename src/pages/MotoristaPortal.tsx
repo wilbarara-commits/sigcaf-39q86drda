@@ -55,6 +55,7 @@ import {
   extrairCoordenadas,
   DEPOSITO_CENTRAL,
   resolverDepositoCentral,
+  buildGoogleMapsRouteUrl,
 } from '@/lib/routeOptimization'
 import { configuracoesService } from '@/services/configuracoes'
 import { APP_VERSION } from '@/lib/version'
@@ -492,13 +493,14 @@ export const MotoristaPortal: React.FC = () => {
   }, [proximaParadaPendente])
 
   // Link do Google Maps do trecho (origem -> destino)
+  // Formato universal universal do Google Maps com trajeto traçado:
+  // https://www.google.com/maps/dir/?api=1&origin=LAT1,LNG1&destination=LAT2,LNG2
   const googleMapsTrechoUrl = useMemo(() => {
     if (!trechoDestinoInfo || !trechoOrigemInfo) return ''
-    const destStr = `${trechoDestinoInfo.latitude},${trechoDestinoInfo.longitude}`
-    const origStr = `${trechoOrigemInfo.latitude},${trechoOrigemInfo.longitude}`
-    return `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(
-      origStr,
-    )}&destination=${encodeURIComponent(destStr)}&travelmode=driving`
+    return buildGoogleMapsRouteUrl(
+      { latitude: trechoOrigemInfo.latitude, longitude: trechoOrigemInfo.longitude },
+      { latitude: trechoDestinoInfo.latitude, longitude: trechoDestinoInfo.longitude },
+    )
   }, [trechoOrigemInfo, trechoDestinoInfo])
 
   // Formatação de hora simples
@@ -766,12 +768,24 @@ export const MotoristaPortal: React.FC = () => {
                 .filter(Boolean)
                 .join(' ')
 
-              // Monta link do Google Maps para a escola se houver endereço ou coordenadas
+              // Monta link do Google Maps para a escola com trajeto traçado a partir da origem atual do trecho:
+              // origem = Depósito Central se nada entregue ainda; senão a última parada fechada/entregue
               let mapsUrl = ''
-              if (escola?.latitude && escola?.longitude) {
-                mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
-                  `${escola.latitude},${escola.longitude}`,
-                )}`
+              const coordsDestinoParada = extrairCoordenadas(escola?.latitude, escola?.longitude)
+              const destinoParadaRef = coordsDestinoParada
+                ? {
+                    latitude: coordsDestinoParada.latitude,
+                    longitude: coordsDestinoParada.longitude,
+                  }
+                : enderecoCompleto || escolaEndereco || escolaNome
+
+              if (trechoOrigemInfo && destinoParadaRef) {
+                mapsUrl = buildGoogleMapsRouteUrl(
+                  { latitude: trechoOrigemInfo.latitude, longitude: trechoOrigemInfo.longitude },
+                  destinoParadaRef,
+                )
+              } else if (coordsDestinoParada) {
+                mapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${coordsDestinoParada.latitude.toFixed(6).replace(',', '.')},${coordsDestinoParada.longitude.toFixed(6).replace(',', '.')}`
               } else if (enderecoCompleto || escolaEndereco || escolaNome) {
                 const buscaMaps = enderecoCompleto || escolaEndereco || escolaNome
                 mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
