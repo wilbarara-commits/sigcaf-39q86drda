@@ -4,6 +4,7 @@ import {
   rotaDespachosService,
   entregaRegistrosService,
   type MotoristaPortalData,
+  type MotoristaPortalParada,
 } from '@/services/rota-despachos'
 import {
   lerFilaLocal,
@@ -13,7 +14,7 @@ import {
   lerCachePortal,
   type FilaEntregaItem,
 } from '@/lib/motoristaOffline'
-import type { ParadaRotaRecord, EscolaRecord, EntregaRegistroRecord } from '@/lib/types'
+import type { EscolaRecord, EntregaRegistroRecord } from '@/lib/types'
 import { SignaturePad } from '@/components/SignaturePad'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -59,13 +60,7 @@ export const MotoristaPortal: React.FC = () => {
   const [filaLocal, setFilaLocal] = useState<FilaEntregaItem[]>([])
 
   // Modal de registro de entrega por parada
-  const [selectedParada, setSelectedParada] = useState<
-    | (ParadaRotaRecord & {
-        escola?: EscolaRecord
-        registro?: EntregaRegistroRecord
-      })
-    | null
-  >(null)
+  const [selectedParada, setSelectedParada] = useState<MotoristaPortalParada | null>(null)
   const [chegadaEm, setChegadaEm] = useState<string>('')
   const [assinaturaDataUrl, setAssinaturaDataUrl] = useState<string | undefined>(undefined)
   const [observacao, setObservacao] = useState<string>('')
@@ -203,12 +198,7 @@ export const MotoristaPortal: React.FC = () => {
   }, [filaLocal, isSyncing, token])
 
   // Abrir modal de entrega: grava AUTOMATICAMENTE o horário de chegada
-  const handleOpenRegistro = (
-    parada: ParadaRotaRecord & {
-      escola?: EscolaRecord
-      registro?: EntregaRegistroRecord
-    },
-  ) => {
+  const handleOpenRegistro = (parada: MotoristaPortalParada) => {
     setSelectedParada(parada)
     // Horário de chegada gravado automaticamente no momento da abertura do formulário
     const nowIso = new Date().toISOString()
@@ -574,9 +564,19 @@ export const MotoristaPortal: React.FC = () => {
                         </div>
 
                         <div className="min-w-0">
-                          <h4 className="font-bold text-base text-foreground leading-snug">
-                            {escolaNome}
-                          </h4>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <h4 className="font-bold text-base text-foreground leading-snug">
+                              {escolaNome}
+                            </h4>
+                            {parada.contratoNumero && (
+                              <Badge
+                                variant="outline"
+                                className="text-[10px] px-1.5 py-0 h-4 font-mono font-medium border-slate-300 dark:border-slate-700 text-muted-foreground"
+                              >
+                                {parada.contratoNumero}
+                              </Badge>
+                            )}
+                          </div>
 
                           {enderecoCompleto && (
                             <p className="text-xs text-muted-foreground mt-0.5 flex items-start gap-1">

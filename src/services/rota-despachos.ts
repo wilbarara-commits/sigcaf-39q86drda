@@ -54,15 +54,16 @@ export function buildDriverWhatsAppMessage(options: {
   return `*${options.rotaNome}*${cicloInfo} — ${entregasText}.\nAcompanhe e registre as entregas pelo link:\n${link}`
 }
 
+export interface MotoristaPortalParada extends ParadaRotaRecord {
+  escola?: EscolaRecord
+  contratoNumero?: string
+  registro?: EntregaRegistroRecord
+}
+
 export interface MotoristaPortalData {
   despacho: RotaDespachoRecord
   rota: RotaRecord
-  paradas: Array<
-    ParadaRotaRecord & {
-      escola?: EscolaRecord
-      registro?: EntregaRegistroRecord
-    }
-  >
+  paradas: MotoristaPortalParada[]
 }
 
 export const rotaDespachosService = {
@@ -168,7 +169,8 @@ export const rotaDespachosService = {
 
   /**
    * Carrega os dados completos para a tela pública do motorista:
-   * rota, paradas com escolas ordenadas e registros de entrega já realizados.
+   * rota, paradas com escolas ordenadas, contrato de origem do vínculo e registros de entrega já realizados.
+   * Suporta o modelo atual de vínculos (chamada x contrato x escola) com fallback resiliente.
    */
   async carregarPortalMotorista(despacho: RotaDespachoRecord): Promise<MotoristaPortalData> {
     const rotaId = despacho.rota_id
@@ -176,13 +178,55 @@ export const rotaDespachosService = {
       expand: 'chamada_id,contrato_id',
     })
 
-    const paradas = await pb.collection('paradas_rota').getFullList<ParadaRotaRecord>({
+    // 1. Carregar paradas cadastradas em paradas_rota (ordenadas por ordem)
+    let paradas = await pb.collection('paradas_rota').getFullList<ParadaRotaRecord>({
       filter: `rota_id = "${rotaId}"`,
       sort: 'ordem',
       expand: 'escola_id',
     })
 
-    // Buscar registros de entrega já existentes para esta rota
+    // 2. Fallback resiliente: se paradas_rota estiver vazio, buscar pelos vínculos contrato_escolas
+    if (paradas.length === 0) {
+      try {
+        const vinculos = await pb.collection('contrato_escolas').getFullList<any>({
+          filter: `rota_id = "${rotaId}"`,
+          expand: 'escola_id,contrato_id',
+          sort: 'created',
+        })
+        paradas = vinculos.map((v, idx) => ({
+          id: v.id,
+          rota_id: rotaId,
+          escola_id: v.escola_id,
+          ordem: idx + 1,
+          expand: {
+            escola_id: v.expand?.escola_id,
+          },
+          created: v.created,
+          updated: v.updated,
+        }))
+      } catch (e) {
+        console.warn('Fallback por contrato_escolas falhou:', e)
+      }
+    }
+
+    // 3. Resolver número do contrato de cada escola na chamada/rota
+    const contratoPorEscolaMap = new Map<string, string>()
+    try {
+      const vinculosComContrato = await pb.collection('contrato_escolas').getFullList<any>({
+        filter: `rota_id = "${rotaId}"`,
+        expand: 'contrato_id',
+      })
+      for (const v of vinculosComContrato) {
+        const num = v.expand?.contrato_id?.numero || v.expand?.contrato_id?.numero_chamada
+        if (num && !contratoPorEscolaMap.has(v.escola_id)) {
+          contratoPorEscolaMap.set(v.escola_id, num)
+        }
+      }
+    } catch (e) {
+      console.warn('Não foi possível obter números de contrato dos vínculos:', e)
+    }
+
+    // 4. Buscar registros de entrega já existentes para esta rota
     let registros: EntregaRegistroRecord[] = []
     try {
       registros = await pb.collection('entrega_registros').getFullList<EntregaRegistroRecord>({
@@ -200,9 +244,10 @@ export const rotaDespachosService = {
       }
     }
 
-    const paradasCompletas = paradas.map((p) => ({
+    const paradasCompletas: MotoristaPortalParada[] = paradas.map((p) => ({
       ...p,
       escola: p.expand?.escola_id,
+      contratoNumero: contratoPorEscolaMap.get(p.escola_id),
       registro: registrosPorEscola.get(p.escola_id),
     }))
 

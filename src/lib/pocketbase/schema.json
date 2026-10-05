@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-05T11:05:17.522Z",
+  "generatedAt": "2026-10-05T12:23:09.321Z",
   "collections": [
     {
       "name": "users",
@@ -1136,8 +1136,8 @@
       "name": "paradas_rota",
       "type": "base",
       "apiRules": {
-        "list": "@request.auth.id != \"\"",
-        "view": "@request.auth.id != \"\"",
+        "list": "",
+        "view": "",
         "create": "@request.auth.id != \"\"",
         "update": "@request.auth.id != \"\"",
         "delete": "@request.auth.id != \"\""
