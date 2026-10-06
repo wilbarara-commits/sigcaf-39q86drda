@@ -148,6 +148,14 @@ routerAdd('POST', '/backend/v1/rotas-logisticas/despachar', (e) => {
       txApp.save(p)
       updatedOrders.push(p.publicExport())
     }
+
+    // Zerar campos legados de posição do caminhão na rota ao despachar
+    try {
+      const rotaTarget = txApp.findRecordById('rotas', rotaId)
+      rotaTarget.set('caminhao_posicao_atual', 0)
+      rotaTarget.set('caminhao_escola_id', '')
+      txApp.save(rotaTarget)
+    } catch (_) {}
   })
 
   return e.json(200, {
@@ -299,6 +307,14 @@ routerAdd('POST', '/backend/v1/rotas/despachar', (e) => {
       txApp.save(p)
       updatedOrders.push(p.publicExport())
     }
+
+    // Zerar campos legados de posição do caminhão na rota ao despachar
+    try {
+      const rotaTarget = txApp.findRecordById('rotas', rotaId)
+      rotaTarget.set('caminhao_posicao_atual', 0)
+      rotaTarget.set('caminhao_escola_id', '')
+      txApp.save(rotaTarget)
+    } catch (_) {}
   })
 
   return e.json(200, {

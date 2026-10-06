@@ -155,7 +155,7 @@ export const rotaDespachosService = {
     }
 
     // 2. Cria o novo registro de despacho com o token exclusivo
-    return await pb.collection('rota_despachos').create<RotaDespachoRecord>({
+    const createdDespacho = await pb.collection('rota_despachos').create<RotaDespachoRecord>({
       rota_id: data.rotaId,
       motorista_id: data.motoristaId || undefined,
       ciclo_id: data.cicloId || undefined,
@@ -165,6 +165,18 @@ export const rotaDespachosService = {
       despachado_em: nowIso,
       renovado_em: data.isRedisparo ? nowIso : undefined,
     })
+
+    // 3. Ao despachar, zera campos legados de posição do caminhão para começar do depósito
+    try {
+      await pb.collection('rotas').update(data.rotaId, {
+        caminhao_posicao_atual: 0,
+        caminhao_escola_id: '',
+      })
+    } catch (err) {
+      console.warn('Aviso ao zerar posição do caminhão da rota no despacho:', err)
+    }
+
+    return createdDespacho
   },
 
   /**

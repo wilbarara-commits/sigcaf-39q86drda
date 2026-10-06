@@ -1777,6 +1777,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
       ),
     )
 
+    // Zerar posição manual/legada do caminhão na rota ao despachar para iniciar do depósito
+    const limparPosicaoCaminhaoDespacho = (rList: RotaRecord[]) =>
+      rList.map((r) =>
+        r.id === rotaLogisticaId
+          ? {
+              ...r,
+              caminhao_escola_id: undefined,
+              caminhao_posicao_atual: 0,
+            }
+          : r,
+      )
+    setRotasLogisticas(limparPosicaoCaminhaoDespacho)
+    setRotas(limparPosicaoCaminhaoDespacho)
+
     const tempDespacho: DespachoRecord = {
       id: `temp-desp-${Date.now()}`,
       chamada_id: effectiveChamadaId,

@@ -2089,7 +2089,9 @@ export default function DeliveryRoutes() {
                             {item.paradasOrdenadas.map((parada) => {
                               const isOver = dragOverEscolaId === parada.escolaId
                               const isBeingDragged = draggedEscolaId === parada.escolaId
-                              const isTruckHere = item.rota.caminhao_escola_id === parada.escolaId
+                              const isTruckHere = modoAutomaticoAtivo
+                                ? ultimaEscolaEntregueId === parada.escolaId
+                                : item.rota.caminhao_escola_id === parada.escolaId
 
                               // Checar se a parada já foi entregue
                               const rotaRegsContexto = getEntregaRegistrosDaRota(item.rota.id)
@@ -2542,13 +2544,17 @@ export default function DeliveryRoutes() {
                               pedidosCount: p.pedidos.length,
                             }))}
                             deposito={depositoConfig}
-                            caminhaoEscolaId={item.rota.caminhao_escola_id}
+                            caminhaoEscolaId={
+                              modoAutomaticoAtivo
+                                ? ultimaEscolaEntregueId
+                                : item.rota.caminhao_escola_id
+                            }
                             isEmRota={hasEmRota}
                             height={viewMode === 'ambos' ? 380 : 420}
                             entregasConfirmadas={entregasConfirmadasMap}
                             ultimaParadaEntregueEscolaId={
-                              hasEmRota
-                                ? ultimaEscolaEntregueId || item.rota.caminhao_escola_id || null
+                              modoAutomaticoAtivo
+                                ? ultimaEscolaEntregueId
                                 : item.rota.caminhao_escola_id || null
                             }
                             onEntregaClick={(escolaId) => {
