@@ -625,7 +625,9 @@ export default function Index() {
                         asChild
                         className="h-7 text-xs text-primary px-2"
                       >
-                        <Link to="/monitoramento">
+                        <Link
+                          to={`/monitoramento?cicloId=${ciclo.id}&chamadaId=${ciclo.chamada_id || ''}`}
+                        >
                           Monitorar <ArrowRight className="h-3 w-3 ml-1" />
                         </Link>
                       </Button>
@@ -742,7 +744,13 @@ export default function Index() {
                         asChild
                         className="h-6 text-[11px] text-primary px-1.5 shrink-0 ml-2"
                       >
-                        <Link to={temCiclo ? '/monitoramento' : '/chamadas'}>
+                        <Link
+                          to={
+                            temCiclo && cicloAtivoDaChamada
+                              ? `/monitoramento?cicloId=${cicloAtivoDaChamada.id}&chamadaId=${ch.id}`
+                              : '/chamadas'
+                          }
+                        >
                           {temCiclo ? 'Ver Ciclo' : 'Abrir'}
                         </Link>
                       </Button>

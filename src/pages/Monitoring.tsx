@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useApp } from '@/context/app-context'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -50,6 +50,10 @@ import type { CicloRecord, EnvioWhatsappRecord } from '@/lib/types'
 
 export default function Monitoring() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const queryCicloId = searchParams.get('cicloId') || ''
+  const queryChamadaId = searchParams.get('chamadaId') || ''
+
   const {
     ciclos,
     contracts,
@@ -59,6 +63,7 @@ export default function Monitoring() {
     schools,
     orders,
     chamadas,
+    despachos,
   } = useApp()
 
   // Seletor de ciclos: mais recente primeiro, padrão = ciclo ativo (ou o mais recente de todos)
@@ -76,8 +81,48 @@ export default function Monitoring() {
   const [cancelarCicloInteiroOpen, setCancelarCicloInteiroOpen] = useState(false)
   const [enviosWhatsapp, setEnviosWhatsapp] = useState<EnvioWhatsappRecord[]>([])
 
-  // Atualizar seleção padrão quando o ativo mudar ou na carga inicial
+  // Atualizar seleção padrão quando o ativo mudar, query params ou na carga inicial
   useEffect(() => {
+    // 1. Se veio cicloId via query param e existe na lista de ciclos, seleciona-o
+    if (queryCicloId) {
+      const targetByCicloId = ciclos.find((c) => c.id === queryCicloId)
+      if (targetByCicloId) {
+        setSelectedCicloId(targetByCicloId.id)
+        return
+      }
+    }
+
+    // 2. Se veio apenas chamadaId via query param, seleciona o ciclo ativo (não-terminal) dessa chamada
+    if (queryChamadaId) {
+      const cicloChamadaAtivo = ciclos
+        .filter((c) => c.chamada_id === queryChamadaId && isCicloNaoTerminal(c.status))
+        .sort((a, b) => {
+          const tA = new Date(a.created || a.data_inicio).getTime()
+          const tB = new Date(b.created || b.data_inicio).getTime()
+          return tB - tA
+        })[0]
+
+      if (cicloChamadaAtivo) {
+        setSelectedCicloId(cicloChamadaAtivo.id)
+        return
+      }
+
+      // Fallback: ciclo mais recente dessa chamada mesmo que fechado
+      const cicloMaisRecenteChamada = ciclos
+        .filter((c) => c.chamada_id === queryChamadaId)
+        .sort((a, b) => {
+          const tA = new Date(a.created || a.data_inicio).getTime()
+          const tB = new Date(b.created || b.data_inicio).getTime()
+          return tB - tA
+        })[0]
+
+      if (cicloMaisRecenteChamada) {
+        setSelectedCicloId(cicloMaisRecenteChamada.id)
+        return
+      }
+    }
+
+    // 3. Fallback padrão: se ainda não houver ciclo selecionado ou o selecionado não existir mais
     if (!selectedCicloId) {
       if (activeCiclo) {
         setSelectedCicloId(activeCiclo.id)
@@ -90,7 +135,7 @@ export default function Monitoring() {
         setSelectedCicloId(activeCiclo?.id || sortedCiclos[0]?.id || '')
       }
     }
-  }, [activeCiclo, sortedCiclos, ciclos, selectedCicloId])
+  }, [activeCiclo, sortedCiclos, ciclos, selectedCicloId, queryCicloId, queryChamadaId])
 
   const selectedCiclo: CicloRecord | null = useMemo(() => {
     return ciclos.find((c) => c.id === selectedCicloId) || activeCiclo || sortedCiclos[0] || null
@@ -144,6 +189,28 @@ export default function Monitoring() {
   const currentFase = useMemo(() => {
     return derivarStatusCiclo(selectedCiclo?.status)
   }, [selectedCiclo])
+
+  // Critério de ciclo já colocado Em Rota (despacho ou pedido com status 'Em Rota')
+  const isCicloEmRota = useMemo(() => {
+    if (!selectedCiclo) return false
+
+    // 1. Despacho com status 'Em Rota' associado ao ciclo_id ou (se houver chamada_id) à mesma chamada
+    const temDespachoEmRota = despachos.some((d) => {
+      if (d.status !== 'Em Rota') return false
+      if (d.ciclo_id && d.ciclo_id === selectedCiclo.id) return true
+      if (selectedCiclo.chamada_id && d.chamada_id === selectedCiclo.chamada_id) return true
+      return false
+    })
+
+    if (temDespachoEmRota) return true
+
+    // 2. Pedido com cicloId === selectedCiclo.id e status 'Em Rota'
+    const temPedidoEmRota = orders.some(
+      (o) => o.cicloId === selectedCiclo.id && o.status === 'Em Rota',
+    )
+
+    return temPedidoEmRota
+  }, [selectedCiclo, despachos, orders])
 
   // Ciclo ativo da chamada do ciclo selecionado (ou fallback no ativo geral)
   const isSelectedAtivo = useMemo(() => {
@@ -662,8 +729,14 @@ export default function Monitoring() {
                     {isColetaEncerrada && (
                       <Button
                         size="sm"
-                        className="w-full text-xs bg-amber-600 hover:bg-amber-700 text-white gap-1"
+                        disabled={isCicloEmRota}
+                        className={
+                          isCicloEmRota
+                            ? 'w-full text-xs bg-muted text-muted-foreground opacity-75 cursor-not-allowed gap-1'
+                            : 'w-full text-xs bg-amber-600 hover:bg-amber-700 text-white gap-1'
+                        }
                         onClick={() => {
+                          if (isCicloEmRota) return
                           const chId = selectedCiclo?.chamada_id
                           const cId = selectedCiclo?.id
                           const params = new URLSearchParams()
@@ -671,9 +744,14 @@ export default function Monitoring() {
                           if (cId) params.set('cicloId', cId)
                           navigate(`/rotas${params.toString() ? `?${params.toString()}` : ''}`)
                         }}
-                        title="Ir para tela de rotas da chamada e despacho"
+                        title={
+                          isCicloEmRota
+                            ? 'Ciclo já possui despacho ativo em andamento (Em Rota)'
+                            : 'Ir para tela de rotas da chamada e despacho'
+                        }
                       >
-                        <Truck className="h-3.5 w-3.5" /> Colocar em Rota
+                        <Truck className="h-3.5 w-3.5" />{' '}
+                        {isCicloEmRota ? 'Em Rota' : 'Colocar em Rota'}
                       </Button>
                     )}
                   </div>
