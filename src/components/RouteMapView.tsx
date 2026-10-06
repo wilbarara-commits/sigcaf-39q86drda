@@ -56,6 +56,10 @@ export interface RouteMapViewProps {
    * ID da escola correspondente à última entrega confirmada da rota (avança o caminhão em tempo real)
    */
   ultimaParadaEntregueEscolaId?: string | null
+  /**
+   * Callback disparado quando o usuário clica em uma entrega confirmada no mapa
+   */
+  onEntregaClick?: (escolaId: string) => void
 }
 
 /**
@@ -283,6 +287,7 @@ export function RouteMapView({
   className = '',
   entregasConfirmadas,
   ultimaParadaEntregueEscolaId,
+  onEntregaClick,
 }: RouteMapViewProps) {
   const [, setMapReady] = useState(false)
   const [osrmResult, setOsrmResult] = useState<OsrmRouteResult | null>(null)
@@ -739,7 +744,18 @@ export function RouteMapView({
             )
 
             return (
-              <Marker key={p.escolaId} position={[item.lat, item.lng]} icon={icon}>
+              <Marker
+                key={p.escolaId}
+                position={[item.lat, item.lng]}
+                icon={icon}
+                eventHandlers={{
+                  click: () => {
+                    if (isEntregue && onEntregaClick) {
+                      onEntregaClick(p.escolaId)
+                    }
+                  },
+                }}
+              >
                 <Popup>
                   <div className="text-xs p-1 space-y-1.5 min-w-[210px] max-w-[280px]">
                     <div className="flex items-start justify-between gap-2">
@@ -754,10 +770,22 @@ export function RouteMapView({
                         <span className="font-bold text-slate-900 leading-tight">{p.nome}</span>
                       </div>
                       {isEntregue ? (
-                        <Badge className="bg-emerald-600 hover:bg-emerald-700 text-white text-[9px] py-0 px-1.5">
-                          ✓ Entregue
-                          {entregaInfo?.horaFormatada ? ` ${entregaInfo.horaFormatada}` : ''}
-                        </Badge>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            if (onEntregaClick) {
+                              onEntregaClick(p.escolaId)
+                            }
+                          }}
+                          className="inline-flex items-center gap-1 bg-emerald-600 hover:bg-emerald-700 text-white text-[9px] font-semibold py-0.5 px-2 rounded-full cursor-pointer transition shadow-2xs focus:outline-hidden"
+                          title="Clique para ver os Dados da Entrega"
+                        >
+                          <span>✓ Entregue</span>
+                          {entregaInfo?.horaFormatada ? (
+                            <span>{entregaInfo.horaFormatada}</span>
+                          ) : null}
+                        </button>
                       ) : isProx ? (
                         <Badge variant="destructive" className="text-[9px] py-0 px-1">
                           Próxima Parada
@@ -786,6 +814,24 @@ export function RouteMapView({
                     {p.endereco ? (
                       <p className="text-[11px] text-slate-600 leading-snug">{p.endereco}</p>
                     ) : null}
+
+                    {isEntregue && onEntregaClick && (
+                      <div className="pt-1 border-t border-slate-100">
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            onEntregaClick(p.escolaId)
+                          }}
+                          className="w-full h-6 text-[10px] text-emerald-800 dark:text-emerald-300 border-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 gap-1 font-medium"
+                        >
+                          <CheckCircle2 className="h-3 w-3 text-emerald-600" />
+                          Ver Dados da Entrega
+                        </Button>
+                      </div>
+                    )}
 
                     <div className="text-[10px] font-mono text-slate-400 pt-0.5 border-t border-slate-100">
                       Parada #{item.ordem} • {item.lat.toFixed(6)}, {item.lng.toFixed(6)}

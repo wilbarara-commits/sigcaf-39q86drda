@@ -94,6 +94,7 @@ import {
   type RotaDespachoRecord,
   type EntregaRegistroRecord,
 } from '@/lib/types'
+import { DeliveryDetailsDialog, type DeliveryDetailsData } from '@/components/DeliveryDetailsDialog'
 
 /**
  * Verifica se a fase do contrato no ciclo é elegível para despacho de rota.
@@ -272,6 +273,11 @@ export default function DeliveryRoutes() {
   >({})
   const [visualizandoAssinaturaUrl, setVisualizandoAssinaturaUrl] = useState<string | null>(null)
   const [visualizandoFotoUrl, setVisualizandoFotoUrl] = useState<string | null>(null)
+
+  // Estado para o modal "Dados da Entrega"
+  const [deliveryDetailsOpen, setDeliveryDetailsOpen] = useState(false)
+  const [selectedDeliveryDetails, setSelectedDeliveryDetails] =
+    useState<DeliveryDetailsData | null>(null)
 
   // Carregar lista de motoristas e despachos ativos
   const carregarMotoristasEDespachos = async () => {
@@ -2007,6 +2013,36 @@ export default function DeliveryRoutes() {
                               const isBeingDragged = draggedEscolaId === parada.escolaId
                               const isTruckHere = item.rota.caminhao_escola_id === parada.escolaId
 
+                              // Checar se a parada já foi entregue
+                              const rotaRegsContexto = getEntregaRegistrosDaRota(item.rota.id)
+                              const rotaRegs =
+                                rotaRegsContexto.length > 0
+                                  ? rotaRegsContexto
+                                  : registrosEntregasMap[item.rota.id] || []
+                              const regParada = rotaRegs.find(
+                                (rg) =>
+                                  rg.escola_id === parada.escolaId && Boolean(rg.confirmado_em),
+                              )
+                              const isParadaEntregue = Boolean(regParada)
+
+                              const handleAbrirDetalhesParada = () => {
+                                if (!isParadaEntregue) return
+                                setSelectedDeliveryDetails({
+                                  registro: regParada || null,
+                                  escolaNome: parada.nome,
+                                  escolaEndereco: parada.endereco,
+                                  contratoNumero: parada.contratoNumero,
+                                  motoristaNome:
+                                    despachosAtivosMap[item.rota.id]?.motorista_nome ||
+                                    motoristasList.find(
+                                      (m) =>
+                                        m.id === despachosAtivosMap[item.rota.id]?.motorista_id,
+                                    )?.nome,
+                                  ordem: parada.ordem,
+                                })
+                                setDeliveryDetailsOpen(true)
+                              }
+
                               return (
                                 <div
                                   key={parada.escolaId}
@@ -2029,6 +2065,7 @@ export default function DeliveryRoutes() {
                                       })),
                                     )
                                   }
+                                  onClick={handleAbrirDetalhesParada}
                                   className={`p-2.5 rounded-lg border text-xs space-y-2 shadow-xs transition-all cursor-grab active:cursor-grabbing select-none ${
                                     isBeingDragged
                                       ? 'opacity-40 border-dashed border-primary scale-[0.98] bg-card'
@@ -2036,7 +2073,9 @@ export default function DeliveryRoutes() {
                                         ? 'border-primary border-2 bg-primary/10 shadow-sm'
                                         : isTruckHere
                                           ? 'border-amber-500/80 bg-amber-500/10 dark:bg-amber-950/20 shadow-sm ring-1 ring-amber-400'
-                                          : 'bg-card hover:border-primary/50 hover:shadow-xs'
+                                          : isParadaEntregue
+                                            ? 'bg-emerald-50/40 dark:bg-emerald-950/20 border-emerald-300 dark:border-emerald-800 hover:border-emerald-500 hover:shadow-xs'
+                                            : 'bg-card hover:border-primary/50 hover:shadow-xs'
                                   }`}
                                 >
                                   <div className="flex items-center justify-between gap-2">
@@ -2104,12 +2143,36 @@ export default function DeliveryRoutes() {
 
                                             return (
                                               <div className="flex items-center gap-1 shrink-0">
-                                                <Badge className="bg-emerald-600 hover:bg-emerald-600 text-white text-[9px] px-1.5 py-0 gap-1 font-semibold">
+                                                <button
+                                                  type="button"
+                                                  onClick={(e) => {
+                                                    e.stopPropagation()
+                                                    setSelectedDeliveryDetails({
+                                                      registro: regParada,
+                                                      escolaNome: parada.nome,
+                                                      escolaEndereco: parada.endereco,
+                                                      contratoNumero: parada.contratoNumero,
+                                                      motoristaNome:
+                                                        despachosAtivosMap[item.rota.id]
+                                                          ?.motorista_nome ||
+                                                        motoristasList.find(
+                                                          (m) =>
+                                                            m.id ===
+                                                            despachosAtivosMap[item.rota.id]
+                                                              ?.motorista_id,
+                                                        )?.nome,
+                                                      ordem: parada.ordem,
+                                                    })
+                                                    setDeliveryDetailsOpen(true)
+                                                  }}
+                                                  className="inline-flex items-center gap-1 bg-emerald-600 hover:bg-emerald-700 text-white text-[9px] px-2 py-0.5 rounded-full font-semibold cursor-pointer transition shadow-2xs focus:outline-hidden"
+                                                  title="Clique para ver os Dados da Entrega completos"
+                                                >
                                                   <CheckCircle2 className="h-2.5 w-2.5" />
                                                   <span>
                                                     {horaEnt ? `Entregue ${horaEnt}` : 'Entregue'}
                                                   </span>
-                                                </Badge>
+                                                </button>
                                                 {regParada.assinatura && (
                                                   <Button
                                                     type="button"
@@ -2407,6 +2470,27 @@ export default function DeliveryRoutes() {
                                 ? ultimaEscolaEntregueId || item.rota.caminhao_escola_id || null
                                 : item.rota.caminhao_escola_id || null
                             }
+                            onEntregaClick={(escolaId) => {
+                              const paradaAlvo = item.paradasOrdenadas.find(
+                                (p) => p.escolaId === escolaId,
+                              )
+                              const regAlvo = rotaRegsEfetivos.find(
+                                (rg) => rg.escola_id === escolaId && Boolean(rg.confirmado_em),
+                              )
+                              setSelectedDeliveryDetails({
+                                registro: regAlvo || null,
+                                escolaNome: paradaAlvo?.nome || 'Escola',
+                                escolaEndereco: paradaAlvo?.endereco,
+                                contratoNumero: paradaAlvo?.contratoNumero,
+                                motoristaNome:
+                                  despachosAtivosMap[item.rota.id]?.motorista_nome ||
+                                  motoristasList.find(
+                                    (m) => m.id === despachosAtivosMap[item.rota.id]?.motorista_id,
+                                  )?.nome,
+                                ordem: paradaAlvo?.ordem,
+                              })
+                              setDeliveryDetailsOpen(true)
+                            }}
                           />
                         )
 
@@ -3313,6 +3397,13 @@ Ou apenas o nome da escola copiado do Excel/Word`}
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* MODAL: Dados da Entrega (detalhes da entrega clicada na parada ou no mapa) */}
+      <DeliveryDetailsDialog
+        open={deliveryDetailsOpen}
+        onOpenChange={setDeliveryDetailsOpen}
+        data={selectedDeliveryDetails}
+      />
     </div>
   )
 }
