@@ -140,6 +140,7 @@ export default function DeliveryRoutes() {
     moverEscolaEntreRotas,
     updateOrderStatus,
     refreshData,
+    getEntregaRegistrosDaRota,
     config,
   } = useApp()
   const { user, isAdmin, isMaster } = useAuth()
@@ -2077,10 +2078,18 @@ export default function DeliveryRoutes() {
 
                                           {/* Status de entrega pelo motorista */}
                                           {(() => {
+                                            // Derivação reativa ao contexto global (getEntregaRegistrosDaRota com fallback local)
+                                            const rotaRegsContexto = getEntregaRegistrosDaRota(
+                                              item.rota.id,
+                                            )
                                             const rotaRegs =
-                                              registrosEntregasMap[item.rota.id] || []
+                                              rotaRegsContexto.length > 0
+                                                ? rotaRegsContexto
+                                                : registrosEntregasMap[item.rota.id] || []
                                             const regParada = rotaRegs.find(
-                                              (rg) => rg.escola_id === parada.escolaId,
+                                              (rg) =>
+                                                rg.escola_id === parada.escolaId &&
+                                                Boolean(rg.confirmado_em),
                                             )
                                             if (!regParada) return null
 
@@ -2141,7 +2150,13 @@ export default function DeliveryRoutes() {
                                           {parada.endereco || 'Endereço não informado'}
                                         </p>
                                         {(() => {
-                                          const rotaRegs = registrosEntregasMap[item.rota.id] || []
+                                          const rotaRegsContexto = getEntregaRegistrosDaRota(
+                                            item.rota.id,
+                                          )
+                                          const rotaRegs =
+                                            rotaRegsContexto.length > 0
+                                              ? rotaRegsContexto
+                                              : registrosEntregasMap[item.rota.id] || []
                                           const regParada = rotaRegs.find(
                                             (rg) => rg.escola_id === parada.escolaId,
                                           )
@@ -2334,6 +2349,39 @@ export default function DeliveryRoutes() {
                           </div>
                         )
 
+                        // Derivar registros de entregas da rota reativamente via contexto global
+                        const rotaRegsContexto = getEntregaRegistrosDaRota(item.rota.id)
+                        const rotaRegsEfetivos =
+                          rotaRegsContexto.length > 0
+                            ? rotaRegsContexto
+                            : registrosEntregasMap[item.rota.id] || []
+
+                        // Mapa de escolaId -> { confirmado_em } para escolas com entrega confirmada
+                        const entregasConfirmadasMap = new Map<
+                          string,
+                          { confirmado_em?: string | null }
+                        >()
+                        rotaRegsEfetivos.forEach((rg) => {
+                          if (rg.escola_id && rg.confirmado_em) {
+                            entregasConfirmadasMap.set(rg.escola_id, {
+                              confirmado_em: rg.confirmado_em,
+                            })
+                          }
+                        })
+
+                        // Identificar a última entrega confirmada na ordem das paradas (para posicionar o caminhão)
+                        let ultimaEscolaEntregueId: string | null = null
+                        if (hasEmRota) {
+                          // Percorre as paradas na ordem inversa para encontrar a parada mais avançada já entregue
+                          for (let i = item.paradasOrdenadas.length - 1; i >= 0; i--) {
+                            const pId = item.paradasOrdenadas[i].escolaId
+                            if (entregasConfirmadasMap.has(pId)) {
+                              ultimaEscolaEntregueId = pId
+                              break
+                            }
+                          }
+                        }
+
                         // Renderizador do Mapa da Rota
                         const renderMapa = (
                           <RouteMapView
@@ -2353,6 +2401,12 @@ export default function DeliveryRoutes() {
                             caminhaoEscolaId={item.rota.caminhao_escola_id}
                             isEmRota={hasEmRota}
                             height={viewMode === 'ambos' ? 380 : 420}
+                            entregasConfirmadas={entregasConfirmadasMap}
+                            ultimaParadaEntregueEscolaId={
+                              hasEmRota
+                                ? ultimaEscolaEntregueId || item.rota.caminhao_escola_id || null
+                                : item.rota.caminhao_escola_id || null
+                            }
                           />
                         )
 

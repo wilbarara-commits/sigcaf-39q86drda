@@ -46,6 +46,16 @@ export interface RouteMapViewProps {
   isEmRota?: boolean
   height?: string | number
   className?: string
+  /**
+   * Mapa ou lista de entregas confirmadas por escolaId -> { confirmado_em: string }
+   */
+  entregasConfirmadas?:
+    | Map<string, { confirmado_em?: string | null }>
+    | Record<string, { confirmado_em?: string | null }>
+  /**
+   * ID da escola correspondente à última entrega confirmada da rota (avança o caminhão em tempo real)
+   */
+  ultimaParadaEntregueEscolaId?: string | null
 }
 
 /**
@@ -85,33 +95,75 @@ function createDepositoIcon(nome: string) {
  * Cria divIcon do Leaflet para uma Parada da Rota com o NÚMERO DA PARADA bem visível.
  * Estilo circular elegante compatível com Tailwind (verde esmeralda primário).
  */
-function createNumberedStopIcon(ordem: number, isFirst: boolean) {
-  const bg = isFirst ? '#15803d' : '#047857' // destaque para a 1ª parada
+function createNumberedStopIcon(
+  ordem: number,
+  isFirst: boolean,
+  entregueInfo?: { hora?: string | null } | null,
+) {
+  const isEntregue = Boolean(entregueInfo)
+  const bg = isEntregue ? '#059669' : isFirst ? '#15803d' : '#047857'
   const border = '#ffffff'
   const size = ordem >= 100 ? 32 : 30
 
+  const badgeHtml = isEntregue
+    ? `
+      <div style="
+        position: absolute;
+        top: -14px;
+        left: 50%;
+        transform: translateX(-50%);
+        white-space: nowrap;
+        background-color: #059669;
+        color: #ffffff;
+        border: 1.5px solid #ffffff;
+        border-radius: 9999px;
+        font-size: 10px;
+        font-weight: 700;
+        padding: 1px 6px;
+        line-height: 14px;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.35);
+        display: flex;
+        align-items: center;
+        gap: 3px;
+        pointer-events: none;
+      ">
+        <span>✓ Entregue${entregueInfo?.hora ? ` ${entregueInfo.hora}` : ''}</span>
+      </div>
+    `
+    : ''
+
   return L.divIcon({
-    className: `custom-stop-marker stop-marker-${ordem}`,
+    className: `custom-stop-marker stop-marker-${ordem} ${isEntregue ? 'stop-entregue' : ''}`,
     html: `
       <div style="
+        position: relative;
         display: flex;
         align-items: center;
         justify-content: center;
         width: ${size}px;
         height: ${size}px;
-        border-radius: 9999px;
-        background-color: ${bg};
-        color: #ffffff;
-        border: 2.5px solid ${border};
-        box-shadow: 0 3px 8px rgba(0,0,0,0.35);
-        font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-        font-weight: 700;
-        font-size: ${ordem >= 100 ? '11px' : '13px'};
-        line-height: 1;
-        cursor: pointer;
-        transition: transform 0.15s ease-in-out;
       ">
-        ${ordem}
+        ${badgeHtml}
+        <div style="
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          width: ${size}px;
+          height: ${size}px;
+          border-radius: 9999px;
+          background-color: ${bg};
+          color: #ffffff;
+          border: 2.5px solid ${border};
+          box-shadow: 0 3px 8px rgba(0,0,0,0.35);
+          font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+          font-weight: 700;
+          font-size: ${ordem >= 100 ? '11px' : '13px'};
+          line-height: 1;
+          cursor: pointer;
+          transition: transform 0.15s ease-in-out;
+        ">
+          ${isEntregue ? '✓' : ordem}
+        </div>
       </div>
     `,
     iconSize: [size, size],
@@ -229,6 +281,8 @@ export function RouteMapView({
   isEmRota = false,
   height = 420,
   className = '',
+  entregasConfirmadas,
+  ultimaParadaEntregueEscolaId,
 }: RouteMapViewProps) {
   const [, setMapReady] = useState(false)
   const [osrmResult, setOsrmResult] = useState<OsrmRouteResult | null>(null)
@@ -264,11 +318,61 @@ export function RouteMapView({
 
   const escolasSemCoordCount = paradas.length - paradasComCoord.length
 
+  // Normalizar mapa de entregas confirmadas para acesso rápido escolaId -> { confirmado_em }
+  const entregasConfirmadasMap = useMemo(() => {
+    const map = new Map<string, { confirmado_em?: string | null; horaFormatada?: string | null }>()
+    if (!entregasConfirmadas) return map
+
+    if (entregasConfirmadas instanceof Map) {
+      entregasConfirmadas.forEach((val, key) => {
+        let horaFormatada: string | null = null
+        if (val?.confirmado_em) {
+          try {
+            horaFormatada = new Date(val.confirmado_em).toLocaleTimeString('pt-BR', {
+              hour: '2-digit',
+              minute: '2-digit',
+            })
+          } catch {
+            horaFormatada = null
+          }
+        }
+        map.set(key, { ...val, horaFormatada })
+      })
+    } else {
+      Object.entries(entregasConfirmadas).forEach(([key, val]) => {
+        let horaFormatada: string | null = null
+        if (val?.confirmado_em) {
+          try {
+            horaFormatada = new Date(val.confirmado_em).toLocaleTimeString('pt-BR', {
+              hour: '2-digit',
+              minute: '2-digit',
+            })
+          } catch {
+            horaFormatada = null
+          }
+        }
+        map.set(key, { ...val, horaFormatada })
+      })
+    }
+    return map
+  }, [entregasConfirmadas])
+
+  // Posição efetiva do caminhão:
+  // Se estiver em rota e houver última entrega confirmada em tempo real (ou repassada por prop),
+  // o caminhão se posiciona prioritariamente na última entrega confirmada.
+  // Caso contrário, respeita caminhaoEscolaId explícito (ou null se no depósito).
+  const caminhaoEscolaIdEfetivo = useMemo(() => {
+    if (isEmRota && ultimaParadaEntregueEscolaId !== undefined) {
+      return ultimaParadaEntregueEscolaId
+    }
+    return caminhaoEscolaId || null
+  }, [isEmRota, ultimaParadaEntregueEscolaId, caminhaoEscolaId])
+
   // Parada onde o caminhão se encontra atualmente (se houver e tiver coordenadas)
   const paradaCaminhao = useMemo(() => {
-    if (!caminhaoEscolaId) return null
-    return paradasComCoord.find((p) => p.parada.escolaId === caminhaoEscolaId) || null
-  }, [caminhaoEscolaId, paradasComCoord])
+    if (!caminhaoEscolaIdEfetivo) return null
+    return paradasComCoord.find((p) => p.parada.escolaId === caminhaoEscolaIdEfetivo) || null
+  }, [caminhaoEscolaIdEfetivo, paradasComCoord])
 
   // Coordenadas válidas do depósito
   const depositoCoords = useMemo(() => {
@@ -289,11 +393,11 @@ export function RouteMapView({
     return L.latLngBounds(points)
   }, [depositoCoords, paradasComCoord])
 
-  // Índice da parada onde o caminhão está (-1 se não estiver em nenhuma com coordenada)
+  // Índice da parada onde o caminhão está (-1 se não estiver em nenhuma com coordenada, ou seja, início/depósito)
   const caminhaoCoordIndex = useMemo(() => {
-    if (!caminhaoEscolaId) return -1
-    return paradasComCoord.findIndex((p) => p.parada.escolaId === caminhaoEscolaId)
-  }, [caminhaoEscolaId, paradasComCoord])
+    if (!caminhaoEscolaIdEfetivo) return -1
+    return paradasComCoord.findIndex((p) => p.parada.escolaId === caminhaoEscolaIdEfetivo)
+  }, [caminhaoEscolaIdEfetivo, paradasComCoord])
 
   // Se o caminhão está na última parada com coordenadas
   const isCaminhaoNaUltimaParada = useMemo(() => {
@@ -625,8 +729,14 @@ export function RouteMapView({
           {/* Marcadores das Paradas numeradas (todas visíveis) */}
           {paradasComCoord.map((item) => {
             const p = item.parada
-            const isProx = isEmRota && proximaParada?.parada.escolaId === p.escolaId
-            const icon = createNumberedStopIcon(item.ordem, item.isFirst)
+            const entregaInfo = entregasConfirmadasMap.get(p.escolaId)
+            const isEntregue = Boolean(entregaInfo)
+            const isProx = isEmRota && !isEntregue && proximaParada?.parada.escolaId === p.escolaId
+            const icon = createNumberedStopIcon(
+              item.ordem,
+              item.isFirst,
+              isEntregue ? { hora: entregaInfo?.horaFormatada } : null,
+            )
 
             return (
               <Marker key={p.escolaId} position={[item.lat, item.lng]} icon={icon}>
@@ -634,16 +744,25 @@ export function RouteMapView({
                   <div className="text-xs p-1 space-y-1.5 min-w-[210px] max-w-[280px]">
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex items-center gap-1.5">
-                        <span className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-700 text-[10px] font-bold text-white shrink-0">
-                          {item.ordem}
+                        <span
+                          className={`flex h-5 w-5 items-center justify-center rounded-full ${
+                            isEntregue ? 'bg-emerald-600' : 'bg-emerald-700'
+                          } text-[10px] font-bold text-white shrink-0`}
+                        >
+                          {isEntregue ? '✓' : item.ordem}
                         </span>
                         <span className="font-bold text-slate-900 leading-tight">{p.nome}</span>
                       </div>
-                      {isProx && (
+                      {isEntregue ? (
+                        <Badge className="bg-emerald-600 hover:bg-emerald-700 text-white text-[9px] py-0 px-1.5">
+                          ✓ Entregue
+                          {entregaInfo?.horaFormatada ? ` ${entregaInfo.horaFormatada}` : ''}
+                        </Badge>
+                      ) : isProx ? (
                         <Badge variant="destructive" className="text-[9px] py-0 px-1">
                           Próxima Parada
                         </Badge>
-                      )}
+                      ) : null}
                     </div>
 
                     <div className="flex flex-wrap gap-1 items-center">
@@ -676,8 +795,8 @@ export function RouteMapView({
               </Marker>
             )
           })}
-          {/* Marcador destacado de CAMINHÃO MANUAL sobre a parada indicada */}
-          {paradaCaminhao && (
+          {/* Marcador destacado de CAMINHÃO (manual ou tempo real da última entrega) */}
+          {paradaCaminhao ? (
             <Marker
               position={[paradaCaminhao.lat, paradaCaminhao.lng]}
               icon={createTruckMarkerIcon(paradaCaminhao.ordem)}
@@ -688,15 +807,17 @@ export function RouteMapView({
                   <div className="flex items-center gap-2">
                     <span className="text-xl">🚚</span>
                     <div>
-                      <div className="font-bold text-amber-800 dark:text-amber-300">
-                        Caminhão de Entrega Aqui Agora
+                      <div className="font-bold text-emerald-800 dark:text-emerald-300">
+                        {isEmRota ? 'Caminhão em Tempo Real' : 'Caminhão de Entrega Aqui Agora'}
                       </div>
                       <div className="text-[11px] text-muted-foreground">
-                        Posição manual na Parada #{paradaCaminhao.ordem}
+                        {isEmRota
+                          ? `Última entrega confirmada: Parada #${paradaCaminhao.ordem}`
+                          : `Posição na Parada #${paradaCaminhao.ordem}`}
                       </div>
                     </div>
                   </div>
-                  <div className="p-1.5 rounded bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800">
+                  <div className="p-1.5 rounded bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800">
                     <p className="font-semibold text-slate-900 dark:text-slate-100">
                       {paradaCaminhao.parada.nome}
                     </p>
@@ -707,12 +828,41 @@ export function RouteMapView({
                     )}
                   </div>
                   <div className="text-[10px] text-muted-foreground">
-                    Marcado manualmente pelo operador da cooperativa.
+                    {isEmRota
+                      ? 'Posição sincronizada automaticamente com o portal do motorista.'
+                      : 'Marcado pelo operador da cooperativa.'}
                   </div>
                 </div>
               </Popup>
             </Marker>
-          )}
+          ) : isEmRota ? (
+            /* Se em rota e nenhuma entrega confirmada ainda, posiciona caminhão no ponto de partida (depósito) */
+            <Marker
+              position={[depositoCoords.latitude, depositoCoords.longitude]}
+              icon={createTruckMarkerIcon(0)}
+              zIndexOffset={1000}
+            >
+              <Popup>
+                <div className="text-xs p-1 space-y-1.5 min-w-[210px] max-w-[280px]">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xl">🚚</span>
+                    <div>
+                      <div className="font-bold text-emerald-800 dark:text-emerald-300">
+                        Caminhão em Rota (Início)
+                      </div>
+                      <div className="text-[11px] text-muted-foreground">
+                        Partindo do {deposito.nome || 'Depósito Central'}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="p-1.5 rounded bg-muted/50 border text-[11px] text-slate-600 dark:text-slate-300">
+                    Nenhuma entrega confirmada ainda nesta rota. O caminhão avançará automaticamente
+                    a cada parada confirmada.
+                  </div>
+                </div>
+              </Popup>
+            </Marker>
+          ) : null}
           {/* ================= DESENHO DE LINHAS: ROTA NÃO DESPACHADA ================= */}
           {!isEmRota && trechoOrigem && (
             <Polyline
@@ -736,25 +886,25 @@ export function RouteMapView({
             />
           )}
           {/* ================= DESENHO DE LINHAS: ROTA EM ROTA ================= */}
-          {/* 1. Trecho Concluído: Depósito Central até a posição do caminhão (verde contínuo) */}
+          {/* 1. Trecho Percorrido: Depósito Central até a última entrega confirmada / caminhão destacada em VERMELHO (#dc2626) */}
           {isEmRota && trechoEmRotaConcluido.length > 1 && (
             <Polyline
               positions={trechoEmRotaConcluido}
               pathOptions={{
-                color: '#059669', // emerald-600
-                weight: 3.5,
-                opacity: 0.75,
+                color: '#dc2626', // vermelho destacado (#dc2626) para o trecho já percorrido
+                weight: 5,
+                opacity: 0.95,
               }}
             />
           )}
-          {/* 2. Trecho em VERMELHO: do caminhão até a próxima parada (OSRM e fallback em linha reta) */}
+          {/* 2. Trecho Ativo / Restante imediato: do caminhão até a próxima parada */}
           {isEmRota && trechoEmRotaAtivoVermelho.length > 1 && (
             <Polyline
               positions={trechoEmRotaAtivoVermelho}
               pathOptions={{
-                color: '#dc2626',
-                weight: 6,
-                opacity: 0.95,
+                color: '#059669', // cor padrão neutra/tema para o trecho restante
+                weight: 4,
+                opacity: 0.85,
                 dashArray: undefined,
               }}
             />
@@ -809,10 +959,10 @@ export function RouteMapView({
               {isCaminhaoNaUltimaParada ? (
                 /* Estado de Retorno: caminhão na última parada */
                 <>
-                  <div className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 font-medium">
-                    <span className="w-5 h-1 bg-emerald-600 inline-block rounded-xs shrink-0"></span>
+                  <div className="flex items-center gap-1.5 text-red-600 dark:text-red-400 font-semibold">
+                    <span className="w-5 h-1.5 bg-red-600 inline-block rounded-xs shrink-0 shadow-xs"></span>
                     <span>
-                      Percurso Concluído
+                      Trecho Percorrido
                       {caminhaoCoordIndex >= 0 ? ` (Depósito → #${caminhaoCoordIndex + 1})` : ''}
                     </span>
                   </div>
@@ -824,18 +974,18 @@ export function RouteMapView({
               ) : (
                 /* Estado normal em rota: antes da última parada */
                 <>
-                  <div className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 font-medium">
-                    <span className="w-5 h-1 bg-emerald-600 inline-block rounded-xs shrink-0"></span>
-                    <span>
-                      Percurso Concluído
-                      {caminhaoCoordIndex >= 0 ? ` (Depósito → #${caminhaoCoordIndex + 1})` : ''}
-                    </span>
-                  </div>
                   <div className="flex items-center gap-1.5 text-red-600 dark:text-red-400 font-semibold">
                     <span className="w-5 h-1.5 bg-red-600 inline-block rounded-xs shrink-0 shadow-xs"></span>
                     <span>
-                      Trecho Ativo em Progresso
-                      {` (${caminhaoCoordIndex >= 0 ? `Caminhão #${caminhaoCoordIndex + 1}` : 'Depósito'} → Próxima #${proximaParada?.ordem ?? proximaParadaCoordIndex + 1})`}
+                      Trecho Percorrido
+                      {caminhaoCoordIndex >= 0 ? ` (Depósito → #${caminhaoCoordIndex + 1})` : ''}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 font-medium">
+                    <span className="w-5 h-1 bg-emerald-600 inline-block rounded-xs shrink-0"></span>
+                    <span>
+                      Trecho Restante
+                      {` (${caminhaoCoordIndex >= 0 ? `Caminhão #${caminhaoCoordIndex + 1}` : 'Depósito'} → #${proximaParada?.ordem ?? proximaParadaCoordIndex + 1})`}
                     </span>
                   </div>
                   <div className="flex items-center gap-1.5 text-muted-foreground">
