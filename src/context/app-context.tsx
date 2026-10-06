@@ -24,6 +24,7 @@ import type {
   ConfiguracoesRecord,
   ChamadaRecord,
   ChamadaItemRecord,
+  EntregaRegistroRecord,
 } from '@/lib/types'
 import { configuracoesService } from '@/services/configuracoes'
 import { chamadasService } from '@/services/chamadas'
@@ -35,6 +36,7 @@ import { atestosService } from '@/services/atestos'
 import { ciclosService } from '@/services/ciclos'
 import { rotasService } from '@/services/rotas'
 import { rotasLogisticasService } from '@/services/rotas-logisticas'
+import { entregaRegistrosService } from '@/services/rota-despachos'
 import { toast } from 'sonner'
 import useRealtime from '@/hooks/use-realtime'
 import { validateOrder } from '@/lib/orderValidation'
@@ -69,6 +71,9 @@ interface AppState {
   rotasLogisticas: RotaLogisticaRecord[]
   paradasRota: ParadaRotaRecord[]
   despachos: DespachoRecord[]
+  entregaRegistros: EntregaRegistroRecord[]
+  ultimoEventoEntrega: string | null
+  getEntregaRegistrosDaRota: (rotaId: string) => EntregaRegistroRecord[]
   config: ConfiguracoesRecord | null
   logoUrl: string
   isLoading: boolean
@@ -190,6 +195,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [rotasLogisticas, setRotasLogisticas] = useState<RotaLogisticaRecord[]>([])
   const [paradasRota, setParadasRota] = useState<ParadaRotaRecord[]>([])
   const [despachos, setDespachos] = useState<DespachoRecord[]>([])
+  const [entregaRegistros, setEntregaRegistros] = useState<EntregaRegistroRecord[]>([])
+  const [ultimoEventoEntrega, setUltimoEventoEntrega] = useState<string | null>(null)
   const [config, setConfig] = useState<ConfiguracoesRecord | null>(null)
   const [logoUrl, setLogoUrl] = useState<string>('')
   const [isLoading, setIsLoading] = useState<boolean>(true)
@@ -532,6 +539,47 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }
       })
       setAtestos(mappedAtestos)
+
+      // Bloco 1: Carga inicial de entrega_registros (rotas em despacho / Em Rota / recentes)
+      try {
+        const rotasEmAndamentoIds = new Set<string>()
+        rawDespachos.forEach((d) => {
+          if (d.status === 'Em Rota' && d.rota_id) {
+            rotasEmAndamentoIds.add(d.rota_id)
+          }
+        })
+        mappedOrders.forEach((p) => {
+          if (p.status === 'Em Rota') {
+            if (p.rotaLogisticaId) rotasEmAndamentoIds.add(p.rotaLogisticaId)
+            if (p.rotaId) rotasEmAndamentoIds.add(p.rotaId)
+          }
+        })
+
+        const rotasParaBuscar =
+          rotasEmAndamentoIds.size > 0 ? Array.from(rotasEmAndamentoIds) : rawRotas.map((r) => r.id)
+
+        if (rotasParaBuscar.length > 0) {
+          const resultados = await Promise.all(
+            rotasParaBuscar.map((rId) => entregaRegistrosService.getByRota(rId).catch(() => [])),
+          )
+          const todos = resultados.flat()
+          const map = new Map<string, EntregaRegistroRecord>()
+          todos.forEach((r) => {
+            if (r.client_uid && map.has(`uid_${r.client_uid}`)) {
+              map.delete(`uid_${r.client_uid}`)
+            }
+            map.set(r.id, r)
+          })
+          const ordenados = Array.from(map.values()).sort((a, b) => {
+            const tA = new Date(a.confirmado_em || a.chegada_em || a.created || 0).getTime()
+            const tB = new Date(b.confirmado_em || b.chegada_em || b.created || 0).getTime()
+            return tB - tA
+          })
+          setEntregaRegistros(ordenados)
+        }
+      } catch (e) {
+        console.warn('Erro ao carregar registros iniciais de entrega em loadAllData:', e)
+      }
     } catch (err: any) {
       console.error('Erro ao carregar dados do PocketBase:', err)
       setError('Erro ao carregar dados do banco de dados.')
@@ -541,9 +589,103 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
+  // Carrega e atualiza registros de entrega das rotas em andamento/recentes
+  const carregarEntregaRegistros = useCallback(
+    async (
+      rotasParam?: RotaRecord[],
+      despachosParam?: DespachoRecord[],
+      pedidosParam?: Order[],
+    ) => {
+      try {
+        const targetRotas = rotasParam || rotas
+        const targetDespachos = despachosParam || despachos
+        const targetPedidos = pedidosParam || orders
+
+        if (!targetRotas || targetRotas.length === 0) return
+
+        // Identificar IDs de rotas em andamento ('Em Rota') ou com despachos recentes
+        const rotasEmAndamentoIds = new Set<string>()
+
+        // 1. Despachos com status 'Em Rota'
+        targetDespachos.forEach((d) => {
+          if (d.status === 'Em Rota' && d.rota_id) {
+            rotasEmAndamentoIds.add(d.rota_id)
+          }
+        })
+
+        // 2. Pedidos com status 'Em Rota'
+        targetPedidos.forEach((p) => {
+          if (p.status === 'Em Rota') {
+            if (p.rotaLogisticaId) rotasEmAndamentoIds.add(p.rotaLogisticaId)
+            if (p.rotaId) rotasEmAndamentoIds.add(p.rotaId)
+          }
+        })
+
+        // Se houver rotas em andamento, busca prioritariamente os registros delas;
+        // caso contrário busca das rotas existentes para o estado inicial não nascer vazio
+        const rotasParaBuscar =
+          rotasEmAndamentoIds.size > 0
+            ? Array.from(rotasEmAndamentoIds)
+            : targetRotas.map((r) => r.id)
+
+        const resultados = await Promise.all(
+          rotasParaBuscar.map((rId) => entregaRegistrosService.getByRota(rId).catch(() => [])),
+        )
+
+        const todosRegistros = resultados.flat()
+
+        setEntregaRegistros((prev) => {
+          const map = new Map<string, EntregaRegistroRecord>()
+          // Manter registros prévios do estado
+          prev.forEach((r) => {
+            if (r.id) map.set(r.id, r)
+            if (r.client_uid) map.set(`uid_${r.client_uid}`, r)
+          })
+
+          // Inserir / substituir pelos novos buscados
+          todosRegistros.forEach((r) => {
+            if (r.client_uid && map.has(`uid_${r.client_uid}`)) {
+              map.delete(`uid_${r.client_uid}`)
+            }
+            map.set(r.id, r)
+          })
+
+          const deduped = Array.from(map.values())
+          return deduped.sort((a, b) => {
+            const tA = new Date(a.confirmado_em || a.chegada_em || a.created || 0).getTime()
+            const tB = new Date(b.confirmado_em || b.chegada_em || b.created || 0).getTime()
+            return tB - tA
+          })
+        })
+      } catch (err) {
+        console.warn('Erro ao carregar registros de entrega iniciais:', err)
+      }
+    },
+    [rotas, despachos, orders],
+  )
+
   useEffect(() => {
     loadAllData()
   }, [loadAllData])
+
+  // Reconexão e foco da janela: revalidar registros das rotas em andamento
+  useEffect(() => {
+    const handleRevalidate = () => {
+      carregarEntregaRegistros()
+    }
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('focus', handleRevalidate)
+      window.addEventListener('online', handleRevalidate)
+    }
+
+    return () => {
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('focus', handleRevalidate)
+        window.removeEventListener('online', handleRevalidate)
+      }
+    }
+  }, [carregarEntregaRegistros])
 
   // Realtime granular subscriptions
   useRealtime<any>('pedidos', (e) => {
@@ -1089,6 +1231,37 @@ export function AppProvider({ children }: { children: ReactNode }) {
       })
     } catch (err) {
       console.error('Erro na sincronização realtime de contrato_escolas:', err)
+    }
+  })
+
+  // Realtime para entrega_registros (confirmações/fotos/assinaturas de entrega do motorista)
+  useRealtime<any>('entrega_registros', (e) => {
+    setUltimoEventoEntrega(new Date().toISOString())
+    if (e.action === 'delete') {
+      setEntregaRegistros((prev) => prev.filter((r) => r.id !== e.record.id))
+    } else if (e.action === 'create' || e.action === 'update') {
+      const rec = e.record as EntregaRegistroRecord
+      setEntregaRegistros((prev) => {
+        // Substituir por id ou client_uid correspondente
+        const existingIdx = prev.findIndex(
+          (item) => item.id === rec.id || (rec.client_uid && item.client_uid === rec.client_uid),
+        )
+        let updated: EntregaRegistroRecord[]
+        if (existingIdx !== -1) {
+          const copy = [...prev]
+          copy[existingIdx] = { ...copy[existingIdx], ...rec }
+          updated = copy
+        } else {
+          updated = [rec, ...prev]
+        }
+
+        // Manter ordenado por confirmado_em / chegada_em / created descrescente
+        return updated.sort((a, b) => {
+          const tA = new Date(a.confirmado_em || a.chegada_em || a.created || 0).getTime()
+          const tB = new Date(b.confirmado_em || b.chegada_em || b.created || 0).getTime()
+          return tB - tA
+        })
+      })
     }
   })
 
@@ -3008,6 +3181,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }
 
+  const getEntregaRegistrosDaRota = useCallback(
+    (rotaId: string): EntregaRegistroRecord[] => {
+      if (!rotaId) return []
+      return entregaRegistros.filter((r) => r.rota_id === rotaId)
+    },
+    [entregaRegistros],
+  )
+
   return (
     <AppContext.Provider
       value={{
@@ -3026,6 +3207,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         rotasLogisticas,
         paradasRota,
         despachos,
+        entregaRegistros,
+        ultimoEventoEntrega,
+        getEntregaRegistrosDaRota,
         config,
         logoUrl,
         isLoading,
