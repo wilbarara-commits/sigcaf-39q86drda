@@ -117,6 +117,26 @@ describe('Motorista - Fila Offline e Sincronização', () => {
     expect(fila[1].client_uid).toBe('uid_2')
   })
 
+  it('preserva responsavel_nome e responsavel_cpf no item enfileirado offline', () => {
+    enfileirarEntrega(
+      tokenTeste,
+      {
+        client_uid: 'uid_resp_1',
+        rota_id: 'rota_a',
+        escola_id: 'esc_1',
+        responsavel_nome: 'Maria da Silva',
+        responsavel_cpf: '529.982.247-25',
+        confirmado_em: '2026-04-10T10:00:00Z',
+      },
+      storage,
+    )
+
+    const fila = lerFilaLocal(tokenTeste, storage)
+    expect(fila).toHaveLength(1)
+    expect(fila[0].responsavel_nome).toBe('Maria da Silva')
+    expect(fila[0].responsavel_cpf).toBe('529.982.247-25')
+  })
+
   it('é idempotente ao reenfileirar a mesma escola/uid (atualiza em vez de duplicar)', () => {
     enfileirarEntrega(
       tokenTeste,

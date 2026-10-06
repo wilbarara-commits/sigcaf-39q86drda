@@ -22,6 +22,7 @@ import {
   Calendar,
   X,
   FileBadge,
+  UserCheck,
 } from 'lucide-react'
 
 export interface DeliveryDetailsData {
@@ -197,11 +198,11 @@ export function DeliveryDetailsDialog({ open, onOpenChange, data }: DeliveryDeta
               </div>
             </div>
 
-            {/* Bloco 3: Motorista que registrou */}
+            {/* Bloco 3: Motorista que transportou/entregou */}
             <div className="p-2.5 bg-slate-50 dark:bg-slate-900/60 border rounded-lg flex items-center justify-between gap-2">
               <div className="flex items-center gap-2">
                 <User className="h-4 w-4 text-primary shrink-0" />
-                <span className="text-muted-foreground">Motorista responsável:</span>
+                <span className="text-muted-foreground">Motorista:</span>
               </div>
               <span className="font-semibold text-foreground">
                 {nomeMotoristaEfetivo || (
@@ -209,6 +210,27 @@ export function DeliveryDetailsDialog({ open, onOpenChange, data }: DeliveryDeta
                 )}
               </span>
             </div>
+
+            {/* Bloco 3.1: Responsável pelo recebimento na escola (quando informado) */}
+            {(registro?.responsavel_nome || registro?.responsavel_cpf) && (
+              <div className="p-2.5 bg-slate-50 dark:bg-slate-900/60 border rounded-lg space-y-1">
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  <UserCheck className="h-4 w-4 text-emerald-600 shrink-0" />
+                  <span className="font-medium text-[11px]">Recebido por:</span>
+                </div>
+                <div className="pl-6 text-foreground font-semibold text-xs flex items-center gap-2 flex-wrap">
+                  {registro.responsavel_nome && <span>{registro.responsavel_nome}</span>}
+                  {registro.responsavel_nome && registro.responsavel_cpf && (
+                    <span className="text-muted-foreground font-normal">—</span>
+                  )}
+                  {registro.responsavel_cpf && (
+                    <span className="font-mono text-[11px] text-muted-foreground bg-muted/60 px-1.5 py-0.5 rounded border">
+                      CPF: {registro.responsavel_cpf}
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
 
             {/* Bloco 4: Assinatura do Responsável */}
             <div className="space-y-1.5">

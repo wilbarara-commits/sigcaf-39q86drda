@@ -47,8 +47,10 @@ import {
   Image as ImageIcon,
   Trash2,
   Navigation,
+  UserCheck,
 } from 'lucide-react'
 import { toast } from '@/hooks/use-toast'
+import { formatarCPF, validarDigitosCPF, limparCPF } from '@/lib/cpfUtils'
 import { MotoristaTrechoMapa } from '@/components/MotoristaTrechoMapa'
 import { compressImage } from '@/lib/imageCompressor'
 import {
@@ -89,6 +91,9 @@ export const MotoristaPortal: React.FC = () => {
   // Modal de registro de entrega por parada
   const [selectedParada, setSelectedParada] = useState<MotoristaPortalParada | null>(null)
   const [chegadaEm, setChegadaEm] = useState<string>('')
+  const [responsavelNome, setResponsavelNome] = useState<string>('')
+  const [responsavelCpf, setResponsavelCpf] = useState<string>('')
+  const [cpfError, setCpfError] = useState<string | null>(null)
   const [assinaturaDataUrl, setAssinaturaDataUrl] = useState<string | undefined>(undefined)
   const [fotoDataUrl, setFotoDataUrl] = useState<string | undefined>(undefined)
   const [isProcessingFoto, setIsProcessingFoto] = useState(false)
@@ -212,6 +217,8 @@ export const MotoristaPortal: React.FC = () => {
           escola_id: item.escola_id,
           motorista_id: item.motorista_id,
           despacho_id: item.despacho_id,
+          responsavel_nome: item.responsavel_nome,
+          responsavel_cpf: item.responsavel_cpf,
           chegada_em: item.chegada_em,
           confirmado_em: item.confirmado_em,
           assinatura: item.assinatura,
@@ -259,9 +266,32 @@ export const MotoristaPortal: React.FC = () => {
     // Horário de chegada gravado automaticamente no momento da abertura do formulário
     const nowIso = new Date().toISOString()
     setChegadaEm(parada.registro?.chegada_em || nowIso)
+    setResponsavelNome(parada.registro?.responsavel_nome || '')
+    setResponsavelCpf(
+      parada.registro?.responsavel_cpf ? formatarCPF(parada.registro.responsavel_cpf) : '',
+    )
+    setCpfError(null)
     setAssinaturaDataUrl(parada.registro?.assinatura || undefined)
     setFotoDataUrl(parada.registro?.foto || undefined)
     setObservacao(parada.registro?.observacao || '')
+  }
+
+  // Manipular digitação de CPF com máscara e limpeza de erro
+  const handleCpfChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const formatado = formatarCPF(e.target.value)
+    setResponsavelCpf(formatado)
+    if (cpfError) {
+      setCpfError(null)
+    }
+  }
+
+  const handleCpfBlur = () => {
+    const digitos = limparCPF(responsavelCpf)
+    if (digitos.length > 0 && !validarDigitosCPF(digitos)) {
+      setCpfError('CPF inválido')
+    } else {
+      setCpfError(null)
+    }
   }
 
   // Manipular captura/anexo de foto do material entregue
@@ -299,9 +329,24 @@ export const MotoristaPortal: React.FC = () => {
   // Confirmar registro de entrega: grava AUTOMATICAMENTE horário de confirmação
   const handleConfirmEntrega = async () => {
     if (!selectedParada || !data) return
+
+    // Validação de CPF do Responsável (se preenchido, deve ser válido)
+    const cpfDigitos = limparCPF(responsavelCpf)
+    if (cpfDigitos.length > 0 && !validarDigitosCPF(cpfDigitos)) {
+      setCpfError('CPF inválido')
+      toast({
+        variant: 'destructive',
+        title: 'CPF inválido',
+        description: 'Verifique o CPF do responsável pelo recebimento antes de confirmar.',
+      })
+      return
+    }
+
     setIsSavingEntrega(true)
     const nowIso = new Date().toISOString()
     const clientUid = `cli_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`
+    const nomeResponsavelSalvar = responsavelNome.trim() || undefined
+    const cpfResponsavelSalvar = cpfDigitos.length === 11 ? formatarCPF(cpfDigitos) : undefined
 
     const registroItem = {
       client_uid: clientUid,
@@ -309,6 +354,8 @@ export const MotoristaPortal: React.FC = () => {
       escola_id: selectedParada.escola_id,
       motorista_id: data.despacho.motorista_id,
       despacho_id: data.despacho.id,
+      responsavel_nome: nomeResponsavelSalvar,
+      responsavel_cpf: cpfResponsavelSalvar,
       chegada_em: chegadaEm || nowIso,
       confirmado_em: nowIso,
       assinatura: assinaturaDataUrl,
@@ -338,6 +385,8 @@ export const MotoristaPortal: React.FC = () => {
                     escola_id: selectedParada.escola_id,
                     motorista_id: data.despacho.motorista_id,
                     despacho_id: data.despacho.id,
+                    responsavel_nome: nomeResponsavelSalvar,
+                    responsavel_cpf: cpfResponsavelSalvar,
                     chegada_em: chegadaEm || nowIso,
                     confirmado_em: nowIso,
                     assinatura: assinaturaDataUrl,
@@ -359,6 +408,8 @@ export const MotoristaPortal: React.FC = () => {
             escola_id: selectedParada.escola_id,
             motorista_id: data.despacho.motorista_id,
             despacho_id: data.despacho.id,
+            responsavel_nome: nomeResponsavelSalvar,
+            responsavel_cpf: cpfResponsavelSalvar,
             chegada_em: chegadaEm || nowIso,
             confirmado_em: nowIso,
             assinatura: assinaturaDataUrl,
@@ -957,10 +1008,62 @@ export const MotoristaPortal: React.FC = () => {
               </div>
             </div>
 
+            {/* Dados de Quem Recebeu (Responsável) */}
+            <div className="space-y-3 pt-1 border-t">
+              <div className="flex items-center gap-1.5 text-xs font-bold text-foreground">
+                <UserCheck className="h-4 w-4 text-primary" />
+                <span>Responsável pelo Recebimento</span>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="resp-nome" className="text-xs font-medium text-foreground">
+                  Nome do Responsável
+                </Label>
+                <Input
+                  id="resp-nome"
+                  type="text"
+                  placeholder="Nome de quem recebeu na escola"
+                  value={responsavelNome}
+                  onChange={(e) => setResponsavelNome(e.target.value)}
+                  disabled={isSavingEntrega}
+                  className="h-9 text-xs"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="resp-cpf" className="text-xs font-medium text-foreground">
+                    CPF do Responsável{' '}
+                    <span className="text-muted-foreground font-normal">(opcional)</span>
+                  </Label>
+                  {responsavelCpf && !cpfError && limparCPF(responsavelCpf).length === 11 && (
+                    <span className="text-[10px] text-emerald-600 font-medium">CPF válido</span>
+                  )}
+                </div>
+                <Input
+                  id="resp-cpf"
+                  type="text"
+                  inputMode="numeric"
+                  placeholder="000.000.000-00"
+                  value={responsavelCpf}
+                  onChange={handleCpfChange}
+                  onBlur={handleCpfBlur}
+                  disabled={isSavingEntrega}
+                  maxLength={14}
+                  className={`h-9 text-xs font-mono ${
+                    cpfError ? 'border-destructive focus-visible:ring-destructive' : ''
+                  }`}
+                />
+                {cpfError && (
+                  <p className="text-[11px] text-destructive font-medium mt-0.5">{cpfError}</p>
+                )}
+              </div>
+            </div>
+
             {/* Assinatura em Canvas Touch */}
-            <div className="space-y-1.5">
+            <div className="space-y-1.5 pt-1 border-t">
               <Label className="text-xs font-bold text-foreground">
-                Assinatura do Recebedor na Escola <span className="text-destructive">*</span>
+                Assinatura do Responsável na Escola <span className="text-destructive">*</span>
               </Label>
               <SignaturePad
                 value={assinaturaDataUrl}

@@ -6,6 +6,8 @@ export interface FilaEntregaItem {
   escola_id: string
   motorista_id?: string
   despacho_id?: string
+  responsavel_nome?: string
+  responsavel_cpf?: string
   chegada_em?: string
   confirmado_em: string
   assinatura?: string

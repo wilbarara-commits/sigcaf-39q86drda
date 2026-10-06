@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-06T06:36:53.706Z",
+  "generatedAt": "2026-10-06T07:12:33.889Z",
   "collections": [
     {
       "name": "users",
@@ -1729,6 +1729,18 @@
         {
           "name": "foto_file",
           "type": "file",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "responsavel_nome",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "responsavel_cpf",
+          "type": "text",
           "required": false,
           "system": false
         }
