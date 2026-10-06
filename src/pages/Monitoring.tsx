@@ -44,6 +44,8 @@ import {
 } from '@/lib/cicloUtils'
 import { AbrirCicloDialog } from '@/components/AbrirCicloDialog'
 import { CancelarCicloDialog } from '@/components/CancelarCicloDialog'
+import { MonitoringDeliveryAlerts } from '@/components/MonitoringDeliveryAlerts'
+import { DeliveryDetailsDialog, type DeliveryDetailsData } from '@/components/DeliveryDetailsDialog'
 import { safeOpenWhatsApp } from '@/lib/whatsapp'
 import pb from '@/lib/pocketbase/client'
 import type { CicloRecord, EnvioWhatsappRecord } from '@/lib/types'
@@ -82,6 +84,16 @@ export default function Monitoring() {
   const [abrirCicloOpen, setAbrirCicloOpen] = useState(false)
   const [cancelarCicloInteiroOpen, setCancelarCicloInteiroOpen] = useState(false)
   const [enviosWhatsapp, setEnviosWhatsapp] = useState<EnvioWhatsappRecord[]>([])
+
+  // Modal "Dados da Entrega" compartilhado para alertas da fase de entrega
+  const [deliveryDetailsOpen, setDeliveryDetailsOpen] = useState(false)
+  const [selectedDeliveryDetails, setSelectedDeliveryDetails] =
+    useState<DeliveryDetailsData | null>(null)
+
+  const handleOpenDeliveryDetails = (data: DeliveryDetailsData) => {
+    setSelectedDeliveryDetails(data)
+    setDeliveryDetailsOpen(true)
+  }
 
   // Atualizar seleção padrão quando o ativo mudar, query params ou na carga inicial
   useEffect(() => {
@@ -867,6 +879,12 @@ export default function Monitoring() {
         </Card>
       </div>
 
+      {/* Bloco B: Alertas da Fase de Entrega em Tempo Real (visível quando há rotas em andamento no ciclo) */}
+      <MonitoringDeliveryAlerts
+        ciclo={selectedCiclo}
+        onOpenDeliveryDetails={handleOpenDeliveryDetails}
+      />
+
       {/* Painel de Alertas de Escolas com Pendências do Ciclo Selecionado */}
       <Card>
         <CardHeader>
@@ -1007,6 +1025,13 @@ export default function Monitoring() {
         ciclo={selectedCiclo}
         open={cancelarCicloInteiroOpen}
         onOpenChange={setCancelarCicloInteiroOpen}
+      />
+
+      {/* MODAL COMPARTILHADO: Dados da Entrega (reaproveitado de DeliveryDetailsDialog) */}
+      <DeliveryDetailsDialog
+        open={deliveryDetailsOpen}
+        onOpenChange={setDeliveryDetailsOpen}
+        data={selectedDeliveryDetails}
       />
     </div>
   )

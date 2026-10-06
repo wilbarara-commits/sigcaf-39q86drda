@@ -238,6 +238,7 @@ const MODULES: ModuleSpec[] = [
       'Trava "Em Rota" na Fase 3 (v0.0.195): No cartão da Fase 3 (Coleta Encerrada), o botão "Colocar em Rota" detecta automaticamente se o ciclo monitorado já possui despacho ativo em andamento (status "Em Rota" em despachos por ciclo_id ou chamada_id, ou pedidos do ciclo com status "Em Rota"). Nesse caso, o botão fica desabilitado com o rótulo "Em Rota", estilo atenuado e title explicativo ("Ciclo já possui despacho ativo em andamento (Em Rota)"), impedindo múltiplos despachos concorrentes.',
       'Navegação Contextual Dashboard → Monitoramento (v0.0.195): Os links do Dashboard (card de ciclo ativo e atalho "Ver Ciclo" das chamadas públicas ativas) navegam com parâmetros de URL contextuais `?cicloId=&chamadaId=`. A tela /monitoramento consome searchParams e pré-seleciona imediatamente o ciclo e chamada correspondentes em todas as seções (cabeçalho, painel informativo, fases, funil e alertas de escolas).',
       'Ciclo Operacional Corrente (v0.0.198): O ciclo em foco na operação diária é gerenciado globalmente via `AppContext` e sincronizado no `localStorage` (chave "sigcaf_ciclo_corrente"). Ao clicar na seta "Monitorar" nos cards de ciclo ativo do Dashboard ou na ação de monitoramento, o ciclo corrente é registrado. As telas de Monitoramento, Novo Pedido e Rotas de Entrega seguem a ordem de precedência: (1) query params de URL (?cicloId=&chamadaId=), (2) ciclo corrente gravado se existir no banco de dados, (3) fallback padrão atual. A troca pontual de ciclo no seletor de consulta dentro da tela NÃO altera o ciclo corrente (consulta local isolada). A página Histórico de Ciclos não é afetada por essa regra.',
+      'Alertas da Fase de Entrega em Monitoramento — Bloco B (v0.0.204): Seção dinâmica no painel de monitoramento visível quando o ciclo monitorado possui rotas despachadas com status "Em Rota" (ou equivalente em andamento). Incorpora três alertas operacionais em tempo real: (1) "Rota parada": motorista sem sincronizar há mais de 30 minutos (limite exato definido pela cooperativa, baseado na hora da última entrega confirmada da rota deduplicada ou no horário do despacho caso nenhuma entrega tenha ocorrido ainda; atualização reativa via realtime + timer a cada 30 segundos); (2) "Paradas pendentes": escolas da rota ainda não entregues com contagem "faltam X de N" e identificação estrita pelo ID do banco (nunca casando por nome); (3) "Entrega sem assinatura": lista de escolas cuja entrega foi confirmada sem assinatura do responsável, com clique direto para o modal "Dados da Entrega" compartilhado; (4) Aviso sonoro melódico curto via Web Audio API disparado na central a cada nova entrega confirmada recebida via realtime (sem dependências externas, bloqueado na carga inicial, protegido contra repetições por client_uid/ID e com toggle de MUTE persistido no localStorage).',
       'Painel de Alertas das Escolas: Identificação imediata e distinção operacional entre escolas que "Já receberam o link do formulário" (disparo registrado no envios_whatsapp) e escolas que "Já preencheram" (pedido com origem=formulario no ciclo) versus escolas sem nenhum pedido, facilitando cobrar diretamente quem falta via WhatsApp.',
     ],
   },
@@ -960,6 +961,75 @@ export function Requirements() {
                 </li>
                 <li>
                   • <code>/historico-ciclos</code>: preservado integralmente sem alteração
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        {/* Bloco B — Alertas da Fase de Entrega em Monitoramento (v0.0.204) */}
+        <div className="rounded-lg border border-border bg-card p-5 space-y-4">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="text-primary border-primary/30">
+                Release v0.0.204
+              </Badge>
+              <span className="font-semibold text-foreground">
+                Bloco B — Alertas da Fase de Entrega em Monitoramento & Aviso Sonoro Realtime
+              </span>
+            </div>
+            <span className="text-xs text-muted-foreground">Executado (v0.0.204)</span>
+          </div>
+          <p className="text-sm text-foreground/90 leading-relaxed">
+            Implementação completa do Bloco B do plano de melhorias em <code>/monitoramento</code>:
+            seção de alertas em tempo real ativada quando o ciclo monitorado possui rotas
+            despachadas com status &quot;Em Rota&quot;. Fornece detecção imediata de atrasos
+            operacionais no campo, visibilidade ordenada das paradas restantes e conformidade de
+            assinaturas escolares, além de retorno sonoro para a central.
+          </p>
+          <div className="grid sm:grid-cols-2 gap-4 text-sm">
+            <div className="rounded-md border border-border/60 bg-muted/20 p-3 space-y-1.5">
+              <span className="font-medium text-amber-600 dark:text-amber-400">
+                Alertas Operacionais de Entrega:
+              </span>
+              <ul className="space-y-1 text-xs text-muted-foreground">
+                <li>
+                  • <strong>Rota parada (30 min):</strong> alerta crítico acionado quando o
+                  motorista está sem sincronizar há mais de 30 minutos (base: última entrega
+                  confirmada deduplicada ou horário de despacho)
+                </li>
+                <li>
+                  • <strong>Paradas pendentes:</strong> relação ordenada de escolas a entregar com
+                  contador &quot;faltam X de N&quot; (casamento estrito por ID do banco)
+                </li>
+                <li>
+                  • <strong>Entrega sem assinatura:</strong> detecção de entregas confirmadas sem
+                  assinatura, com clique abrindo o modal compartilhado &quot;Dados da Entrega&quot;
+                </li>
+                <li>
+                  • Atualização automática reativa via eventos SSE da coleção{' '}
+                  <code>entrega_registros</code> e recálculo de tempos a cada 30 segundos
+                </li>
+              </ul>
+            </div>
+            <div className="rounded-md border border-primary/30 bg-primary/5 p-3 space-y-1.5">
+              <span className="font-medium text-primary">Aviso Sonoro & Integração Central:</span>
+              <ul className="space-y-1 text-xs text-foreground/80">
+                <li>
+                  • <strong>Aviso sonoro realtime:</strong> Web Audio API sintetiza bip duplo suave
+                  a cada nova entrega confirmada recebida na central
+                </li>
+                <li>
+                  • <strong>Botão de MUTE integrado:</strong> alternador sonoro visível na seção com
+                  estado persistido no <code>localStorage</code>
+                </li>
+                <li>
+                  • <strong>Proteção contra falso alarme:</strong> não toca na carga inicial e
+                  ignora duplicatas pelo identificador do registro / client_uid
+                </li>
+                <li>
+                  • Coexistência perfeita com os alertas de coleta existentes (sem polling
+                  redundante no banco)
                 </li>
               </ul>
             </div>
