@@ -22,11 +22,12 @@ interface ModuleSpec {
 const MODULES: ModuleSpec[] = [
   {
     id: '3.1',
-    title: 'Dashboard',
+    title: 'Dashboard & Acompanhamento Executivo',
     route: '/ (Página Inicial)',
-    goal: 'Fornecer uma visão executiva dos contratos e do ciclo de entregas.',
+    goal: 'Fornecer uma visão executiva dos contratos, do ciclo operacional e do acompanhamento das entregas em tempo real.',
     details: [
       'Métricas em cards: Pedidos Pendentes, Contratos Ativos, Entregas Hoje e Receita Entregue do Mês com % de realização.',
+      'Widget "Entregas em Andamento": Acompanhamento em tempo real (alimentado por realtime/eventos no banco) das rotas em execução. Exibe identificação completa da rota (nome da rota, chamada associada, ciclo operacional, motorista responsável e crachá "Em Rota"), barra de progresso visual "X de N entregas" com percentual concluído, indicador da última sincronização em tempo relativo amigável ("há 2 min"), indicação da próxima parada a atender (primeira escola sem entrega confirmada) ou "Rota concluída" quando todas as paradas forem finalizadas. Possui estado vazio informativo quando não há rotas em trânsito e atalho de clique direto para a tela de Rotas (/rotas).',
       'Cartão informativo de ciclo: "Ciclo ativo: XX/AAAA — Fase: ..." e aviso destacado de "N ciclo(s) pendente(s) de fechamento" quando houver ciclos não-terminais anteriores em aberto.',
       'Lista de Entregas Recentes com badges de status e feed de atividade recente.',
       'Ações rápidas: "Novo Pedido", "Emitir Atesto" e fechamento mensal com geração de relatório.',
@@ -121,7 +122,7 @@ const MODULES: ModuleSpec[] = [
     details: [
       'Novo Fluxo de Criação Orientado a Ciclo (v0.0.143): O modal "Lançar Pedido" (/pedidos) é conduzido pelo Ciclo Operacional (selectedCicloId). Lista exclusivamente ciclos com status "coletando" ou "correcao" com rótulo "Ciclo {numero}/{ano} [{chamada}] — {fase}". Na ausência de ciclo aberto em coleta ou correção, exibe Alert âmbar explicativo orientando a abertura em Monitoramento e desabilita escola, itens e submissão.',
       'Chamada Pública Soberana & Badge Contextual (v0.0.143): A Chamada Pública é derivada diretamente do ciclo selecionado (ciclo.chamada_id), exibida em badge destacado no cabeçalho ("Chamada {numero} • {dependencia}"). O seletor manual de contrato foi completamente removido do diálogo.',
-      'Escolas Participantes da Chamada (v0.0.143): O seletor de escola apresenta a união desduplicada por ID das escolas vinculadas aos contratos ativos (status="Ativo") da chamada do ciclo selecionado, exibindo Nome, Código INEP (se houver) e Rota Logística associada.',
+      'Seleção Manual de Escola por ID Cadastral (sem casamento por nome): O seletor de escola apresenta a união desduplicada por ID das escolas vinculadas aos contratos ativos (status="Ativo") da chamada do ciclo selecionado, exibindo Nome, Código INEP (se houver) e Rota Logística associada. Regra fundamental do sistema: a escola é SEMPRE selecionada manualmente pelo operador na lista oficial por seu ID único no banco — nunca é feito casamento/pré-seleção automática por nome, pois existem instituições homônimas na rede (ex.: Centros de Educação e Colégios Municipais distintos com mesmo patrono). Em textos e comprovantes colados, o nome da escola porventura detectado tem caráter puramente informativo.',
       'Funcionalidade "Colar Produtos" em Lote (v0.0.143 / v0.0.153): Botão dedicado "Colar Produtos" no diálogo "Novo Pedido" que abre modal de colagem direta de texto contendo produto e quantidade ou comprovante de pedido gerado. A ação tem propósito estrito de adicionar/popular produtos na lista de itens do pedido em criação (com fusão somada de itens repetidos, preservando o diálogo aberto e sem submissão precoce). A gravação é exclusiva do botão "Salvar Pedido". O botão Salvar Pedido conta com validação ativa e mensagens orientadoras (ciclo, escola, itens > 0).',
       'Itens da Chamada & Múltiplos de 0,5 (v0.0.143): Os itens e preços unitários são herdados com soberania da Chamada Pública (chamada_itens). As quantidades aceitam múltiplos de 0,5 (step 0.5, ex.: 0,5 / 1,0 / 1,5), com subtotais e valor total recalculados em tempo real na interface.',
       'Gravação Automática com Derivação de Contrato e Rota (v0.0.143): No salvamento, o sistema vincula o pedido diretamente ao ciclo selecionado (ciclo_id) e deriva automaticamente a rota da escola escolhida nos contratos ativos da chamada em segundo plano.',
@@ -166,27 +167,52 @@ const MODULES: ModuleSpec[] = [
   },
   {
     id: '3.8',
-    title: 'Roteamento & Despacho Logístico no Nível da Chamada',
+    title: 'Roteamento, Despacho Logístico & Gestão de Motoristas',
     route: '/rotas',
-    goal: 'Rotas criadas no nível da Chamada, agrupando escolas de todos os contratos vinculados em uma mesma rota integrada, sequenciamento drag-and-drop de paradas, otimização geográfica partindo do Depósito Central e despacho por rota inteira.',
+    goal: 'Rotas criadas no nível da Chamada integrando escolas de múltiplos contratos, sequenciamento de paradas, otimização geográfica partindo do Depósito Central, cadastro de motoristas, despacho operacional e acompanhamento de entregas em tempo real.',
     details: [
-      'Consistência de Métricas e Remoção de Contrato Ref no Card (0.0.97): remoção definitiva do rótulo "Contrato ref" do cabeçalho dos cards de rota (a rota pertence à Chamada e reúne escolas de múltiplos contratos, com badge individual por parada). Unificação do cálculo de Volume Total e Valor Total para computar exclusivamente pedidos ativos/em trânsito (Pendente e Em Rota), eliminando contradição entre "Pedidos Ativos: 0" e contagem legada de itens cancelados.',
+      'Cadastro Centralizado de Motoristas da Cooperativa: Botão "Motoristas" na barra superior de /rotas e atalho "Gerenciar Motoristas" dentro do diálogo modal de despacho. Cadastro único para toda a cooperativa mantendo nome completo, telefone para contato e status ativo/inativo. O motorista é vinculado dinamicamente à rota no momento da confirmação do despacho (coleção rota_despachos), permitindo reutilização flexível entre ciclos e rotas.',
+      'Fluxo de Despacho em Dois Estágios no Cartão da Rota: Gestão visual e transacional clara no cartão de cada rota em /rotas:',
+      '• Estágio 1 (Antes do Despacho): Exibe badge visual "Aguardando Despacho" e botão principal "Despachar Rota". O acionamento abre o modal de despacho com seleção do motorista responsável, conferência de paradas e cálculo de métricas. Travas estritas de integridade: o despacho só é liberado após o encerramento da coleta da chamada (status coleta_encerrada), exigindo obrigatoriamente que a rota possua pedidos ativos e que tenha paradas sequenciadas e gravadas pelo roteamento.',
+      '• Estágio 2 (Após Despacho Confirmado): O botão "Despachar Rota" desaparece e é substituído pelo badge laranja destacado "Em Rota". Fica disponível o botão "Reenviar Link Motorista" (que gera/renova o token seguro de acesso e monta mensagem pronta com link para cópia e envio manual no WhatsApp pelo operador — o sistema não faz disparo automático de WhatsApp) e o botão "Rota Entregue" torna-se habilitado para conclusão formal da rota.',
+      'Acompanhamento das Entregas em Tempo Real na Central: Sem necessidade de recarregamento manual da página nem polling ineficiente. A interface é alimentada reativamente pelas assinaturas em tempo real do banco de dados (coleção `entrega_registros`):',
+      '• Caminhão Avançando Entrega a Entrega no Mapa: Conforme o motorista registra as entregas no Portal, o marcador de caminhão 🚚 avança automaticamente para a última parada confirmada (posicionado no Depósito Central antes da primeira entrega e consolidado na última parada ao concluir).',
+      '• Destaque Visual do Trecho e Etiqueta de Confirmação: O trecho já percorrido entre as paradas confirmadas é destacado com traçado em vermelho proeminente pelas rodovias, e cada parada finalizada exibe etiqueta destacada "✓ Entregue HH:mm" com a hora real em que a entrega foi confirmada no local.',
+      '• Modal Somente Leitura "Dados da Entrega": Ao clicar sobre a etiqueta da entrega no mapa ou sobre a parada na lista de paradas da rota, abre-se o modal detalhado de auditoria contendo: horários reais de chegada e confirmação, assinatura digital em canvas perfeitamente legível, foto do material entregue com visualizador em tela cheia (zoom/preview expandido), observações registradas pelo motorista, identificação do motorista responsável e número do contrato do vínculo.',
+      'Consistência de Métricas e Remoção de Contrato Ref no Card (0.0.97): Unificação do cálculo de Volume Total e Valor Total para computar exclusivamente pedidos ativos/em trânsito (Pendente e Em Rota), eliminando contradição entre "Pedidos Ativos: 0" e contagem legada de itens cancelados.',
       'Rotas no Nível da Chamada: A coleção `rotas` opera primariamente associada a `chamada_id` (com `contrato_id` preservado para legado). Em uma rota, a cooperativa pode agrupar escolas de diferentes contratos vinculados à mesma chamada pública.',
       'Catálogo Unificado de Escolas da Chamada: Na montagem do roteamento, o sistema carrega os vínculos `contrato_escolas` de todos os contratos com aquele `chamada_id`, disponibilizando uma visão unificada para seleção e distribuição nas rotas.',
       'Identificação Visual do Contrato de Origem: Na listagem de paradas e pedidos, cada escola exibe um badge sutil com o número do contrato de origem (ex.: "C-2026-01"), preservando a clareza institucional.',
-      'Sequência de Paradas com Expansão Sob Demanda dos Pedidos: Na lista de paradas da rota, os itens das escolas iniciam por padrão recolhidos (apenas cabeçalho com nome, endereço, alunos, badge de contrato e contador de pedidos). A lista detalhada de pedidos de cada escola expande sob demanda ao clicar no indicador numérico de pedidos da respectiva parada e recolhe ao clicar novamente (toggle independente por parada com chevron animado e highlight visual), mantendo a navegação rápida e despoluída.',
-      'Otimização Geográfica de Rotas Partindo do Depósito Central Configurável: O módulo conta com algoritmo de roteamento geográfico (heurística do vizinho mais próximo + melhoria local 2-opt com cálculo Haversine) que utiliza o Depósito Central da cooperativa como ponto de partida fixo da rota. As coordenadas e o nome do depósito são dinamicamente parametrizáveis na tela de Configurações (/configuracoes), possuindo fallback resiliente para as coordenadas padrão de referência da cooperativa (latitude -22.260264, longitude -42.738042). As escolas são ordenadas pela proximidade real partindo do depósito e o diálogo comparativo exibe a identificação personalizada, o trecho inicial e a quilometragem estimada antes da aplicação da sugestão.',
-      'Visualização Interativa em Mapa da Rota (Leaflet + OpenStreetMap + OSRM): Painel cartográfico integrado na tela de rotas (/rotas) exibindo o traçado do percurso pelas ESTRADAS reais via serviço público e aberto OSRM (Open Source Routing Machine), com cache em memória por sessão e fallback automático para linhas retas com aviso discreto caso o serviço esteja indisponível. Apresenta pinos numerados para cada parada na ordem sequencial atual (1, 2, 3...), popup detalhado com escola, alunos e badge do contrato, marcador diferenciado para o Depósito Central, trecho tracejado de saída do depósito até a 1ª parada pelas vias rodoviárias, linhas contínuas entre as paradas, quilometragem real percorrida por estrada (com tempo estimado), enquadramento automático (fitBounds) e contador de escolas sem coordenadas.',
-      'Comportamento do Mapa em Status "EM ROTA" e Retorno Verde (v0.0.134): Quando a rota está em execução (pedidos em status "Em Rota", último despacho com status "Em Rota" ou caminhão posicionado), o mapa adota modo dinâmico de condução: (1) O percurso considera o Depósito Central como origem de partida e destino final de retorno (circuito fechado completo); (2) O percurso concluído do depósito até a posição atual do caminhão é desenhado em verde contínuo (#059669); (3) O trecho ativo restante entre a posição atual do caminhão (ou depósito, se sem pino) e a PRÓXIMA parada na sequência é destacado com traçado em VERMELHO proeminente (#dc2626, weight 6, opacity 0.95) pelas estradas reais via OSRM, com fallback em linha reta vermelho caso o OSRM falhe; o trecho vermelho só existe ANTES da última parada; (4) Quando o caminhão está na ÚLTIMA parada, o trecho de retorno ao Depósito Central passa a ser desenhado em VERDE sólido (#059669, mesmo tom do percurso concluído), pelas estradas via OSRM com fallback em linha reta verde; (5) As linhas das paradas posteriores à próxima ficam ocultas antes da última parada, mantendo o foco operacional exato no deslocamento em curso enquanto TODOS os pinos numerados verdes permanecem visíveis; (6) Antes da última parada, o trecho futuro de retorno ao Depósito Central é exibido em azul tracejado (#0284c7, dash 6, 6); (7) Legenda dinâmica e padronizada: antes da última parada exibe Percurso Concluído (verde), Trecho Ativo em Progresso (vermelho #dc2626) e Retorno ao Depósito (azul tracejado); na última parada, omite o trecho vermelho e exibe Percurso Concluído (verde) e Retorno ao Depósito (Em regresso) em verde sólido; (8) Rotas não despachadas continuam exibindo o traçado convencional (saída tracejada e paradas contínuas em verde, sem retorno ao depósito).',
-      'Pino de Caminhão Manual e Limpeza na Conclusão (v0.0.134): Controle operacional manual para operadores e administradores indicarem em tempo real em qual parada da rota o caminhão está no momento (via seletor "Posição Atual da Entrega", botões de navegação "Anterior/Próxima" e marcação rápida na lista de paradas). O mapa Leaflet exibe um marcador proeminente de caminhão 🚚 com anel pulsante sobre a parada indicada (sem substituir o pino numérico verde), persistido no banco na collection `rotas` (campos `caminhao_escola_id` e `caminhao_posicao_atual`). Ao concluir a rota inteira ("Rota Entregue"), o caminhão é automaticamente limpo (caminhao_escola_id e caminhao_posicao_atual limpos no backend e localmente), apagando o marcador do caminhão e consolidando toda a rota como percurso verde concluído.',
-      'Desacoplamento do Pino Manual do Status da Rota e Transação Estrita de Despacho (v0.0.136): O status "Em Rota" da rota passa a depender estritamente da existência de pedidos com status "Em Rota" ou de registro ativo em despachos com status "Em Rota", não sendo mais promovido artificialmente pela simples presença do pino manual (`caminhao_escola_id`). Quando a rota estiver de fato "Em Rota", o botão "Colocar em Rota" fica oculto e apenas a ação "Rota Entregue" permanece acessível. Quando a rota não estiver "Em Rota" e possuir pedidos pendentes, "Colocar em Rota" fica disponível. Na tentativa de despacho sem pedidos pendentes elegíveis, nenhuma mutação ou alteração é efetuada na rota e nos pedidos (validação defensiva no frontend e transacional no backend via hook despachar_rota.js). Rotas sem despacho ativo e sem pedidos em rota têm sua posição normalizada para o depósito central (migration 0111).',
-      'Resolução do Ciclo Ativo da Chamada da Rota no Despacho (v0.0.137): O despacho de rotas e as validações de fase/pedidos pendentes resolvem estritamente o ciclo ativo da CHAMADA À QUAL A ROTA PERTENCE (e não mais um ciclo ativo global arbitrário). Quando múltiplos ciclos de chamadas distintas (ex.: Municipal e Estadual) estão ativos simultaneamente, a rota despacha apenas os pedidos pendentes do ciclo da sua própria chamada. Caso a chamada da rota não possua ciclo ativo aberto, o sistema bloqueia explicitamente com mensagem indicando a chamada sem ciclo ativo. Pedidos pendentes e fases de contrato são validados contra o ciclo ativo da respectiva chamada tanto no frontend quanto de forma atômica no hook backend `despachar_rota.js`.',
-      'Preservação de Escolas Sem Coordenadas: Escolas sem latitude/longitude cadastradas são mantidas em sua ordem relativa original ao final do percurso sugerido, acompanhadas de aviso explícito no diálogo de otimização e nota informativa discreta sob o mapa.',
-      'Herança Automática da Rota pelos Pedidos: Os pedidos continuam referenciando seu respectivo contrato de origem e herdam o `rota_id` da escola vinculada.',
-      'Preservação e Atestos: Pedidos, itens faturados e atestos mantêm estrita referência ao seu contrato de origem (número de empenho e itens contratuais), mesmo compartilhando o percurso logístico com escolas de outros contratos.',
-      'Painel de Escolas Sem Rota: Escolas da chamada sem rota atribuída permanecem em destaque sem bloquear o despacho das rotas já montadas.',
-      'Despacho da Rota Inteira (Batch Único): Botão "Colocar em Rota" aciona o hook do backend gravando `despachos` com `chamada_id` e atualizando os pedidos da rota para "Em Rota".',
-      'Entrega por Rota Inteira: Botão "Rota Entregue" conclui a entrega de todos os pedidos da rota atomicamente.',
+      'Sequência de Paradas com Expansão Sob Demanda dos Pedidos: Na lista de paradas da rota, os itens das escolas iniciam por padrão recolhidos (apenas cabeçalho com nome, endereço, alunos, badge de contrato e contador de pedidos). A lista detalhada de pedidos de cada escola expande sob demanda com chevron animado.',
+      'Otimização Geográfica de Rotas Partindo do Depósito Central Configurável: Heurística do vizinho mais próximo + melhoria local 2-opt com cálculo Haversine utilizando o Depósito Central da cooperativa (/configuracoes) como ponto de partida fixo da rota.',
+      'Visualização Interativa em Mapa da Rota (Leaflet + OpenStreetMap + OSRM): Painel cartográfico integrado exibindo o traçado pelas vias rodoviárias reais via serviço OSRM (Open Source Routing Machine), pinos numerados, marcador do Depósito Central, trecho tracejado de saída, estimativa de quilometragem e tempo, e fallback resiliente em linha reta.',
+      'Resolução do Ciclo Ativo da Chamada da Rota no Despacho (v0.0.137): O despacho de rotas e as validações de fase/pedidos pendentes resolvem estritamente o ciclo ativo da CHAMADA À QUAL A ROTA PERTENCE. Pedidos pendentes e fases de contrato são validados contra o ciclo ativo da respectiva chamada.',
+      'Entrega por Rota Inteira: Botão "Rota Entregue" conclui atomicamente a entrega de todos os pedidos da rota.',
+    ],
+  },
+  {
+    id: '3.8B',
+    title: 'Portal do Motorista & Navegação Google Maps',
+    route: '/motorista?token=...',
+    goal: 'Interface web pública, responsiva e otimizada para uso em smartphones pelos motoristas durante as entregas, com funcionamento 100% offline, integração com Google Maps, coleta de assinaturas e fotos.',
+    details: [
+      'Acesso Público e Seguro sem Login: Acesso instantâneo via link exclusivo contendo token criptográfico assinado (/motorista?token=...). Não exige instalação de aplicativo nem credenciais de login. Exibe selo de versão "SIGCAF vX.X.X" fixo no topo, garantindo rastreabilidade do ambiente em execução.',
+      'Visão do Roteiro e Progresso: Apresenta a relação ordenada das paradas na sequência oficial de entrega, com nome da escola, identificação do contrato de origem do vínculo, endereço completo e contador de progresso visual "X de N entregas".',
+      'Atalho e Navegação no Google Maps por Parada: Cada parada da listagem conta com botão de atalho direto para abrir o aplicativo do Google Maps no smartphone com as coordenadas exatas da escola.',
+      'Mapa Dinâmico do Trecho a Percorrer: Mapa integrado que traça com precisão o trecho ativo do deslocamento:',
+      '• Antes da primeira entrega: traçado partindo do Depósito Central da cooperativa (/configuracoes) até a Parada #1;',
+      '• Entre entregas: traçado da última parada confirmada até a próxima parada pendente da sequência;',
+      '• Conclusão da rota: indicação de "Rota concluída" com mensagem de parabéns quando todas as paradas forem finalizadas.',
+      '• Métricas do Trecho & Botão "Navegar no Google Maps": Exibe a distância estimada (em km) e a previsão de tempo de chegada do trecho ativo. Inclui o botão proeminente "Navegar no Google Maps" que envia tanto a ORIGEM quanto o DESTINO (duas coordenadas geográficas) para o Google Maps, permitindo navegação curva a curva em tempo real no app nativo.',
+      'Registro Completo de Entrega por Parada: Formulário intuitivo acionado na parada correspondente contendo:',
+      '• Horários Automáticos: Registro automático do horário de chegada ao abrir o formulário na escola e do horário de confirmação ao clicar em salvar, prevenindo adulteração manual.',
+      '• Assinatura Digital em Canvas: Área de assinatura tátil responsiva para o conferente da escola assinar com o dedo na tela do celular ou com o mouse.',
+      '• Registro Fotográfico com Compressão no Dispositivo: Captura opcional de foto do material/produtos entregues (via câmera do smartphone ou galeria de fotos). O sistema realiza a compressão inteligente da imagem no próprio dispositivo do motorista antes do armazenamento, economizando franquia de dados móveis e tempo de transmissão.',
+      '• Observações do Motorista: Campo de texto livre para anotações de campo (avarias, responsáveis ausentes, ressalvas de recebimento).',
+      'Operação e Resiliência 100% OFFLINE: Projetado especificamente para zonas rurais e áreas sem cobertura de internet móvel:',
+      '• Fila Local Segura: Na ausência de sinal de internet, os registros de entrega concluídos são salvos em fila local criptografada no armazenamento interno do navegador (localStorage/IndexedDB).',
+      '• Sincronização Automática em Ordem: O portal monitora a reconexão à internet (evento "online" do dispositivo e rotina periódica de retry). Assim que a conexão é restabelecida, a sincronização é disparada automaticamente, transmitindo os registros na ordem cronológica em que foram efetuados.',
+      '• Preservação dos Horários Reais da Entrega: A persistência no banco grava os horários reais em que o motorista realizou a entrega no campo (chegada e confirmação originais), e NÃO o momento posterior em que os dados foram sincronizados.',
     ],
   },
   {
@@ -262,18 +288,18 @@ const MODULES: ModuleSpec[] = [
     id: '3.13',
     title: 'Emissão de Atestos (Documento Oficial)',
     route: '/atestos',
-    goal: 'Produzir o documento oficial da cooperativa ("TERMO DE RECEBIMENTO DE AQUISIÇÃO DE GÊNEROS ALIMENTÍCIOS") em formato A4, com pré-visualização, geração de PDF gravado no banco e download posterior.',
+    goal: 'Produzir o documento oficial da cooperativa ("TERMO DE RECEBIMENTO DE AQUISIÇÃO DE GÊNEROS ALIMENTÍCIOS") em formato A4, com suporte a 1 ou 2 vias, impressão por rota em andamento ou entregue, geração de PDF e auditoria.',
     details: [
-      'Nome do Produto no Atesto é o Nome no Contrato: Em estrita conformidade com a exigência dos órgãos fiscalizadores e da secretaria, o documento oficial e seu PDF timbrado imprimem o Nome no Contrato (contratoItem.nome_contrato com fallback para produto.nome), garantindo correspondência jurídica perfeita com a nota de empenho e o contrato firmado.',
-      'Estrutura Oficial do Documento (A4 - 1 página): Cabeçalho com logotipo da cooperativa e título central "TERMO DE RECEBIMENTO DE AQUISIÇÃO DE GÊNEROS ALIMENTÍCIOS REFERENTE À CHAMADA PÚBLICA-N° {numero_chamada}".',
-      'Parágrafo de Atesto: "Atesto que a {nome_da_escola} recebeu os produtos listados abaixo da {nome_da_cooperativa}".',
-      'Tabela de Produtos: Colunas PRODUTOS e QUANTIDADE (KG), uma linha por produto entregue em formato brasileiro (vírgula decimal), e linha final "Total de itens" com a soma das quantidades.',
-      'Declaração Institucional: "Nestes termos, os produtos entregues estão de acordo com o contrato assinado." seguido do compromisso de destinação final da Agricultura Familiar para Alimentação Escolar.',
-      'Local e Data: "{cidade}, {dia} de {mês} de {ano}." derivado do cadastro de Configurações da cooperativa e data de emissão.',
-      'Rodapé de Assinatura: Linha "Matrícula ou CPF: ___________________________" (em branco para preenchimento manual após a impressão) e identificação "Representante da Unidade Escolar (conferente) {nome_da_escola}".',
-      'Linha de Rodapé Operacional (Contratos Centralizados): Centralizada no rodapé do documento para contratos de modalidade centralizada, rastreia o atesto ao ciclo de origem e à sequência logística de entrega. Exibe os valores separados por traços sem rótulos (ex.: "37/2026 - ROTA A - 7"), omitindo traços caso algum dado esteja ausente. O ciclo provém do pedido ou do ciclo ativo; a rota e a posição da parada provêm da alocação da escola na rota de entrega (contrato_escolas.rota_id → paradas_rota).',
-      'Fluxo de Emissão & Armazenamento: Emitido apenas para pedidos Entregues sem atesto vinculado. Apresenta preview do documento oficial, botão "Emitir Atesto" que gera e armazena o binário PDF no registro do atesto (campo arquivo), e botão "Baixar PDF" nos atestos já emitidos.',
-      'Download e Síntese Retroativa Resiliente: O botão "Baixar PDF" realiza o download imediato do arquivo salvo via Blob/createObjectURL e, para registros legados sem arquivo ou na indisponibilidade do arquivo binário, realiza a síntese retroativa instantânea em memória, armazena o PDF no registro e conclui o download com feedback e tratamento completo de erros.',
+      'Disponibilidade Imediata em "Em Rota" (Operação de Campo): O atesto fica disponível para geração e impressão já com os pedidos no status "Em Rota" (durante o transporte). Isso permite que o motorista saia da cooperativa com o termo impresso em mãos para que o conferente da unidade escolar assine fisicamente no ato da entrega (Via 1 assinada retorna com o motorista para comprovação contábil na cooperativa). A emissão também é plenamente suportada para pedidos com status "Entregue".',
+      'Configuração de Vias em /configuracoes: Parametrização institucional do número de vias (1 ou 2 vias por termo) e dos rótulos personalizados de cada via (opcionais, podendo ficar em branco; padrões amigáveis "Via 1: Escola" e "Via 2: Cooperativa"). Quando configurado para 2 vias, o sistema gera as duas vias estruturadas no mesmo documento/fluxo de impressão.',
+      'Impressão de Atestos em Lote por Rota ("Imprimir Atestos por Rota"): Diálogo especializado com abas organizadas em:',
+      '• Aba "Rotas em Andamento / Em Rota": Permite imprimir previamente todos os termos das escolas participantes da rota despachada antes ou durante a saída do caminhão;',
+      '• Aba "Por Rota Entregue": Permite a impressão de atestos consolidados após a conclusão formal das entregas da rota.',
+      'Contexto Institucional e Vínculo de Contrato no Modal de Atesto: O cabeçalho do cartão da rota no diálogo de impressão exibe explicitamente "Chamada: XX/YYYY", e cada parada/escola traz o número do contrato do seu respectivo vínculo institucional.',
+      'Rodapé Operacional por Página: O rodapé de cada página impressa identifica os elementos-chave da entrega no formato padronizado "Ciclo · Contrato · Parada · Via" (ex.: "Ciclo 38/2026 · Contrato C-2026-02-01 · Parada #3 · 1ª Via: Escola"), garantindo rastreabilidade documental impecável.',
+      'Nome do Produto no Atesto é o Nome no Contrato: O documento oficial e seu PDF timbrado imprimem o Nome no Contrato (contratoItem.nome_contrato com fallback para produto.nome), garantindo correspondência jurídica perfeita com a nota de empenho e o contrato firmado.',
+      'Estrutura Oficial do Documento (A4): Cabeçalho com logotipo da cooperativa e título central "TERMO DE RECEBIMENTO DE AQUISIÇÃO DE GÊNEROS ALIMENTÍCIOS REFERENTE À CHAMADA PÚBLICA-N° {numero_chamada}". Tabela de produtos com quantidades em formato brasileiro (vírgula decimal), declaração institucional de destinação da Agricultura Familiar, local e data dinâmicos das configurações, e campo de assinatura com identificação do representante escolar.',
+      'Download e Síntese Retroativa Resiliente: O botão "Baixar PDF" realiza o download do arquivo salvo via Blob/createObjectURL e, para registros legados sem arquivo ou na indisponibilidade do binário, realiza a síntese retroativa instantânea em memória, armazena o PDF no registro e conclui o download.',
     ],
   },
   {
@@ -318,12 +344,13 @@ const MODULES: ModuleSpec[] = [
     id: '3.17',
     title: 'Configurações da Cooperativa (Exclusivo MASTER)',
     route: '/configuracoes',
-    goal: 'Parametrização institucional da cooperativa, identidade visual completa e controle de ambiente de autenticação.',
+    goal: 'Parametrização institucional da cooperativa, identidade visual completa, parâmetros de atesto, origem logística e controle de ambiente.',
     details: [
       'Controle de atalhos demo na tela de login: toggle para ocultar ou exibir botões de teste rápido (para produção segura).',
       'Dados institucionais da cooperativa: Razão Social, Sigla, CNPJ, Município/UF, Telefone e E-mail.',
       'Logotipo Institucional da Cooperativa: upload de imagem (PNG, JPG, WEBP) aplicado dinamicamente em todo o aplicativo — menu lateral desktop, cabeçalho mobile, tela pública de login e favicon/apple-touch-icon da aba do navegador, com fallback resiliente para ícone/sigla.',
-      'Depósito Central & Origem das Rotas de Entrega: Configuração geográfica do ponto de partida da cooperativa para a otimização de rotas, incluindo Nome/Identificação, Latitude e Longitude (aceitando formatação com vírgula ou ponto decimal), botão para restaurar valores de fábrica e fallback automático para as coordenadas de referência (-22.260264, -42.738042) caso os campos estejam vazios ou inválidos.',
+      'Depósito Central & Origem das Rotas de Entrega: Configuração geográfica do ponto de partida da cooperativa para a otimização de rotas e navegação no Google Maps pelo Portal do Motorista, incluindo Nome/Identificação, Latitude e Longitude (aceitando formatação com vírgula ou ponto decimal), botão para restaurar valores de fábrica e fallback automático para as coordenadas de referência (-22.260264, -42.738042).',
+      'Parâmetros Oficiais de Emissão de Atestos: Configuração do número de vias emitidas (1 ou 2 vias) e dos rótulos personalizáveis das vias (ex.: "Escola" e "Cooperativa", com permissão para ficarem em branco caso a cooperativa prefira vias sem rótulo fixo).',
       'Integração dos dados da cooperativa em atestos, relatórios e telas do sistema.',
     ],
   },
@@ -393,12 +420,15 @@ const STACK = [
   'Tailwind CSS + shadcn/ui',
   'Lucide React',
   'Sonner (toasts)',
-  'Backend conectado: Skip Cloud (PocketBase v0.36) com coleções persistidas em tempo real',
+  'Backend conectado: Skip Cloud (PocketBase v0.36) com coleções persistidas em tempo real (realtime events)',
+  'Leaflet + OpenStreetMap + OSRM (roteamento geográfico nas rodovias)',
+  'Google Maps (integração móvel para navegação de trechos e paradas com origem e destino)',
+  'PWA / Offline Queue (localStorage/IndexedDB) para o Portal do Motorista com resincronização automática',
 ]
 
 const DATA_MODEL = [
   'users (id, email, nome/name, celular, foto [file], perfil [MASTER/ADMINISTRADOR/SECRETARIA], ativo [bool])',
-  'configuracoes (id, nome_cooperativa, sigla, cnpj, telefone, email, cidade_uf, exibir_atalhos_demo [bool], logotipo [file], subtitulo_sistema, deposito_nome, deposito_latitude, deposito_longitude)',
+  'configuracoes (id, nome_cooperativa, sigla, cnpj, telefone, email, cidade_uf, exibir_atalhos_demo [bool], logotipo [file], subtitulo_sistema, deposito_nome, deposito_latitude, deposito_longitude, atesto_vias [1 ou 2], atesto_rotulo_via1 [texto], atesto_rotulo_via2 [texto])',
   'ciclos (id, nome, chamada_id → chamadas, data_inicio, data_fim, data_despacho, status [texto extensível: coletando / correcao / coleta_encerrada / fechado / cancelado], motivo_cancelamento [texto], data_cancelamento [data], snapshot [json com regra semanal e despacho]) [1 ciclo ativo por chamada; número = semana ISO; fase única do ciclo governando todos os contratos da chamada]',
   'chamadas (id, chamada, programa, modalidade [individualizado/centralizado], dependencia_administrativa [Federal/Estadual/Municipal/Privada — opcional], status [Ativo/Pendente/Encerrado/Cancelado]) [Nível estrutural superior: 1 chamada pública : N contratos; populado inicialmente por migração dos contratos com deduplicação futura]',
   'chamada_itens (id, chamada_id → chamadas [obrigatório], produto_id → produtos [opcional], produto, aka [apelido na planilha], unidade, preco) [Produtos, AKAs e preços unitários oficiais vivem na Chamada; quantidade da chamada = soma reativa das quantidades dos contratos vinculados]',
@@ -406,8 +436,11 @@ const DATA_MODEL = [
   'escolas (id, nome, codigo_inep, dependencia_administrativa [Federal/Estadual/Municipal/Privada], endereco, telefone, email, tipo [CMEI/CRECHE/INTEGRAL/FUNDAMENTAL/Médio/Técnico], alunos, bairro, contato, cep, latitude, longitude) [Cadastro Mestre Global — rota atribuída via vínculos]',
   'contratos (id, numero, chamada_id → chamadas [obrigatório, 1 chamada : N contratos], numero_chamada, tipo, modalidade_pedido [individualizado/centralizado], tipo_importacao [unica/fracionada], abas_planilha, num_rotas_logisticas [opcional], valor_total, status [Ativo/Encerrado/Cancelado/Pendente], encerrado_em [data], motivo_cancelamento [texto])',
   'contrato_escolas (id, contrato_id → contratos, escola_id → escolas, rota_id → rotas, coleta_por [padrao/formulario/planilha, default padrao], encerrado_em [data]) [Vínculo ÚNICO ATIVO por escola; vínculos encerrados/desvinculados mantêm histórico via campo encerrado_em; coleta_por para extensibilidade de coleta mista]',
-  'rotas (id, chamada_id → chamadas, contrato_id → contratos [opcional legado], nome, ordem, ativa [bool], caminhao_escola_id → escolas, caminhao_posicao_atual [int]) [Rotas no nível da Chamada com suporte a pino manual de caminhão]',
+  'rotas (id, chamada_id → chamadas, contrato_id → contratos [opcional legado], nome, ordem, ativa [bool], caminhao_escola_id → escolas, caminhao_posicao_atual [int]) [Rotas no nível da Chamada com suporte a rastreamento de caminhão em tempo real]',
   'paradas_rota (id, rota_id → rotas, escola_id → escolas, ordem) [Sequenciamento Drag-and-Drop das paradas de entrega da rota]',
+  'motoristas (id, nome [texto], telefone [texto], ativo [bool]) [Cadastro único da cooperativa gerenciado em /rotas]',
+  'rota_despachos (id, rota_id → rotas, ciclo_id → ciclos, motorista_id → motoristas [opcional], token [string único para Portal do Motorista], status [em_rota / entregue / cancelado], despachado_em, entregue_em, observacoes) [Despacho da rota com token criptográfico de acesso móvel]',
+  'entrega_registros (id, despacho_id → rota_despachos, parada_id → paradas_rota, escola_id → escolas, horario_chegada, horario_confirmacao, assinatura [imagem/canvas], foto [arquivo compactado], observacao, sincronizado_em) [Eventos de entrega com suporte offline e sincronização em tempo real para a central]',
   'despachos (id, chamada_id → chamadas, contrato_id → contratos [opcional], ciclo_id → ciclos, rota_id → rotas, data_despacho, usuario_id → users, status [Em Rota/Entregue/Cancelado])',
   'contrato_itens (id, contrato_id → contratos, produto_id → produtos, preco, quantidade_contratada [numérico opcional — pode ficar em branco], nome_contrato [texto opcional], apelidos [texto opcional]) [Nota arquitetural: duplicação temporária com chamada_itens mantida em transição suave para compatibilidade, a ser eliminada futuramente]',
   'pedidos (id, numero, escola_id → escolas, ciclo_id → ciclos, origem [excel/whatsapp/manual/formulario], rota_id → rotas, validacao [json], data_prevista, status [Pendente/Em Rota/Entregue/Cancelado], entregue_em, entregue_por → users, motivo_cancelamento, cancelado_em)',
@@ -804,6 +837,55 @@ export function Requirements() {
       {/* 7. Registro de Manutenção e Limpeza de Dados */}
       <SectionTitle>7. Registro de Manutenção & Higienização do Banco de Dados</SectionTitle>
       <div className="space-y-4">
+        {/* Portal do Motorista, Tempo Real e Google Maps (v0.0.194) */}
+        <div className="rounded-lg border border-border bg-card p-5 space-y-4">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="text-primary border-primary/30">
+                Release v0.0.194
+              </Badge>
+              <span className="font-semibold text-foreground">
+                Portal do Motorista, Acompanhamento em Tempo Real, Google Maps & Gestão Logística
+              </span>
+            </div>
+            <span className="text-xs text-muted-foreground">Consolidado (v0.0.194)</span>
+          </div>
+          <p className="text-sm text-foreground/90 leading-relaxed">
+            Consolidação completa da logística de ponta a ponta no SIGCAF: módulo centralizado de{' '}
+            <strong>Cadastro de Motoristas</strong> em <code>/rotas</code>, fluxo de despacho em
+            dois estágios com trava de fase da coleta, <strong>Portal do Motorista</strong> móvel em{' '}
+            <code>/motorista?token=...</code> com funcionamento 100% offline, rota no Google Maps
+            com origem e destino, coleta de assinatura e foto compactada, acompanhamento em tempo
+            real na central com caminhão dinâmico e modal somente leitura de dados de entrega, e
+            widget executivo no Dashboard.
+          </p>
+          <div className="grid sm:grid-cols-2 gap-4 text-sm">
+            <div className="rounded-md border border-border/60 bg-muted/20 p-3 space-y-1.5">
+              <span className="font-medium text-primary">Portal do Motorista & Campo:</span>
+              <ul className="space-y-1 text-xs text-muted-foreground">
+                <li>• Acesso por link único seguro sem login com selo de versão SIGCAF</li>
+                <li>• Roteiro ordenado com progresso X de N e atalhos por parada</li>
+                <li>• Mapa do trecho ativo com botão de rota no Google Maps (origem e destino)</li>
+                <li>• Coleta de horários automáticos, assinatura digital e foto compactada</li>
+                <li>
+                  • Operação offline com fila local e sincronização automática mantendo horários
+                  reais
+                </li>
+              </ul>
+            </div>
+            <div className="rounded-md border border-primary/30 bg-primary/5 p-3 space-y-1.5">
+              <span className="font-medium text-primary">Central & Acompanhamento:</span>
+              <ul className="space-y-1 text-xs text-foreground/80">
+                <li>• Cadastro de motoristas reutilizável para toda a cooperativa</li>
+                <li>• Trava de despacho pós-encerramento de coleta e vínculo na rota</li>
+                <li>• Realtime central: caminhão avançando e etiqueta ✓ Entregue HH:mm</li>
+                <li>• Modal de dados da entrega com assinatura e foto em tela cheia</li>
+                <li>• Widget &quot;Entregas em Andamento&quot; no Dashboard com próxima parada</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
         {/* Correção do Colar Produtos e Validação Salvar Pedido (v0.0.153) */}
         <div className="rounded-lg border border-border bg-card p-5 space-y-4">
           <div className="flex items-center justify-between flex-wrap gap-2">
