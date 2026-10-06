@@ -81,11 +81,13 @@ export const rotasLogisticasService = {
     rota_id?: string
     rota_logistica_id?: string
     user_id?: string
+    observacao?: string
   }): Promise<{ pedidos: any[]; produtos: any[] }> {
     const rId = data.rota_id || data.rota_logistica_id || ''
     return await rotasService.entregarRotaBatch({
       rota_id: rId,
       user_id: data.user_id,
+      observacao: data.observacao,
     })
   },
 

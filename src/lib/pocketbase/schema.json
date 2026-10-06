@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-06T08:47:47.246Z",
+  "generatedAt": "2026-10-06T16:07:20.129Z",
   "collections": [
     {
       "name": "users",
@@ -506,6 +506,12 @@
         {
           "name": "cancelado_em",
           "type": "date",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "observacao_entrega",
+          "type": "text",
           "required": false,
           "system": false
         }
@@ -1255,6 +1261,12 @@
           "required": false,
           "system": false,
           "collectionRef": "chamadas"
+        },
+        {
+          "name": "observacao",
+          "type": "text",
+          "required": false,
+          "system": false
         }
       ],
       "indexes": [
@@ -1627,6 +1639,12 @@
           "required": false,
           "system": false,
           "autodateTriggers": ["onCreate", "onUpdate"]
+        },
+        {
+          "name": "observacao",
+          "type": "text",
+          "required": false,
+          "system": false
         }
       ],
       "indexes": []

@@ -360,6 +360,7 @@ export default function DeliveryRoutes() {
   // Estado para confirmação de rota entregue (rota inteira)
   const [deliverWholeRouteOpen, setDeliverWholeRouteOpen] = useState(false)
   const [rotaToDeliver, setRotaToDeliver] = useState<RotaLogisticaRecord | null>(null)
+  const [observacaoEntregaRota, setObservacaoEntregaRota] = useState('')
   const [isDeliveringWholeRoute, setIsDeliveringWholeRoute] = useState(false)
 
   // Estado para cancelamento por "Não entregue" após despacho (motivo logístico fixo)
@@ -704,6 +705,7 @@ export default function DeliveryRoutes() {
   // Entrega: Abrir modal para confirmar que a rota inteira foi entregue
   const handleOpenDeliverWholeRoute = (rota: RotaLogisticaRecord) => {
     setRotaToDeliver(rota)
+    setObservacaoEntregaRota('')
     setDeliverWholeRouteOpen(true)
   }
 
@@ -712,9 +714,14 @@ export default function DeliveryRoutes() {
     if (!rotaToDeliver) return
     setIsDeliveringWholeRoute(true)
     try {
-      await confirmarEntregaRotaInteira(rotaToDeliver.id, user?.id)
+      await confirmarEntregaRotaInteira(
+        rotaToDeliver.id,
+        user?.id,
+        observacaoEntregaRota.trim() || undefined,
+      )
       setDeliverWholeRouteOpen(false)
       setRotaToDeliver(null)
+      setObservacaoEntregaRota('')
     } finally {
       setIsDeliveringWholeRoute(false)
     }
@@ -2506,7 +2513,25 @@ export default function DeliveryRoutes() {
                                               <p className="text-[10px] text-muted-foreground">
                                                 {ped.items.length} produto(s) • R${' '}
                                                 {ped.total.toFixed(2)}
+                                                {ped.entregue_em && (
+                                                  <span>
+                                                    {' '}
+                                                    • Entregue em{' '}
+                                                    {new Date(ped.entregue_em).toLocaleDateString(
+                                                      'pt-BR',
+                                                      {
+                                                        hour: '2-digit',
+                                                        minute: '2-digit',
+                                                      },
+                                                    )}
+                                                  </span>
+                                                )}
                                               </p>
+                                              {ped.observacao_entrega && (
+                                                <p className="text-[10px] text-emerald-800 dark:text-emerald-300 font-medium italic mt-0.5">
+                                                  Obs: {ped.observacao_entrega}
+                                                </p>
+                                              )}
                                             </div>
 
                                             {/* Ações no pedido: se estiver Em Rota e motorista não entregou */}
@@ -3081,27 +3106,110 @@ Ou apenas o nome da escola copiado do Excel/Word`}
       </AlertDialog>
 
       {/* MODAL 3: Confirmação de Entrega da Rota Inteira (Operação Offline da Central) */}
-      <AlertDialog open={deliverWholeRouteOpen} onOpenChange={setDeliverWholeRouteOpen}>
-        <AlertDialogContent>
+      <AlertDialog
+        open={deliverWholeRouteOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            setObservacaoEntregaRota('')
+            setRotaToDeliver(null)
+          }
+          setDeliverWholeRouteOpen(open)
+        }}
+      >
+        <AlertDialogContent className="sm:max-w-[500px]">
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2 text-emerald-600">
               <CheckCircle2 className="h-5 w-5" /> Confirmar Retorno e Entrega da Rota Inteira
             </AlertDialogTitle>
-            <AlertDialogDescription className="space-y-2">
-              <p>
-                Confirmação offline da central: o motorista retornou do campo com a rota{' '}
-                <strong>{rotaToDeliver?.nome}</strong> cumprida.
-              </p>
-              <p>
-                Todos os pedidos <strong>"Em Rota"</strong> dela serão marcados como{' '}
-                <strong>Entregue</strong>, com registro de data/hora (entregue_em) e usuário
-                conferente (entregue_por: <strong>{user?.name || user?.email}</strong>), realizando
-                a <strong>baixa automática no estoque</strong> e liberando a emissão de Atesto.
-              </p>
+            <AlertDialogDescription className="space-y-3 pt-1 text-left">
+              {(() => {
+                if (!rotaToDeliver) return null
+                const escolasDaRotaSet = new Set(
+                  paradasRota
+                    .filter((p) => (p.rota_id || (p as any).rota_logistica_id) === rotaToDeliver.id)
+                    .map((p) => p.escola_id),
+                )
+                const pedidosAfetados = orders.filter(
+                  (o) =>
+                    o.status === 'Em Rota' &&
+                    (escolasDaRotaSet.has(o.schoolId) ||
+                      o.rotaLogisticaId === rotaToDeliver.id ||
+                      o.rotaId === rotaToDeliver.id),
+                )
+                const totalPedidosNaRota = orders.filter(
+                  (o) =>
+                    escolasDaRotaSet.has(o.schoolId) ||
+                    o.rotaLogisticaId === rotaToDeliver.id ||
+                    o.rotaId === rotaToDeliver.id,
+                ).length
+
+                return (
+                  <>
+                    <p className="text-xs text-foreground/90 leading-relaxed">
+                      Fechamento da rota pelo retorno offline do motorista:{' '}
+                      <strong>{rotaToDeliver.nome}</strong>. Um único acionamento conclui toda a
+                      rota de uma vez, sem exigir conferência entrega a entrega.
+                    </p>
+
+                    <div className="p-2.5 rounded-md bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 text-xs space-y-1.5">
+                      <div className="flex items-center justify-between text-emerald-900 dark:text-emerald-100 font-semibold">
+                        <span>Pedidos em trânsito a finalizar:</span>
+                        <Badge
+                          variant="outline"
+                          className="bg-emerald-600 text-white font-bold border-transparent px-2"
+                        >
+                          {pedidosAfetados.length} pedido(s) Em Rota
+                        </Badge>
+                      </div>
+                      <p className="text-[11px] text-muted-foreground">
+                        Total cadastrado na rota (todos os status): {totalPedidosNaRota} pedido(s).
+                        Apenas os{' '}
+                        <strong>{pedidosAfetados.length} pedido(s) em status "Em Rota"</strong>{' '}
+                        serão marcados como "Entregue".
+                      </p>
+                      <p className="text-[11px] text-emerald-800 dark:text-emerald-300">
+                        Responsável registrado:{' '}
+                        <strong>{user?.name || user?.email || 'Usuário Atual'}</strong> (horário do
+                        ato). Baixa de estoque e liberação de Atesto são executadas automaticamente.
+                      </p>
+                    </div>
+
+                    <div className="space-y-1.5 pt-1">
+                      <Label
+                        htmlFor="obs-fechamento-rota"
+                        className="text-xs font-semibold text-foreground"
+                      >
+                        Observação de Fechamento (opcional)
+                      </Label>
+                      <textarea
+                        id="obs-fechamento-rota"
+                        rows={3}
+                        value={observacaoEntregaRota}
+                        onChange={(e) => setObservacaoEntregaRota(e.target.value)}
+                        placeholder="Ex.: Motorista não utilizou o portal / comprovantes em papel entregues na central / entrega concluída normalmente sem celular."
+                        className="w-full p-2 rounded-md border text-xs bg-background placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                      />
+                      <p className="text-[10px] text-muted-foreground">
+                        Utilize este campo caso a rota tenha sido cumprida sem o aplicativo/portal
+                        do motorista. A observação ficará registrada no despacho e nos pedidos
+                        finalizados.
+                      </p>
+                    </div>
+                  </>
+                )
+              })()}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={isDeliveringWholeRoute}>Voltar</AlertDialogCancel>
+            <AlertDialogCancel
+              disabled={isDeliveringWholeRoute}
+              onClick={() => {
+                setObservacaoEntregaRota('')
+                setRotaToDeliver(null)
+              }}
+            >
+              Voltar
+            </AlertDialogCancel>
             <AlertDialogAction
               className="bg-emerald-600 hover:bg-emerald-700 text-white"
               disabled={isDeliveringWholeRoute}

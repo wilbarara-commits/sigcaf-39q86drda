@@ -110,7 +110,11 @@ interface AppState {
     userId?: string,
     chamadaId?: string,
   ) => Promise<boolean>
-  confirmarEntregaRotaInteira: (rotaLogisticaId: string, userId?: string) => Promise<boolean>
+  confirmarEntregaRotaInteira: (
+    rotaLogisticaId: string,
+    userId?: string,
+    observacao?: string,
+  ) => Promise<boolean>
   marcarNaoEntreguePedido: (
     pedidoId: string,
     motivoLogistico: string,
@@ -474,6 +478,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           entreguePorNome,
           motivo_cancelamento: motivoCancel,
           cancelado_em: ped.cancelado_em,
+          observacao_entrega: ped.observacao_entrega,
           total: Math.round(total * 100) / 100,
           items,
         }
@@ -770,6 +775,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
             entregue_por: rec.entregue_por ?? existing.entregue_por,
             motivo_cancelamento: rec.motivo_cancelamento || existing.motivo_cancelamento,
             cancelado_em: rec.cancelado_em ?? existing.cancelado_em,
+            observacao_entrega: rec.observacao_entrega ?? existing.observacao_entrega,
             validacao: rec.validacao || existing.validacao,
           }
           const copy = [...prev]
@@ -812,6 +818,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           entreguePorNome: '',
           motivo_cancelamento: rec.motivo_cancelamento,
           cancelado_em: rec.cancelado_em,
+          observacao_entrega: rec.observacao_entrega,
           total: tempIdx !== -1 ? prev[tempIdx].total : 0,
           items: tempIdx !== -1 ? prev[tempIdx].items : [],
         }
@@ -1845,6 +1852,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const confirmarEntregaRotaInteira = async (
     rotaLogisticaId: string,
     userId?: string,
+    observacao?: string,
   ): Promise<boolean> => {
     const escolasDaRota = new Set(
       paradasRota.filter((p) => p.rota_id === rotaLogisticaId).map((p) => p.escola_id),
@@ -1864,6 +1872,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return false
     }
 
+    const cleanObservacao = observacao?.trim() || undefined
     const nowIso = new Date().toISOString()
     const prevOrders = [...orders]
     const prevProducts = [...products]
@@ -1881,6 +1890,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
               status: 'Entregue',
               entregue_em: nowIso,
               entregue_por: userId,
+              observacao_entrega: cleanObservacao ?? o.observacao_entrega,
             }
           : o,
       ),
@@ -1889,7 +1899,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
     // Optimistic Update: despachos da rota -> Entregue
     setDespachos((prev) =>
       prev.map((d) =>
-        d.rota_id === rotaLogisticaId && d.status === 'Em Rota' ? { ...d, status: 'Entregue' } : d,
+        d.rota_id === rotaLogisticaId && d.status === 'Em Rota'
+          ? {
+              ...d,
+              status: 'Entregue',
+              observacao: cleanObservacao ?? d.observacao,
+            }
+          : d,
       ),
     )
 
@@ -1911,6 +1927,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       await rotasLogisticasService.entregarRotaBatch({
         rota_logistica_id: rotaLogisticaId,
         user_id: userId,
+        observacao: cleanObservacao,
       })
 
       // Garantir limpeza no backend via rotasService também caso o hook falhe parcialmente

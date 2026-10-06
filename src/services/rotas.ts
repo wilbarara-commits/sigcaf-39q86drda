@@ -198,6 +198,7 @@ export const rotasService = {
   async entregarRotaBatch(data: {
     rota_id: string
     user_id?: string
+    observacao?: string
   }): Promise<{ pedidos: any[]; produtos: any[] }> {
     return await pb.send<{ success: boolean; pedidos: any[]; produtos: any[] }>(
       '/backend/v1/rotas/entregar',

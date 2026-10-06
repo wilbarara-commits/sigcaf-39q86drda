@@ -1,13 +1,14 @@
 // Hook para confirmação de entrega de rota inteira em transação atômica única
 // POST /backend/v1/rotas-logisticas/entregar (mantido para compatibilidade)
 // POST /backend/v1/rotas/entregar
-// Body: { rota_id?: string, rota_logistica_id?: string, user_id?: string }
+// Body: { rota_id?: string, rota_logistica_id?: string, user_id?: string, observacao?: string }
 // Atualiza pedidos 'Em Rota' para 'Entregue' e atualiza despachos ativos.
 
 routerAdd('POST', '/backend/v1/rotas-logisticas/entregar', (e) => {
   const body = e.requestInfo().body || {}
   const rotaId = body.rota_id || body.rota_logistica_id
   const userId = body.user_id || ''
+  const observacao = (body.observacao || '').trim()
 
   if (!rotaId) {
     throw new BadRequestError('rota_id é obrigatório')
@@ -59,11 +60,14 @@ routerAdd('POST', '/backend/v1/rotas-logisticas/entregar', (e) => {
       if (userId) {
         p.set('entregue_por', userId)
       }
+      if (observacao) {
+        p.set('observacao_entrega', observacao)
+      }
       txApp.save(p)
       updatedOrders.push(p.publicExport())
     }
 
-    // 4. Atualizar status dos despachos ativos da rota para 'Entregue'
+    // 4. Atualizar status dos despachos ativos da rota para 'Entregue' (e salvar observação)
     const despachosAtivos = txApp.findRecordsByFilter(
       'despachos',
       'rota_id = {:rId} && status = "Em Rota"',
@@ -75,8 +79,31 @@ routerAdd('POST', '/backend/v1/rotas-logisticas/entregar', (e) => {
     for (let i = 0; i < despachosAtivos.length; i++) {
       const d = despachosAtivos[i]
       d.set('status', 'Entregue')
+      if (observacao) {
+        d.set('observacao', observacao)
+      }
       txApp.save(d)
     }
+
+    // Também em rota_despachos caso haja despacho com status 'despachada'
+    try {
+      const rdAtivos = txApp.findRecordsByFilter(
+        'rota_despachos',
+        'rota_id = {:rId} && status = "despachada"',
+        '-created',
+        0,
+        0,
+        { rId: rotaId },
+      )
+      for (let j = 0; j < rdAtivos.length; j++) {
+        const rd = rdAtivos[j]
+        rd.set('status', 'concluida')
+        if (observacao) {
+          rd.set('observacao', observacao)
+        }
+        txApp.save(rd)
+      }
+    } catch (_) {}
 
     // 5. Limpar marcador do caminhão na rota (caminhao_escola_id e caminhao_posicao_atual)
     try {
@@ -106,6 +133,7 @@ routerAdd('POST', '/backend/v1/rotas/entregar', (e) => {
   const body = e.requestInfo().body || {}
   const rotaId = body.rota_id || body.rota_logistica_id
   const userId = body.user_id || ''
+  const observacao = (body.observacao || '').trim()
 
   if (!rotaId) {
     throw new BadRequestError('rota_id é obrigatório')
@@ -157,11 +185,14 @@ routerAdd('POST', '/backend/v1/rotas/entregar', (e) => {
       if (userId) {
         p.set('entregue_por', userId)
       }
+      if (observacao) {
+        p.set('observacao_entrega', observacao)
+      }
       txApp.save(p)
       updatedOrders.push(p.publicExport())
     }
 
-    // 4. Atualizar status dos despachos ativos da rota para 'Entregue'
+    // 4. Atualizar status dos despachos ativos da rota para 'Entregue' (e salvar observação)
     const despachosAtivos = txApp.findRecordsByFilter(
       'despachos',
       'rota_id = {:rId} && status = "Em Rota"',
@@ -173,8 +204,31 @@ routerAdd('POST', '/backend/v1/rotas/entregar', (e) => {
     for (let i = 0; i < despachosAtivos.length; i++) {
       const d = despachosAtivos[i]
       d.set('status', 'Entregue')
+      if (observacao) {
+        d.set('observacao', observacao)
+      }
       txApp.save(d)
     }
+
+    // Também em rota_despachos caso haja despacho com status 'despachada'
+    try {
+      const rdAtivos = txApp.findRecordsByFilter(
+        'rota_despachos',
+        'rota_id = {:rId} && status = "despachada"',
+        '-created',
+        0,
+        0,
+        { rId: rotaId },
+      )
+      for (let j = 0; j < rdAtivos.length; j++) {
+        const rd = rdAtivos[j]
+        rd.set('status', 'concluida')
+        if (observacao) {
+          rd.set('observacao', observacao)
+        }
+        txApp.save(rd)
+      }
+    } catch (_) {}
 
     // 5. Limpar marcador do caminhão na rota (caminhao_escola_id e caminhao_posicao_atual)
     try {

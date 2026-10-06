@@ -135,6 +135,7 @@ export interface DespachoRecord {
   data_despacho: string
   usuario_id?: string
   status: 'Em Rota' | 'Entregue' | 'Cancelado'
+  observacao?: string
   expand?: {
     contrato_id?: ContratoRecord
     chamada_id?: ChamadaRecord
@@ -265,6 +266,7 @@ export interface PedidoRecord {
   entregue_por?: string
   motivo_cancelamento?: string
   cancelado_em?: string
+  observacao_entrega?: string
   expand?: {
     escola_id?: EscolaRecord
     ciclo_id?: CicloRecord
@@ -449,6 +451,7 @@ export interface Order {
   entreguePorNome?: string
   motivo_cancelamento?: string
   cancelado_em?: string
+  observacao_entrega?: string
   total: number
   items: OrderItem[]
 }
@@ -540,6 +543,8 @@ export interface RotaDespachoRecord {
   renovado_em?: string
   ciclo_id?: string
   chamada_id?: string
+  status?: string
+  observacao?: string
   expand?: {
     rota_id?: RotaRecord
     motorista_id?: MotoristaRecord
