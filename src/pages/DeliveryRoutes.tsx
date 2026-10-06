@@ -3507,7 +3507,7 @@ Ou apenas o nome da escola copiado do Excel/Word`}
               [selectedRotaForDriverModal.id]: novoDespacho,
             }))
           }
-          await carregarMotoristasEDespachos()
+          await Promise.all([carregarMotoristasEDespachos(), refreshData()])
         }}
         onGerenciarMotoristas={() => {
           setDespachoMotoristaOpen(false)

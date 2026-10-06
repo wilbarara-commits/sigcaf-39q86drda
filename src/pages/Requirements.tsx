@@ -187,7 +187,7 @@ const MODULES: ModuleSpec[] = [
       'Otimização Geográfica de Rotas Partindo do Depósito Central Configurável: Heurística do vizinho mais próximo + melhoria local 2-opt com cálculo Haversine utilizando o Depósito Central da cooperativa (/configuracoes) como ponto de partida fixo da rota.',
       'Visualização Interativa em Mapa da Rota (Leaflet + OpenStreetMap + OSRM): Painel cartográfico integrado exibindo o traçado pelas vias rodoviárias reais via serviço OSRM (Open Source Routing Machine), pinos numerados, marcador do Depósito Central, trecho tracejado de saída, estimativa de quilometragem e tempo, e fallback resiliente em linha reta.',
       'Resolução do Ciclo Ativo da Chamada da Rota no Despacho (v0.0.137): O despacho de rotas e as validações de fase/pedidos pendentes resolvem estritamente o ciclo ativo da CHAMADA À QUAL A ROTA PERTENCE. Pedidos pendentes e fases de contrato são validados contra o ciclo ativo da respectiva chamada.',
-      'Entrega por Rota Inteira: Botão "Rota Entregue" conclui atomicamente a entrega de todos os pedidos da rota.',
+      'Entrega por Rota Inteira (Fechamento pela Central): Botão único "Rota Entregue" que realiza a conclusão em lote de todos os pedidos da rota que se encontram "Em Rota", sem necessidade de conferência entrega a entrega. O registro é efetuado em nome do usuário autenticado no sistema, com timestamp exato do ato, campo de observação livre para registros de retorno quando não houver apontamento via Portal do Motorista, conclusão do despacho correspondente, baixa de estoque e liberação imediata dos atestos de entrega.',
     ],
   },
   {

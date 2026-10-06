@@ -135,7 +135,8 @@ export const rotaDespachosService = {
     cicloId?: string
     chamadaId?: string
     isRedisparo?: boolean
-  }): Promise<RotaDespachoRecord> {
+    userId?: string
+  }): Promise<{ despacho: RotaDespachoRecord; pedidosAfetados: any[] }> {
     const nowIso = new Date().toISOString()
     const newToken = generateDriverToken()
 
@@ -176,7 +177,80 @@ export const rotaDespachosService = {
       console.warn('Aviso ao zerar posição do caminhão da rota no despacho:', err)
     }
 
-    return createdDespacho
+    const pedidosAfetados: any[] = []
+
+    // 4. Se for novo despacho (!isRedisparo), atualizar os pedidos pendentes para "Em Rota"
+    // e criar registro correspondente na collection despachos (status "Em Rota")
+    if (!data.isRedisparo) {
+      try {
+        // Localizar as escolas da rota via paradas_rota
+        let paradas = await pb.collection('paradas_rota').getFullList<ParadaRotaRecord>({
+          filter: `rota_id = "${data.rotaId}"`,
+          sort: 'ordem',
+        })
+        const escolaIds = new Set(paradas.map((p) => p.escola_id))
+
+        // Se paradas_rota estiver vazio, fallback por contrato_escolas
+        if (escolaIds.size === 0) {
+          try {
+            const vinculos = await pb.collection('contrato_escolas').getFullList<any>({
+              filter: `rota_id = "${data.rotaId}"`,
+            })
+            vinculos.forEach((v) => escolaIds.add(v.escola_id))
+          } catch {
+            /* intentionally ignored */
+          }
+        }
+
+        // Buscar pedidos do ciclo ativo com status Pendente
+        let pedidosFilter = `status = "Pendente"`
+        if (data.cicloId) {
+          pedidosFilter += ` && ciclo_id = "${data.cicloId}"`
+        }
+
+        const pedidosPendentes = await pb.collection('pedidos').getFullList<any>({
+          filter: pedidosFilter,
+        })
+
+        // Filtrar pedidos que pertencem a esta rota (por rota_id ou pelas escolas das paradas)
+        const elegiveis = pedidosPendentes.filter(
+          (p) => p.rota_id === data.rotaId || escolaIds.has(p.escola_id),
+        )
+
+        for (const ped of elegiveis) {
+          const atualizado = await pb.collection('pedidos').update(ped.id, {
+            status: 'Em Rota',
+            rota_id: data.rotaId,
+          })
+          pedidosAfetados.push(atualizado)
+        }
+
+        // Criar registro na collection despachos com status "Em Rota"
+        try {
+          const despExistentes = await pb.collection('despachos').getList(1, 1, {
+            filter: `rota_id = "${data.rotaId}" && status = "Em Rota"${
+              data.cicloId ? ` && ciclo_id = "${data.cicloId}"` : ''
+            }`,
+          })
+          if (despExistentes.items.length === 0) {
+            await pb.collection('despachos').create({
+              rota_id: data.rotaId,
+              chamada_id: data.chamadaId || undefined,
+              ciclo_id: data.cicloId || undefined,
+              usuario_id: data.userId || undefined,
+              data_despacho: nowIso,
+              status: 'Em Rota',
+            })
+          }
+        } catch (errDesp) {
+          console.warn('Aviso ao criar registro na collection despachos:', errDesp)
+        }
+      } catch (errPedidos) {
+        console.error('Erro ao atualizar pedidos para Em Rota no despacho:', errPedidos)
+      }
+    }
+
+    return { despacho: createdDespacho, pedidosAfetados }
   },
 
   /**

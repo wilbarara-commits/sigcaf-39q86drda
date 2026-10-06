@@ -53,7 +53,7 @@ interface DespachoMotoristaModalProps {
   totalParadas?: number
   motoristas: MotoristaRecord[]
   despachoAtivo: RotaDespachoRecord | null
-  onDespachoSucesso: (despacho: RotaDespachoRecord) => void
+  onDespachoSucesso: (despacho: RotaDespachoRecord, pedidosAfetados?: any[]) => void
   onGerenciarMotoristas: () => void
 }
 
@@ -159,13 +159,14 @@ export const DespachoMotoristaModal: React.FC<DespachoMotoristaModalProps> = ({
     setIsProcessing(true)
 
     try {
-      const novoDespacho = await rotaDespachosService.despacharOuRenovar({
-        rotaId: rota.id,
-        motoristaId: selectedMotoristaId || undefined,
-        cicloId: ciclo?.id,
-        chamadaId: chamada?.id || rota.chamada_id,
-        isRedisparo,
-      })
+      const { despacho: novoDespacho, pedidosAfetados } =
+        await rotaDespachosService.despacharOuRenovar({
+          rotaId: rota.id,
+          motoristaId: selectedMotoristaId || undefined,
+          cicloId: ciclo?.id,
+          chamadaId: chamada?.id || rota.chamada_id,
+          isRedisparo,
+        })
 
       const cicloCodigo = ciclo?.nome || (ciclo as any)?.numero || chamada?.chamada
       const msg = buildDriverWhatsAppMessage({
@@ -176,7 +177,7 @@ export const DespachoMotoristaModal: React.FC<DespachoMotoristaModalProps> = ({
       })
       setMensagemPronta(msg)
 
-      onDespachoSucesso(novoDespacho)
+      onDespachoSucesso(novoDespacho, pedidosAfetados)
 
       toast({
         title: isRedisparo ? 'Rota redisparada!' : 'Rota despachada para o motorista!',
