@@ -112,6 +112,7 @@ export function isFaseElegivelParaDespacho(fase?: string): boolean {
   return norm === 'coleta_encerrada' || norm === 'coletado'
 }
 
+// DeliveryRoutes 0.0.202
 export default function DeliveryRoutes() {
   const [searchParams, setSearchParams] = useSearchParams()
   const paramChamadaId = searchParams.get('chamadaId')
