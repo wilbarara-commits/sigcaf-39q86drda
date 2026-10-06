@@ -2033,7 +2033,8 @@ export default function DeliveryRoutes() {
                                   escolaEndereco: parada.endereco,
                                   contratoNumero: parada.contratoNumero,
                                   motoristaNome:
-                                    despachosAtivosMap[item.rota.id]?.motorista_nome ||
+                                    despachosAtivosMap[item.rota.id]?.expand?.motorista_id?.nome ||
+                                    (despachosAtivosMap[item.rota.id] as any)?.motorista_nome ||
                                     motoristasList.find(
                                       (m) =>
                                         m.id === despachosAtivosMap[item.rota.id]?.motorista_id,
@@ -2153,7 +2154,9 @@ export default function DeliveryRoutes() {
                                                       escolaEndereco: parada.endereco,
                                                       contratoNumero: parada.contratoNumero,
                                                       motoristaNome:
-                                                        despachosAtivosMap[item.rota.id]
+                                                        despachosAtivosMap[item.rota.id]?.expand
+                                                          ?.motorista_id?.nome ||
+                                                        (despachosAtivosMap[item.rota.id] as any)
                                                           ?.motorista_nome ||
                                                         motoristasList.find(
                                                           (m) =>
@@ -2483,7 +2486,8 @@ export default function DeliveryRoutes() {
                                 escolaEndereco: paradaAlvo?.endereco,
                                 contratoNumero: paradaAlvo?.contratoNumero,
                                 motoristaNome:
-                                  despachosAtivosMap[item.rota.id]?.motorista_nome ||
+                                  despachosAtivosMap[item.rota.id]?.expand?.motorista_id?.nome ||
+                                  (despachosAtivosMap[item.rota.id] as any)?.motorista_nome ||
                                   motoristasList.find(
                                     (m) => m.id === despachosAtivosMap[item.rota.id]?.motorista_id,
                                   )?.nome,

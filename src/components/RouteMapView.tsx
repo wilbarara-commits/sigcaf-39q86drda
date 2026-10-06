@@ -20,6 +20,7 @@ import {
   Info,
   Navigation,
   Loader2,
+  CheckCircle2,
 } from 'lucide-react'
 
 export interface ParadaMapaItem {
