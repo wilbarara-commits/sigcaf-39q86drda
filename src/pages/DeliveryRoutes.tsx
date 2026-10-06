@@ -1535,11 +1535,31 @@ export default function DeliveryRoutes() {
                             item.ultimoDespacho?.status === 'Em Rota' ||
                             item.pedidosEmRota.length > 0
 
-                          return isDespachadoConfirmado ? (
-                            <Badge className="bg-amber-600 hover:bg-amber-600 text-white text-[10px] animate-pulse">
-                              Em Rota
-                            </Badge>
-                          ) : (
+                          const isRotaEntregue =
+                            !despAtivo &&
+                            item.pedidosEmRota.length === 0 &&
+                            item.pedidosEntregues.length > 0 &&
+                            (item.ultimoDespacho?.status === 'Entregue' ||
+                              item.pedidosPendentes.length === 0)
+
+                          if (isDespachadoConfirmado) {
+                            return (
+                              <Badge className="bg-amber-600 hover:bg-amber-600 text-white text-[10px] animate-pulse">
+                                Em Rota
+                              </Badge>
+                            )
+                          }
+
+                          if (isRotaEntregue) {
+                            return (
+                              <Badge className="bg-emerald-600 hover:bg-emerald-600 text-white text-[10px] gap-1">
+                                <CheckCircle2 className="h-3 w-3" />
+                                Rota Entregue
+                              </Badge>
+                            )
+                          }
+
+                          return (
                             <Badge variant="outline" className="text-muted-foreground text-[10px]">
                               Aguardando Despacho
                             </Badge>
@@ -1657,6 +1677,13 @@ export default function DeliveryRoutes() {
                       Boolean(despAtivo) ||
                       item.ultimoDespacho?.status === 'Em Rota' ||
                       item.pedidosEmRota.length > 0
+
+                    const isRotaEntregue =
+                      !despAtivo &&
+                      item.pedidosEmRota.length === 0 &&
+                      item.pedidosEntregues.length > 0 &&
+                      (item.ultimoDespacho?.status === 'Entregue' ||
+                        item.pedidosPendentes.length === 0)
                     const hasPedidosAtivos = totalEmTransito > 0
                     const hasParadas = item.paradasOrdenadas.length > 0
 
@@ -1715,7 +1742,20 @@ export default function DeliveryRoutes() {
                         </div>
 
                         <div className="flex items-center gap-1.5 shrink-0">
-                          {!isDespachadoConfirmado ? (
+                          {isRotaEntregue ? (
+                            /* ESTÁGIO 3 — Rota Entregue / Concluída: informativo estático sem botão de despacho */
+                            <div className="rounded-md border border-emerald-200 dark:border-emerald-800 bg-emerald-50/50 dark:bg-emerald-950/30 p-2.5 flex items-center gap-2">
+                              <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                              <div className="text-left">
+                                <p className="text-xs font-semibold text-emerald-900 dark:text-emerald-200">
+                                  Rota Entregue · Concluída
+                                </p>
+                                <p className="text-[10px] text-emerald-700 dark:text-emerald-400">
+                                  Todas as entregas foram confirmadas pela central.
+                                </p>
+                              </div>
+                            </div>
+                          ) : !isDespachadoConfirmado ? (
                             /* ESTÁGIO 1 — NÃO despachado: APENAS o botão "Despachar Rota" */
                             <Button
                               size="sm"
