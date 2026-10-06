@@ -4,6 +4,7 @@ import React, {
   useState,
   useEffect,
   useCallback,
+  useMemo,
   ReactNode,
 } from 'react'
 import type {
@@ -74,6 +75,7 @@ interface AppState {
   entregaRegistros: EntregaRegistroRecord[]
   ultimoEventoEntrega: string | null
   getEntregaRegistrosDaRota: (rotaId: string) => EntregaRegistroRecord[]
+  escolasComEntregaDuplicadaMap: Record<string, string[]>
   cicloCorrente: { cicloId: string; chamadaId?: string } | null
   setCicloCorrente: (cicloId: string, chamadaId?: string) => void
   limparCicloCorrente: () => void
@@ -3226,12 +3228,70 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }
 
+  // Mapa de duplicidade por rota: { [rotaId]: [escolaId1, escolaId2] }
+  // Detecta escolas que possuem múltiplos registros em entrega_registros
+  const { registrosDeduplicadosPorRotaMap, escolasComEntregaDuplicadaMap } = useMemo(() => {
+    const rotasMap = new Map<string, Map<string, EntregaRegistroRecord[]>>()
+
+    entregaRegistros.forEach((reg) => {
+      if (!reg.rota_id || !reg.escola_id) return
+      if (!rotasMap.has(reg.rota_id)) {
+        rotasMap.set(reg.rota_id, new Map())
+      }
+      const escolaMap = rotasMap.get(reg.rota_id)!
+      const list = escolaMap.get(reg.escola_id) || []
+      list.push(reg)
+      escolaMap.set(reg.escola_id, list)
+    })
+
+    const dedupMap = new Map<string, EntregaRegistroRecord[]>()
+    const dupMap: Record<string, string[]> = {}
+
+    rotasMap.forEach((escolaMap, rId) => {
+      const dedupList: EntregaRegistroRecord[] = []
+      const dups: string[] = []
+
+      escolaMap.forEach((registros, escId) => {
+        if (registros.length > 1) {
+          dups.push(escId)
+        }
+        // Escolhe o registro mais recente (maior confirmado_em, desempate por created)
+        const sorted = [...registros].sort((a, b) => {
+          const tA = new Date(a.confirmado_em || a.chegada_em || a.created || 0).getTime()
+          const tB = new Date(b.confirmado_em || b.chegada_em || b.created || 0).getTime()
+          if (tB !== tA) return tB - tA
+          const cA = new Date(a.created || 0).getTime()
+          const cB = new Date(b.created || 0).getTime()
+          return cB - cA
+        })
+        dedupList.push(sorted[0])
+      })
+
+      // Ordenar a lista deduplicada descrescente por horário
+      dedupList.sort((a, b) => {
+        const tA = new Date(a.confirmado_em || a.chegada_em || a.created || 0).getTime()
+        const tB = new Date(b.confirmado_em || b.chegada_em || b.created || 0).getTime()
+        return tB - tA
+      })
+
+      dedupMap.set(rId, dedupList)
+      if (dups.length > 0) {
+        dupMap[rId] = dups
+      }
+    })
+
+    return {
+      registrosDeduplicadosPorRotaMap: dedupMap,
+      escolasComEntregaDuplicadaMap: dupMap,
+    }
+  }, [entregaRegistros])
+
   const getEntregaRegistrosDaRota = useCallback(
     (rotaId: string): EntregaRegistroRecord[] => {
       if (!rotaId) return []
-      return entregaRegistros.filter((r) => r.rota_id === rotaId)
+      return registrosDeduplicadosPorRotaMap.get(rotaId) || []
     },
-    [entregaRegistros],
+    [registrosDeduplicadosPorRotaMap],
   )
 
   return (
@@ -3258,6 +3318,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setCicloCorrente,
         limparCicloCorrente,
         getEntregaRegistrosDaRota,
+        escolasComEntregaDuplicadaMap,
         config,
         logoUrl,
         isLoading,

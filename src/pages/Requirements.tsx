@@ -840,6 +840,64 @@ export function Requirements() {
       {/* 7. Registro de Manutenção e Limpeza de Dados */}
       <SectionTitle>7. Registro de Manutenção & Higienização do Banco de Dados</SectionTitle>
       <div className="space-y-4">
+        {/* Modo Automático do Caminhão & Deduplicação de Entregas (v0.0.199) */}
+        <div className="rounded-lg border border-border bg-card p-5 space-y-4">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="text-primary border-primary/30">
+                Release v0.0.199
+              </Badge>
+              <span className="font-semibold text-foreground">
+                Acompanhamento Automático do Caminhão & Deduplicação por Rota+Escola (/rotas)
+              </span>
+            </div>
+            <span className="text-xs text-muted-foreground">Consolidado (v0.0.199)</span>
+          </div>
+          <p className="text-sm text-foreground/90 leading-relaxed">
+            Evolução do acompanhamento logístico em <code>/rotas</code>:
+          </p>
+          <div className="grid sm:grid-cols-2 gap-4 text-sm">
+            <div className="rounded-md border border-border/60 bg-muted/20 p-3 space-y-1.5">
+              <span className="font-medium text-primary">Modo Automático vs Manual:</span>
+              <ul className="space-y-1 text-xs text-muted-foreground">
+                <li>
+                  • Quando a rota está <strong>Em Rota</strong> com pelo menos uma entrega
+                  confirmada vinda do portal, o painel âmbar de pino manual e os botões manuais de
+                  &quot;Marcar&quot; são ocultados, exibindo aviso discreto de acompanhamento
+                  automático em tempo real.
+                </li>
+                <li>
+                  • O caminhão posiciona-se automaticamente na última escola entregue na sequência
+                  de paradas.
+                </li>
+                <li>
+                  • Se a rota for despachada sem nenhuma confirmação (exceção por WhatsApp), o modo
+                  manual permanece 100% visível e funcional.
+                </li>
+              </ul>
+            </div>
+            <div className="rounded-md border border-primary/30 bg-primary/5 p-3 space-y-1.5">
+              <span className="font-medium text-primary">
+                Deduplicação e Transição em Tempo Real:
+              </span>
+              <ul className="space-y-1 text-xs text-foreground/80">
+                <li>
+                  • Deduplicação de <code>entrega_registros</code> por rota+escola mantendo o
+                  registro com maior <code>confirmado_em</code> (desempate por <code>created</code>
+                  ).
+                </li>
+                <li>
+                  • Protege contra duplicidades causadas por múltiplos acessos ou reconexões de rede
+                  no Portal do Motorista.
+                </li>
+                <li>
+                  • Transição imediata e transparente via eventos realtime sem recarregar a tela.
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
         {/* Ciclo Operacional Corrente (v0.0.198) */}
         <div className="rounded-lg border border-border bg-card p-5 space-y-4">
           <div className="flex items-center justify-between flex-wrap gap-2">
