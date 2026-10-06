@@ -68,28 +68,32 @@ routerAdd('POST', '/backend/v1/rotas-logisticas/entregar', (e) => {
     }
 
     // 4. Atualizar status dos despachos ativos da rota para 'Entregue' (e salvar observação)
-    const despachosAtivos = txApp.findRecordsByFilter(
-      'despachos',
-      'rota_id = {:rId} && status = "Em Rota"',
-      '-data_despacho',
-      0,
-      0,
-      { rId: rotaId },
-    )
-    for (let i = 0; i < despachosAtivos.length; i++) {
-      const d = despachosAtivos[i]
-      d.set('status', 'Entregue')
-      if (observacao) {
-        d.set('observacao', observacao)
+    try {
+      const despachosAtivos = txApp.findRecordsByFilter(
+        'despachos',
+        'rota_id = {:rId} && status = "Em Rota"',
+        '-data_despacho',
+        0,
+        0,
+        { rId: rotaId },
+      )
+      for (let i = 0; i < despachosAtivos.length; i++) {
+        const d = despachosAtivos[i]
+        d.set('status', 'Entregue')
+        if (observacao) {
+          d.set('observacao', observacao)
+        }
+        txApp.save(d)
       }
-      txApp.save(d)
+    } catch (errDesp) {
+      console.warn('Aviso ao atualizar despachos legados para Entregue:', errDesp)
     }
 
-    // Também em rota_despachos caso haja despacho com status 'despachada'
+    // Também encerrar despachos ativos na collection rota_despachos (campo ativo: bool = false)
     try {
       const rdAtivos = txApp.findRecordsByFilter(
         'rota_despachos',
-        'rota_id = {:rId} && status = "despachada"',
+        'rota_id = {:rId} && ativo = true',
         '-created',
         0,
         0,
@@ -97,13 +101,16 @@ routerAdd('POST', '/backend/v1/rotas-logisticas/entregar', (e) => {
       )
       for (let j = 0; j < rdAtivos.length; j++) {
         const rd = rdAtivos[j]
-        rd.set('status', 'concluida')
+        rd.set('ativo', false)
+        rd.set('renovado_em', nowIso)
         if (observacao) {
           rd.set('observacao', observacao)
         }
         txApp.save(rd)
       }
-    } catch (_) {}
+    } catch (errRd) {
+      console.warn('Aviso ao desativar rota_despachos na entrega:', errRd)
+    }
 
     // 5. Limpar marcador do caminhão na rota (caminhao_escola_id e caminhao_posicao_atual)
     try {
@@ -193,28 +200,32 @@ routerAdd('POST', '/backend/v1/rotas/entregar', (e) => {
     }
 
     // 4. Atualizar status dos despachos ativos da rota para 'Entregue' (e salvar observação)
-    const despachosAtivos = txApp.findRecordsByFilter(
-      'despachos',
-      'rota_id = {:rId} && status = "Em Rota"',
-      '-data_despacho',
-      0,
-      0,
-      { rId: rotaId },
-    )
-    for (let i = 0; i < despachosAtivos.length; i++) {
-      const d = despachosAtivos[i]
-      d.set('status', 'Entregue')
-      if (observacao) {
-        d.set('observacao', observacao)
+    try {
+      const despachosAtivos = txApp.findRecordsByFilter(
+        'despachos',
+        'rota_id = {:rId} && status = "Em Rota"',
+        '-data_despacho',
+        0,
+        0,
+        { rId: rotaId },
+      )
+      for (let i = 0; i < despachosAtivos.length; i++) {
+        const d = despachosAtivos[i]
+        d.set('status', 'Entregue')
+        if (observacao) {
+          d.set('observacao', observacao)
+        }
+        txApp.save(d)
       }
-      txApp.save(d)
+    } catch (errDesp) {
+      console.warn('Aviso ao atualizar despachos legados para Entregue:', errDesp)
     }
 
-    // Também em rota_despachos caso haja despacho com status 'despachada'
+    // Também encerrar despachos ativos na collection rota_despachos (campo ativo: bool = false)
     try {
       const rdAtivos = txApp.findRecordsByFilter(
         'rota_despachos',
-        'rota_id = {:rId} && status = "despachada"',
+        'rota_id = {:rId} && ativo = true',
         '-created',
         0,
         0,
@@ -222,13 +233,16 @@ routerAdd('POST', '/backend/v1/rotas/entregar', (e) => {
       )
       for (let j = 0; j < rdAtivos.length; j++) {
         const rd = rdAtivos[j]
-        rd.set('status', 'concluida')
+        rd.set('ativo', false)
+        rd.set('renovado_em', nowIso)
         if (observacao) {
           rd.set('observacao', observacao)
         }
         txApp.save(rd)
       }
-    } catch (_) {}
+    } catch (errRd) {
+      console.warn('Aviso ao desativar rota_despachos na entrega:', errRd)
+    }
 
     // 5. Limpar marcador do caminhão na rota (caminhao_escola_id e caminhao_posicao_atual)
     try {
