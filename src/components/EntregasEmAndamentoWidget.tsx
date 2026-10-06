@@ -102,8 +102,30 @@ export function EntregasEmAndamentoWidget() {
       setLoadingDespachos(false)
     }
 
+    // Subscrição em tempo real na coleção rota_despachos para atualizar o widget
+    const unsub = rotaDespachosService.subscribe(({ action, record }) => {
+      if (!isMounted) return
+      const rotaId = record.rota_id
+      if (!rotaId) return
+
+      if (action === 'delete' || !record.ativo) {
+        setDespachosAtivos((prev) => {
+          if (!prev[rotaId]) return prev
+          const next = { ...prev }
+          delete next[rotaId]
+          return next
+        })
+      } else if (record.ativo) {
+        setDespachosAtivos((prev) => ({
+          ...prev,
+          [rotaId]: record,
+        }))
+      }
+    })
+
     return () => {
       isMounted = false
+      unsub()
     }
   }, [rotasLogisticas])
 

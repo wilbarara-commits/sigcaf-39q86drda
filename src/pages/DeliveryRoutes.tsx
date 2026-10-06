@@ -352,6 +352,36 @@ export default function DeliveryRoutes() {
     carregarMotoristasEDespachos()
   }, [rotasLogisticas])
 
+  // Subscrição em tempo real na coleção rota_despachos:
+  // quando um despacho é desativado (ativo=false) ou excluído, remove rotaId do despachosAtivosMap
+  // e atualiza os dados em tempo real se alterado por outra sessão
+  useEffect(() => {
+    const unsub = rotaDespachosService.subscribe(({ action, record }) => {
+      const rotaId = record.rota_id
+      if (!rotaId) return
+
+      if (action === 'delete' || !record.ativo) {
+        setDespachosAtivosMap((prev) => {
+          if (!prev[rotaId]) return prev
+          const next = { ...prev }
+          delete next[rotaId]
+          return next
+        })
+        refreshData().catch(() => {})
+      } else if (record.ativo) {
+        setDespachosAtivosMap((prev) => ({
+          ...prev,
+          [rotaId]: record,
+        }))
+        refreshData().catch(() => {})
+      }
+    })
+
+    return () => {
+      unsub()
+    }
+  }, [refreshData])
+
   // Estado para confirmação de despacho da rota inteira
   const [dispatchConfirmOpen, setDispatchConfirmOpen] = useState(false)
   const [rotaToDispatch, setRotaToDispatch] = useState<RotaLogisticaRecord | null>(null)
@@ -712,13 +742,30 @@ export default function DeliveryRoutes() {
   // Entrega: Executar confirmação de rota entregue
   const handleConfirmDeliverWholeRoute = async () => {
     if (!rotaToDeliver) return
+    const targetRotaId = rotaToDeliver.id
     setIsDeliveringWholeRoute(true)
     try {
       await confirmarEntregaRotaInteira(
-        rotaToDeliver.id,
+        targetRotaId,
         user?.id,
         observacaoEntregaRota.trim() || undefined,
       )
+
+      // (a) Limpar localmente o despacho ativo do estado despachosAtivosMap
+      setDespachosAtivosMap((prev) => {
+        const next = { ...prev }
+        delete next[targetRotaId]
+        return next
+      })
+
+      // (b) Reinvocar carregarMotoristasEDespachos para trazer o estado real do banco
+      carregarMotoristasEDespachos()
+
+      // (c) Chamar refreshData() do contexto para pedidos saírem de "Em Rota" para "Entregue" nos cards
+      refreshData().catch((err) => {
+        console.warn('Erro ao atualizar dados globais após entrega de rota:', err)
+      })
+
       setDeliverWholeRouteOpen(false)
       setRotaToDeliver(null)
       setObservacaoEntregaRota('')

@@ -258,6 +258,38 @@ export const rotaDespachosService = {
    * rota, paradas com escolas ordenadas, contrato de origem do vínculo e registros de entrega já realizados.
    * Suporta o modelo atual de vínculos (chamada x contrato x escola) com fallback resiliente.
    */
+  /**
+   * Subscrição em tempo real para mudanças na coleção rota_despachos
+   */
+  subscribe(callback: (data: { action: string; record: RotaDespachoRecord }) => void): () => void {
+    let cancelled = false
+    let unsubscribeFn: (() => Promise<void>) | undefined
+
+    pb.collection<RotaDespachoRecord>('rota_despachos')
+      .subscribe('*', (e) => {
+        if (!cancelled && e.record) {
+          callback({ action: e.action, record: e.record })
+        }
+      })
+      .then((fn) => {
+        if (cancelled) {
+          fn().catch(() => {})
+        } else {
+          unsubscribeFn = fn
+        }
+      })
+      .catch((err) => {
+        console.warn('Erro ao assinar realtime de rota_despachos:', err)
+      })
+
+    return () => {
+      cancelled = true
+      if (unsubscribeFn) {
+        unsubscribeFn().catch(() => {})
+      }
+    }
+  },
+
   async carregarPortalMotorista(despacho: RotaDespachoRecord): Promise<MotoristaPortalData> {
     const rotaId = despacho.rota_id
     const rota = await pb.collection('rotas').getOne<RotaRecord>(rotaId, {
