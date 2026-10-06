@@ -26,6 +26,7 @@ import {
 } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { MonthlyReportButton } from '@/components/MonthlyReportButton'
+import { EntregasEmAndamentoWidget } from '@/components/EntregasEmAndamentoWidget'
 import {
   formatIntervaloCiclo,
   formatDespachoAmigavel,
@@ -395,6 +396,9 @@ export default function Index() {
           </Button>
         </div>
       </div>
+
+      {/* Widget de Entregas em Andamento em Tempo Real (Bloco 3) */}
+      <EntregasEmAndamentoWidget />
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         {metrics.map((m) => {
