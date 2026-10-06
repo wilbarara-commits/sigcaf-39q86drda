@@ -129,6 +129,7 @@ export default function Orders() {
     ciclos,
     contractSchools,
     activeCiclo,
+    cicloCorrente,
     addOrder,
     updateOrderStatus,
     updateOrderItemsAndDate,
@@ -388,7 +389,9 @@ export default function Orders() {
       // Só inicializa dados se o formulário ainda não estiver preenchido (preserva itens caso haja toggle acidental)
       if (!selectedCicloId && openCiclos.length > 0) {
         const cicloInicial =
-          (activeCiclo && openCiclos.find((c) => c.id === activeCiclo.id)) || openCiclos[0]
+          (cicloCorrente?.cicloId && openCiclos.find((c) => c.id === cicloCorrente.cicloId)) ||
+          (activeCiclo && openCiclos.find((c) => c.id === activeCiclo.id)) ||
+          openCiclos[0]
         if (cicloInicial) {
           setSelectedCicloId(cicloInicial.id)
           setOrderDate(getCicloDataDespachoInput(cicloInicial))
@@ -401,7 +404,9 @@ export default function Orders() {
   const resetOrderForm = () => {
     const cicloInicial =
       openCiclos.length > 0
-        ? (activeCiclo && openCiclos.find((c) => c.id === activeCiclo.id)) || openCiclos[0]
+        ? (cicloCorrente?.cicloId && openCiclos.find((c) => c.id === cicloCorrente.cicloId)) ||
+          (activeCiclo && openCiclos.find((c) => c.id === activeCiclo.id)) ||
+          openCiclos[0]
         : null
     setSelectedCicloId(cicloInicial?.id || '')
     setSelectedSchool('')

@@ -47,6 +47,8 @@ export default function Index() {
     chamadas,
     activeCiclo,
     isLoading,
+    cicloCorrente,
+    setCicloCorrente,
   } = useApp()
 
   const pendingOrders = orders.filter((o) => o.status === 'Pendente').length
@@ -485,7 +487,15 @@ export default function Index() {
           </div>
           <div className="flex items-center gap-2">
             <Button variant="ghost" size="sm" asChild className="text-xs text-primary gap-1">
-              <Link to="/monitoramento">
+              <Link
+                to={
+                  cicloCorrente?.cicloId
+                    ? `/monitoramento?cicloId=${cicloCorrente.cicloId}${
+                        cicloCorrente.chamadaId ? `&chamadaId=${cicloCorrente.chamadaId}` : ''
+                      }`
+                    : '/monitoramento'
+                }
+              >
                 Painel de Monitoramento <ChevronRight className="h-3.5 w-3.5" />
               </Link>
             </Button>
@@ -627,6 +637,7 @@ export default function Index() {
                       >
                         <Link
                           to={`/monitoramento?cicloId=${ciclo.id}&chamadaId=${ciclo.chamada_id || ''}`}
+                          onClick={() => setCicloCorrente(ciclo.id, ciclo.chamada_id || undefined)}
                         >
                           Monitorar <ArrowRight className="h-3 w-3 ml-1" />
                         </Link>

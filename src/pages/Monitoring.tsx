@@ -64,6 +64,8 @@ export default function Monitoring() {
     orders,
     chamadas,
     despachos,
+    cicloCorrente,
+    setCicloCorrente,
   } = useApp()
 
   // Seletor de ciclos: mais recente primeiro, padrão = ciclo ativo (ou o mais recente de todos)
@@ -122,7 +124,16 @@ export default function Monitoring() {
       }
     }
 
-    // 3. Fallback padrão: se ainda não houver ciclo selecionado ou o selecionado não existir mais
+    // 3. Se houver cicloCorrente no contexto/localStorage e existir na lista de ciclos do banco
+    if (cicloCorrente?.cicloId) {
+      const targetByCorrente = ciclos.find((c) => c.id === cicloCorrente.cicloId)
+      if (targetByCorrente) {
+        setSelectedCicloId(targetByCorrente.id)
+        return
+      }
+    }
+
+    // 4. Fallback padrão: se ainda não houver ciclo selecionado ou o selecionado não existir mais
     if (!selectedCicloId) {
       if (activeCiclo) {
         setSelectedCicloId(activeCiclo.id)
@@ -135,7 +146,15 @@ export default function Monitoring() {
         setSelectedCicloId(activeCiclo?.id || sortedCiclos[0]?.id || '')
       }
     }
-  }, [activeCiclo, sortedCiclos, ciclos, selectedCicloId, queryCicloId, queryChamadaId])
+  }, [
+    activeCiclo,
+    sortedCiclos,
+    ciclos,
+    selectedCicloId,
+    queryCicloId,
+    queryChamadaId,
+    cicloCorrente,
+  ])
 
   const selectedCiclo: CicloRecord | null = useMemo(() => {
     return ciclos.find((c) => c.id === selectedCicloId) || activeCiclo || sortedCiclos[0] || null

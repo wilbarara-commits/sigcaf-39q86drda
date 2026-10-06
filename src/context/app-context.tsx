@@ -74,6 +74,9 @@ interface AppState {
   entregaRegistros: EntregaRegistroRecord[]
   ultimoEventoEntrega: string | null
   getEntregaRegistrosDaRota: (rotaId: string) => EntregaRegistroRecord[]
+  cicloCorrente: { cicloId: string; chamadaId?: string } | null
+  setCicloCorrente: (cicloId: string, chamadaId?: string) => void
+  limparCicloCorrente: () => void
   config: ConfiguracoesRecord | null
   logoUrl: string
   isLoading: boolean
@@ -201,6 +204,48 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [logoUrl, setLogoUrl] = useState<string>('')
   const [isLoading, setIsLoading] = useState<boolean>(true)
   const [error, setError] = useState<string | null>(null)
+
+  const [cicloCorrente, setCicloCorrenteState] = useState<{
+    cicloId: string
+    chamadaId?: string
+  } | null>(() => {
+    if (typeof window === 'undefined') return null
+    try {
+      const stored = localStorage.getItem('sigcaf_ciclo_corrente')
+      if (stored) {
+        const parsed = JSON.parse(stored)
+        if (parsed && typeof parsed === 'object' && parsed.cicloId) {
+          return {
+            cicloId: String(parsed.cicloId),
+            chamadaId: parsed.chamadaId ? String(parsed.chamadaId) : undefined,
+          }
+        }
+      }
+    } catch {
+      // Ignora erro de JSON malformado
+    }
+    return null
+  })
+
+  const setCicloCorrente = useCallback((cicloId: string, chamadaId?: string) => {
+    if (!cicloId) return
+    const valor = { cicloId, chamadaId: chamadaId || undefined }
+    setCicloCorrenteState(valor)
+    try {
+      localStorage.setItem('sigcaf_ciclo_corrente', JSON.stringify(valor))
+    } catch {
+      // localStorage pode falhar em modo restrito
+    }
+  }, [])
+
+  const limparCicloCorrente = useCallback(() => {
+    setCicloCorrenteState(null)
+    try {
+      localStorage.removeItem('sigcaf_ciclo_corrente')
+    } catch {
+      // localStorage pode falhar em modo restrito
+    }
+  }, [])
 
   const loadAllData = useCallback(async () => {
     try {
@@ -3209,6 +3254,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         despachos,
         entregaRegistros,
         ultimoEventoEntrega,
+        cicloCorrente,
+        setCicloCorrente,
+        limparCicloCorrente,
         getEntregaRegistrosDaRota,
         config,
         logoUrl,

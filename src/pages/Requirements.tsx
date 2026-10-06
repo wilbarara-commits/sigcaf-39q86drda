@@ -235,6 +235,7 @@ const MODULES: ModuleSpec[] = [
       'Travas por Fase da Cadeia Operacional (Regra de Janelas de Envio): Coletando = PRIMEIRO envio de formulário pela escola aceito ✓, reenvios permitidos ✓, importação de planilhas ✓, despacho de rotas ✗; Correção = reenvio/correção de pedidos por escolas que já enviaram permitido ✓, primeiro envio bloqueado para quem não enviou a tempo ✗, importação de planilhas ✓; Coleta Encerrada = reenvios/correções permitidos até o fechamento da coleta (último envio prevalece) ✓, primeiro envio bloqueado ✗, novas importações ✗, despacho de rotas liberado ✓; Fechado ou Cancelado = bloqueio total de envios com aviso "Coleta encerrada para este ciclo — aguarde o próximo aviso da cooperativa". A página pública do formulário distingue operacionalmente escola sem pedido × escola que já enviou.',
       'Trava "Em Rota" na Fase 3 (v0.0.195): No cartão da Fase 3 (Coleta Encerrada), o botão "Colocar em Rota" detecta automaticamente se o ciclo monitorado já possui despacho ativo em andamento (status "Em Rota" em despachos por ciclo_id ou chamada_id, ou pedidos do ciclo com status "Em Rota"). Nesse caso, o botão fica desabilitado com o rótulo "Em Rota", estilo atenuado e title explicativo ("Ciclo já possui despacho ativo em andamento (Em Rota)"), impedindo múltiplos despachos concorrentes.',
       'Navegação Contextual Dashboard → Monitoramento (v0.0.195): Os links do Dashboard (card de ciclo ativo e atalho "Ver Ciclo" das chamadas públicas ativas) navegam com parâmetros de URL contextuais `?cicloId=&chamadaId=`. A tela /monitoramento consome searchParams e pré-seleciona imediatamente o ciclo e chamada correspondentes em todas as seções (cabeçalho, painel informativo, fases, funil e alertas de escolas).',
+      'Ciclo Operacional Corrente (v0.0.198): O ciclo em foco na operação diária é gerenciado globalmente via `AppContext` e sincronizado no `localStorage` (chave "sigcaf_ciclo_corrente"). Ao clicar na seta "Monitorar" nos cards de ciclo ativo do Dashboard ou na ação de monitoramento, o ciclo corrente é registrado. As telas de Monitoramento, Novo Pedido e Rotas de Entrega seguem a ordem de precedência: (1) query params de URL (?cicloId=&chamadaId=), (2) ciclo corrente gravado se existir no banco de dados, (3) fallback padrão atual. A troca pontual de ciclo no seletor de consulta dentro da tela NÃO altera o ciclo corrente (consulta local isolada). A página Histórico de Ciclos não é afetada por essa regra.',
       'Painel de Alertas das Escolas: Identificação imediata e distinção operacional entre escolas que "Já receberam o link do formulário" (disparo registrado no envios_whatsapp) e escolas que "Já preencheram" (pedido com origem=formulario no ciclo) versus escolas sem nenhum pedido, facilitando cobrar diretamente quem falta via WhatsApp.',
     ],
   },
@@ -839,6 +840,72 @@ export function Requirements() {
       {/* 7. Registro de Manutenção e Limpeza de Dados */}
       <SectionTitle>7. Registro de Manutenção & Higienização do Banco de Dados</SectionTitle>
       <div className="space-y-4">
+        {/* Ciclo Operacional Corrente (v0.0.198) */}
+        <div className="rounded-lg border border-border bg-card p-5 space-y-4">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="text-primary border-primary/30">
+                Release v0.0.198
+              </Badge>
+              <span className="font-semibold text-foreground">
+                Regra do Ciclo Operacional Corrente (Contexto Global, Monitoramento, Pedidos e
+                Rotas)
+              </span>
+            </div>
+            <span className="text-xs text-muted-foreground">Consolidado (v0.0.198)</span>
+          </div>
+          <p className="text-sm text-foreground/90 leading-relaxed">
+            Implementação da regra do <strong>Ciclo Operacional Corrente</strong> para manter o
+            ciclo de trabalho sincronizado entre as principais telas do sistema sem navegação
+            redundante:
+          </p>
+          <div className="grid sm:grid-cols-2 gap-4 text-sm">
+            <div className="rounded-md border border-border/60 bg-muted/20 p-3 space-y-1.5">
+              <span className="font-medium text-primary">Conceito e Persistência:</span>
+              <ul className="space-y-1 text-xs text-muted-foreground">
+                <li>
+                  • Estado persistido em localStorage (<code>sigcaf_ciclo_corrente</code>) com{' '}
+                  <code>cicloId</code> e <code>chamadaId</code>
+                </li>
+                <li>
+                  • Exposto via <code>useApp()</code> com <code>setCicloCorrente</code> e{' '}
+                  <code>limparCicloCorrente</code>
+                </li>
+                <li>
+                  • Seta &quot;Monitorar&quot; no Dashboard define o ciclo corrente ao navegar
+                </li>
+                <li>
+                  • Link do cabeçalho &quot;Painel de Monitoramento&quot; direciona para o ciclo
+                  corrente
+                </li>
+                <li>• Troca no seletor de página é consulta local e NÃO altera o corrente</li>
+              </ul>
+            </div>
+            <div className="rounded-md border border-primary/30 bg-primary/5 p-3 space-y-1.5">
+              <span className="font-medium text-primary">Precedência e Telas Afetadas:</span>
+              <ul className="space-y-1 text-xs text-foreground/80">
+                <li>
+                  • <strong>Ordem de precedência:</strong> (1) Query params URL &gt; (2)
+                  cicloCorrente &gt; (3) Fallback padrão
+                </li>
+                <li>
+                  • <code>/monitoramento</code>: abre no corrente ou query params
+                </li>
+                <li>
+                  • <code>/pedidos</code>: pré-seleciona o corrente no diálogo Novo Pedido (se
+                  aberto em coletando/correcao)
+                </li>
+                <li>
+                  • <code>/rotas</code>: pré-seleciona a chamada do corrente ou query params
+                </li>
+                <li>
+                  • <code>/historico-ciclos</code>: preservado integralmente sem alteração
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
         {/* Portal do Motorista, Tempo Real e Google Maps (v0.0.194) */}
         <div className="rounded-lg border border-border bg-card p-5 space-y-4">
           <div className="flex items-center justify-between flex-wrap gap-2">

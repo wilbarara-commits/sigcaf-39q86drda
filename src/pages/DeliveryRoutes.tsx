@@ -116,6 +116,7 @@ export default function DeliveryRoutes() {
   const [searchParams, setSearchParams] = useSearchParams()
   const paramChamadaId = searchParams.get('chamadaId')
   const paramContratoId = searchParams.get('contratoId')
+  const paramCicloId = searchParams.get('cicloId')
 
   const {
     chamadas,
@@ -125,6 +126,7 @@ export default function DeliveryRoutes() {
     schools,
     ciclos,
     activeCiclo,
+    cicloCorrente,
     rotasLogisticas,
     paradasRota,
     despachos,
@@ -148,28 +150,67 @@ export default function DeliveryRoutes() {
   const canEditRoutes = isAdmin || isMaster
 
   // Selecionar primariamente a CHAMADA (ou se não houver chamadas, cai para todos ou contratos)
+  // Precedência de seleção:
+  // 1. Query params URL (?chamadaId= ou ?cicloId= ou ?contratoId=)
+  // 2. cicloCorrente se existir no banco (sua chamada correspondente)
+  // 3. Fallback atual (primeira chamada ou 'todas')
   const initialChamadaId = useMemo(() => {
     if (paramChamadaId) return paramChamadaId
+    if (paramCicloId) {
+      const cicloParam = ciclos.find((c) => c.id === paramCicloId)
+      if (cicloParam?.chamada_id) return cicloParam.chamada_id
+    }
     if (paramContratoId) {
       const cnt = contracts.find((c) => c.id === paramContratoId)
       if (cnt?.chamada_id) return cnt.chamada_id
     }
+    if (cicloCorrente?.chamadaId) {
+      const existsChamada = chamadas.some((ch) => ch.id === cicloCorrente.chamadaId)
+      if (existsChamada) return cicloCorrente.chamadaId
+    }
+    if (cicloCorrente?.cicloId) {
+      const cicloObj = ciclos.find((c) => c.id === cicloCorrente.cicloId)
+      if (cicloObj?.chamada_id) return cicloObj.chamada_id
+    }
     return chamadas[0]?.id || 'todas'
-  }, [paramChamadaId, paramContratoId, contracts, chamadas])
+  }, [paramChamadaId, paramCicloId, paramContratoId, contracts, chamadas, cicloCorrente, ciclos])
 
   const [selectedChamadaId, setSelectedChamadaId] = useState<string>(initialChamadaId)
 
-  // Sincronizar se o param da URL mudar
+  // Sincronizar se os query params ou cicloCorrente mudarem
   useEffect(() => {
     if (paramChamadaId) {
       setSelectedChamadaId(paramChamadaId)
-    } else if (paramContratoId) {
+      return
+    }
+    if (paramCicloId) {
+      const cicloParam = ciclos.find((c) => c.id === paramCicloId)
+      if (cicloParam?.chamada_id) {
+        setSelectedChamadaId(cicloParam.chamada_id)
+        return
+      }
+    }
+    if (paramContratoId) {
       const cnt = contracts.find((c) => c.id === paramContratoId)
       if (cnt?.chamada_id) {
         setSelectedChamadaId(cnt.chamada_id)
+        return
       }
     }
-  }, [paramChamadaId, paramContratoId, contracts])
+    if (cicloCorrente?.chamadaId) {
+      const existsChamada = chamadas.some((ch) => ch.id === cicloCorrente.chamadaId)
+      if (existsChamada) {
+        setSelectedChamadaId(cicloCorrente.chamadaId)
+        return
+      }
+    }
+    if (cicloCorrente?.cicloId) {
+      const cicloObj = ciclos.find((c) => c.id === cicloCorrente.cicloId)
+      if (cicloObj?.chamada_id) {
+        setSelectedChamadaId(cicloObj.chamada_id)
+      }
+    }
+  }, [paramChamadaId, paramCicloId, paramContratoId, contracts, cicloCorrente, ciclos, chamadas])
 
   // Chamada atualmente focada
   const currentChamada = useMemo(() => {
