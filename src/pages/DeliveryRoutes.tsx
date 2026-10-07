@@ -2239,6 +2239,11 @@ export default function DeliveryRoutes() {
 
                               const handleAbrirDetalhesParada = () => {
                                 if (!isParadaEntregue) return
+                                const pedEntregue = parada.pedidos.find(
+                                  (p) => p.status === 'Entregue',
+                                )
+                                const conferenteNome =
+                                  pedEntregue?.entreguePorNome || pedEntregue?.entregue_por || null
                                 setSelectedDeliveryDetails({
                                   registro: regParada || null,
                                   escolaNome: parada.nome,
@@ -2252,6 +2257,7 @@ export default function DeliveryRoutes() {
                                         m.id === despachosAtivosMap[item.rota.id]?.motorista_id,
                                     )?.nome,
                                   ordem: parada.ordem,
+                                  conferenteNome,
                                 })
                                 setDeliveryDetailsOpen(true)
                               }
@@ -2360,6 +2366,13 @@ export default function DeliveryRoutes() {
                                                   type="button"
                                                   onClick={(e) => {
                                                     e.stopPropagation()
+                                                    const pedEntregue = parada.pedidos.find(
+                                                      (p) => p.status === 'Entregue',
+                                                    )
+                                                    const conferenteNome =
+                                                      pedEntregue?.entreguePorNome ||
+                                                      pedEntregue?.entregue_por ||
+                                                      null
                                                     setSelectedDeliveryDetails({
                                                       registro: regParada,
                                                       escolaNome: parada.nome,
@@ -2377,6 +2390,7 @@ export default function DeliveryRoutes() {
                                                               ?.motorista_id,
                                                         )?.nome,
                                                       ordem: parada.ordem,
+                                                      conferenteNome,
                                                     })
                                                     setDeliveryDetailsOpen(true)
                                                   }}
@@ -2600,19 +2614,26 @@ export default function DeliveryRoutes() {
                                               <p className="text-[10px] text-muted-foreground">
                                                 {ped.items.length} produto(s) • R${' '}
                                                 {ped.total.toFixed(2)}
-                                                {ped.entregue_em && (
-                                                  <span>
-                                                    {' '}
-                                                    • Entregue em{' '}
-                                                    {new Date(ped.entregue_em).toLocaleDateString(
-                                                      'pt-BR',
-                                                      {
-                                                        hour: '2-digit',
-                                                        minute: '2-digit',
-                                                      },
-                                                    )}
-                                                  </span>
-                                                )}
+                                                {ped.entregue_em &&
+                                                  (() => {
+                                                    const horaFormatada = new Date(
+                                                      ped.entregue_em,
+                                                    ).toLocaleTimeString('pt-BR', {
+                                                      hour: '2-digit',
+                                                      minute: '2-digit',
+                                                    })
+                                                    const conferente =
+                                                      ped.entreguePorNome || ped.entregue_por
+                                                    return (
+                                                      <span>
+                                                        {' '}
+                                                        • Entregue às {horaFormatada}
+                                                        {conferente
+                                                          ? ` · Conferido por: ${conferente}`
+                                                          : ''}
+                                                      </span>
+                                                    )
+                                                  })()}
                                               </p>
                                               {ped.observacao_entrega && (
                                                 <p className="text-[10px] text-emerald-800 dark:text-emerald-300 font-medium italic mt-0.5">
@@ -2681,6 +2702,11 @@ export default function DeliveryRoutes() {
                               const regAlvo = rotaRegsEfetivos.find(
                                 (rg) => rg.escola_id === escolaId && Boolean(rg.confirmado_em),
                               )
+                              const pedEntregue = paradaAlvo?.pedidos.find(
+                                (p) => p.status === 'Entregue',
+                              )
+                              const conferenteNome =
+                                pedEntregue?.entreguePorNome || pedEntregue?.entregue_por || null
                               setSelectedDeliveryDetails({
                                 registro: regAlvo || null,
                                 escolaNome: paradaAlvo?.nome || 'Escola',
@@ -2693,6 +2719,7 @@ export default function DeliveryRoutes() {
                                     (m) => m.id === despachosAtivosMap[item.rota.id]?.motorista_id,
                                   )?.nome,
                                 ordem: paradaAlvo?.ordem,
+                                conferenteNome,
                               })
                               setDeliveryDetailsOpen(true)
                             }}

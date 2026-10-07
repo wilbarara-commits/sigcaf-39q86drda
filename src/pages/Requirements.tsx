@@ -843,6 +843,50 @@ export function Requirements() {
       {/* 7. Registro de Manutenção e Limpeza de Dados */}
       <SectionTitle>7. Registro de Manutenção & Higienização do Banco de Dados</SectionTitle>
       <div className="space-y-4">
+        {/* Registro do Conferente do Fechamento em Rotas e Detalhes (v0.0.210) */}
+        <div className="rounded-lg border border-border bg-card p-5 space-y-4">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="text-primary border-primary/30">
+                Release v0.0.210
+              </Badge>
+              <span className="font-semibold text-foreground">
+                Identificação do Conferente no Fechamento de Entregas (/rotas & Modal Dados da
+                Entrega)
+              </span>
+            </div>
+            <span className="text-xs text-muted-foreground">Consolidado (v0.0.210)</span>
+          </div>
+          <p className="text-sm text-foreground/90 leading-relaxed">
+            Pedidos &quot;Entregue&quot; em <code>/rotas</code> (tanto na listagem de pedidos da
+            parada quanto no modal compartilhado Dados da Entrega) exibem explicitamente
+            &quot;Entregue às HH:MM · Conferido por: [usuário logado que realizou o
+            fechamento]&quot;. Quando não houver conferente registrado, é exibido apenas o horário
+            sem separador órfão. O motorista nunca é exibido como responsável pelo fechamento
+            operacional.
+          </p>
+        </div>
+
+        {/* Estado "Rota Entregue" para Rotas Concluídas (v0.0.209) */}
+        <div className="rounded-lg border border-border bg-card p-5 space-y-4">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="text-primary border-primary/30">
+                Release v0.0.209
+              </Badge>
+              <span className="font-semibold text-foreground">
+                Estado &quot;Rota Entregue&quot; para Rotas Concluídas (/rotas)
+              </span>
+            </div>
+            <span className="text-xs text-muted-foreground">Consolidado (v0.0.209)</span>
+          </div>
+          <p className="text-sm text-foreground/90 leading-relaxed">
+            Em <code>/rotas</code>, a rota com 100% das entregas realizadas exibe estado conclusivo
+            &quot;Rota Entregue&quot; (badge verde, bloco informativo de conclusão e sem botão de
+            despacho).
+          </p>
+        </div>
+
         {/* Modo Automático do Caminhão & Deduplicação de Entregas (v0.0.199) */}
         <div className="rounded-lg border border-border bg-card p-5 space-y-4">
           <div className="flex items-center justify-between flex-wrap gap-2">

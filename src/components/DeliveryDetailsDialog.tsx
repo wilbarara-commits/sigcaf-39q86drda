@@ -32,6 +32,7 @@ export interface DeliveryDetailsData {
   contratoNumero?: string
   motoristaNome?: string
   ordem?: number
+  conferenteNome?: string | null
 }
 
 export interface DeliveryDetailsDialogProps {
@@ -90,7 +91,15 @@ export function DeliveryDetailsDialog({ open, onOpenChange, data }: DeliveryDeta
 
   if (!data) return null
 
-  const { registro, escolaNome, escolaEndereco, contratoNumero, motoristaNome, ordem } = data
+  const {
+    registro,
+    escolaNome,
+    escolaEndereco,
+    contratoNumero,
+    motoristaNome,
+    ordem,
+    conferenteNome,
+  } = data
 
   // Horários reais de coleta no dispositivo do motorista (independentes da sincronização)
   const chegadaInfo = formatDataHora(registro?.chegada_em)
@@ -188,6 +197,11 @@ export function DeliveryDetailsDialog({ open, onOpenChange, data }: DeliveryDeta
                 </div>
                 <div className="text-sm font-bold text-emerald-700 dark:text-emerald-400">
                   {confirmacaoInfo.isOutroDia ? confirmacaoInfo.dataCompleta : confirmacaoInfo.hora}
+                  {conferenteNome ? (
+                    <span className="block text-[11px] font-normal text-muted-foreground mt-0.5">
+                      Entregue às {confirmacaoInfo.hora} · Conferido por: {conferenteNome}
+                    </span>
+                  ) : null}
                 </div>
                 {confirmacaoInfo.isOutroDia && (
                   <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
