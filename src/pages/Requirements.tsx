@@ -861,6 +861,78 @@ export function Requirements() {
       {/* 7. Registro de Manutenção e Limpeza de Dados */}
       <SectionTitle>7. Registro de Manutenção & Higienização do Banco de Dados</SectionTitle>
       <div className="space-y-4">
+        {/* Retenção Histórica de Dados de Entrega por Ciclo (v0.0.221) */}
+        <div className="rounded-lg border border-border bg-card p-5 space-y-4">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="text-primary border-primary/30">
+                Release v0.0.221
+              </Badge>
+              <span className="font-semibold text-foreground">
+                0.0.221: Ganchos de Retenção Histórica por Ciclo (Despacho, Portal do Motorista e
+                Fechamento)
+              </span>
+            </div>
+            <span className="text-xs text-muted-foreground">Consolidado (v0.0.221)</span>
+          </div>
+          <p className="text-sm text-foreground/90 leading-relaxed">
+            Implementação dos ganchos automatizados, idempotentes e não-bloqueantes de retenção
+            histórica permanente nas coleções <code>rota_snapshots</code> e{' '}
+            <code>entrega_comprovantes</code> (criadas pela migration 0139):
+          </p>
+          <div className="grid sm:grid-cols-3 gap-4 text-sm">
+            <div className="rounded-md border border-border/60 bg-muted/20 p-3 space-y-1.5">
+              <span className="font-medium text-primary">
+                1. Gancho no Despacho (Central & Link):
+              </span>
+              <ul className="space-y-1 text-xs text-muted-foreground">
+                <li>
+                  • Ao despachar a rota (em <code>/rotas</code> ou geração de link do motorista),
+                  grava snapshot em <code>rota_snapshots</code> com{' '}
+                  <code>versao_evento = &apos;despacho&apos;</code>.
+                </li>
+                <li>
+                  • Registra a composição completa e sequência exata das paradas naquele instante,
+                  com <code>ciclo_id</code> e <code>chamada_id</code> do ciclo em foco.
+                </li>
+              </ul>
+            </div>
+            <div className="rounded-md border border-primary/30 bg-primary/5 p-3 space-y-1.5">
+              <span className="font-medium text-primary">
+                2. Gancho na Entrega (Portal do Motorista):
+              </span>
+              <ul className="space-y-1 text-xs text-foreground/80">
+                <li>
+                  • Quando o motorista confirma a entrega no portal público (com assinatura, foto,
+                  chegada e confirmação), grava em <code>entrega_registros</code> e sincroniza
+                  imediatamente o comprovante permanente em <code>entrega_comprovantes</code>.
+                </li>
+                <li>
+                  • Armazena ciclo_id, chamada_id, motorista_id, client_uid (sincronização offline),
+                  foto e assinatura em resolução permanente.
+                </li>
+              </ul>
+            </div>
+            <div className="rounded-md border border-border/60 bg-muted/20 p-3 space-y-1.5">
+              <span className="font-medium text-primary">
+                3. Gancho no Fechamento &quot;Rota Entregue&quot;:
+              </span>
+              <ul className="space-y-1 text-xs text-muted-foreground">
+                <li>
+                  • Ao acionar &quot;Rota Entregue&quot; pela secretária/central, grava snapshot com{' '}
+                  <code>versao_evento = &apos;fechamento&apos;</code> e cria/atualiza os{' '}
+                  <code>entrega_comprovantes</code> em lote.
+                </li>
+                <li>
+                  • Carimbo com identificação do usuário logado e horário do ato; operação 100%
+                  tolerante a falhas (best-effort silencioso) sem travar nem fazer rollback do fluxo
+                  principal.
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
         {/* API REST Somente Leitura para ERP de Faturamento (v0.0.219) */}
         <div className="rounded-lg border border-border bg-card p-5 space-y-4">
           <div className="flex items-center justify-between flex-wrap gap-2">

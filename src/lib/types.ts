@@ -561,6 +561,8 @@ export interface EntregaRegistroRecord {
   escola_id: string
   motorista_id?: string
   despacho_id?: string
+  ciclo_id?: string
+  chamada_id?: string
   responsavel_nome?: string
   responsavel_cpf?: string
   chegada_em?: string
@@ -576,6 +578,73 @@ export interface EntregaRegistroRecord {
     escola_id?: EscolaRecord
     motorista_id?: MotoristaRecord
     despacho_id?: RotaDespachoRecord
+    ciclo_id?: CicloRecord
+    chamada_id?: ChamadaRecord
+  }
+  created?: string
+  updated?: string
+}
+
+export interface ParadaSnapshotItem {
+  escola_id: string
+  escola_nome: string
+  ordem: number
+  endereco?: string
+  contrato?: string
+}
+
+export interface RotaSnapshotRecord {
+  id: string
+  rota_id: string
+  ciclo_id?: string
+  chamada_id?: string
+  motorista_id?: string
+  despacho_id?: string
+  rota_nome: string
+  versao_evento: 'despacho' | 'fechamento' | 'manual' | string
+  total_paradas?: number
+  total_pedidos?: number
+  paradas_snapshot?: string | ParadaSnapshotItem[] // JSON string ou parsed
+  snapshot_em?: string
+  observacao?: string
+  expand?: {
+    rota_id?: RotaRecord
+    ciclo_id?: CicloRecord
+    chamada_id?: ChamadaRecord
+    motorista_id?: MotoristaRecord
+    despacho_id?: RotaDespachoRecord
+  }
+  created?: string
+  updated?: string
+}
+
+export interface EntregaComprovanteRecord {
+  id: string
+  escola_id: string
+  rota_id?: string
+  ciclo_id?: string
+  chamada_id?: string
+  pedido_id?: string
+  motorista_id?: string
+  registro_id?: string
+  escola_nome?: string
+  responsavel_nome?: string
+  responsavel_cpf?: string
+  chegada_em?: string
+  confirmado_em?: string
+  assinatura?: string // Base64 PNG
+  foto?: string // Base64 JPEG
+  observacao?: string
+  origem?: 'portal_motorista' | 'fechamento_secretaria' | 'backfill' | string
+  client_uid?: string
+  expand?: {
+    escola_id?: EscolaRecord
+    rota_id?: RotaRecord
+    ciclo_id?: CicloRecord
+    chamada_id?: ChamadaRecord
+    pedido_id?: PedidoRecord
+    motorista_id?: MotoristaRecord
+    registro_id?: EntregaRegistroRecord
   }
   created?: string
   updated?: string

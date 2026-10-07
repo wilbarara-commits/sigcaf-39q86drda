@@ -38,6 +38,7 @@ import { ciclosService } from '@/services/ciclos'
 import { rotasService } from '@/services/rotas'
 import { rotasLogisticasService } from '@/services/rotas-logisticas'
 import { entregaRegistrosService } from '@/services/rota-despachos'
+import { retencaoHistoricaService } from '@/services/retencao-historica'
 import pb from '@/lib/pocketbase/client'
 import { toast } from 'sonner'
 import useRealtime from '@/hooks/use-realtime'
@@ -1846,6 +1847,50 @@ export function AppProvider({ children }: { children: ReactNode }) {
         })
       }
 
+      // GANCHO DE RETENÇÃO HISTÓRICA NO DESPACHO (rota_snapshots versao_evento='despacho'):
+      // Grava a composição e ordem das paradas da rota naquele momento, ciclo_id e chamada_id em foco.
+      // Idempotente e não-bloqueante (best-effort silencioso).
+      try {
+        const rotaObj =
+          rotasLogisticas.find((r) => r.id === rotaLogisticaId) ||
+          rotas.find((r) => r.id === rotaLogisticaId)
+        const cicloIdDespacho = cicloAtivoChamada?.id || cicloCorrente?.cicloId || activeCiclo?.id
+        const despId = res.despacho?.id
+
+        const paradasDaRota = paradasRota
+          .filter((p) => p.rota_id === rotaLogisticaId)
+          .sort((a, b) => (a.ordem || 0) - (b.ordem || 0))
+          .map((p, idx) => {
+            const esc = schools.find((s) => s.id === p.escola_id)
+            return {
+              escola_id: p.escola_id,
+              escola_nome: esc?.name || '',
+              ordem: p.ordem || idx + 1,
+              endereco: esc?.address || '',
+            }
+          })
+
+        await retencaoHistoricaService.salvarSnapshot({
+          rotaId: rotaLogisticaId,
+          cicloId: cicloIdDespacho,
+          chamadaId: effectiveChamadaId,
+          motoristaId: rotaObj?.motorista_id,
+          despachoId: despId,
+          rotaNome: rotaObj?.nome || 'Rota',
+          versaoEvento: 'despacho',
+          totalParadas: paradasDaRota.length,
+          totalPedidos: pedidosDaRota.length,
+          paradasSnapshot: paradasDaRota,
+          snapshotEm: nowIso,
+          observacao: undefined,
+        })
+      } catch (errSnapDespacho) {
+        console.warn(
+          'Aviso não-bloqueante na retenção histórica de snapshot de despacho:',
+          errSnapDespacho,
+        )
+      }
+
       toast.success(
         `Rota despachada com sucesso! ${pedidosDaRota.length} pedido(s) colocados "Em Rota".`,
       )
@@ -2022,6 +2067,84 @@ export function AppProvider({ children }: { children: ReactNode }) {
         })
       } catch (_) {
         // Tolerante: o hook do backend já atualizou
+      }
+
+      // GANCHO DE RETENÇÃO HISTÓRICA NO FECHAMENTO "Rota Entregue" (rota_snapshots + entrega_comprovantes):
+      // Idempotente e não-bloqueante (best-effort silencioso)
+      try {
+        const rotaObj =
+          rotasLogisticas.find((r) => r.id === rotaLogisticaId) ||
+          rotas.find((r) => r.id === rotaLogisticaId)
+        const cicloIdFechamento =
+          pedidosEmRota[0]?.cicloId || activeCiclo?.id || cicloCorrente?.cicloId
+        const chamadaIdFechamento =
+          rotaObj?.chamada_id || pedidosEmRota[0]?.chamadaId || cicloCorrente?.chamadaId
+        const motoristaIdFechamento = rotaObj?.motorista_id
+
+        // Nome do usuário logado para carimbo no comprovante permanente
+        let nomeResponsavelFechamento = 'Central / Secretária'
+        if (userId) {
+          try {
+            const uRec = await pb.collection('users').getOne(userId)
+            nomeResponsavelFechamento = uRec.name || uRec.email || nomeResponsavelFechamento
+          } catch {
+            /* tolerante */
+          }
+        }
+
+        // Paradas atuais da rota
+        const paradasDaRota = paradasRota
+          .filter((p) => p.rota_id === rotaLogisticaId)
+          .sort((a, b) => (a.ordem || 0) - (b.ordem || 0))
+          .map((p, idx) => {
+            const esc = schools.find((s) => s.id === p.escola_id)
+            return {
+              escola_id: p.escola_id,
+              escola_nome: esc?.name || '',
+              ordem: p.ordem || idx + 1,
+              endereco: esc?.address || '',
+            }
+          })
+
+        // 1. Snapshot com versao_evento='fechamento'
+        await retencaoHistoricaService.salvarSnapshot({
+          rotaId: rotaLogisticaId,
+          cicloId: cicloIdFechamento,
+          chamadaId: chamadaIdFechamento,
+          motoristaId: motoristaIdFechamento,
+          rotaNome: rotaObj?.nome || 'Rota',
+          versaoEvento: 'fechamento',
+          totalParadas: paradasDaRota.length,
+          totalPedidos: pedidosEmRota.length,
+          paradasSnapshot: paradasDaRota,
+          snapshotEm: nowIso,
+          observacao: cleanObservacao,
+        })
+
+        // 2. Comprovantes permanentes em entrega_comprovantes em lote
+        const escolaNomesMap = new Map<string, string>()
+        schools.forEach((s) => escolaNomesMap.set(s.id, s.name))
+
+        await retencaoHistoricaService.salvarComprovantesFechamentoLote({
+          rotaId: rotaLogisticaId,
+          cicloId: cicloIdFechamento,
+          chamadaId: chamadaIdFechamento,
+          motoristaId: motoristaIdFechamento,
+          pedidos: pedidosEmRota.map((p) => ({
+            id: p.id,
+            escola_id: p.schoolId,
+            observacao_entrega: cleanObservacao,
+            entregue_em: nowIso,
+          })),
+          escolaNomesMap,
+          responsavelNome: nomeResponsavelFechamento,
+          observacaoGeral: cleanObservacao,
+        })
+      } catch (errRetencao) {
+        console.warn(
+          'Aviso não-bloqueante na retenção histórica do fechamento da rota:',
+          errRetencao,
+        )
       }
 
       toast.success(`Rota confirmada como entregue! ${pedidosEmRota.length} pedido(s) finalizados.`)

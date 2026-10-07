@@ -253,6 +253,66 @@ export const rotaDespachosService = {
       console.warn('Aviso ao zerar posição do caminhão da rota no despacho:', err)
     }
 
+    // 3.1 GANCHO DE RETENÇÃO HISTÓRICA NO DESPACHO (rota_snapshots versao_evento='despacho')
+    // Grava a composição e ordem das paradas da rota naquele momento, ciclo_id e chamada_id.
+    // Idempotente e não-bloqueante (best-effort silencioso).
+    try {
+      let rotaNome = ''
+      try {
+        const rRec = await pb.collection('rotas').getOne(data.rotaId)
+        rotaNome = rRec.nome || 'Rota'
+      } catch {
+        rotaNome = 'Rota'
+      }
+
+      // Buscar paradas atuais com escolas ordenadas
+      let paradasList = await pb.collection('paradas_rota').getFullList<ParadaRotaRecord>({
+        filter: `rota_id = "${data.rotaId}"`,
+        sort: 'ordem',
+        expand: 'escola_id',
+      })
+
+      const paradasSnapshot = paradasList.map((p, idx) => ({
+        escola_id: p.escola_id,
+        escola_nome: (p as any).expand?.escola_id?.nome || '',
+        ordem: p.ordem || idx + 1,
+        endereco: (p as any).expand?.escola_id?.endereco || '',
+      }))
+
+      // Idempotência em rota_snapshots: verificar se já existe snapshot deste despacho/rota no ciclo
+      const snapFilter = data.cicloId
+        ? `rota_id = "${data.rotaId}" && versao_evento = "despacho" && ciclo_id = "${data.cicloId}"`
+        : `rota_id = "${data.rotaId}" && versao_evento = "despacho"`
+      const snapExistentes = await pb.collection('rota_snapshots').getList(1, 1, {
+        filter: snapFilter,
+        sort: '-snapshot_em,-created',
+      })
+
+      const snapPayload: Record<string, any> = {
+        rota_id: data.rotaId,
+        ciclo_id: data.cicloId || undefined,
+        chamada_id: data.chamadaId || undefined,
+        motorista_id: data.motoristaId || undefined,
+        despacho_id: createdDespacho.id,
+        rota_nome: rotaNome,
+        versao_evento: 'despacho',
+        total_paradas: paradasSnapshot.length,
+        paradas_snapshot: JSON.stringify(paradasSnapshot),
+        snapshot_em: nowIso,
+      }
+
+      if (snapExistentes.items.length > 0) {
+        await pb.collection('rota_snapshots').update(snapExistentes.items[0].id, snapPayload)
+      } else {
+        await pb.collection('rota_snapshots').create(snapPayload)
+      }
+    } catch (errSnap) {
+      console.warn(
+        'Aviso não-bloqueante ao gravar snapshot de despacho em rota-despachos:',
+        errSnap,
+      )
+    }
+
     const pedidosAfetados: any[] = []
 
     // 4. Se for novo despacho (!isRedisparo), atualizar os pedidos pendentes para "Em Rota"
@@ -496,17 +556,49 @@ export const entregaRegistrosService = {
     }
 
     // Resolver ciclo_id e chamada_id caso o despacho tenha sido informado
-    if (data.despacho_id && (!payload.ciclo_id || !payload.chamada_id)) {
+    let resolvedCicloId = payload.ciclo_id || ''
+    let resolvedChamadaId = payload.chamada_id || ''
+    let resolvedMotoristaId = payload.motorista_id || ''
+
+    if (data.despacho_id && (!resolvedCicloId || !resolvedChamadaId || !resolvedMotoristaId)) {
       try {
         const despRec = await pb.collection('rota_despachos').getOne(data.despacho_id)
-        if (!payload.ciclo_id && despRec.ciclo_id) payload.ciclo_id = despRec.ciclo_id
-        if (!payload.chamada_id && despRec.chamada_id) payload.chamada_id = despRec.chamada_id
-        if (!payload.motorista_id && despRec.motorista_id)
-          payload.motorista_id = despRec.motorista_id
+        if (!resolvedCicloId && despRec.ciclo_id) resolvedCicloId = despRec.ciclo_id
+        if (!resolvedChamadaId && despRec.chamada_id) resolvedChamadaId = despRec.chamada_id
+        if (!resolvedMotoristaId && despRec.motorista_id) resolvedMotoristaId = despRec.motorista_id
       } catch {
         /* tolerante */
       }
     }
+
+    if (data.rota_id && (!resolvedChamadaId || !resolvedCicloId)) {
+      try {
+        const rRec = await pb.collection('rotas').getOne(data.rota_id)
+        if (!resolvedChamadaId && rRec.chamada_id) resolvedChamadaId = rRec.chamada_id
+      } catch {
+        /* tolerante */
+      }
+
+      if (!resolvedCicloId && resolvedChamadaId) {
+        try {
+          const ciclosList = await pb.collection('ciclos').getList(1, 1, {
+            filter: `chamada_id = "${resolvedChamadaId}" && status != "fechado" && status != "cancelado"`,
+            sort: '-created,-data_inicio',
+          })
+          if (ciclosList.items.length > 0) {
+            resolvedCicloId = ciclosList.items[0].id
+          }
+        } catch {
+          /* tolerante */
+        }
+      }
+    }
+
+    if (resolvedCicloId) payload.ciclo_id = resolvedCicloId
+    if (resolvedChamadaId) payload.chamada_id = resolvedChamadaId
+    if (resolvedMotoristaId) payload.motorista_id = resolvedMotoristaId
+
+    let registroSalvo: EntregaRegistroRecord | null = null
 
     // Se vier client_uid, tenta atualizar ou evitar duplicação
     if (data.client_uid) {
@@ -518,7 +610,9 @@ export const entregaRegistrosService = {
           })
         if (existList.items.length > 0) {
           const id = existList.items[0].id
-          return await pb.collection('entrega_registros').update<EntregaRegistroRecord>(id, payload)
+          registroSalvo = await pb
+            .collection('entrega_registros')
+            .update<EntregaRegistroRecord>(id, payload)
         }
       } catch {
         /* intentionally ignored */
@@ -526,7 +620,7 @@ export const entregaRegistrosService = {
     }
 
     // Checar se já existe registro desta escola na mesma rota e despacho
-    if (data.rota_id && data.escola_id) {
+    if (!registroSalvo && data.rota_id && data.escola_id) {
       try {
         const filterStr = data.despacho_id
           ? `rota_id = "${data.rota_id}" && escola_id = "${data.escola_id}" && despacho_id = "${data.despacho_id}"`
@@ -536,13 +630,101 @@ export const entregaRegistrosService = {
           .getList<EntregaRegistroRecord>(1, 1, { filter: filterStr, sort: '-created' })
         if (exist.items.length > 0) {
           const id = exist.items[0].id
-          return await pb.collection('entrega_registros').update<EntregaRegistroRecord>(id, payload)
+          registroSalvo = await pb
+            .collection('entrega_registros')
+            .update<EntregaRegistroRecord>(id, payload)
         }
       } catch {
         /* intentionally ignored */
       }
     }
 
-    return await pb.collection('entrega_registros').create<EntregaRegistroRecord>(payload)
+    if (!registroSalvo) {
+      registroSalvo = await pb
+        .collection('entrega_registros')
+        .create<EntregaRegistroRecord>(payload)
+    }
+
+    // 2. GANCHO DE RETENÇÃO HISTÓRICA DO PORTAL DO MOTORISTA (entrega_comprovantes):
+    // Garante a gravação ou atualização permanente com ciclo_id e chamada_id.
+    // É idempotente e NÃO bloqueante (erro só em console/log).
+    try {
+      const nowIso = new Date().toISOString()
+      let escolaNome = ''
+      try {
+        const escRec = await pb.collection('escolas').getOne(data.escola_id)
+        escolaNome = escRec.nome || ''
+      } catch {
+        /* tolerante */
+      }
+
+      // Idempotência em entrega_comprovantes: buscar por client_uid ou registro_id ou (escola + ciclo + rota)
+      let compExistId: string | null = null
+      if (data.client_uid) {
+        try {
+          const cList = await pb.collection('entrega_comprovantes').getList(1, 1, {
+            filter: `client_uid = "${data.client_uid}"`,
+          })
+          if (cList.items.length > 0) compExistId = cList.items[0].id
+        } catch {
+          /* tolerante */
+        }
+      }
+
+      if (!compExistId && registroSalvo.id) {
+        try {
+          const cList = await pb.collection('entrega_comprovantes').getList(1, 1, {
+            filter: `registro_id = "${registroSalvo.id}"`,
+          })
+          if (cList.items.length > 0) compExistId = cList.items[0].id
+        } catch {
+          /* tolerante */
+        }
+      }
+
+      if (!compExistId && data.escola_id && data.rota_id) {
+        try {
+          const compFilter = resolvedCicloId
+            ? `escola_id = "${data.escola_id}" && rota_id = "${data.rota_id}" && ciclo_id = "${resolvedCicloId}"`
+            : `escola_id = "${data.escola_id}" && rota_id = "${data.rota_id}"`
+          const cList = await pb.collection('entrega_comprovantes').getList(1, 1, {
+            filter: compFilter,
+            sort: '-created',
+          })
+          if (cList.items.length > 0) compExistId = cList.items[0].id
+        } catch {
+          /* tolerante */
+        }
+      }
+
+      const compPayload: Record<string, any> = {
+        escola_id: data.escola_id,
+        escola_nome: escolaNome,
+        rota_id: data.rota_id || undefined,
+        ciclo_id: resolvedCicloId || undefined,
+        chamada_id: resolvedChamadaId || undefined,
+        motorista_id: resolvedMotoristaId || undefined,
+        registro_id: registroSalvo.id,
+        responsavel_nome: data.responsavel_nome || undefined,
+        responsavel_cpf: data.responsavel_cpf || undefined,
+        chegada_em: data.chegada_em || undefined,
+        confirmado_em: data.confirmado_em || nowIso,
+        assinatura: data.assinatura || undefined,
+        foto: data.foto || undefined,
+        observacao: data.observacao || undefined,
+        origem: 'portal_motorista',
+        client_uid: data.client_uid || undefined,
+      }
+
+      if (compExistId) {
+        await pb.collection('entrega_comprovantes').update(compExistId, compPayload)
+      } else {
+        await pb.collection('entrega_comprovantes').create(compPayload)
+      }
+    } catch (errComp) {
+      console.warn('Aviso ao sincronizar entrega_comprovantes no salvarRegistro:', errComp)
+    }
+
+    return registroSalvo
   },
 }

@@ -217,6 +217,8 @@ export const MotoristaPortal: React.FC = () => {
           escola_id: item.escola_id,
           motorista_id: item.motorista_id,
           despacho_id: item.despacho_id,
+          ciclo_id: data?.despacho.ciclo_id,
+          chamada_id: data?.despacho.chamada_id,
           responsavel_nome: item.responsavel_nome,
           responsavel_cpf: item.responsavel_cpf,
           chegada_em: item.chegada_em,
@@ -408,6 +410,8 @@ export const MotoristaPortal: React.FC = () => {
             escola_id: selectedParada.escola_id,
             motorista_id: data.despacho.motorista_id,
             despacho_id: data.despacho.id,
+            ciclo_id: data.despacho.ciclo_id,
+            chamada_id: data.despacho.chamada_id,
             responsavel_nome: nomeResponsavelSalvar,
             responsavel_cpf: cpfResponsavelSalvar,
             chegada_em: chegadaEm || nowIso,
@@ -417,8 +421,7 @@ export const MotoristaPortal: React.FC = () => {
             observacao: observacao.trim() || undefined,
             client_uid: clientUid,
           })
-          // Atualiza a fila marcando sincronizado
-          const f = lerFilaLocal(token).map((it) =>
+          // Atualiza a fila marcando sincronizado          const f = lerFilaLocal(token).map((it) =>
             it.client_uid === clientUid ? { ...it, status_sync: 'sincronizado' as const } : it,
           )
           salvarCachePortal(token, data)
