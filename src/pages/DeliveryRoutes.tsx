@@ -411,15 +411,20 @@ export default function DeliveryRoutes() {
 
       const mapDesp: Record<string, RotaDespachoRecord> = {}
       const mapRegs: Record<string, EntregaRegistroRecord[]> = {}
+      const cicloFiltroId = selectedCiclo?.id
 
       for (const r of rotasLogisticas) {
-        const desp = await rotaDespachosService.getAtivoByRota(r.id)
+        const desp = await rotaDespachosService.getAtivoByRota(r.id, cicloFiltroId)
         if (desp) {
           mapDesp[r.id] = desp
         }
-        const regs = await entregaRegistrosService.getByRota(r.id)
-        if (regs.length > 0) {
-          mapRegs[r.id] = regs
+        // Se há ciclo selecionado, passa cicloFiltroId. Se não houver ciclo selecionado,
+        // não traz registros de outros ciclos (isolamento por ciclo)
+        if (cicloFiltroId) {
+          const regs = await entregaRegistrosService.getByRota(r.id, cicloFiltroId)
+          if (regs.length > 0) {
+            mapRegs[r.id] = regs
+          }
         }
       }
       setDespachosAtivosMap(mapDesp)
@@ -431,7 +436,7 @@ export default function DeliveryRoutes() {
 
   useEffect(() => {
     carregarMotoristasEDespachos()
-  }, [rotasLogisticas])
+  }, [rotasLogisticas, selectedCiclo?.id])
 
   // Subscrição em tempo real na coleção rota_despachos:
   // quando um despacho é desativado (ativo=false) ou excluído, remove rotaId do despachosAtivosMap
@@ -675,9 +680,16 @@ export default function DeliveryRoutes() {
         })
       })
 
-      // Último despacho realizado desta rota
+      // Último despacho realizado desta rota (respeitando o ciclo selecionado quando houver)
       const ultimoDespacho = despachos
-        .filter((d) => (d.rota_id || (d as any).rota_logistica_id) === rota.id)
+        .filter((d) => {
+          const rotaMatch = (d.rota_id || (d as any).rota_logistica_id) === rota.id
+          if (!rotaMatch) return false
+          if (selectedCiclo?.id) {
+            return (d as any).ciclo_id === selectedCiclo.id
+          }
+          return false
+        })
         .sort(
           (a, b) => new Date(b.data_despacho).getTime() - new Date(a.data_despacho).getTime(),
         )[0]
@@ -1651,7 +1663,9 @@ export default function DeliveryRoutes() {
               Boolean(despAtivoRota) ||
               item.ultimoDespacho?.status === 'Em Rota' ||
               item.pedidosEmRota.length > 0
-            const registrosRota = getEntregaRegistrosDaRota(item.rota.id)
+            const registrosRota = selectedCiclo?.id
+              ? getEntregaRegistrosDaRota(item.rota.id, selectedCiclo.id)
+              : []
             const temEntregaConfirmadaPortal = registrosRota.some(
               (r) => r.confirmado_em && r.confirmado_em.trim() !== '',
             )
@@ -1889,11 +1903,17 @@ export default function DeliveryRoutes() {
                     // Verificação de modo de posicionamento do caminhão:
                     // Se a rota está "Em Rota" (hasEmRota) COM pelo menos um registro confirmado -> modo AUTOMÁTICO
                     // Exceção: rota despachada mas SEM nenhum registro confirmado -> modo MANUAL preservado
-                    const registrosRota = getEntregaRegistrosDaRota(item.rota.id)
+                    const registrosRota = selectedCiclo?.id
+                      ? getEntregaRegistrosDaRota(item.rota.id, selectedCiclo.id)
+                      : []
                     const rotaRegsEfetivosCalculo =
                       registrosRota.length > 0
                         ? registrosRota
-                        : registrosEntregasMap[item.rota.id] || []
+                        : selectedCiclo?.id
+                          ? (registrosEntregasMap[item.rota.id] || []).filter(
+                              (r) => r.ciclo_id === selectedCiclo.id,
+                            )
+                          : []
                     const temEntregaConfirmadaPortal = rotaRegsEfetivosCalculo.some(
                       (r) => r.confirmado_em && r.confirmado_em.trim() !== '',
                     )
@@ -2345,12 +2365,18 @@ export default function DeliveryRoutes() {
                         const viewMode = routeViewModeMap[item.rota.id] || 'ambos'
                         const depositoConfig = resolverDepositoCentral(config)
 
-                        // Derivar registros de entregas da rota reativamente via contexto global
-                        const rotaRegsContexto = getEntregaRegistrosDaRota(item.rota.id)
+                        // Derivar registros de entregas da rota reativamente via contexto global (respeitando o ciclo selecionado)
+                        const rotaRegsContexto = selectedCiclo?.id
+                          ? getEntregaRegistrosDaRota(item.rota.id, selectedCiclo.id)
+                          : []
                         const rotaRegsEfetivos =
                           rotaRegsContexto.length > 0
                             ? rotaRegsContexto
-                            : registrosEntregasMap[item.rota.id] || []
+                            : selectedCiclo?.id
+                              ? (registrosEntregasMap[item.rota.id] || []).filter(
+                                  (r) => r.ciclo_id === selectedCiclo.id,
+                                )
+                              : []
 
                         // Mapa de escolaId -> { confirmado_em } para escolas com entrega confirmada
                         const entregasConfirmadasMap = new Map<
@@ -2394,13 +2420,8 @@ export default function DeliveryRoutes() {
                                 ? ultimaEscolaEntregueId === parada.escolaId
                                 : item.rota.caminhao_escola_id === parada.escolaId
 
-                              // Checar se a parada já foi entregue
-                              const rotaRegsContexto = getEntregaRegistrosDaRota(item.rota.id)
-                              const rotaRegs =
-                                rotaRegsContexto.length > 0
-                                  ? rotaRegsContexto
-                                  : registrosEntregasMap[item.rota.id] || []
-                              const regParada = rotaRegs.find(
+                              // Checar se a parada já foi entregue no ciclo selecionado
+                              const regParada = rotaRegsEfetivos.find(
                                 (rg) =>
                                   rg.escola_id === parada.escolaId && Boolean(rg.confirmado_em),
                               )
@@ -2505,19 +2526,7 @@ export default function DeliveryRoutes() {
 
                                           {/* Status de entrega pelo motorista */}
                                           {(() => {
-                                            // Derivação reativa ao contexto global (getEntregaRegistrosDaRota com fallback local)
-                                            const rotaRegsContexto = getEntregaRegistrosDaRota(
-                                              item.rota.id,
-                                            )
-                                            const rotaRegs =
-                                              rotaRegsContexto.length > 0
-                                                ? rotaRegsContexto
-                                                : registrosEntregasMap[item.rota.id] || []
-                                            const regParada = rotaRegs.find(
-                                              (rg) =>
-                                                rg.escola_id === parada.escolaId &&
-                                                Boolean(rg.confirmado_em),
-                                            )
+                                            // Derivação reativa ao ciclo selecionado (reaproveitando regParada já apurado)
                                             if (!regParada) return null
 
                                             const horaEnt = regParada.confirmado_em
@@ -2611,20 +2620,13 @@ export default function DeliveryRoutes() {
                                           {parada.endereco || 'Endereço não informado'}
                                         </p>
                                         {(() => {
-                                          const rotaRegsContexto = getEntregaRegistrosDaRota(
-                                            item.rota.id,
-                                          )
-                                          const rotaRegs =
-                                            rotaRegsContexto.length > 0
-                                              ? rotaRegsContexto
-                                              : registrosEntregasMap[item.rota.id] || []
-                                          const regParada = rotaRegs.find(
+                                          const regObs = rotaRegsEfetivos.find(
                                             (rg) => rg.escola_id === parada.escolaId,
                                           )
-                                          if (regParada?.observacao) {
+                                          if (regObs?.observacao) {
                                             return (
                                               <p className="text-[9px] text-slate-600 dark:text-slate-400 italic truncate mt-0.5">
-                                                Obs: {regParada.observacao}
+                                                Obs: {regObs.observacao}
                                               </p>
                                             )
                                           }

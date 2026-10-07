@@ -76,7 +76,7 @@ interface AppState {
   despachos: DespachoRecord[]
   entregaRegistros: EntregaRegistroRecord[]
   ultimoEventoEntrega: string | null
-  getEntregaRegistrosDaRota: (rotaId: string) => EntregaRegistroRecord[]
+  getEntregaRegistrosDaRota: (rotaId: string, cicloId?: string) => EntregaRegistroRecord[]
   escolasComEntregaDuplicadaMap: Record<string, string[]>
   cicloCorrente: { cicloId: string; chamadaId?: string } | null
   setCicloCorrente: (cicloId: string, chamadaId?: string) => void
@@ -3525,9 +3525,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [entregaRegistros])
 
   const getEntregaRegistrosDaRota = useCallback(
-    (rotaId: string): EntregaRegistroRecord[] => {
+    (rotaId: string, cicloId?: string): EntregaRegistroRecord[] => {
       if (!rotaId) return []
-      return registrosDeduplicadosPorRotaMap.get(rotaId) || []
+      const list = registrosDeduplicadosPorRotaMap.get(rotaId) || []
+      if (cicloId) {
+        return list.filter((r) => r.ciclo_id === cicloId)
+      }
+      return list
     },
     [registrosDeduplicadosPorRotaMap],
   )

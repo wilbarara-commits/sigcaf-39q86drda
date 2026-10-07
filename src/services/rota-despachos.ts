@@ -68,12 +68,16 @@ export interface MotoristaPortalData {
 
 export const rotaDespachosService = {
   /**
-   * Busca o despacho ativo mais recente de uma rota
+   * Busca o despacho ativo mais recente de uma rota (opcionalmente filtrado por ciclo)
    */
-  async getAtivoByRota(rotaId: string): Promise<RotaDespachoRecord | null> {
+  async getAtivoByRota(rotaId: string, cicloId?: string): Promise<RotaDespachoRecord | null> {
     try {
+      let filter = `rota_id = "${rotaId}" && ativo = true`
+      if (cicloId) {
+        filter += ` && ciclo_id = "${cicloId}"`
+      }
       const records = await pb.collection('rota_despachos').getList<RotaDespachoRecord>(1, 1, {
-        filter: `rota_id = "${rotaId}" && ativo = true`,
+        filter,
         sort: '-despachado_em,-created',
         expand: 'motorista_id,rota_id,ciclo_id,chamada_id',
       })
@@ -515,12 +519,16 @@ export const rotaDespachosService = {
 
 export const entregaRegistrosService = {
   /**
-   * Lista todos os registros de uma rota
+   * Lista todos os registros de uma rota (opcionalmente filtrados por ciclo)
    */
-  async getByRota(rotaId: string): Promise<EntregaRegistroRecord[]> {
+  async getByRota(rotaId: string, cicloId?: string): Promise<EntregaRegistroRecord[]> {
     try {
+      let filter = `rota_id = "${rotaId}"`
+      if (cicloId) {
+        filter += ` && ciclo_id = "${cicloId}"`
+      }
       return await pb.collection('entrega_registros').getFullList<EntregaRegistroRecord>({
-        filter: `rota_id = "${rotaId}"`,
+        filter,
         sort: 'confirmado_em,created',
         expand: 'escola_id,motorista_id',
       })
