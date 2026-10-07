@@ -156,6 +156,103 @@ routerAdd('POST', '/backend/v1/rotas-logisticas/despachar', (e) => {
       rotaTarget.set('caminhao_escola_id', '')
       txApp.save(rotaTarget)
     } catch (_) {}
+
+    // Gravar Snapshot Histórico de Despacho (rota_snapshots)
+    try {
+      const rotaTarget = txApp.findRecordById('rotas', rotaId)
+      const rotaNome = rotaTarget.getString('nome') || 'Rota'
+      const motoristaId = body.motorista_id || ''
+
+      // Montar lista ordenada de paradas detalhada
+      const paradasList = []
+      for (let pIdx = 0; pIdx < paradas.length; pIdx++) {
+        const pRecord = paradas[pIdx]
+        const eId = pRecord.getString('escola_id')
+        let eNome = ''
+        let eEndereco = ''
+        try {
+          const escRec = txApp.findRecordById('escolas', eId)
+          eNome = escRec.getString('nome') || ''
+          eEndereco = escRec.getString('endereco') || ''
+        } catch (_) {}
+
+        // Buscar contrato do vínculo se existir
+        let contratoNome = ''
+        try {
+          const vinculos = txApp.findRecordsByFilter(
+            'contrato_escolas',
+            'escola_id = {:eId} && rota_id = {:rId}',
+            '-created',
+            1,
+            0,
+            { eId: eId, rId: rotaId },
+          )
+          if (vinculos.length > 0 && vinculos[0].getString('contrato_id')) {
+            const cRec = txApp.findRecordById('contratos', vinculos[0].getString('contrato_id'))
+            contratoNome = cRec.getString('numero') || cRec.getString('numero_chamada') || ''
+          }
+        } catch (_) {}
+
+        paradasList.push({
+          escola_id: eId,
+          escola_nome: eNome,
+          ordem: pRecord.getInt('ordem') || pIdx + 1,
+          endereco: eEndereco,
+          contrato: contratoNome,
+        })
+      }
+
+      // Buscar se já existe despacho_id em rota_despachos ativo
+      let rotaDespachoId = ''
+      try {
+        const rdList = txApp.findRecordsByFilter(
+          'rota_despachos',
+          'rota_id = {:rId} && ativo = true',
+          '-created',
+          1,
+          0,
+          { rId: rotaId },
+        )
+        if (rdList.length > 0) {
+          rotaDespachoId = rdList[0].id
+        }
+      } catch (_) {}
+
+      // Idempotência: verificar se já existe snapshot deste despacho
+      const filterSnap = effectiveCicloId
+        ? 'rota_id = {:rId} && ciclo_id = {:cId} && versao_evento = "despacho"'
+        : 'rota_id = {:rId} && versao_evento = "despacho"'
+      const snapParams = { rId: rotaId }
+      if (effectiveCicloId) snapParams.cId = effectiveCicloId
+
+      const snapsExistentes = txApp.findRecordsByFilter(
+        'rota_snapshots',
+        filterSnap,
+        '-snapshot_em,-created',
+        1,
+        0,
+        snapParams,
+      )
+
+      const snapshotsCol = txApp.findCollectionByNameOrId('rota_snapshots')
+      const snapRec = snapsExistentes.length > 0 ? snapsExistentes[0] : new Record(snapshotsCol)
+
+      snapRec.set('rota_id', rotaId)
+      if (effectiveCicloId) snapRec.set('ciclo_id', effectiveCicloId)
+      if (chamadaId) snapRec.set('chamada_id', chamadaId)
+      if (motoristaId) snapRec.set('motorista_id', motoristaId)
+      if (rotaDespachoId) snapRec.set('despacho_id', rotaDespachoId)
+      snapRec.set('rota_nome', rotaNome)
+      snapRec.set('versao_evento', 'despacho')
+      snapRec.set('total_paradas', paradasList.length)
+      snapRec.set('total_pedidos', pedidosParaDespachar.length)
+      snapRec.set('paradas_snapshot', JSON.stringify(paradasList))
+      snapRec.set('snapshot_em', nowIso)
+      snapRec.set('observacao', 'Despacho da rota registrado automaticamente')
+      txApp.save(snapRec)
+    } catch (errSnap) {
+      console.warn('Aviso ao registrar rota_snapshots no despacho:', errSnap)
+    }
   })
 
   return e.json(200, {
@@ -315,6 +412,103 @@ routerAdd('POST', '/backend/v1/rotas/despachar', (e) => {
       rotaTarget.set('caminhao_escola_id', '')
       txApp.save(rotaTarget)
     } catch (_) {}
+
+    // Gravar Snapshot Histórico de Despacho (rota_snapshots)
+    try {
+      const rotaTarget = txApp.findRecordById('rotas', rotaId)
+      const rotaNome = rotaTarget.getString('nome') || 'Rota'
+      const motoristaId = body.motorista_id || ''
+
+      // Montar lista ordenada de paradas detalhada
+      const paradasList = []
+      for (let pIdx = 0; pIdx < paradas.length; pIdx++) {
+        const pRecord = paradas[pIdx]
+        const eId = pRecord.getString('escola_id')
+        let eNome = ''
+        let eEndereco = ''
+        try {
+          const escRec = txApp.findRecordById('escolas', eId)
+          eNome = escRec.getString('nome') || ''
+          eEndereco = escRec.getString('endereco') || ''
+        } catch (_) {}
+
+        // Buscar contrato do vínculo se existir
+        let contratoNome = ''
+        try {
+          const vinculos = txApp.findRecordsByFilter(
+            'contrato_escolas',
+            'escola_id = {:eId} && rota_id = {:rId}',
+            '-created',
+            1,
+            0,
+            { eId: eId, rId: rotaId },
+          )
+          if (vinculos.length > 0 && vinculos[0].getString('contrato_id')) {
+            const cRec = txApp.findRecordById('contratos', vinculos[0].getString('contrato_id'))
+            contratoNome = cRec.getString('numero') || cRec.getString('numero_chamada') || ''
+          }
+        } catch (_) {}
+
+        paradasList.push({
+          escola_id: eId,
+          escola_nome: eNome,
+          ordem: pRecord.getInt('ordem') || pIdx + 1,
+          endereco: eEndereco,
+          contrato: contratoNome,
+        })
+      }
+
+      // Buscar se já existe despacho_id em rota_despachos ativo
+      let rotaDespachoId = ''
+      try {
+        const rdList = txApp.findRecordsByFilter(
+          'rota_despachos',
+          'rota_id = {:rId} && ativo = true',
+          '-created',
+          1,
+          0,
+          { rId: rotaId },
+        )
+        if (rdList.length > 0) {
+          rotaDespachoId = rdList[0].id
+        }
+      } catch (_) {}
+
+      // Idempotência: verificar se já existe snapshot deste despacho
+      const filterSnap = effectiveCicloId
+        ? 'rota_id = {:rId} && ciclo_id = {:cId} && versao_evento = "despacho"'
+        : 'rota_id = {:rId} && versao_evento = "despacho"'
+      const snapParams = { rId: rotaId }
+      if (effectiveCicloId) snapParams.cId = effectiveCicloId
+
+      const snapsExistentes = txApp.findRecordsByFilter(
+        'rota_snapshots',
+        filterSnap,
+        '-snapshot_em,-created',
+        1,
+        0,
+        snapParams,
+      )
+
+      const snapshotsCol = txApp.findCollectionByNameOrId('rota_snapshots')
+      const snapRec = snapsExistentes.length > 0 ? snapsExistentes[0] : new Record(snapshotsCol)
+
+      snapRec.set('rota_id', rotaId)
+      if (effectiveCicloId) snapRec.set('ciclo_id', effectiveCicloId)
+      if (chamadaId) snapRec.set('chamada_id', chamadaId)
+      if (motoristaId) snapRec.set('motorista_id', motoristaId)
+      if (rotaDespachoId) snapRec.set('despacho_id', rotaDespachoId)
+      snapRec.set('rota_nome', rotaNome)
+      snapRec.set('versao_evento', 'despacho')
+      snapRec.set('total_paradas', paradasList.length)
+      snapRec.set('total_pedidos', pedidosParaDespachar.length)
+      snapRec.set('paradas_snapshot', JSON.stringify(paradasList))
+      snapRec.set('snapshot_em', nowIso)
+      snapRec.set('observacao', 'Despacho da rota registrado automaticamente')
+      txApp.save(snapRec)
+    } catch (errSnap) {
+      console.warn('Aviso ao registrar rota_snapshots no despacho:', errSnap)
+    }
   })
 
   return e.json(200, {

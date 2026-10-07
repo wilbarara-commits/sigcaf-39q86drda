@@ -1,3 +1,2 @@
-// Versão da aplicação centralizada e sincronizada com package.json
-export const APP_VERSION = '0.0.219'
-export const APP_BUILD_TIMESTAMP = new Date().toISOString()
+export const APP_VERSION = '0.0.221'
+export const APP_BUILD_TIMESTAMP = '2026-10-07T16:30:00.000Z'

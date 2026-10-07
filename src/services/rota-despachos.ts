@@ -167,6 +167,82 @@ export const rotaDespachosService = {
       renovado_em: data.isRedisparo ? nowIso : undefined,
     })
 
+    // 2.1 Garantir retenção histórica em rota_snapshots (versao_evento='despacho')
+    // Na 1ª vez do despacho cria o snapshot; no redisparo, atualiza idempotentemente o snapshot existente sem duplicar
+    try {
+      let rotaNome = 'Rota'
+      try {
+        const rRec = await pb.collection('rotas').getOne(data.rotaId)
+        rotaNome = rRec.nome || 'Rota'
+      } catch {
+        /* tolerante */
+      }
+
+      // Paradas da rota
+      let paradasList: any[] = []
+      try {
+        const pRecords = await pb.collection('paradas_rota').getFullList({
+          filter: `rota_id = "${data.rotaId}"`,
+          sort: 'ordem',
+          expand: 'escola_id',
+        })
+        paradasList = pRecords.map((p, idx) => ({
+          escola_id: p.escola_id,
+          escola_nome: (p as any).expand?.escola_id?.nome || '',
+          ordem: p.ordem || idx + 1,
+          endereco: (p as any).expand?.escola_id?.endereco || '',
+        }))
+      } catch {
+        /* tolerante */
+      }
+
+      // Contagem de pedidos da rota
+      let totalPedidosCount = 0
+      try {
+        let pedFilter = `rota_id = "${data.rotaId}"`
+        if (data.cicloId) pedFilter += ` && ciclo_id = "${data.cicloId}"`
+        const pList = await pb.collection('pedidos').getFullList({ filter: pedFilter })
+        totalPedidosCount = pList.length
+      } catch {
+        /* tolerante */
+      }
+
+      // Verificar existência de snapshot do ciclo/rota para despacho
+      const filterSnap = data.cicloId
+        ? `rota_id = "${data.rotaId}" && ciclo_id = "${data.cicloId}" && versao_evento = "despacho"`
+        : `rota_id = "${data.rotaId}" && versao_evento = "despacho"`
+
+      const snapExistentes = await pb.collection('rota_snapshots').getList(1, 1, {
+        filter: filterSnap,
+        sort: '-snapshot_em,-created',
+      })
+
+      const snapPayload: Record<string, any> = {
+        rota_id: data.rotaId,
+        ciclo_id: data.cicloId || undefined,
+        chamada_id: data.chamadaId || undefined,
+        motorista_id: data.motoristaId || undefined,
+        despacho_id: createdDespacho.id,
+        rota_nome: rotaNome,
+        versao_evento: 'despacho',
+        total_paradas: paradasList.length,
+        total_pedidos: totalPedidosCount,
+        paradas_snapshot: JSON.stringify(paradasList),
+        snapshot_em: nowIso,
+        observacao: data.isRedisparo
+          ? 'Redisparo da rota pelo motorista'
+          : 'Despacho da rota pelo motorista',
+      }
+
+      if (snapExistentes.items.length > 0) {
+        await pb.collection('rota_snapshots').update(snapExistentes.items[0].id, snapPayload)
+      } else {
+        await pb.collection('rota_snapshots').create(snapPayload)
+      }
+    } catch (errSnap) {
+      console.warn('Aviso ao sincronizar rota_snapshots no despacharOuRenovar:', errSnap)
+    }
+
     // 3. Ao despachar, zera campos legados de posição do caminhão para começar do depósito
     try {
       await pb.collection('rotas').update(data.rotaId, {
@@ -417,6 +493,19 @@ export const entregaRegistrosService = {
     const payload: Record<string, any> = {
       ...data,
       status_sync: 'sincronizado',
+    }
+
+    // Resolver ciclo_id e chamada_id caso o despacho tenha sido informado
+    if (data.despacho_id && (!payload.ciclo_id || !payload.chamada_id)) {
+      try {
+        const despRec = await pb.collection('rota_despachos').getOne(data.despacho_id)
+        if (!payload.ciclo_id && despRec.ciclo_id) payload.ciclo_id = despRec.ciclo_id
+        if (!payload.chamada_id && despRec.chamada_id) payload.chamada_id = despRec.chamada_id
+        if (!payload.motorista_id && despRec.motorista_id)
+          payload.motorista_id = despRec.motorista_id
+      } catch {
+        /* tolerante */
+      }
     }
 
     // Se vier client_uid, tenta atualizar ou evitar duplicação
