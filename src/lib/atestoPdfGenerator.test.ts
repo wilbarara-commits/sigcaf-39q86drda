@@ -5,9 +5,42 @@ import {
   createOfficialAtestoPdf,
   formatExtendDateBR,
   formatQuantityBR,
+  parseProductNameAka,
 } from './atestoPdfGenerator'
 
 describe('atestoPdfGenerator', () => {
+  describe('parseProductNameAka', () => {
+    it('separa produto com vírgula em nome principal e AKA', () => {
+      const res = parseProductNameAka('Batata Doce Roxa, Batata Doce')
+      expect(res.nomePrincipal).toBe('Batata Doce Roxa')
+      expect(res.aka).toBe('Batata Doce')
+    })
+
+    it('mantém apenas nome principal quando não há vírgula', () => {
+      const res = parseProductNameAka('Banana Prata')
+      expect(res.nomePrincipal).toBe('Banana Prata')
+      expect(res.aka).toBeUndefined()
+    })
+
+    it('separa apenas na primeira vírgula caso haja mais de uma', () => {
+      const res = parseProductNameAka('Alface Lisa, Alface, Hidropônica')
+      expect(res.nomePrincipal).toBe('Alface Lisa')
+      expect(res.aka).toBe('Alface, Hidropônica')
+    })
+
+    it('ignora AKA vazio quando só há vírgula no final', () => {
+      const res = parseProductNameAka('Cenoura, ')
+      expect(res.nomePrincipal).toBe('Cenoura')
+      expect(res.aka).toBeUndefined()
+    })
+
+    it('trata string vazia adequadamente', () => {
+      const res = parseProductNameAka('')
+      expect(res.nomePrincipal).toBe('')
+      expect(res.aka).toBeUndefined()
+    })
+  })
+
   it('formata quantidades no padrão brasileiro', () => {
     expect(formatQuantityBR(10)).toBe('10')
     expect(formatQuantityBR(10.5)).toBe('10,5')
@@ -170,5 +203,30 @@ describe('atestoPdfGenerator', () => {
     ])
     expect(batch1Via).toBeDefined()
     expect(batch1Via.getNumberOfPages()).toBe(1)
+  })
+
+  it('gera PDF com produtos que possuem formato "NOME, AKA" sem erros', async () => {
+    const docData: AtestoDocumentData = {
+      numeroAtesto: 'AT-040',
+      numeroChamada: '01/2026',
+      nomeEscola: 'Escola Municipal E',
+      nomeCooperativa: 'Cooperativa Agrícola Familiar',
+      siglaCooperativa: 'COOP',
+      cidadeUf: 'Teresópolis - RJ',
+      dataEmissao: new Date('2026-05-10T10:00:00Z'),
+      items: [
+        { nome: 'Batata Doce Roxa, Batata Doce', quantidade: 50 },
+        { nome: 'Banana Prata', quantidade: 20 },
+        { nome: 'Tomate Débora, Tomate Redondo', quantidade: 15.5 },
+      ],
+      cicloNome: 'Ciclo 40/2026',
+      contratoNumero: 'C-2026-02-05',
+      numeroParada: 2,
+      via: 'v1',
+    }
+
+    const doc = await createOfficialAtestoPdf(docData)
+    expect(doc).toBeDefined()
+    expect(doc.getNumberOfPages()).toBe(1)
   })
 })

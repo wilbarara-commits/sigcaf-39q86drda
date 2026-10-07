@@ -54,6 +54,7 @@ import {
   downloadAtestoPdf,
   formatQuantityBR,
   formatExtendDateBR,
+  parseProductNameAka,
   type AtestoDocumentData,
 } from '@/lib/atestoPdfGenerator'
 
@@ -2133,25 +2134,39 @@ function DocumentoOficialView({
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800">
-              {items.map((it, idx) => (
-                <tr key={idx}>
-                  <td
-                    className={`border-r border-slate-800 ${
-                      isDense ? 'py-0.5 px-2.5 text-[11px]' : 'py-1 px-3 text-xs'
-                    } uppercase text-slate-800 font-medium truncate`}
-                    title={it.name}
-                  >
-                    {it.name}
-                  </td>
-                  <td
-                    className={`${
-                      isDense ? 'py-0.5 px-2.5 text-[11px]' : 'py-1 px-3 text-xs'
-                    } text-center font-bold text-slate-900`}
-                  >
-                    {formatQuantityBR(it.quantity)}
-                  </td>
-                </tr>
-              ))}
+              {items.map((it, idx) => {
+                const parsed = parseProductNameAka(it.name)
+                return (
+                  <tr key={idx}>
+                    <td
+                      className={`border-r border-slate-800 ${
+                        isDense ? 'py-0.5 px-2.5 text-[11px]' : 'py-1 px-3 text-xs'
+                      } text-slate-800 font-medium`}
+                      title={it.name}
+                    >
+                      <div className="uppercase font-medium text-slate-800 leading-tight">
+                        {parsed.nomePrincipal}
+                      </div>
+                      {parsed.aka && (
+                        <div
+                          className={`text-slate-500 font-normal normal-case leading-tight ${
+                            isDense ? 'text-[9.5px]' : 'text-[10px]'
+                          }`}
+                        >
+                          Conhecido como: {parsed.aka}
+                        </div>
+                      )}
+                    </td>
+                    <td
+                      className={`${
+                        isDense ? 'py-0.5 px-2.5 text-[11px]' : 'py-1 px-3 text-xs'
+                      } text-center font-bold text-slate-900 align-middle`}
+                    >
+                      {formatQuantityBR(it.quantity)}
+                    </td>
+                  </tr>
+                )
+              })}
               {Array.from({ length: emptyRowsCount }).map((_, i) => (
                 <tr key={`empty-${i}`}>
                   <td

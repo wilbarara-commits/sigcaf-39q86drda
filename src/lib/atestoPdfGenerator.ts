@@ -31,6 +31,37 @@ function runAutoTable(doc: jsPDF, options: any): void {
   throw new Error('Falha ao carregar o motor de tabela autoTable do jsPDF')
 }
 
+export interface ParsedProductNameAka {
+  nomePrincipal: string
+  aka?: string
+}
+
+/**
+ * Separa o nome do produto cadastrado no contrato no formato "NOME, AKA":
+ * - A parte ANTES da primeira vírgula é o nome principal do produto.
+ * - A parte DEPOIS da primeira vírgula é o AKA (apelido / "also known as").
+ * - Se não houver vírgula, retorna apenas o nome principal sem AKA.
+ */
+export function parseProductNameAka(rawName: string): ParsedProductNameAka {
+  const text = (rawName || '').trim()
+  if (!text) {
+    return { nomePrincipal: '' }
+  }
+
+  const commaIndex = text.indexOf(',')
+  if (commaIndex === -1) {
+    return { nomePrincipal: text }
+  }
+
+  const nomePrincipal = text.slice(0, commaIndex).trim()
+  const aka = text.slice(commaIndex + 1).trim()
+
+  return {
+    nomePrincipal: nomePrincipal || text,
+    aka: aka || undefined,
+  }
+}
+
 export interface AtestoDocumentData {
   numeroAtesto: string
   numeroChamada: string
@@ -335,10 +366,15 @@ export async function renderAtestoPageToDoc(
   }
 
   const head = [['PRODUTOS', 'QUANTIDADE (KG)']]
-  const body = data.items.map((item) => [
-    item.nome.toUpperCase(),
-    formatQuantityBR(item.quantidade),
-  ])
+  const body = data.items.map((item) => {
+    const parsed = parseProductNameAka(item.nome)
+    const nomePrincipalUpper = parsed.nomePrincipal.toUpperCase()
+    const content = parsed.aka
+      ? `${nomePrincipalUpper}\nConhecido como: ${parsed.aka}`
+      : nomePrincipalUpper
+
+    return [content, formatQuantityBR(item.quantidade)]
+  })
 
   // Se houver poucos itens (menos de 6), adiciona linhas tracejadas conforme o modelo oficial
   if (itemCount < 6) {
