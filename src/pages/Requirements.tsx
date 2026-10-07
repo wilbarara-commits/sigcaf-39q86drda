@@ -235,7 +235,7 @@ const MODULES: ModuleSpec[] = [
       'Ação "Cancelar Ciclo": Exige justificativa/motivo obrigatório. Quando existirem pedidos vinculados, questiona e cancela os pedidos em conjunto (impedindo registros órfãos). Caso existam atestos emitidos, o cancelamento é expressamente BLOQUEADO (o caminho regulamentar é fechar o ciclo). Ciclos já Fechados ou Cancelados não podem ser cancelados.',
       'Fechamento Manual: Habilitado na fase "Coleta Encerrada" com todos os atestos de entrega devidamente emitidos e armazenados no sistema. O botão exibe o progresso de fechamento "Atestos: X/N armazenados".',
       'Travas por Fase da Cadeia Operacional (Regra de Janelas de Envio): Coletando = PRIMEIRO envio de formulário pela escola aceito ✓, reenvios permitidos ✓, importação de planilhas ✓, despacho de rotas ✗; Correção = reenvio/correção de pedidos por escolas que já enviaram permitido ✓, primeiro envio bloqueado para quem não enviou a tempo ✗, importação de planilhas ✓; Coleta Encerrada = reenvios/correções permitidos até o fechamento da coleta (último envio prevalece) ✓, primeiro envio bloqueado ✗, novas importações ✗, despacho de rotas liberado ✓; Fechado ou Cancelado = bloqueio total de envios com aviso "Coleta encerrada para este ciclo — aguarde o próximo aviso da cooperativa". A página pública do formulário distingue operacionalmente escola sem pedido × escola que já enviou.',
-      'Trava "Em Rota" na Fase 3 (v0.0.195): No cartão da Fase 3 (Coleta Encerrada), o botão "Colocar em Rota" detecta automaticamente se o ciclo monitorado já possui despacho ativo em andamento (status "Em Rota" em despachos por ciclo_id ou chamada_id, ou pedidos do ciclo com status "Em Rota"). Nesse caso, o botão fica desabilitado com o rótulo "Em Rota", estilo atenuado e title explicativo ("Ciclo já possui despacho ativo em andamento (Em Rota)"), impedindo múltiplos despachos concorrentes.',
+      'Ciclo de Vida do Botão "Colocar em Rota" na Fase 3 (v0.0.195 / v0.0.212): No cartão da Fase 3 (Coleta Encerrada), o botão segue o ciclo de vida: (1) Disponível e habilitado ("Colocar em Rota") quando a coleta estiver encerrada e não houver despacho ativo nem entregas concluídas; (2) "Em Rota" (desabilitado) quando houver despacho ou pedidos com status "Em Rota"; (3) Oculto quando as entregas forem concluídas (isEntregasConcluidas: despachos encerrados, todos os pedidos ativos entregues e nenhum em rota), cedendo lugar ao badge visual definitivo "Entregas Concluídas" no cabeçalho do cartão.',
       'Navegação Contextual Dashboard → Monitoramento (v0.0.195): Os links do Dashboard (card de ciclo ativo e atalho "Ver Ciclo" das chamadas públicas ativas) navegam com parâmetros de URL contextuais `?cicloId=&chamadaId=`. A tela /monitoramento consome searchParams e pré-seleciona imediatamente o ciclo e chamada correspondentes em todas as seções (cabeçalho, painel informativo, fases, funil e alertas de escolas).',
       'Ciclo Operacional Corrente (v0.0.198): O ciclo em foco na operação diária é gerenciado globalmente via `AppContext` e sincronizado no `localStorage` (chave "sigcaf_ciclo_corrente"). Ao clicar na seta "Monitorar" nos cards de ciclo ativo do Dashboard ou na ação de monitoramento, o ciclo corrente é registrado. As telas de Monitoramento, Novo Pedido e Rotas de Entrega seguem a ordem de precedência: (1) query params de URL (?cicloId=&chamadaId=), (2) ciclo corrente gravado se existir no banco de dados, (3) fallback padrão atual. A troca pontual de ciclo no seletor de consulta dentro da tela NÃO altera o ciclo corrente (consulta local isolada). A página Histórico de Ciclos não é afetada por essa regra.',
       'Alertas da Fase de Entrega em Monitoramento — Bloco B (v0.0.204 / v0.0.208): Seção dinâmica no painel de monitoramento visível quando o ciclo monitorado possui rotas despachadas com status "Em Rota" (ou equivalente em andamento). Incorpora três alertas operacionais em tempo real: (1) "Rota parada": motorista sem sincronizar há mais de 30 minutos (limite exato definido pela cooperativa, baseado na hora da última entrega confirmada da rota deduplicada ou no horário do despacho caso nenhuma entrega tenha ocorrido ainda; atualização reativa via realtime + timer a cada 30 segundos); (2) "Paradas pendentes": escolas da rota ainda não entregues com contagem "faltam X de N" e identificação estrita pelo ID do banco (nunca casando por nome); (3) "Entrega sem assinatura": lista de escolas cuja entrega foi confirmada sem assinatura do responsável, com clique direto para o modal "Dados da Entrega" compartilhado; (4) Aviso sonoro melódico curto via Web Audio API disparado na central a cada nova entrega confirmada recebida via realtime (sem dependências externas, bloqueado na carga inicial, protegido contra repetições por client_uid/ID e com toggle de MUTE persistido no localStorage); (5) Reatividade total ao fechamento: ao ser confirmada a "Rota Entregue" pela secretária, o despacho é desativado na hora e a rota, seus alertas e paradas pendentes somem imediatamente em tempo real, sem F5.',
@@ -843,6 +843,60 @@ export function Requirements() {
       {/* 7. Registro de Manutenção e Limpeza de Dados */}
       <SectionTitle>7. Registro de Manutenção & Higienização do Banco de Dados</SectionTitle>
       <div className="space-y-4">
+        {/* Botão Colocar em Rota Oculto com Entregas Concluídas (v0.0.212) */}
+        <div className="rounded-lg border border-border bg-card p-5 space-y-4">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="text-primary border-primary/30">
+                Release v0.0.212
+              </Badge>
+              <span className="font-semibold text-foreground">
+                Ocultação do Botão &quot;Colocar em Rota&quot; da Fase 3 com Entregas Concluídas
+                (/monitoramento)
+              </span>
+            </div>
+            <span className="text-xs text-muted-foreground">Consolidado (v0.0.212)</span>
+          </div>
+          <p className="text-sm text-foreground/90 leading-relaxed">
+            Correção no ciclo de vida do botão da Fase 3 (Coleta Encerrada) em{' '}
+            <code>/monitoramento</code>: quando as entregas do ciclo selecionado já foram concluídas
+            (todos os pedidos entregues, nenhum em rota e nenhum despacho em trânsito), o botão
+            &quot;Colocar em Rota&quot; deixa de existir no cartão, eliminando o reaparecimento
+            indevido após a confirmação de rota entregue e mantendo em destaque o badge verde{' '}
+            <code>Entregas Concluídas</code>.
+          </p>
+          <div className="grid sm:grid-cols-2 gap-4 text-sm">
+            <div className="rounded-md border border-border/60 bg-muted/20 p-3 space-y-1.5">
+              <span className="font-medium text-primary">Ciclo de Vida do Botão:</span>
+              <ul className="space-y-1 text-xs text-muted-foreground">
+                <li>
+                  • <strong>Disponível:</strong> Coleta encerrada, sem despacho em andamento e
+                  entregas ainda não concluídas → botão habilitado &quot;Colocar em Rota&quot;.
+                </li>
+                <li>
+                  • <strong>Em Rota:</strong> Despacho ou pedidos em trânsito → botão desabilitado
+                  como &quot;Em Rota&quot;.
+                </li>
+                <li>
+                  • <strong>Oculto:</strong> Entregas concluídas (<code>isEntregasConcluidas</code>)
+                  → botão não é renderizado; permanece o badge verde &quot;Entregas
+                  Concluídas&quot;.
+                </li>
+              </ul>
+            </div>
+            <div className="rounded-md border border-primary/30 bg-primary/5 p-3 space-y-1.5">
+              <span className="font-medium text-primary">Preservação Integral:</span>
+              <ul className="space-y-1 text-xs text-foreground/80">
+                <li>
+                  • Mantidos intactos: badge &quot;Entregas Concluídas&quot;, card de Atestos
+                  Confirmados (X de N), alertas em tempo real do Bloco B, regra do Ciclo Corrente e
+                  ouvintes realtime.
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
         {/* Badge Entregas Concluídas e Atestos Confirmados em Monitoramento (v0.0.211) */}
         <div className="rounded-lg border border-border bg-card p-5 space-y-4">
           <div className="flex items-center justify-between flex-wrap gap-2">

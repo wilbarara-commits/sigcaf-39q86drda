@@ -812,7 +812,7 @@ export default function Monitoring() {
                     >
                       {isColetaEncerrada ? 'Fase Ativa' : 'Encerrar Coleta'}
                     </Button>{' '}
-                    {isColetaEncerrada && (
+                    {isColetaEncerrada && !isEntregasConcluidas && (
                       <Button
                         size="sm"
                         disabled={isCicloEmRota}
