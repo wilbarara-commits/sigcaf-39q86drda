@@ -72,7 +72,8 @@ import { toast } from 'sonner'
 import { matchPastedSchoolLine } from '@/lib/excelImporter'
 import { RouteSchoolBatchImportModal } from '@/components/RouteSchoolBatchImportModal'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
-import { getCicloAtivo, formatFaseAmigavel } from '@/lib/cicloUtils'
+import { getCicloAtivo, formatFaseAmigavel, isCicloNaoTerminal } from '@/lib/cicloUtils'
+import { Calendar } from 'lucide-react'
 import {
   otimizarSequenciaParadas,
   extrairCoordenadas,
@@ -178,6 +179,7 @@ export default function DeliveryRoutes() {
   }, [paramChamadaId, paramCicloId, paramContratoId, contracts, chamadas, cicloCorrente, ciclos])
 
   const [selectedChamadaId, setSelectedChamadaId] = useState<string>(initialChamadaId)
+  const [selectedCicloId, setSelectedCicloId] = useState<string>('')
 
   // Sincronizar se os query params ou cicloCorrente mudarem
   useEffect(() => {
@@ -213,6 +215,80 @@ export default function DeliveryRoutes() {
       }
     }
   }, [paramChamadaId, paramCicloId, paramContratoId, contracts, cicloCorrente, ciclos, chamadas])
+
+  // Ciclos disponíveis da Chamada selecionada (ordenados do mais recente para o mais antigo)
+  const chamadaCiclos = useMemo(() => {
+    if (selectedChamadaId === 'todas') {
+      return [...ciclos].sort((a, b) => {
+        const tA = new Date(a.created || a.data_inicio).getTime()
+        const tB = new Date(b.created || b.data_inicio).getTime()
+        return tB - tA
+      })
+    }
+    return ciclos
+      .filter((c) => c.chamada_id === selectedChamadaId)
+      .sort((a, b) => {
+        const tA = new Date(a.created || a.data_inicio).getTime()
+        const tB = new Date(b.created || b.data_inicio).getTime()
+        return tB - tA
+      })
+  }, [ciclos, selectedChamadaId])
+
+  // Resolução e sincronização do Ciclo selecionado com a mesma precedência de /monitoramento:
+  // 1. Query param ?cicloId= (se pertencer à chamada selecionada ou geral)
+  // 2. cicloCorrente se pertencer à chamada selecionada
+  // 3. Ciclo ativo (não-terminal) da chamada selecionada
+  // 4. Fallback: ciclo mais recente da chamada (mesmo fechado)
+  useEffect(() => {
+    // 1. Query param direto
+    if (paramCicloId) {
+      const targetParam = chamadaCiclos.find((c) => c.id === paramCicloId)
+      if (targetParam) {
+        setSelectedCicloId(targetParam.id)
+        return
+      }
+    }
+
+    // 2. Se a seleção atual já pertence aos ciclos da chamada em foco, mantém
+    if (selectedCicloId && chamadaCiclos.some((c) => c.id === selectedCicloId)) {
+      return
+    }
+
+    // 3. Ciclo Corrente (se pertencer à chamada selecionada)
+    if (cicloCorrente?.cicloId) {
+      const targetCorrente = chamadaCiclos.find((c) => c.id === cicloCorrente.cicloId)
+      if (targetCorrente) {
+        setSelectedCicloId(targetCorrente.id)
+        return
+      }
+    }
+
+    // 4. Ciclo ativo (não-terminal) da chamada
+    const ativoChamada = chamadaCiclos.find((c) => isCicloNaoTerminal(c.status))
+    if (ativoChamada) {
+      setSelectedCicloId(ativoChamada.id)
+      return
+    }
+
+    // 5. Fallback: ciclo mais recente da chamada
+    if (chamadaCiclos.length > 0) {
+      setSelectedCicloId(chamadaCiclos[0].id)
+      return
+    }
+
+    setSelectedCicloId('')
+  }, [selectedChamadaId, chamadaCiclos, paramCicloId, cicloCorrente, selectedCicloId])
+
+  // Objeto do ciclo selecionado em foco
+  const selectedCiclo = useMemo(() => {
+    return (
+      chamadaCiclos.find((c) => c.id === selectedCicloId) ||
+      (selectedChamadaId !== 'todas' ? getCicloAtivo(ciclos, selectedChamadaId) : null) ||
+      activeCiclo ||
+      chamadaCiclos[0] ||
+      null
+    )
+  }, [chamadaCiclos, selectedCicloId, selectedChamadaId, ciclos, activeCiclo])
 
   // Chamada atualmente focada
   const currentChamada = useMemo(() => {
@@ -519,14 +595,24 @@ export default function DeliveryRoutes() {
     return dedupedList
   }, [rotasLogisticas, selectedChamadaId, chamadaContratos])
 
-  // Pedidos que pertencem à chamada selecionada (via escolas dos contratos da chamada)
-  const chamadaOrders = useMemo(() => {
-    if (!currentChamada) return orders
-    const schoolIds = new Set(unifiedChamadaSchools.map((e) => e.escolaId))
-    return orders.filter((o) => schoolIds.has(o.schoolId))
-  }, [orders, currentChamada, unifiedChamadaSchools])
+  // Pedidos que pertencem à dupla Chamada + Ciclo selecionados
+  // Se houver ciclo selecionado (ou ciclo ativo de fallback), filtra estritamente por cicloId
+  const chamadaCicloOrders = useMemo(() => {
+    let pool = orders
+    if (currentChamada) {
+      const schoolIds = new Set(unifiedChamadaSchools.map((e) => e.escolaId))
+      pool = pool.filter((o) => schoolIds.has(o.schoolId))
+    }
+    if (selectedCiclo?.id) {
+      pool = pool.filter((o) => o.cicloId === selectedCiclo.id)
+    }
+    return pool
+  }, [orders, currentChamada, unifiedChamadaSchools, selectedCiclo])
 
-  // Detalhes completos por rota logística
+  // Compatibilidade legada com referências de pedidos da chamada
+  const chamadaOrders = chamadaCicloOrders
+
+  // Detalhes completos por rota logística (respeitando a dupla Chamada + Ciclo)
   const rotasLogisticasDetalhes = useMemo(() => {
     return filteredRotasLogisticas.map((rota) => {
       const chamadaObj = chamadas.find((ch) => ch.id === rota.chamada_id)
@@ -539,8 +625,9 @@ export default function DeliveryRoutes() {
 
       const escolaIdsDaRota = new Set(paradasCadastradas.map((p) => p.escola_id))
 
-      // Pedidos desta rota: herdados da escola (paradas_rota) OU com rotaLogisticaId/rotaId definido
-      const pedidosDaRota = orders.filter(
+      // Pedidos desta rota: filtrados pelo ciclo selecionado (chamadaCicloOrders)
+      // herdados da escola (paradas_rota) OU com rotaLogisticaId/rotaId definido
+      const pedidosDaRota = chamadaCicloOrders.filter(
         (o) =>
           escolaIdsDaRota.has(o.schoolId) || o.rotaLogisticaId === rota.id || o.rotaId === rota.id,
       )
@@ -627,7 +714,7 @@ export default function DeliveryRoutes() {
     filteredRotasLogisticas,
     chamadas,
     contracts,
-    orders,
+    chamadaCicloOrders,
     schools,
     paradasRota,
     despachos,
@@ -646,13 +733,13 @@ export default function DeliveryRoutes() {
     return unifiedChamadaSchools.filter((e) => !paradasDestaChamadaSet.has(e.escolaId))
   }, [currentChamada, filteredRotasLogisticas, paradasRota, unifiedChamadaSchools])
 
-  // Pedidos de escolas sem rota logística atribuída
+  // Pedidos de escolas sem rota logística atribuída (no ciclo selecionado)
   const pedidosSemRota = useMemo(() => {
     const escolasSemRotaIds = new Set(escolasSemRota.map((e) => e.escolaId))
-    return chamadaOrders.filter(
+    return chamadaCicloOrders.filter(
       (o) => o.status === 'Pendente' && (!o.rotaLogisticaId || escolasSemRotaIds.has(o.schoolId)),
     )
-  }, [escolasSemRota, chamadaOrders])
+  }, [escolasSemRota, chamadaCicloOrders])
 
   // Despacho: Abrir modal de confirmação para colocar rota inteira em rota
   const handleOpenDispatch = (rota: RotaLogisticaRecord) => {
@@ -673,11 +760,10 @@ export default function DeliveryRoutes() {
       return
     }
 
-    // Regra D: Despacho ("Colocar em Rota"): só habilitado quando o ciclo do pedido estiver FECHADO;
-    // caso contrário desabilitado com explicação "Despacho liberado após o fechamento do ciclo".
-    // Identificar os pedidos pendentes desta rota
+    // Regra D: Despacho ("Colocar em Rota"): só habilitado quando o ciclo em foco estiver em fase elegível
+    // Identificar os pedidos pendentes desta rota respeitando a dupla Chamada + Ciclo em tela
     const escolaIdsDaRota = new Set(paradasCadastradas.map((p) => p.escola_id))
-    const pedidosPendentesRota = orders.filter(
+    const pedidosPendentesRota = chamadaCicloOrders.filter(
       (o) =>
         (escolaIdsDaRota.has(o.schoolId) ||
           o.rotaLogisticaId === rotaToDispatch.id ||
@@ -685,16 +771,20 @@ export default function DeliveryRoutes() {
         o.status === 'Pendente',
     )
 
-    // Resolver ciclo ativo da chamada à qual a rota pertence (com fallback no activeCiclo)
+    // Resolver ciclo de referência para validação:
+    // 1. Ciclo selecionado na tela (/rotas)
+    // 2. Ciclo ativo da chamada da rota
+    // 3. activeCiclo global
     const chamadaDaRotaId = rotaToDispatch.chamada_id || currentChamada?.id
-    const cicloAtivoChamadaRota = chamadaDaRotaId
-      ? getCicloAtivo(ciclos, chamadaDaRotaId) || activeCiclo
-      : activeCiclo
+    const cicloReferenciaRota =
+      selectedCiclo ||
+      (chamadaDaRotaId ? getCicloAtivo(ciclos, chamadaDaRotaId) : null) ||
+      activeCiclo
 
     // Validação de despacho baseada no STATUS DO CICLO:
     // O despacho só é liberado quando o ciclo da chamada/pedido estiver em "coleta_encerrada".
     const pedidoBloqueado = pedidosPendentesRota.find((ped) => {
-      const pedCiclo = ciclos.find((c) => c.id === ped.cicloId) || cicloAtivoChamadaRota
+      const pedCiclo = ciclos.find((c) => c.id === ped.cicloId) || cicloReferenciaRota
       if (!pedCiclo || pedCiclo.status === 'fechado' || pedCiclo.status === 'cancelado') {
         return true
       }
@@ -702,7 +792,7 @@ export default function DeliveryRoutes() {
     })
 
     if (pedidoBloqueado) {
-      const pedCiclo = ciclos.find((c) => c.id === pedidoBloqueado.cicloId) || cicloAtivoChamadaRota
+      const pedCiclo = ciclos.find((c) => c.id === pedidoBloqueado.cicloId) || cicloReferenciaRota
       const faseAtual = pedCiclo?.status || 'desconhecida'
 
       if (pedCiclo?.status === 'fechado' || faseAtual.toLowerCase() === 'fechado') {
@@ -1365,31 +1455,88 @@ export default function DeliveryRoutes() {
           </p>
         </div>
 
-        {/* Filtro por Chamada e Ações */}
-        <div className="flex items-center gap-2">
-          <Layers className="h-4 w-4 text-primary shrink-0" />
-          <Select
-            value={selectedChamadaId}
-            onValueChange={(val) => {
-              setSelectedChamadaId(val)
-              setSearchParams(val === 'todas' ? {} : { chamadaId: val })
-            }}
-          >
-            <SelectTrigger className="w-[300px]">
-              <SelectValue placeholder="Selecione a Chamada" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="todas">Todas as Chamadas</SelectItem>
-              {chamadas.map((ch) => {
-                const cnts = contracts.filter((c) => c.chamada_id === ch.id)
-                return (
-                  <SelectItem key={ch.id} value={ch.id}>
-                    {ch.chamada} ({ch.programa || 'PNAE'}) • {cnts.length} contrato(s)
-                  </SelectItem>
-                )
-              })}
-            </SelectContent>
-          </Select>
+        {/* Filtro por Chamada + Ciclo e Ações */}
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-2">
+            <Layers className="h-4 w-4 text-primary shrink-0" />
+            <Select
+              value={selectedChamadaId}
+              onValueChange={(val) => {
+                setSelectedChamadaId(val)
+                // Ao trocar a chamada, auto-seleciona o ciclo ativo da nova chamada
+                let novoCicloId = ''
+                if (val !== 'todas') {
+                  const ciclosDaNova = ciclos.filter((c) => c.chamada_id === val)
+                  const ativo = ciclosDaNova.find((c) => isCicloNaoTerminal(c.status))
+                  if (ativo) {
+                    novoCicloId = ativo.id
+                  } else if (ciclosDaNova.length > 0) {
+                    novoCicloId = ciclosDaNova[0].id
+                  }
+                }
+                setSelectedCicloId(novoCicloId)
+                if (val === 'todas') {
+                  setSearchParams({})
+                } else if (novoCicloId) {
+                  setSearchParams({ chamadaId: val, cicloId: novoCicloId })
+                } else {
+                  setSearchParams({ chamadaId: val })
+                }
+              }}
+            >
+              <SelectTrigger className="w-[260px]">
+                <SelectValue placeholder="Selecione a Chamada" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todas">Todas as Chamadas</SelectItem>
+                {chamadas.map((ch) => {
+                  const cnts = contracts.filter((c) => c.chamada_id === ch.id)
+                  return (
+                    <SelectItem key={ch.id} value={ch.id}>
+                      {ch.chamada} ({ch.programa || 'PNAE'}) • {cnts.length} contrato(s)
+                    </SelectItem>
+                  )
+                })}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Seletor de Ciclo sincronizado com a chamada escolhida */}
+          <div className="flex items-center gap-2">
+            <Calendar className="h-4 w-4 text-primary shrink-0" />
+            <Select
+              value={selectedCicloId}
+              onValueChange={(val) => {
+                setSelectedCicloId(val)
+                const nextParams: Record<string, string> = {}
+                if (selectedChamadaId && selectedChamadaId !== 'todas') {
+                  nextParams.chamadaId = selectedChamadaId
+                }
+                if (val) {
+                  nextParams.cicloId = val
+                }
+                setSearchParams(nextParams)
+              }}
+              disabled={chamadaCiclos.length === 0}
+            >
+              <SelectTrigger className="w-[240px]">
+                <SelectValue
+                  placeholder={chamadaCiclos.length === 0 ? 'Nenhum ciclo' : 'Selecione o Ciclo'}
+                />
+              </SelectTrigger>
+              <SelectContent>
+                {chamadaCiclos.map((c) => {
+                  const isAtivo = isCicloNaoTerminal(c.status)
+                  return (
+                    <SelectItem key={c.id} value={c.id}>
+                      {c.nome || `Ciclo ${c.numero_ciclo || c.numero || ''}`}
+                      {isAtivo ? ' ★ Ativo' : ''} ({formatFaseAmigavel(c.status)})
+                    </SelectItem>
+                  )
+                })}
+              </SelectContent>
+            </Select>
+          </div>
 
           <Button
             onClick={() => setMotoristasManagerOpen(true)}
@@ -1670,12 +1817,12 @@ export default function DeliveryRoutes() {
                   {/* Ações de Despacho e Entrega por Rota Inteira */}
                   {(() => {
                     const chamadaRotaId = item.rota.chamada_id || currentChamada?.id
-                    const cicloAtivoChamada = chamadaRotaId
-                      ? getCicloAtivo(ciclos, chamadaRotaId)
-                      : currentChamada?.id
-                        ? getCicloAtivo(ciclos, currentChamada.id)
-                        : activeCiclo
-                    const faseCiclo = cicloAtivoChamada?.status
+                    const cicloReferencia =
+                      selectedCiclo ||
+                      (chamadaRotaId ? getCicloAtivo(ciclos, chamadaRotaId) : null) ||
+                      (currentChamada?.id ? getCicloAtivo(ciclos, currentChamada.id) : null) ||
+                      activeCiclo
+                    const faseCiclo = cicloReferencia?.status
                     const isFaseElegivel = isFaseElegivelParaDespacho(faseCiclo)
                     const faseNorm = (faseCiclo || 'coletando').trim().toLowerCase()
                     const isFaseColeta = faseNorm === 'coletando' || faseNorm === 'correcao'
@@ -3259,14 +3406,14 @@ Ou apenas o nome da escola copiado do Excel/Word`}
                     .filter((p) => (p.rota_id || (p as any).rota_logistica_id) === rotaToDeliver.id)
                     .map((p) => p.escola_id),
                 )
-                const pedidosAfetados = orders.filter(
+                const pedidosAfetados = chamadaCicloOrders.filter(
                   (o) =>
                     o.status === 'Em Rota' &&
                     (escolasDaRotaSet.has(o.schoolId) ||
                       o.rotaLogisticaId === rotaToDeliver.id ||
                       o.rotaId === rotaToDeliver.id),
                 )
-                const totalPedidosNaRota = orders.filter(
+                const totalPedidosNaRota = chamadaCicloOrders.filter(
                   (o) =>
                     escolasDaRotaSet.has(o.schoolId) ||
                     o.rotaLogisticaId === rotaToDeliver.id ||
@@ -3581,13 +3728,14 @@ Ou apenas o nome da escola copiado do Excel/Word`}
         onOpenChange={setDespachoMotoristaOpen}
         rota={selectedRotaForDriverModal}
         ciclo={
-          selectedRotaForDriverModal?.chamada_id
+          selectedCiclo ||
+          (selectedRotaForDriverModal?.chamada_id
             ? getCicloAtivo(ciclos, selectedRotaForDriverModal.chamada_id) ||
               (currentChamada?.id ? getCicloAtivo(ciclos, currentChamada.id) : null) ||
               activeCiclo
             : currentChamada?.id
               ? getCicloAtivo(ciclos, currentChamada.id) || activeCiclo
-              : activeCiclo
+              : activeCiclo)
         }
         chamada={
           selectedRotaForDriverModal?.chamada_id
@@ -3597,7 +3745,7 @@ Ou apenas o nome da escola copiado do Excel/Word`}
         }
         totalEntregas={
           selectedRotaForDriverModal
-            ? orders.filter(
+            ? chamadaCicloOrders.filter(
                 (o) =>
                   (o.status === 'Pendente' || o.status === 'Em Rota') &&
                   (o.rotaLogisticaId === selectedRotaForDriverModal.id ||
