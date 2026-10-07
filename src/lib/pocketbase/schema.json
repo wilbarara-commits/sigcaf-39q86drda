@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-07T07:44:44.044Z",
+  "generatedAt": "2026-10-07T15:59:20.577Z",
   "collections": [
     {
       "name": "users",
@@ -1761,6 +1761,20 @@
           "type": "text",
           "required": false,
           "system": false
+        },
+        {
+          "name": "ciclo_id",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "ciclos"
+        },
+        {
+          "name": "chamada_id",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "chamadas"
         }
       ],
       "indexes": [
@@ -1769,6 +1783,248 @@
         "CREATE INDEX idx_entrega_reg_despacho ON entrega_registros (despacho_id)",
         "CREATE INDEX idx_entrega_reg_client_uid ON entrega_registros (client_uid)"
       ]
+    },
+    {
+      "name": "rota_snapshots",
+      "type": "base",
+      "apiRules": {
+        "list": "",
+        "view": "",
+        "create": "",
+        "update": "",
+        "delete": "@request.auth.id != \"\""
+      },
+      "fields": [
+        {
+          "name": "rota_id",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "rotas"
+        },
+        {
+          "name": "ciclo_id",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "ciclos"
+        },
+        {
+          "name": "chamada_id",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "chamadas"
+        },
+        {
+          "name": "motorista_id",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "motoristas"
+        },
+        {
+          "name": "despacho_id",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "rota_despachos"
+        },
+        {
+          "name": "rota_nome",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "versao_evento",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "total_paradas",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "total_pedidos",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "paradas_snapshot",
+          "type": "json",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "snapshot_em",
+          "type": "date",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "observacao",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": []
+    },
+    {
+      "name": "entrega_comprovantes",
+      "type": "base",
+      "apiRules": {
+        "list": "",
+        "view": "",
+        "create": "",
+        "update": "",
+        "delete": "@request.auth.id != \"\""
+      },
+      "fields": [
+        {
+          "name": "escola_id",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "escolas"
+        },
+        {
+          "name": "rota_id",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "rotas"
+        },
+        {
+          "name": "ciclo_id",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "ciclos"
+        },
+        {
+          "name": "chamada_id",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "chamadas"
+        },
+        {
+          "name": "pedido_id",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "pedidos"
+        },
+        {
+          "name": "motorista_id",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "motoristas"
+        },
+        {
+          "name": "registro_id",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "entrega_registros"
+        },
+        {
+          "name": "escola_nome",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "responsavel_nome",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "responsavel_cpf",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "chegada_em",
+          "type": "date",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "confirmado_em",
+          "type": "date",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "assinatura",
+          "type": "editor",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "foto",
+          "type": "editor",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "observacao",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "origem",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "client_uid",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": []
     }
   ]
 }
