@@ -58,7 +58,7 @@ export default function Index() {
     return chamadas.filter((ch) => ch.status === 'Ativo')
   }, [chamadas])
 
-  // Preço unitário do contrato: mapeia escola -> contrato_id -> itens de contrato
+  // Receita Entregue e Total do Mês calculadas com base no valor canônico (order.total) com deduplicação de pedidos
   const { receitaEntregueMes, receitaTotalMes, percentEntregue, currentMonthName } = useMemo(() => {
     const now = new Date()
     const currentYear = now.getFullYear()
@@ -80,88 +80,36 @@ export default function Index() {
     ]
     const curMonthName = `${monthNames[currentMonth]} de ${currentYear}`
 
-    // Mapeamento rápido de escolaId -> contratoId
-    const escolaToContractId = new Map<string, string>()
-    if (contractSchools && contractSchools.length > 0) {
-      for (const cs of contractSchools) {
-        if (cs.escola_id && cs.contrato_id) {
-          escolaToContractId.set(cs.escola_id, cs.contrato_id)
-        }
-      }
-    } else if (contracts && contracts.length > 0) {
-      for (const c of contracts) {
-        if (c.escolas) {
-          for (const esc of c.escolas) {
-            if (esc.escolaId) {
-              escolaToContractId.set(esc.escolaId, c.id)
-            }
-          }
-        }
-      }
-    }
-
-    // Mapa de preço por (contrato_id, produto_id) e fallback por produto_id
-    const contractProductPriceMap = new Map<string, number>()
-    const fallbackProductPriceMap = new Map<string, number>()
-    if (contractItems && contractItems.length > 0) {
-      for (const ci of contractItems) {
-        const preco = Number(ci.preco) || 0
-        if (preco > 0) {
-          if (ci.contrato_id && ci.produto_id) {
-            contractProductPriceMap.set(`${ci.contrato_id}:${ci.produto_id}`, preco)
-          }
-          if (ci.produto_id && !fallbackProductPriceMap.has(ci.produto_id)) {
-            fallbackProductPriceMap.set(ci.produto_id, preco)
-          }
-        }
-      }
-    }
-
-    // Função para calcular a receita de um pedido com base nos itens de contrato
-    const calcularReceitaPedido = (order: (typeof orders)[0]): number => {
-      if (!order.items || order.items.length === 0) {
-        return Number(order.total) || 0
+    // Resolução canônica de valor do pedido (mesmo modelo de Reports.tsx e MonthlyReportButton.tsx)
+    const obterValorPedidoCanonico = (order: (typeof orders)[0]): number => {
+      const recordedTotal = Number(order.total)
+      if (!isNaN(recordedTotal) && recordedTotal > 0) {
+        return recordedTotal
       }
 
-      const contratoId = escolaToContractId.get(order.schoolId)
-      let pedidoTotalCalculado = 0
-      let calculouPorContrato = false
-
-      for (const item of order.items) {
-        const qtd = Number(item.quantity) || 0
-        if (qtd <= 0) continue
-
-        let preco = 0
-        if (contratoId) {
-          preco = contractProductPriceMap.get(`${contratoId}:${item.productId}`) || 0
-        }
-        if (!preco) {
-          preco = fallbackProductPriceMap.get(item.productId) || 0
-        }
-        if (!preco) {
-          preco = Number(item.price) || 0
-        }
-
-        if (preco > 0) {
-          calculouPorContrato = true
-        }
-        pedidoTotalCalculado += qtd * preco
+      // Fallback = soma dos itens do próprio pedido sem re-consultar contratos
+      if (order.items && order.items.length > 0) {
+        const somaItens = order.items.reduce((acc, it) => {
+          const qtd = Number(it.quantity) || 0
+          const preco = Number(it.price) || 0
+          return acc + qtd * preco
+        }, 0)
+        return Math.round(somaItens * 100) / 100
       }
 
-      // Se nenhum item encontrou preço no contrato nem no item, usa o total gravado no pedido (se houver)
-      if (!calculouPorContrato && pedidoTotalCalculado === 0 && Number(order.total) > 0) {
-        return Number(order.total)
-      }
-
-      return pedidoTotalCalculado
+      return 0
     }
 
     // Filtrar pedidos cujo mês e ano correspondam ao mês corrente
     // Não consideramos pedidos com status "Cancelado" na receita
     let entregueTotal = 0
     let geralMesTotal = 0
+    const seenOrderIds = new Set<string>()
 
     for (const order of orders) {
+      if (!order.id || seenOrderIds.has(order.id)) continue
+      seenOrderIds.add(order.id)
+
       if (order.status === 'Cancelado') continue
 
       // Extrair data do pedido (ou entregue_em se entregue)
@@ -179,7 +127,7 @@ export default function Index() {
 
       if (!isInCurrentMonth) continue
 
-      const valorPedido = calcularReceitaPedido(order)
+      const valorPedido = obterValorPedidoCanonico(order)
       geralMesTotal += valorPedido
 
       if (order.status === 'Entregue') {
@@ -195,7 +143,7 @@ export default function Index() {
       percentEntregue: pct,
       currentMonthName: curMonthName,
     }
-  }, [orders, contracts, contractItems, contractSchools])
+  }, [orders])
 
   const formattedReceitaEntregue = receitaEntregueMes.toLocaleString('pt-BR', {
     style: 'currency',

@@ -747,7 +747,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     } else if (e.action === 'create' || e.action === 'update') {
       const rec = e.record
       setOrders((prev) => {
-        const idx = prev.findIndex((o) => o.id === rec.id)
         const schoolObj = schools.find((s) => s.id === rec.escola_id)
         const schoolName = rec.expand?.escola_id?.nome || schoolObj?.name || 'Escola'
         const paradaEscola = paradasRota.find((p) => p.escola_id === rec.escola_id)
@@ -756,6 +755,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const rotaLogisticaNome = rotaLogObj?.nome || rec.expand?.rota_id?.nome
         const rotaObj = rotas.find((r) => r.id === rec.rota_id)
         const rotaNome = rec.expand?.rota_id?.nome || rotaObj?.nome
+
+        const idx = prev.findIndex((o) => o.id === rec.id)
+
+        // Se houver pedido temporário correspondente (mesmo número ou mesma escola no mesmo ciclo)
+        const tempIdx = prev.findIndex(
+          (o) =>
+            o.id.startsWith('temp-') &&
+            ((rec.numero && o.numero === rec.numero) ||
+              (o.schoolId === rec.escola_id && o.cicloId === rec.ciclo_id)),
+        )
 
         if (idx !== -1) {
           const existing = prev[idx]
@@ -779,18 +788,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
             observacao_entrega: rec.observacao_entrega ?? existing.observacao_entrega,
             validacao: rec.validacao || existing.validacao,
           }
-          const copy = [...prev]
-          copy[idx] = updated
-          return copy
+          // Substitui o registro existente e limpa eventual temp residual
+          return prev
+            .filter((o, i) => o.id !== rec.id && (tempIdx === -1 || i !== tempIdx))
+            .concat(updated)
+            .sort((a, b) => b.date.localeCompare(a.date))
         }
-
-        // Se houver um pedido temporário com mesmo número ou mesma escola no mesmo ciclo, substitui
-        const tempIdx = prev.findIndex(
-          (o) =>
-            o.id.startsWith('temp-') &&
-            ((rec.numero && o.numero === rec.numero) ||
-              (o.schoolId === rec.escola_id && o.cicloId === rec.ciclo_id)),
-        )
 
         // Novo pedido via SSE
         const newOrder: Order = {
@@ -825,12 +828,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }
 
         if (tempIdx !== -1) {
-          const copy = [...prev]
-          copy[tempIdx] = newOrder
-          return copy
+          const filtered = prev.filter((o, i) => i !== tempIdx && o.id !== rec.id)
+          return [newOrder, ...filtered]
         }
 
-        return [newOrder, ...prev]
+        // Garante que não duplica caso já exista por algum motivo
+        const cleanPrev = prev.filter((o) => o.id !== rec.id)
+        return [newOrder, ...cleanPrev]
       })
     }
   })
@@ -1297,18 +1301,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
     } else if (e.action === 'create' || e.action === 'update') {
       const rec = e.record as EntregaRegistroRecord
       setEntregaRegistros((prev) => {
-        // Substituir por id ou client_uid correspondente
-        const existingIdx = prev.findIndex(
-          (item) => item.id === rec.id || (rec.client_uid && item.client_uid === rec.client_uid),
-        )
-        let updated: EntregaRegistroRecord[]
-        if (existingIdx !== -1) {
-          const copy = [...prev]
-          copy[existingIdx] = { ...copy[existingIdx], ...rec }
-          updated = copy
-        } else {
-          updated = [rec, ...prev]
-        }
+        // Substituir por id ou client_uid correspondente e descartar temporários otimistas (temp-)
+        const dedupedWithoutTarget = prev.filter((item) => {
+          if (item.id === rec.id) return false
+          if (rec.client_uid && item.client_uid === rec.client_uid) return false
+          if (item.id.startsWith('temp-') && rec.client_uid && item.client_uid === rec.client_uid) {
+            return false
+          }
+          if (
+            item.id.startsWith('temp-') &&
+            rec.rota_id &&
+            rec.escola_id &&
+            item.rota_id === rec.rota_id &&
+            item.escola_id === rec.escola_id
+          ) {
+            return false
+          }
+          return true
+        })
+
+        const updated: EntregaRegistroRecord[] = [rec, ...dedupedWithoutTarget]
 
         // Manter ordenado por confirmado_em / chegada_em / created descrescente
         return updated.sort((a, b) => {

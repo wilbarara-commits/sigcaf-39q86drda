@@ -843,6 +843,64 @@ export function Requirements() {
       {/* 7. Registro de Manutenção e Limpeza de Dados */}
       <SectionTitle>7. Registro de Manutenção & Higienização do Banco de Dados</SectionTitle>
       <div className="space-y-4">
+        {/* Alinhamento da Receita Entregue do Mês ao Valor Canônico e Deduplicação (v0.0.214) */}
+        <div className="rounded-lg border border-border bg-card p-5 space-y-4">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="text-primary border-primary/30">
+                Release v0.0.214
+              </Badge>
+              <span className="font-semibold text-foreground">
+                0.0.214: Receita Entregue no Mês do Dashboard alinhada ao valor canônico
+                (order.total) com deduplicação de pedidos
+              </span>
+            </div>
+            <span className="text-xs text-muted-foreground">Consolidado (v0.0.214)</span>
+          </div>
+          <p className="text-sm text-foreground/90 leading-relaxed">
+            Alinhamento do indicador <em>Receita Entregue no Mês</em> do Dashboard (<code>/</code>)
+            ao modelo canônico consolidado de faturamento utilizado em Relatórios (
+            <code>Reports.tsx</code>) e no Fechamento Mensal (<code>MonthlyReportButton.tsx</code>):
+          </p>
+          <div className="grid sm:grid-cols-2 gap-4 text-sm">
+            <div className="rounded-md border border-border/60 bg-muted/20 p-3 space-y-1.5">
+              <span className="font-medium text-primary">Correções no Dashboard (Index.tsx):</span>
+              <ul className="space-y-1 text-xs text-muted-foreground">
+                <li>
+                  • Leitura direta de <code>order.total</code> (já consolidado a partir de{' '}
+                  <code>pedido_itens</code> no carregamento do contexto), eliminando re-cálculo
+                  divergente que re-consultava mapas de contratos/fallback e duplicava valores.
+                </li>
+                <li>
+                  • Fallback resiliente: caso <code>order.total</code> não esteja disponível ou seja
+                  0, utiliza a soma dos próprios itens do pedido (<code>quantity * price</code>) sem
+                  re-consultar contratos.
+                </li>
+                <li>
+                  • Deduplicação de pedidos por ID (<code>seenOrderIds</code>) no loop mensal,
+                  prevenindo acúmulo duplo de instâncias do mesmo pedido.
+                </li>
+              </ul>
+            </div>
+            <div className="rounded-md border border-primary/30 bg-primary/5 p-3 space-y-1.5">
+              <span className="font-medium text-primary">Prevenção no Contexto Realtime:</span>
+              <ul className="space-y-1 text-xs text-foreground/80">
+                <li>
+                  • Subscrições realtime de <code>pedidos</code> e <code>entrega_registros</code>{' '}
+                  higienizadas para substituir registros por ID e descartar IDs temporários
+                  otimistas (<code>temp-</code>) quando o registro persistido equivalente é
+                  recebido.
+                </li>
+                <li>
+                  • Preservados integralmente: Ciclo Corrente, Bloco B (alerta de rota parada 30 min
+                  e aviso sonoro com mudo), badge &quot;Entregas Concluídas&quot;, card de Atestos
+                  Confirmados e correções conclusivas da Rota C (v0.0.213).
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
         {/* Regularização de Despachos Residuais e Encerramento Conclusivo (v0.0.213) */}
         <div className="rounded-lg border border-border bg-card p-5 space-y-4">
           <div className="flex items-center justify-between flex-wrap gap-2">
