@@ -368,12 +368,9 @@ export async function renderAtestoPageToDoc(
   const head = [['PRODUTOS', 'QUANTIDADE (KG)']]
   const body = data.items.map((item) => {
     const parsed = parseProductNameAka(item.nome)
-    const nomePrincipalUpper = parsed.nomePrincipal.toUpperCase()
-    const content = parsed.aka
-      ? `${nomePrincipalUpper}\nConhecido como: ${parsed.aka}`
-      : nomePrincipalUpper
+    const nomePrincipalUpper = (parsed.nomePrincipal || item.nome || '').toUpperCase()
 
-    return [content, formatQuantityBR(item.quantidade)]
+    return [nomePrincipalUpper, formatQuantityBR(item.quantidade)]
   })
 
   // Se houver poucos itens (menos de 6), adiciona linhas tracejadas conforme o modelo oficial

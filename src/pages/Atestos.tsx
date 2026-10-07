@@ -63,6 +63,7 @@ export default function Atestos() {
     atestos,
     orders,
     chamadas,
+    chamadaItems,
     contracts,
     contractSchools,
     contractItems,
@@ -365,12 +366,16 @@ export default function Atestos() {
       }
     }
 
+    // Determinar a chamada vinculada para resolução mestre dos itens
+    const targetChamadaId =
+      linkedContract?.chamada_id ||
+      (order.cicloId ? ciclos.find((c) => c.id === order.cicloId)?.chamada_id : undefined)
+
     const items =
       order.items && order.items.length > 0
         ? order.items.map((i) => {
-            // Regra oficial de Atestos: "o nome do produto exibido no atesto (prévia e PDF) deve ser o nome
-            // do item do contrato (nome_contrato quando existir; senão apelidos do item do contrato; senão nome do produto)
-            // — o apelido do contrato vale tanto para a planilha quanto para o atesto".
+            // Regra oficial de Atestos: "o nome do produto exibido no atesto (prévia e PDF) deve ser o trecho
+            // antes da primeira vírgula do Nome no Contrato (nome_contrato quando existir; senão chamada_item; senão produto.nome)".
             let nomeParaAtesto = (i.name || '').trim()
             let foundCI: ContratoItemRecord | undefined
 
@@ -396,14 +401,28 @@ export default function Atestos() {
                   nomeParaAtesto = firstAlias
                 }
               }
+            } else if (chamadaItems && chamadaItems.length > 0) {
+              const matchedChItem =
+                (targetChamadaId
+                  ? chamadaItems.find(
+                      (ci) => ci.chamada_id === targetChamadaId && ci.produto_id === i.productId,
+                    )
+                  : undefined) || chamadaItems.find((ci) => ci.produto_id === i.productId)
+              if (matchedChItem?.produto?.trim()) {
+                nomeParaAtesto = matchedChItem.produto.trim()
+              }
             }
 
             if (!nomeParaAtesto) {
               nomeParaAtesto = i.name || 'Gêneros Alimentícios'
             }
 
+            // Aplica a regra canônica: apenas a parte ANTES da primeira vírgula
+            const parsedName = parseProductNameAka(nomeParaAtesto)
+            const finalNome = parsedName.nomePrincipal || nomeParaAtesto
+
             return {
-              nome: nomeParaAtesto,
+              nome: finalNome,
               quantidade: i.quantity,
             }
           })
@@ -539,10 +558,12 @@ export default function Atestos() {
             expand: 'produto_id',
           })
 
-          // Buscar contrato_itens para garantir o nome no contrato
+          // Buscar contrato_itens e chamada_itens para garantir o nome no contrato
           let fallbackContractItems: any[] = []
+          let fallbackChamadaItens: any[] = []
           try {
             fallbackContractItems = await pb.collection('contrato_itens').getFullList<any>()
+            fallbackChamadaItens = await pb.collection('chamada_itens').getFullList<any>()
           } catch {
             /* intentionally ignored */
           }
@@ -570,15 +591,21 @@ export default function Atestos() {
                 const firstAlias = ciMatch?.apelidos
                   ? String(ciMatch.apelidos).split(/[,;]/)[0]?.trim()
                   : ''
+                const chMatch = fallbackChamadaItens.find(
+                  (c) => c.produto_id === it.produto_id && c.produto?.trim(),
+                )
                 const nomeResolvido =
                   ciMatch?.nome_contrato?.trim() ||
+                  chMatch?.produto?.trim() ||
                   firstAlias ||
                   it.expand?.produto_id?.nome ||
                   'Gêneros Alimentícios'
+                const parsed = parseProductNameAka(nomeResolvido)
+                const finalNome = parsed.nomePrincipal || nomeResolvido
                 return {
                   id: it.id,
                   productId: it.produto_id,
-                  name: nomeResolvido,
+                  name: finalNome,
                   quantity: Number(it.quantidade) || 0,
                   price: Number(it.preco_unitario) || 0,
                 }
@@ -725,8 +752,10 @@ export default function Atestos() {
             expand: 'produto_id',
           })
           let fallbackContractItems: any[] = []
+          let fallbackChamadaItens: any[] = []
           try {
             fallbackContractItems = await pb.collection('contrato_itens').getFullList<any>()
+            fallbackChamadaItens = await pb.collection('chamada_itens').getFullList<any>()
           } catch {
             /* intentionally ignored */
           }
@@ -753,15 +782,21 @@ export default function Atestos() {
                 const firstAlias = ciMatch?.apelidos
                   ? String(ciMatch.apelidos).split(/[,;]/)[0]?.trim()
                   : ''
+                const chMatch = fallbackChamadaItens.find(
+                  (c) => c.produto_id === it.produto_id && c.produto?.trim(),
+                )
                 const nomeResolvido =
                   ciMatch?.nome_contrato?.trim() ||
+                  chMatch?.produto?.trim() ||
                   firstAlias ||
                   it.expand?.produto_id?.nome ||
                   'Gêneros Alimentícios'
+                const parsed = parseProductNameAka(nomeResolvido)
+                const finalNome = parsed.nomePrincipal || nomeResolvido
                 return {
                   id: it.id,
                   productId: it.produto_id,
-                  name: nomeResolvido,
+                  name: finalNome,
                   quantity: Number(it.quantidade) || 0,
                   price: Number(it.preco_unitario) || 0,
                 }
@@ -2136,26 +2171,18 @@ function DocumentoOficialView({
             <tbody className="divide-y divide-slate-800">
               {items.map((it, idx) => {
                 const parsed = parseProductNameAka(it.name)
+                const nomeExibicao = parsed.nomePrincipal || it.name
                 return (
                   <tr key={idx}>
                     <td
                       className={`border-r border-slate-800 ${
                         isDense ? 'py-0.5 px-2.5 text-[11px]' : 'py-1 px-3 text-xs'
                       } text-slate-800 font-medium`}
-                      title={it.name}
+                      title={nomeExibicao}
                     >
                       <div className="uppercase font-medium text-slate-800 leading-tight">
-                        {parsed.nomePrincipal}
+                        {nomeExibicao}
                       </div>
-                      {parsed.aka && (
-                        <div
-                          className={`text-slate-500 font-normal normal-case leading-tight ${
-                            isDense ? 'text-[9.5px]' : 'text-[10px]'
-                          }`}
-                        >
-                          Conhecido como: {parsed.aka}
-                        </div>
-                      )}
                     </td>
                     <td
                       className={`${

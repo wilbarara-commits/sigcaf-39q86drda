@@ -205,7 +205,7 @@ describe('atestoPdfGenerator', () => {
     expect(batch1Via.getNumberOfPages()).toBe(1)
   })
 
-  it('gera PDF com produtos que possuem formato "NOME, AKA" sem erros', async () => {
+  it('gera PDF com produtos que possuem formato "NOME, AKA" extraindo apenas o nome antes da vírgula sem exibir AKA', async () => {
     const docData: AtestoDocumentData = {
       numeroAtesto: 'AT-040',
       numeroChamada: '01/2026',
@@ -224,6 +224,11 @@ describe('atestoPdfGenerator', () => {
       numeroParada: 2,
       via: 'v1',
     }
+
+    // Valida que parseProductNameAka extrai corretamente o nome principal e o AKA
+    const parsedBatata = parseProductNameAka('Batata Doce Roxa, Batata Doce')
+    expect(parsedBatata.nomePrincipal).toBe('Batata Doce Roxa')
+    expect(parsedBatata.aka).toBe('Batata Doce')
 
     const doc = await createOfficialAtestoPdf(docData)
     expect(doc).toBeDefined()
