@@ -316,4 +316,30 @@ export const retencaoHistoricaService = {
     }
     return sucessos
   },
+
+  /**
+   * Busca todos os comprovantes permanentes de entrega de um ciclo específico.
+   * Isolamento por ciclo estrito: filtra por ciclo_id.
+   * Suporta filtro opcional por rotaId.
+   */
+  async getComprovantesByCiclo(
+    cicloId: string,
+    rotaId?: string,
+  ): Promise<EntregaComprovanteRecord[]> {
+    if (!cicloId) return []
+    try {
+      const filters = [`ciclo_id = "${cicloId}"`]
+      if (rotaId) {
+        filters.push(`rota_id = "${rotaId}"`)
+      }
+      return await pb.collection('entrega_comprovantes').getFullList<EntregaComprovanteRecord>({
+        filter: filters.join(' && '),
+        sort: 'confirmado_em,created',
+        expand: 'escola_id,motorista_id,pedido_id',
+      })
+    } catch (err) {
+      console.warn('Erro ao consultar entrega_comprovantes por ciclo:', err)
+      return []
+    }
+  },
 }

@@ -861,6 +861,164 @@ export function Requirements() {
       {/* 7. Registro de Manutenção e Limpeza de Dados */}
       <SectionTitle>7. Registro de Manutenção & Higienização do Banco de Dados</SectionTitle>
       <div className="space-y-4">
+        {/* Release v0.0.227: Leitura de Comprovantes Permanentes em /rotas */}
+        <div className="rounded-lg border border-border bg-card p-5 space-y-4">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="text-primary border-primary/30">
+                Release v0.0.227
+              </Badge>
+              <span className="font-semibold text-foreground">
+                0.0.227: Leitura Unificada de Recibos em /rotas (entrega_registros e
+                entrega_comprovantes da secretária)
+              </span>
+            </div>
+            <span className="text-xs text-muted-foreground">Consolidado (v0.0.227)</span>
+          </div>
+          <p className="text-sm text-foreground/90 leading-relaxed">
+            Correção no módulo de Rotas de Entrega (<code>/rotas</code>): quando as entregas de um
+            ciclo são fechadas pela secretária através do botão em lote &quot;Rota Entregue&quot;, a
+            retenção histórica permanente é gravada na coleção <code>entrega_comprovantes</code>{' '}
+            (com <code>origem = &apos;fechamento_secretaria&apos;</code>). O componente agora
+            consulta de forma unificada tanto <code>entrega_registros</code> quanto{' '}
+            <code>entrega_comprovantes</code> estritamente isolados pelo ciclo selecionado,
+            garantindo a visualização dos recibos e horários de confirmação das paradas.
+          </p>
+          <div className="grid sm:grid-cols-2 gap-4 text-sm">
+            <div className="rounded-md border border-border/60 bg-muted/20 p-3 space-y-1.5">
+              <span className="font-medium text-primary">
+                Leitura & Exibição Unificada nas Paradas:
+              </span>
+              <ul className="space-y-1 text-xs text-muted-foreground">
+                <li>
+                  • O selo verde <code>Entregue HH:MM</code> e o status de parada entregue aparecem
+                  se houver confirmação em qualquer das duas fontes do ciclo selecionado.
+                </li>
+                <li>
+                  • O mapa interativo (<code>RouteMapView</code>) recebe os horários e paradas
+                  entregues consolidados de ambas as coleções.
+                </li>
+                <li>
+                  • Mantido 100% o isolamento por ciclo: nenhum registro de outro ciclo é misturado.
+                </li>
+              </ul>
+            </div>
+            <div className="rounded-md border border-primary/30 bg-primary/5 p-3 space-y-1.5">
+              <span className="font-medium text-primary">
+                Modal &quot;Dados da Entrega&quot; e Origem:
+              </span>
+              <ul className="space-y-1 text-xs text-foreground/80">
+                <li>
+                  • Suporte a dados originados pelo fechamento da secretária com badge informativo
+                  &quot;Fechamento pela secretária&quot;.
+                </li>
+                <li>
+                  • Exibição fiel dos horários, observação, responsável e dados disponíveis sem
+                  inventar motoristas não cadastrados.
+                </li>
+                <li>
+                  • O carimbo &quot;Conferido por&quot; preserva estritamente a fonte do pedido /
+                  usuário logado (0.0.210).
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        {/* Release v0.0.226: Isolamento de Entregas por Ciclo */}
+        <div className="rounded-lg border border-border bg-card p-5 space-y-4">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="text-primary border-primary/30">
+                Release v0.0.226
+              </Badge>
+              <span className="font-semibold text-foreground">
+                0.0.226: Isolamento Estrito de Entregas e Despachos por Ciclo em /rotas
+              </span>
+            </div>
+            <span className="text-xs text-muted-foreground">Consolidado (v0.0.226)</span>
+          </div>
+          <p className="text-sm text-foreground/90 leading-relaxed">
+            Isolamento hermético das entregas e despachos na tela <code>/rotas</code> para que o
+            estado das rotas reflita unicamente o ciclo ativo ou selecionado no cabeçalho:
+          </p>
+          <div className="grid sm:grid-cols-2 gap-4 text-sm">
+            <div className="rounded-md border border-border/60 bg-muted/20 p-3 space-y-1.5">
+              <span className="font-medium text-primary">Regras de Filtragem por Ciclo:</span>
+              <ul className="space-y-1 text-xs text-muted-foreground">
+                <li>
+                  • Consultas a despachos e registros de entrega utilizam o <code>ciclo_id</code> em
+                  foco como filtro obrigatório na API.
+                </li>
+                <li>
+                  • Histórico imutável: ciclos concluídos mantêm seus selos de entrega e caminhão
+                  congelados no estado do seu ciclo sem sofrer interferência de novos ciclos
+                  abertos.
+                </li>
+              </ul>
+            </div>
+            <div className="rounded-md border border-primary/30 bg-primary/5 p-3 space-y-1.5">
+              <span className="font-medium text-primary">Preservação Operacional:</span>
+              <ul className="space-y-1 text-xs text-foreground/80">
+                <li>
+                  • Respeita a regra do Ciclo Corrente (definido pela seta &quot;Monitorar&quot; ou
+                  ciclo ativo).
+                </li>
+                <li>
+                  • Integração com o seletor Chamada + Ciclo sem recarregar desnecessariamente dados
+                  globais.
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        {/* Release v0.0.225: Filtro Chamada + Ciclo em /rotas */}
+        <div className="rounded-lg border border-border bg-card p-5 space-y-4">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="text-primary border-primary/30">
+                Release v0.0.225
+              </Badge>
+              <span className="font-semibold text-foreground">
+                0.0.225: Filtro Unificado Chamada + Ciclo em /rotas (Alinhamento com /monitoramento)
+              </span>
+            </div>
+            <span className="text-xs text-muted-foreground">Consolidado (v0.0.225)</span>
+          </div>
+          <p className="text-sm text-foreground/90 leading-relaxed">
+            Padronização da barra de seleção superior de <code>/rotas</code> para oferecer a mesma
+            experiência de navegação de <code>/monitoramento</code>:
+          </p>
+          <div className="grid sm:grid-cols-2 gap-4 text-sm">
+            <div className="rounded-md border border-border/60 bg-muted/20 p-3 space-y-1.5">
+              <span className="font-medium text-primary">Seletores Integrados:</span>
+              <ul className="space-y-1 text-xs text-muted-foreground">
+                <li>
+                  • Seletor primário de Chamada (Municipal vs Estadual) seguido pelo seletor de
+                  Ciclos da chamada.
+                </li>
+                <li>
+                  • Suporte a sincronização bidirecional com parâmetros de URL (
+                  <code>?chamadaId=</code> e <code>?cicloId=</code>).
+                </li>
+              </ul>
+            </div>
+            <div className="rounded-md border border-primary/30 bg-primary/5 p-3 space-y-1.5">
+              <span className="font-medium text-primary">Precedência do Ciclo Corrente:</span>
+              <ul className="space-y-1 text-xs text-foreground/80">
+                <li>
+                  • Abertura pré-selecionada no Ciclo Corrente persistido no banco quando pertencer
+                  à chamada.
+                </li>
+                <li>
+                  • Fallback inteligente para o ciclo ativo da chamada ou o ciclo mais recente.
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
         {/* Retenção Histórica de Dados de Entrega por Ciclo (v0.0.221) */}
         <div className="rounded-lg border border-border bg-card p-5 space-y-4">
           <div className="flex items-center justify-between flex-wrap gap-2">

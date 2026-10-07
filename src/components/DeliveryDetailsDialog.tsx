@@ -9,7 +9,7 @@ import {
 } from '@/components/ui/dialog'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import type { EntregaRegistroRecord } from '@/lib/types'
+import type { EntregaRegistroRecord, EntregaComprovanteRecord } from '@/lib/types'
 import {
   CheckCircle2,
   Clock,
@@ -23,10 +23,12 @@ import {
   X,
   FileBadge,
   UserCheck,
+  Building,
 } from 'lucide-react'
 
 export interface DeliveryDetailsData {
   registro?: EntregaRegistroRecord | null
+  comprovante?: EntregaComprovanteRecord | null
   escolaNome: string
   escolaEndereco?: string
   contratoNumero?: string
@@ -93,6 +95,7 @@ export function DeliveryDetailsDialog({ open, onOpenChange, data }: DeliveryDeta
 
   const {
     registro,
+    comprovante,
     escolaNome,
     escolaEndereco,
     contratoNumero,
@@ -101,16 +104,33 @@ export function DeliveryDetailsDialog({ open, onOpenChange, data }: DeliveryDeta
     conferenteNome,
   } = data
 
-  // Horários reais de coleta no dispositivo do motorista (independentes da sincronização)
-  const chegadaInfo = formatDataHora(registro?.chegada_em)
-  const confirmacaoInfo = formatDataHora(registro?.confirmado_em)
+  // Horários reais de coleta/confirmação (lendo registro ou comprovante permanente)
+  const chegadaEm = registro?.chegada_em || comprovante?.chegada_em || null
+  const confirmadoEm = registro?.confirmado_em || comprovante?.confirmado_em || null
+  const chegadaInfo = formatDataHora(chegadaEm)
+  const confirmacaoInfo = formatDataHora(confirmadoEm)
 
-  // Motorista que registrou: expand do registro > motoristaNome passado > fallback
-  const nomeMotoristaEfetivo = registro?.expand?.motorista_id?.nome || motoristaNome || null
+  // Motorista que registrou: apenas quando registrado/disponível
+  const nomeMotoristaEfetivo =
+    registro?.expand?.motorista_id?.nome ||
+    comprovante?.expand?.motorista_id?.nome ||
+    motoristaNome ||
+    null
 
   // Imagens (assinatura e foto)
-  const assinaturaUrl = registro?.assinatura || null
-  const fotoUrl = registro?.foto || null
+  const assinaturaUrl = registro?.assinatura || comprovante?.assinatura || null
+  const fotoUrl = registro?.foto || comprovante?.foto || null
+
+  // Responsável pelo recebimento
+  const responsavelNome = registro?.responsavel_nome || comprovante?.responsavel_nome || null
+  const responsavelCpf = registro?.responsavel_cpf || comprovante?.responsavel_cpf || null
+
+  // Observação
+  const observacao = (registro?.observacao || comprovante?.observacao || '').trim()
+
+  // Origem do registro (portal do motorista vs fechamento pela secretária)
+  const origem = comprovante?.origem || (registro ? 'portal_motorista' : undefined)
+  const isFechamentoSecretaria = origem === 'fechamento_secretaria'
 
   return (
     <>
@@ -132,9 +152,20 @@ export function DeliveryDetailsDialog({ open, onOpenChange, data }: DeliveryDeta
                   <Badge className="bg-emerald-600 text-white hover:bg-emerald-600 text-[10px] px-1.5 py-0 font-medium">
                     Somente leitura
                   </Badge>
+                  {isFechamentoSecretaria && (
+                    <Badge
+                      variant="outline"
+                      className="border-primary/50 bg-primary/10 text-primary text-[10px] px-1.5 py-0 font-medium flex items-center gap-1"
+                    >
+                      <Building className="h-2.5 w-2.5" />
+                      Fechamento pela secretária
+                    </Badge>
+                  )}
                 </DialogTitle>
                 <DialogDescription className="text-xs text-muted-foreground truncate">
-                  Comprovante e registros da entrega realizada na escola
+                  {isFechamentoSecretaria
+                    ? 'Comprovante permanente registrado pelo fechamento da rota na central'
+                    : 'Comprovante e registros da entrega realizada na escola'}
                 </DialogDescription>
               </div>
             </div>
@@ -226,20 +257,20 @@ export function DeliveryDetailsDialog({ open, onOpenChange, data }: DeliveryDeta
             </div>
 
             {/* Bloco 3.1: Responsável pelo recebimento na escola (quando informado) */}
-            {(registro?.responsavel_nome || registro?.responsavel_cpf) && (
+            {(responsavelNome || responsavelCpf) && (
               <div className="p-2.5 bg-slate-50 dark:bg-slate-900/60 border rounded-lg space-y-1">
                 <div className="flex items-center gap-2 text-muted-foreground">
                   <UserCheck className="h-4 w-4 text-emerald-600 shrink-0" />
                   <span className="font-medium text-[11px]">Recebido por:</span>
                 </div>
                 <div className="pl-6 text-foreground font-semibold text-xs flex items-center gap-2 flex-wrap">
-                  {registro.responsavel_nome && <span>{registro.responsavel_nome}</span>}
-                  {registro.responsavel_nome && registro.responsavel_cpf && (
+                  {responsavelNome && <span>{responsavelNome}</span>}
+                  {responsavelNome && responsavelCpf && (
                     <span className="text-muted-foreground font-normal">—</span>
                   )}
-                  {registro.responsavel_cpf && (
+                  {responsavelCpf && (
                     <span className="font-mono text-[11px] text-muted-foreground bg-muted/60 px-1.5 py-0.5 rounded border">
-                      CPF: {registro.responsavel_cpf}
+                      CPF: {responsavelCpf}
                     </span>
                   )}
                 </div>
@@ -309,15 +340,17 @@ export function DeliveryDetailsDialog({ open, onOpenChange, data }: DeliveryDeta
               )}
             </div>
 
-            {/* Bloco 6: Comentários / Observação do Motorista */}
+            {/* Bloco 6: Comentários / Observação */}
             <div className="space-y-1.5">
               <div className="flex items-center gap-1.5 font-semibold text-muted-foreground">
                 <FileText className="h-4 w-4 text-amber-600" />
-                <span>Observação do Motorista</span>
+                <span>
+                  {isFechamentoSecretaria ? 'Observação do Fechamento' : 'Observação do Motorista'}
+                </span>
               </div>
-              {registro?.observacao && registro.observacao.trim() ? (
+              {observacao ? (
                 <div className="p-2.5 bg-amber-50/70 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg text-slate-800 dark:text-slate-200 leading-relaxed whitespace-pre-wrap">
-                  {registro.observacao.trim()}
+                  {observacao}
                 </div>
               ) : (
                 <div className="p-3 bg-muted/20 border border-dashed rounded-lg text-center text-muted-foreground italic">

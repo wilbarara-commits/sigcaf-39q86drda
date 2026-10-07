@@ -91,6 +91,7 @@ import { MotoristasManagerDialog } from '@/components/MotoristasManagerDialog'
 import { DespachoMotoristaModal } from '@/components/DespachoMotoristaModal'
 import { motoristasService } from '@/services/motoristas'
 import { rotaDespachosService, entregaRegistrosService } from '@/services/rota-despachos'
+import { retencaoHistoricaService } from '@/services/retencao-historica'
 import {
   MOTIVOS_LOGISTICOS_CANCELAMENTO,
   type MotivoLogisticoCancelamento,
@@ -99,6 +100,7 @@ import {
   type MotoristaRecord,
   type RotaDespachoRecord,
   type EntregaRegistroRecord,
+  type EntregaComprovanteRecord,
 } from '@/lib/types'
 import { DeliveryDetailsDialog, type DeliveryDetailsData } from '@/components/DeliveryDetailsDialog'
 
@@ -395,6 +397,11 @@ export default function DeliveryRoutes() {
   const [registrosEntregasMap, setRegistrosEntregasMap] = useState<
     Record<string, EntregaRegistroRecord[]>
   >({})
+  // Mapa de comprovantes permanentes por rotaId: Record<rotaId, EntregaComprovanteRecord[]>
+  // Lidos do banco (entrega_comprovantes) estritamente filtrados pelo ciclo selecionado (isolamento por ciclo)
+  const [comprovantesEntregasMap, setComprovantesEntregasMap] = useState<
+    Record<string, EntregaComprovanteRecord[]>
+  >({})
   const [visualizandoAssinaturaUrl, setVisualizandoAssinaturaUrl] = useState<string | null>(null)
   const [visualizandoFotoUrl, setVisualizandoFotoUrl] = useState<string | null>(null)
 
@@ -403,7 +410,7 @@ export default function DeliveryRoutes() {
   const [selectedDeliveryDetails, setSelectedDeliveryDetails] =
     useState<DeliveryDetailsData | null>(null)
 
-  // Carregar lista de motoristas e despachos ativos
+  // Carregar lista de motoristas, despachos ativos e comprovantes/registros do ciclo selecionado
   const carregarMotoristasEDespachos = async () => {
     try {
       const motList = await motoristasService.getAll()
@@ -411,7 +418,23 @@ export default function DeliveryRoutes() {
 
       const mapDesp: Record<string, RotaDespachoRecord> = {}
       const mapRegs: Record<string, EntregaRegistroRecord[]> = {}
+      const mapComps: Record<string, EntregaComprovanteRecord[]> = {}
       const cicloFiltroId = selectedCiclo?.id
+
+      // 1. Carregar comprovantes permanentes de retenção (entrega_comprovantes) do ciclo selecionado
+      if (cicloFiltroId) {
+        try {
+          const compsCiclo = await retencaoHistoricaService.getComprovantesByCiclo(cicloFiltroId)
+          compsCiclo.forEach((c) => {
+            if (c.rota_id) {
+              if (!mapComps[c.rota_id]) mapComps[c.rota_id] = []
+              mapComps[c.rota_id].push(c)
+            }
+          })
+        } catch (errComp) {
+          console.warn('Erro ao carregar comprovantes do ciclo:', errComp)
+        }
+      }
 
       for (const r of rotasLogisticas) {
         const desp = await rotaDespachosService.getAtivoByRota(r.id, cicloFiltroId)
@@ -429,8 +452,9 @@ export default function DeliveryRoutes() {
       }
       setDespachosAtivosMap(mapDesp)
       setRegistrosEntregasMap(mapRegs)
+      setComprovantesEntregasMap(mapComps)
     } catch (e) {
-      console.warn('Erro ao carregar dados de motoristas/despachos:', e)
+      console.warn('Erro ao carregar dados de motoristas/despachos/comprovantes:', e)
     }
   }
 
@@ -1666,9 +1690,16 @@ export default function DeliveryRoutes() {
             const registrosRota = selectedCiclo?.id
               ? getEntregaRegistrosDaRota(item.rota.id, selectedCiclo.id)
               : []
-            const temEntregaConfirmadaPortal = registrosRota.some(
-              (r) => r.confirmado_em && r.confirmado_em.trim() !== '',
-            )
+            const compsRota = selectedCiclo?.id
+              ? (comprovantesEntregasMap[item.rota.id] || []).filter(
+                  (c) => c.ciclo_id === selectedCiclo.id,
+                )
+              : []
+            const temEntregaConfirmadaPortal =
+              registrosRota.some((r) => r.confirmado_em && r.confirmado_em.trim() !== '') ||
+              compsRota.some(
+                (c) => (c.confirmado_em && c.confirmado_em.trim() !== '') || Boolean(c.chegada_em),
+              )
             const modoAutomaticoAtivo = isDespachadoConfirmadoRota && temEntregaConfirmadaPortal
 
             const hasEmRota =
@@ -1914,9 +1945,20 @@ export default function DeliveryRoutes() {
                               (r) => r.ciclo_id === selectedCiclo.id,
                             )
                           : []
-                    const temEntregaConfirmadaPortal = rotaRegsEfetivosCalculo.some(
-                      (r) => r.confirmado_em && r.confirmado_em.trim() !== '',
-                    )
+                    const rotaCompsEfetivosCalculo = selectedCiclo?.id
+                      ? (comprovantesEntregasMap[item.rota.id] || []).filter(
+                          (c) => c.ciclo_id === selectedCiclo.id,
+                        )
+                      : []
+                    const temEntregaConfirmadaPortal =
+                      rotaRegsEfetivosCalculo.some(
+                        (r) => r.confirmado_em && r.confirmado_em.trim() !== '',
+                      ) ||
+                      rotaCompsEfetivosCalculo.some(
+                        (c) =>
+                          (c.confirmado_em && c.confirmado_em.trim() !== '') ||
+                          Boolean(c.chegada_em),
+                      )
                     const modoAutomaticoAtivo = hasEmRota && temEntregaConfirmadaPortal
 
                     return (
@@ -2377,8 +2419,14 @@ export default function DeliveryRoutes() {
                                   (r) => r.ciclo_id === selectedCiclo.id,
                                 )
                               : []
+                        // Comprovantes permanentes (entrega_comprovantes) da rota no ciclo selecionado
+                        const rotaCompsEfetivos = selectedCiclo?.id
+                          ? (comprovantesEntregasMap[item.rota.id] || []).filter(
+                              (c) => c.ciclo_id === selectedCiclo.id,
+                            )
+                          : []
 
-                        // Mapa de escolaId -> { confirmado_em } para escolas com entrega confirmada
+                        // Mapa de escolaId -> { confirmado_em } para escolas com entrega confirmada (entrega_registros OU entrega_comprovantes)
                         const entregasConfirmadasMap = new Map<
                           string,
                           { confirmado_em?: string | null }
@@ -2388,6 +2436,15 @@ export default function DeliveryRoutes() {
                             entregasConfirmadasMap.set(rg.escola_id, {
                               confirmado_em: rg.confirmado_em,
                             })
+                          }
+                        })
+                        rotaCompsEfetivos.forEach((comp) => {
+                          if (comp.escola_id && (comp.confirmado_em || comp.chegada_em)) {
+                            if (!entregasConfirmadasMap.has(comp.escola_id)) {
+                              entregasConfirmadasMap.set(comp.escola_id, {
+                                confirmado_em: comp.confirmado_em || comp.chegada_em || null,
+                              })
+                            }
                           }
                         })
 
@@ -2420,12 +2477,17 @@ export default function DeliveryRoutes() {
                                 ? ultimaEscolaEntregueId === parada.escolaId
                                 : item.rota.caminhao_escola_id === parada.escolaId
 
-                              // Checar se a parada já foi entregue no ciclo selecionado
+                              // Checar se a parada já foi entregue no ciclo selecionado (registro OU comprovante)
                               const regParada = rotaRegsEfetivos.find(
                                 (rg) =>
                                   rg.escola_id === parada.escolaId && Boolean(rg.confirmado_em),
                               )
-                              const isParadaEntregue = Boolean(regParada)
+                              const compParada = rotaCompsEfetivos.find(
+                                (c) =>
+                                  c.escola_id === parada.escolaId &&
+                                  Boolean(c.confirmado_em || c.chegada_em),
+                              )
+                              const isParadaEntregue = Boolean(regParada || compParada)
 
                               const handleAbrirDetalhesParada = () => {
                                 if (!isParadaEntregue) return
@@ -2434,18 +2496,19 @@ export default function DeliveryRoutes() {
                                 )
                                 const conferenteNome =
                                   pedEntregue?.entreguePorNome || pedEntregue?.entregue_por || null
+                                const motoristaDoDespacho =
+                                  despachosAtivosMap[item.rota.id]?.expand?.motorista_id?.nome ||
+                                  (despachosAtivosMap[item.rota.id] as any)?.motorista_nome ||
+                                  motoristasList.find(
+                                    (m) => m.id === despachosAtivosMap[item.rota.id]?.motorista_id,
+                                  )?.nome
                                 setSelectedDeliveryDetails({
                                   registro: regParada || null,
+                                  comprovante: compParada || null,
                                   escolaNome: parada.nome,
                                   escolaEndereco: parada.endereco,
                                   contratoNumero: parada.contratoNumero,
-                                  motoristaNome:
-                                    despachosAtivosMap[item.rota.id]?.expand?.motorista_id?.nome ||
-                                    (despachosAtivosMap[item.rota.id] as any)?.motorista_nome ||
-                                    motoristasList.find(
-                                      (m) =>
-                                        m.id === despachosAtivosMap[item.rota.id]?.motorista_id,
-                                    )?.nome,
+                                  motoristaNome: motoristaDoDespacho,
                                   ordem: parada.ordem,
                                   conferenteNome,
                                 })
@@ -2524,19 +2587,31 @@ export default function DeliveryRoutes() {
                                             </Badge>
                                           )}
 
-                                          {/* Status de entrega pelo motorista */}
+                                          {/* Status de entrega pelo motorista ou secretária */}
                                           {(() => {
-                                            // Derivação reativa ao ciclo selecionado (reaproveitando regParada já apurado)
-                                            if (!regParada) return null
+                                            // Derivação reativa ao ciclo selecionado (reaproveitando regParada e compParada já apurados)
+                                            if (!regParada && !compParada) return null
 
-                                            const horaEnt = regParada.confirmado_em
-                                              ? new Date(
-                                                  regParada.confirmado_em,
-                                                ).toLocaleTimeString('pt-BR', {
-                                                  hour: '2-digit',
-                                                  minute: '2-digit',
-                                                })
+                                            const timestampEntrega =
+                                              regParada?.confirmado_em ||
+                                              compParada?.confirmado_em ||
+                                              compParada?.chegada_em
+                                            const horaEnt = timestampEntrega
+                                              ? new Date(timestampEntrega).toLocaleTimeString(
+                                                  'pt-BR',
+                                                  {
+                                                    hour: '2-digit',
+                                                    minute: '2-digit',
+                                                  },
+                                                )
                                               : null
+
+                                            const assinaturaDisponivel =
+                                              regParada?.assinatura ||
+                                              compParada?.assinatura ||
+                                              null
+                                            const fotoDisponivel =
+                                              regParada?.foto || compParada?.foto || null
 
                                             return (
                                               <div className="flex items-center gap-1 shrink-0">
@@ -2551,22 +2626,24 @@ export default function DeliveryRoutes() {
                                                       pedEntregue?.entreguePorNome ||
                                                       pedEntregue?.entregue_por ||
                                                       null
+                                                    const motoristaDoDespacho =
+                                                      despachosAtivosMap[item.rota.id]?.expand
+                                                        ?.motorista_id?.nome ||
+                                                      (despachosAtivosMap[item.rota.id] as any)
+                                                        ?.motorista_nome ||
+                                                      motoristasList.find(
+                                                        (m) =>
+                                                          m.id ===
+                                                          despachosAtivosMap[item.rota.id]
+                                                            ?.motorista_id,
+                                                      )?.nome
                                                     setSelectedDeliveryDetails({
-                                                      registro: regParada,
+                                                      registro: regParada || null,
+                                                      comprovante: compParada || null,
                                                       escolaNome: parada.nome,
                                                       escolaEndereco: parada.endereco,
                                                       contratoNumero: parada.contratoNumero,
-                                                      motoristaNome:
-                                                        despachosAtivosMap[item.rota.id]?.expand
-                                                          ?.motorista_id?.nome ||
-                                                        (despachosAtivosMap[item.rota.id] as any)
-                                                          ?.motorista_nome ||
-                                                        motoristasList.find(
-                                                          (m) =>
-                                                            m.id ===
-                                                            despachosAtivosMap[item.rota.id]
-                                                              ?.motorista_id,
-                                                        )?.nome,
+                                                      motoristaNome: motoristaDoDespacho,
                                                       ordem: parada.ordem,
                                                       conferenteNome,
                                                     })
@@ -2580,7 +2657,7 @@ export default function DeliveryRoutes() {
                                                     {horaEnt ? `Entregue ${horaEnt}` : 'Entregue'}
                                                   </span>
                                                 </button>
-                                                {regParada.assinatura && (
+                                                {assinaturaDisponivel && (
                                                   <Button
                                                     type="button"
                                                     variant="outline"
@@ -2588,7 +2665,7 @@ export default function DeliveryRoutes() {
                                                     onClick={(e) => {
                                                       e.stopPropagation()
                                                       setVisualizandoAssinaturaUrl(
-                                                        regParada.assinatura || null,
+                                                        assinaturaDisponivel,
                                                       )
                                                     }}
                                                     className="h-5 px-1.5 text-[9px] border-emerald-400 text-emerald-800 dark:text-emerald-300 hover:bg-emerald-50"
@@ -2597,14 +2674,14 @@ export default function DeliveryRoutes() {
                                                     Assinatura
                                                   </Button>
                                                 )}
-                                                {regParada.foto && (
+                                                {fotoDisponivel && (
                                                   <Button
                                                     type="button"
                                                     variant="outline"
                                                     size="sm"
                                                     onClick={(e) => {
                                                       e.stopPropagation()
-                                                      setVisualizandoFotoUrl(regParada.foto || null)
+                                                      setVisualizandoFotoUrl(fotoDisponivel)
                                                     }}
                                                     className="h-5 px-1.5 text-[9px] border-blue-400 text-blue-800 dark:text-blue-300 hover:bg-blue-50 gap-0.5"
                                                     title="Ver foto do material entregue"
@@ -2623,10 +2700,15 @@ export default function DeliveryRoutes() {
                                           const regObs = rotaRegsEfetivos.find(
                                             (rg) => rg.escola_id === parada.escolaId,
                                           )
-                                          if (regObs?.observacao) {
+                                          const compObs = rotaCompsEfetivos.find(
+                                            (c) => c.escola_id === parada.escolaId,
+                                          )
+                                          const observacaoEfetiva =
+                                            regObs?.observacao || compObs?.observacao
+                                          if (observacaoEfetiva) {
                                             return (
                                               <p className="text-[9px] text-slate-600 dark:text-slate-400 italic truncate mt-0.5">
-                                                Obs: {regObs.observacao}
+                                                Obs: {observacaoEfetiva}
                                               </p>
                                             )
                                           }
@@ -2873,22 +2955,29 @@ export default function DeliveryRoutes() {
                               const regAlvo = rotaRegsEfetivos.find(
                                 (rg) => rg.escola_id === escolaId && Boolean(rg.confirmado_em),
                               )
+                              const compAlvo = rotaCompsEfetivos.find(
+                                (c) =>
+                                  c.escola_id === escolaId &&
+                                  Boolean(c.confirmado_em || c.chegada_em),
+                              )
                               const pedEntregue = paradaAlvo?.pedidos.find(
                                 (p) => p.status === 'Entregue',
                               )
                               const conferenteNome =
                                 pedEntregue?.entreguePorNome || pedEntregue?.entregue_por || null
+                              const motoristaDoDespacho =
+                                despachosAtivosMap[item.rota.id]?.expand?.motorista_id?.nome ||
+                                (despachosAtivosMap[item.rota.id] as any)?.motorista_nome ||
+                                motoristasList.find(
+                                  (m) => m.id === despachosAtivosMap[item.rota.id]?.motorista_id,
+                                )?.nome
                               setSelectedDeliveryDetails({
                                 registro: regAlvo || null,
+                                comprovante: compAlvo || null,
                                 escolaNome: paradaAlvo?.nome || 'Escola',
                                 escolaEndereco: paradaAlvo?.endereco,
                                 contratoNumero: paradaAlvo?.contratoNumero,
-                                motoristaNome:
-                                  despachosAtivosMap[item.rota.id]?.expand?.motorista_id?.nome ||
-                                  (despachosAtivosMap[item.rota.id] as any)?.motorista_nome ||
-                                  motoristasList.find(
-                                    (m) => m.id === despachosAtivosMap[item.rota.id]?.motorista_id,
-                                  )?.nome,
+                                motoristaNome: motoristaDoDespacho,
                                 ordem: paradaAlvo?.ordem,
                                 conferenteNome,
                               })
