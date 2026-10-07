@@ -445,8 +445,9 @@ export function MonitoringDeliveryAlerts({
             </Button>
 
             {contadoresAlertas.rotasParadasCount > 0 && (
-              <Badge variant="destructive" className="text-xs font-semibold animate-pulse">
-                {contadoresAlertas.rotasParadasCount} rota(s) parada(s)
+              <Badge variant="destructive" className="text-xs font-semibold animate-pulse gap-1">
+                <span>⚠️</span>
+                <span>{contadoresAlertas.rotasParadasCount} rota(s) parada(s)</span>
               </Badge>
             )}
             {contadoresAlertas.entregasSemAssinaturaCount > 0 && (
@@ -501,7 +502,13 @@ export function MonitoringDeliveryAlerts({
                       className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold bg-destructive text-destructive-foreground animate-pulse shadow-2xs"
                       title="Alerta crítico: motorista sem sincronizar há mais de 30 minutos!"
                     >
-                      <AlertTriangle className="h-3.5 w-3.5" />
+                      <span
+                        className="text-sm leading-none"
+                        role="img"
+                        aria-label="Alerta rota parada"
+                      >
+                        ⚠️
+                      </span>
                       <span>
                         Rota parada: sem sincronizar há{' '}
                         {formatTempoDecorridoMinutos(minutosSemSync)}
@@ -532,14 +539,19 @@ export function MonitoringDeliveryAlerts({
                 <div className="p-3 bg-card border rounded-md space-y-2">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-1.5 font-semibold text-foreground">
-                      <ListOrdered className="h-4 w-4 text-amber-600" />
+                      <span
+                        className="text-base leading-none"
+                        role="img"
+                        aria-label="Paradas pendentes"
+                      >
+                        📍
+                      </span>
                       <span>Paradas Pendentes</span>
                     </div>
                     <Badge variant="outline" className="text-[11px] font-semibold text-amber-700">
                       Faltam {paradasPendentes.length} de {totalParadas}
                     </Badge>
                   </div>
-
                   {paradasPendentes.length === 0 ? (
                     <div className="py-2 flex items-center gap-1.5 text-emerald-700 dark:text-emerald-400 font-medium">
                       <CheckCircle2 className="h-4 w-4 text-emerald-600" />

@@ -276,14 +276,20 @@ export default function Index() {
   ]
 
   // Recent activity feed dynamically assembled from real database records
-  const dynamicActivities = []
+  const dynamicActivities: Array<{
+    title: string
+    desc: string
+    time: string
+    emoji: string
+    color: string
+  }> = []
   if (atestos.length > 0) {
     const latestAtesto = atestos[0]
     dynamicActivities.push({
       title: `Atesto Gerado (${latestAtesto.numero || 'AT'})`,
       desc: latestAtesto.schoolName,
       time: new Date(latestAtesto.date).toLocaleDateString('pt-BR'),
-      icon: CheckCircle2,
+      emoji: '📜',
       color: 'text-primary',
     })
   }
@@ -293,7 +299,7 @@ export default function Index() {
       title: `Novo Pedido (${latestOrder.numero || 'ORD'})`,
       desc: `${latestOrder.schoolName} — R$ ${latestOrder.total.toFixed(2)}`,
       time: new Date(latestOrder.date).toLocaleDateString('pt-BR'),
-      icon: Clock,
+      emoji: '📋',
       color: 'text-secondary',
     })
   }
@@ -301,7 +307,7 @@ export default function Index() {
     title: 'Catálogo Conectado',
     desc: 'PocketBase Skip Cloud ativo',
     time: 'Hoje',
-    icon: Sprout,
+    emoji: '🌱',
     color: 'text-blue-500',
   })
 
@@ -321,7 +327,9 @@ export default function Index() {
           >
             <Link to="/atestos" className="flex items-center gap-3">
               <div className="h-12 w-12 rounded-xl bg-primary/10 text-primary flex items-center justify-center transition-all group-hover:scale-105 group-hover:border group-hover:border-primary/40 shrink-0">
-                <BadgeCheck className="h-6 w-6 stroke-[1.8]" />
+                <span className="text-2xl leading-none" role="img" aria-label="Emitir Atesto">
+                  📜
+                </span>
               </div>
               <div className="text-left">
                 <div className="font-semibold text-sm leading-tight text-foreground">
@@ -336,7 +344,9 @@ export default function Index() {
           <Button asChild className="h-auto py-1.5 px-3 group">
             <Link to="/pedidos" className="flex items-center gap-3">
               <div className="h-12 w-12 rounded-xl bg-primary/20 text-primary-foreground dark:text-primary flex items-center justify-center transition-all group-hover:scale-105 group-hover:border group-hover:border-primary/40 shrink-0">
-                <ShoppingBasket className="h-6 w-6 stroke-[1.8]" />
+                <span className="text-2xl leading-none" role="img" aria-label="Novo Pedido">
+                  📋
+                </span>
               </div>
               <div className="text-left">
                 <div className="font-semibold text-sm leading-tight">Novo Pedido</div>
@@ -796,9 +806,11 @@ export default function Index() {
           <CardContent>
             <div className="space-y-6">
               {dynamicActivities.map((act, i) => (
-                <div key={i} className="flex gap-4">
-                  <div className={`mt-0.5 rounded-full p-1 border ${act.color} bg-background`}>
-                    <act.icon className="h-4 w-4" />
+                <div key={i} className="flex gap-4 items-start">
+                  <div className="mt-0.5 rounded-full p-1.5 border border-border bg-muted/30 flex items-center justify-center shrink-0">
+                    <span className="text-base leading-none" role="img" aria-label={act.title}>
+                      {act.emoji}
+                    </span>
                   </div>
                   <div className="flex flex-col">
                     <p className="text-sm font-medium leading-none">{act.title}</p>

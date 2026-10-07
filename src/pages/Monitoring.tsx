@@ -674,14 +674,20 @@ export default function Monitoring() {
               }`}
             >
               <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-bold uppercase tracking-wider text-blue-600">
-                  Fase 1
+                <span className="text-xs font-bold uppercase tracking-wider text-blue-600 flex items-center gap-1">
+                  <span>Fase 1</span>
+                  <span>📝</span>
                 </span>
                 <div className="h-8 w-8 rounded-lg bg-blue-100 dark:bg-blue-900/50 text-blue-600 flex items-center justify-center">
-                  <Clock className="h-4 w-4 stroke-[1.8]" />
+                  <span className="text-base leading-none" role="img" aria-label="Fase 1 Coletando">
+                    📝
+                  </span>
                 </div>
               </div>
-              <h3 className="font-semibold text-base mb-1">Coletando</h3>
+              <h3 className="font-semibold text-base mb-1 flex items-center gap-1.5">
+                <span>Coletando</span>
+                <span className="text-base leading-none">📝</span>
+              </h3>
               <p className="text-xs text-muted-foreground mb-3">
                 importa ✓ · pedido ✓ · despacho ✗
               </p>
@@ -719,14 +725,20 @@ export default function Monitoring() {
               }`}
             >
               <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-bold uppercase tracking-wider text-amber-600">
-                  Fase 2
+                <span className="text-xs font-bold uppercase tracking-wider text-amber-600 flex items-center gap-1">
+                  <span>Fase 2</span>
+                  <span>🔍</span>
                 </span>
                 <div className="h-8 w-8 rounded-lg bg-amber-100 dark:bg-amber-900/50 text-amber-600 flex items-center justify-center">
-                  <AlertTriangle className="h-4 w-4 stroke-[1.8]" />
+                  <span className="text-base leading-none" role="img" aria-label="Fase 2 Correção">
+                    🔍
+                  </span>
                 </div>
               </div>
-              <h3 className="font-semibold text-base mb-1">Correção</h3>
+              <h3 className="font-semibold text-base mb-1 flex items-center gap-1.5">
+                <span>Correção</span>
+                <span className="text-base leading-none">🔍</span>
+              </h3>
               <p className="text-xs text-muted-foreground mb-3">
                 importa ✓ · pedido ✓ · despacho ✗
               </p>
@@ -770,15 +782,25 @@ export default function Monitoring() {
                   }`}
                 >
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs font-bold uppercase tracking-wider text-purple-600">
-                      Fase 3
+                    <span className="text-xs font-bold uppercase tracking-wider text-purple-600 flex items-center gap-1">
+                      <span>Fase 3</span>
+                      <span>🚚</span>
                     </span>
                     <div className="h-8 w-8 rounded-lg bg-purple-100 dark:bg-purple-900/50 text-purple-600 flex items-center justify-center">
-                      <Truck className="h-4 w-4 stroke-[1.8]" />
+                      <span
+                        className="text-base leading-none"
+                        role="img"
+                        aria-label="Fase 3 Em Rota/Coleta Encerrada"
+                      >
+                        🚚
+                      </span>
                     </div>
                   </div>
                   <div className="flex items-center gap-1.5 flex-wrap mb-1">
-                    <h3 className="font-semibold text-base">Coleta Encerrada</h3>
+                    <h3 className="font-semibold text-base flex items-center gap-1.5">
+                      <span>Coleta Encerrada</span>
+                      <span className="text-base leading-none">🚚</span>
+                    </h3>
                     {isEntregasConcluidas && (
                       <Badge className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold">
                         Entregas Concluídas
@@ -854,14 +876,20 @@ export default function Monitoring() {
               }`}
             >
               <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-bold uppercase tracking-wider text-emerald-600">
-                  Fase 4
+                <span className="text-xs font-bold uppercase tracking-wider text-emerald-600 flex items-center gap-1">
+                  <span>Fase 4</span>
+                  <span>🔒</span>
                 </span>
                 <div className="h-8 w-8 rounded-lg bg-emerald-100 dark:bg-emerald-900/50 text-emerald-600 flex items-center justify-center">
-                  <CheckCircle2 className="h-4 w-4 stroke-[1.8]" />
+                  <span className="text-base leading-none" role="img" aria-label="Fase 4 Fechado">
+                    🔒
+                  </span>
                 </div>
               </div>
-              <h3 className="font-semibold text-base mb-1">Fechado</h3>
+              <h3 className="font-semibold text-base mb-1 flex items-center gap-1.5">
+                <span>Fechado</span>
+                <span className="text-base leading-none">🔒</span>
+              </h3>
               <p className="text-xs text-muted-foreground mb-3">
                 importa ✗ · entrada ✗ · despacho ✗ · cancela ✗ (exceto logístico)
               </p>
@@ -898,13 +926,18 @@ export default function Monitoring() {
                     : 'bg-primary/10 text-primary'
                 }`}
               >
-                <FileCheck2 className="h-5 w-5" />
+                <span className="text-xl leading-none" role="img" aria-label="Atestos Confirmados">
+                  📜
+                </span>
               </div>
               <div>
                 <div className="flex items-center gap-2 flex-wrap">
-                  <h4 className="font-semibold text-sm text-foreground">
-                    Atestos Confirmados: {atestosMetrics.confirmados} de{' '}
-                    {atestosMetrics.totalEntregues}
+                  <h4 className="font-semibold text-sm text-foreground flex items-center gap-1.5">
+                    <span className="text-base leading-none">📜</span>
+                    <span>
+                      Atestos Confirmados: {atestosMetrics.confirmados} de{' '}
+                      {atestosMetrics.totalEntregues}
+                    </span>
                   </h4>
                   {atestosMetrics.todosConfirmados ? (
                     <Badge className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold">

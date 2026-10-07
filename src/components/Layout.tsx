@@ -51,30 +51,30 @@ import { ChangePasswordDialog } from '@/components/ChangePasswordDialog'
 interface NavItem {
   name: string
   path: string
-  icon: any
+  emoji: string
   adminOnly?: boolean
   masterOnly?: boolean
 }
 
 const NAV_ITEMS: NavItem[] = [
-  { name: 'Dashboard', path: '/', icon: LayoutDashboard },
-  { name: 'Produtos', path: '/produtos', icon: Sprout, adminOnly: true },
-  { name: 'Escolas', path: '/escolas', icon: School, adminOnly: true },
-  { name: 'Chamadas', path: '/chamadas', icon: Layers, adminOnly: true },
-  { name: 'Contratos', path: '/contratos', icon: FileText, adminOnly: true },
-  { name: 'Pedidos', path: '/pedidos', icon: ShoppingCart },
-  { name: 'Monitoramento', path: '/monitoramento', icon: Activity },
-  { name: 'Histórico de Ciclos', path: '/historico-ciclos', icon: History },
-  { name: 'Importação Excel', path: '/importacao', icon: Upload },
-  { name: 'Comunicação WhatsApp', path: '/comunicacao', icon: MessageSquare },
-  { name: 'Consolidação', path: '/consolidacao', icon: Grid },
-  { name: 'Rotas de Entrega', path: '/rotas', icon: Map },
-  { name: 'Atestos', path: '/atestos', icon: FileCheck },
-  { name: 'Relatórios', path: '/relatorios', icon: BarChart3 },
-  { name: 'Meu Perfil', path: '/perfil', icon: User },
-  { name: 'Usuários', path: '/usuarios', icon: Users, masterOnly: true },
-  { name: 'Configurações', path: '/configuracoes', icon: Settings, masterOnly: true },
-  { name: 'Documento de Requisitos', path: '/requisitos', icon: BookOpen, adminOnly: true },
+  { name: 'Dashboard', path: '/', emoji: '📊' },
+  { name: 'Produtos', path: '/produtos', emoji: '🌱', adminOnly: true },
+  { name: 'Escolas', path: '/escolas', emoji: '🏫', adminOnly: true },
+  { name: 'Chamadas', path: '/chamadas', emoji: '🌾', adminOnly: true },
+  { name: 'Contratos', path: '/contratos', emoji: '📄', adminOnly: true },
+  { name: 'Pedidos', path: '/pedidos', emoji: '📋' },
+  { name: 'Monitoramento', path: '/monitoramento', emoji: '📡' },
+  { name: 'Histórico de Ciclos', path: '/historico-ciclos', emoji: '🔄' },
+  { name: 'Importação Excel', path: '/importacao', emoji: '📥' },
+  { name: 'Comunicação WhatsApp', path: '/comunicacao', emoji: '💬' },
+  { name: 'Consolidação', path: '/consolidacao', emoji: '🧺' },
+  { name: 'Rotas de Entrega', path: '/rotas', emoji: '🛣️' },
+  { name: 'Atestos', path: '/atestos', emoji: '📜' },
+  { name: 'Relatórios', path: '/relatorios', emoji: '📈' },
+  { name: 'Meu Perfil', path: '/perfil', emoji: '👤' },
+  { name: 'Usuários', path: '/usuarios', emoji: '👥', masterOnly: true },
+  { name: 'Configurações', path: '/configuracoes', emoji: '⚙️', masterOnly: true },
+  { name: 'Documento de Requisitos', path: '/requisitos', emoji: '📚', adminOnly: true },
 ]
 
 export default function Layout() {
@@ -133,13 +133,13 @@ export default function Layout() {
             className={cn(
               'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
               isActive
-                ? 'bg-primary/10 text-primary'
+                ? 'bg-primary/10 text-primary font-semibold'
                 : 'text-muted-foreground hover:bg-muted hover:text-foreground',
             )}
           >
-            <item.icon
-              className={cn('h-5 w-5', isActive ? 'text-primary' : 'text-muted-foreground')}
-            />
+            <span className="text-lg leading-none shrink-0" role="img" aria-label={item.name}>
+              {item.emoji}
+            </span>
             <span>{item.name}</span>
           </Link>
         )
@@ -448,14 +448,14 @@ export default function Layout() {
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={() => navigate('/perfil')} className="cursor-pointer">
-                  <User className="mr-2 h-4 w-4 text-primary" />
+                  <span className="mr-2 text-base leading-none">👤</span>
                   <span>Meu Perfil</span>
                 </DropdownMenuItem>
                 <DropdownMenuItem
                   onClick={() => setChangePasswordOpen(true)}
                   className="cursor-pointer"
                 >
-                  <KeyRound className="mr-2 h-4 w-4 text-muted-foreground" />
+                  <span className="mr-2 text-base leading-none">🔑</span>
                   <span>Alterar Senha</span>
                 </DropdownMenuItem>
                 {isPerfilMaster && (
@@ -465,14 +465,14 @@ export default function Layout() {
                       onClick={() => navigate('/usuarios')}
                       className="cursor-pointer"
                     >
-                      <Users className="mr-2 h-4 w-4 text-amber-600" />
+                      <span className="mr-2 text-base leading-none">👥</span>
                       <span>Gestão de Usuários</span>
                     </DropdownMenuItem>
                     <DropdownMenuItem
                       onClick={() => navigate('/configuracoes')}
                       className="cursor-pointer"
                     >
-                      <Settings className="mr-2 h-4 w-4 text-muted-foreground" />
+                      <span className="mr-2 text-base leading-none">⚙️</span>
                       <span>Configurações</span>
                     </DropdownMenuItem>
                   </>
@@ -482,7 +482,7 @@ export default function Layout() {
                   onClick={handleLogout}
                   className="text-destructive focus:text-destructive focus:bg-destructive/10 cursor-pointer"
                 >
-                  <LogOut className="mr-2 h-4 w-4" />
+                  <span className="mr-2 text-base leading-none">🚪</span>
                   <span>Sair da conta</span>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />

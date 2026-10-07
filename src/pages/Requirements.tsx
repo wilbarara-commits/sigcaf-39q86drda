@@ -843,6 +843,69 @@ export function Requirements() {
       {/* 7. Registro de Manutenção e Limpeza de Dados */}
       <SectionTitle>7. Registro de Manutenção & Higienização do Banco de Dados</SectionTitle>
       <div className="space-y-4">
+        {/* Padronização de Identidade Visual com Emojis Temáticos Coloridos (v0.0.215) */}
+        <div className="rounded-lg border border-border bg-card p-5 space-y-4">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="text-primary border-primary/30">
+                Release v0.0.215
+              </Badge>
+              <span className="font-semibold text-foreground">
+                0.0.215: Emojis temáticos coloridos no menu de navegação, ações rápidas e
+                monitoramento
+              </span>
+            </div>
+            <span className="text-xs text-muted-foreground">Consolidado (v0.0.215)</span>
+          </div>
+          <p className="text-sm text-foreground/90 leading-relaxed">
+            Adoção da identidade visual com emojis temáticos coloridos Unicode no menu de navegação
+            lateral, menu suspenso do perfil, ações rápidas do Dashboard e painéis de monitoramento:
+          </p>
+          <div className="grid sm:grid-cols-2 gap-4 text-sm">
+            <div className="rounded-md border border-border/60 bg-muted/20 p-3 space-y-1.5">
+              <span className="font-medium text-primary">Navegação e Menus (Layout.tsx):</span>
+              <ul className="space-y-1 text-xs text-muted-foreground">
+                <li>
+                  • Dashboard 📊, Produtos 🌱, Escolas 🏫, Chamadas 🌾, Contratos 📄, Pedidos 📋
+                </li>
+                <li>
+                  • Monitoramento 📡, Histórico de Ciclos 🔄, Importação Excel 📥, Comunicação
+                  WhatsApp 💬
+                </li>
+                <li>
+                  • Consolidação 🧺, Rotas de Entrega 🛣️, Atestos 📜, Relatórios 📈, Meu Perfil 👤,
+                  Usuários 👥, Configurações ⚙️, Documento de Requisitos 📚
+                </li>
+                <li>
+                  • Menu do usuário: 👤 Meu Perfil, 🔑 Alterar Senha, 👥 Gestão de Usuários, ⚙️
+                  Configurações, 🚪 Sair
+                </li>
+              </ul>
+            </div>
+            <div className="rounded-md border border-primary/30 bg-primary/5 p-3 space-y-1.5">
+              <span className="font-medium text-primary">Dashboard e Monitoramento:</span>
+              <ul className="space-y-1 text-xs text-foreground/80">
+                <li>
+                  • Dashboard (Index.tsx): Ações Rápidas (📋 Novo Pedido, 📜 Emitir Atesto, 📅
+                  Relatório Mensal) e feed de atividades temático
+                </li>
+                <li>
+                  • Monitoramento: Fases (Fase 1 Coletando 📝, Fase 2 Correção 🔍, Fase 3 Em
+                  Rota/Coleta Encerrada 🚚, Fase 4 Fechado 🔒)
+                </li>
+                <li>
+                  • Alertas e Atestos: card de Atestos Confirmados 📜, alerta rota parada ⚠️ e
+                  paradas pendentes 📍
+                </li>
+                <li>
+                  • Preservadas integralmente todas as regras de Ciclo Corrente, Bloco B (alerta de
+                  30 min e áudio) e fechamento de rota
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
         {/* Alinhamento da Receita Entregue do Mês ao Valor Canônico e Deduplicação (v0.0.214) */}
         <div className="rounded-lg border border-border bg-card p-5 space-y-4">
           <div className="flex items-center justify-between flex-wrap gap-2">

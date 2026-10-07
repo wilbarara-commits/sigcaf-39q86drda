@@ -208,7 +208,9 @@ export function MonthlyReportButton({
                   disabled
                   className={`opacity-60 pointer-events-none gap-2 ${className || ''}`}
                 >
-                  <Lock className="h-4 w-4" />
+                  <span className="text-base leading-none" role="img" aria-label="Relatório Mensal">
+                    📅
+                  </span>
                   Relatório Mensal
                 </Button>
               </span>
@@ -233,7 +235,9 @@ export function MonthlyReportButton({
         onClick={() => setModalOpen(true)}
         className={`gap-2 ${className || ''}`}
       >
-        <CalendarCheck className="h-4 w-4 text-emerald-500" />
+        <span className="text-base leading-none" role="img" aria-label="Relatório Mensal">
+          📅
+        </span>
         Relatório Mensal ({closingMonthName})
       </Button>
     )
