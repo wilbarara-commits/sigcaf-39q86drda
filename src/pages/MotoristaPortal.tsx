@@ -421,7 +421,8 @@ export const MotoristaPortal: React.FC = () => {
             observacao: observacao.trim() || undefined,
             client_uid: clientUid,
           })
-          // Atualiza a fila marcando sincronizado          const f = lerFilaLocal(token).map((it) =>
+          // Atualiza a fila marcando sincronizado
+          const f = lerFilaLocal(token).map((it) =>
             it.client_uid === clientUid ? { ...it, status_sync: 'sincronizado' as const } : it,
           )
           salvarCachePortal(token, data)

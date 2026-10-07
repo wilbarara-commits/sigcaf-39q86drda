@@ -96,6 +96,7 @@ export interface RotaRecord {
   id: string
   contrato_id?: string
   chamada_id?: string
+  motorista_id?: string
   nome: string
   ordem?: number
   ativa?: boolean
@@ -105,6 +106,7 @@ export interface RotaRecord {
     contrato_id?: ContratoRecord
     chamada_id?: ChamadaRecord
     caminhao_escola_id?: EscolaRecord
+    motorista_id?: MotoristaRecord
   }
   created?: string
   updated?: string
@@ -438,6 +440,7 @@ export interface Order {
   schoolName: string
   schoolAlunos?: number
   cicloId?: string
+  chamadaId?: string
   origem: 'excel' | 'whatsapp' | 'manual' | 'formulario'
   rotaId?: string
   rotaNome?: string
