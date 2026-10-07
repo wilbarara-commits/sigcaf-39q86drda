@@ -72,7 +72,12 @@ import { toast } from 'sonner'
 import { matchPastedSchoolLine } from '@/lib/excelImporter'
 import { RouteSchoolBatchImportModal } from '@/components/RouteSchoolBatchImportModal'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
-import { getCicloAtivo, formatFaseAmigavel, isCicloNaoTerminal } from '@/lib/cicloUtils'
+import {
+  getCicloAtivo,
+  formatFaseAmigavel,
+  isCicloNaoTerminal,
+  extractCicloCodigo,
+} from '@/lib/cicloUtils'
 import { Calendar } from 'lucide-react'
 import {
   otimizarSequenciaParadas,
@@ -1527,9 +1532,10 @@ export default function DeliveryRoutes() {
               <SelectContent>
                 {chamadaCiclos.map((c) => {
                   const isAtivo = isCicloNaoTerminal(c.status)
+                  const codCiclo = extractCicloCodigo(c.nome) || c.nome || 'Ciclo'
                   return (
                     <SelectItem key={c.id} value={c.id}>
-                      {c.nome || `Ciclo ${c.numero_ciclo || c.numero || ''}`}
+                      {c.nome?.startsWith('Ciclo') ? c.nome : `Ciclo ${codCiclo}`}
                       {isAtivo ? ' ★ Ativo' : ''} ({formatFaseAmigavel(c.status)})
                     </SelectItem>
                   )
