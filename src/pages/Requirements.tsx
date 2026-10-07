@@ -389,6 +389,24 @@ const MODULES: ModuleSpec[] = [
       'Feedback seguro com confirmação visual para o usuário sem exposição indevida de dados.',
     ],
   },
+  {
+    id: '3.20',
+    title: 'API REST de Integração com ERP de Faturamento (Somente Leitura)',
+    route: 'GET /backend/v1/erp/pedidos',
+    goal: 'Disponibilizar endpoint REST seguro e exclusivo de leitura para que o sistema de ERP da cooperativa importe os pedidos realizados e alimente automaticamente o faturamento, sem qualquer permissão de escrita.',
+    details: [
+      'Arquitetura Estritamente Somente Leitura: O ERP não grava nem altera pedidos no SIGCAF. O endpoint opera exclusivamente via método HTTP GET.',
+      'Autenticação e Proteção por Chave de API: Protegido por chave secreta validada no header HTTP (X-API-Key: <chave> ou Authorization: Bearer <chave>). A chave é comparada contra a variável de ambiente do servidor ERP_API_KEY. Requisição sem chave ou com chave incorreta retorna HTTP 401 Unauthorized com JSON limpo, sem vazar detalhes internos.',
+      'Gestão Segura da Chave: A cooperativa fornece a chave de integração diretamente à equipe do ERP. A chave é configurada nas variáveis de ambiente do painel/servidor, JAMAIS sendo hardcodada no código-fonte nem exibida publicamente em textos da interface.',
+      'Identificação Cadastral da Escola (sem casamento por nome): Cada pedido expõe os dados cadastrais da escola vinculada: ID único no banco de dados (escola.id), Nome oficial, Código INEP, Tipo, Dependência Administrativa, Bairro e Endereço. Respeita a regra fundamental do sistema: nunca casar escola por nome.',
+      'Metadados de Chamada, Ciclo e Contrato: Expõe o ID e número da Chamada Pública, Programa e Dependência; ID, nome, número da semana e ano do Ciclo Operacional; ID e número do Contrato de vínculo; e ID e nome da Rota Logística.',
+      'Itens do Pedido com Regra de Nome no Contrato e AKA Separado: Cada item do pedido expõe o Nome do Produto (apenas a parte antes da vírgula do Nome no Contrato), campo separado "aka" (apelido/referência interna para que o ERP reconcilie eventuais divergências de nomenclatura), quantidade, unidade de medida, preço unitário acordado e total do item.',
+      'Total Consolidado do Pedido: Cada pedido inclui o valor financeiro consolidado canônico (total_consolidado), compatível com o modelo oficial de fechamento e relatórios do SIGCAF.',
+      'Filtros via Query String: Suporte a filtros por chamada (?chamada=...), por ciclo (?ciclo=...), por status (?status=Entregue, etc.) e por período de datas (?data_inicio=YYYY-MM-DD&data_fim=YYYY-MM-DD&tipo_data=entrega|criacao). Datas com validação estrita (HTTP 400 em caso de formato inválido).',
+      'Paginação com Contagem Total: Paginação via parâmetros ?page=1&per_page=50 (máximo 200 por página). O payload de resposta inclui total_items, total_pages, page, per_page e items_count para que o ERP saiba com exatidão quando parar de paginar.',
+      'Respostas de Erro Padronizadas: Retornos 401 (não autorizado), 400 (filtros/datas inválidos) e 500 (erro interno) padronizados em JSON ({ success: false, error: "..." }).',
+    ],
+  },
 ]
 
 const PROFILES = [
@@ -843,6 +861,74 @@ export function Requirements() {
       {/* 7. Registro de Manutenção e Limpeza de Dados */}
       <SectionTitle>7. Registro de Manutenção & Higienização do Banco de Dados</SectionTitle>
       <div className="space-y-4">
+        {/* API REST Somente Leitura para ERP de Faturamento (v0.0.219) */}
+        <div className="rounded-lg border border-border bg-card p-5 space-y-4">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="text-primary border-primary/30">
+                Release v0.0.219
+              </Badge>
+              <span className="font-semibold text-foreground">
+                0.0.219: API REST Somente Leitura para Leitura de Pedidos pelo ERP de Faturamento
+              </span>
+            </div>
+            <span className="text-xs text-muted-foreground">Consolidado (v0.0.219)</span>
+          </div>
+          <p className="text-sm text-foreground/90 leading-relaxed">
+            Disponibilização do endpoint REST HTTP seguro e exclusivamente para leitura{' '}
+            <code>GET /backend/v1/erp/pedidos</code> para que o sistema de ERP da cooperativa
+            importe os pedidos realizados no SIGCAF e alimente o faturamento institucional:
+          </p>
+          <div className="grid sm:grid-cols-2 gap-4 text-sm">
+            <div className="rounded-md border border-border/60 bg-muted/20 p-3 space-y-1.5">
+              <span className="font-medium text-primary">Segurança & Autenticação da API:</span>
+              <ul className="space-y-1 text-xs text-muted-foreground">
+                <li>
+                  • <strong>Método HTTP GET Somente Leitura:</strong> Nenhuma operação de escrita,
+                  atualização ou exclusão é admitida pelo endpoint.
+                </li>
+                <li>
+                  • <strong>Header de Autenticação:</strong> Validação da chave enviada no cabeçalho{' '}
+                  <code>X-API-Key</code> (ou <code>Authorization: Bearer &lt;chave&gt;</code>).
+                </li>
+                <li>
+                  • <strong>Chave via Variável de Ambiente:</strong> A chave é validada contra{' '}
+                  <code>ERP_API_KEY</code> configurada no ambiente do servidor (nunca hardcodada no
+                  código nem exibida na interface). Chave inválida ou ausente retorna HTTP 401.
+                </li>
+                <li>
+                  • <strong>Tratamento de Erros:</strong> Mensagens limpas em formato JSON (401, 400
+                  e 500) sem vazamento de detalhes internos da infraestrutura.
+                </li>
+              </ul>
+            </div>
+            <div className="rounded-md border border-primary/30 bg-primary/5 p-3 space-y-1.5">
+              <span className="font-medium text-primary">Dados Fornecidos ao Faturamento:</span>
+              <ul className="space-y-1 text-xs text-foreground/80">
+                <li>
+                  • <strong>Escola:</strong> ID do banco + nome cadastral oficial, código INEP,
+                  tipo, dependência administrativa e endereço (sem matching por nome).
+                </li>
+                <li>
+                  • <strong>Chamada, Ciclo & Contrato:</strong> Números/ano da chamada, ciclo e
+                  contrato do vínculo correspondente.
+                </li>
+                <li>
+                  • <strong>Itens com Nome no Contrato & AKA:</strong> Nome antes da vírgula do Nome
+                  no Contrato, campo separado <code>aka</code> para reconciliação do ERP,
+                  quantidade, unidade, preço unitário e total do item.
+                </li>
+                <li>
+                  • <strong>Total Canônico & Filtros:</strong> Total consolidado canônico por
+                  pedido, filtros via query string (<code>chamada</code>, <code>ciclo</code>,{' '}
+                  <code>status</code>, <code>data_inicio</code>, <code>data_fim</code>) e paginação
+                  estruturada com <code>total_items</code>.
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
         {/* Padronização de Identidade Visual com Emojis Temáticos Coloridos (v0.0.215) */}
         <div className="rounded-lg border border-border bg-card p-5 space-y-4">
           <div className="flex items-center justify-between flex-wrap gap-2">
