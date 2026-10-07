@@ -38,6 +38,7 @@ import { ciclosService } from '@/services/ciclos'
 import { rotasService } from '@/services/rotas'
 import { rotasLogisticasService } from '@/services/rotas-logisticas'
 import { entregaRegistrosService } from '@/services/rota-despachos'
+import pb from '@/lib/pocketbase/client'
 import { toast } from 'sonner'
 import useRealtime from '@/hooks/use-realtime'
 import { validateOrder } from '@/lib/orderValidation'
@@ -1868,6 +1869,77 @@ export function AppProvider({ children }: { children: ReactNode }) {
     })
 
     if (pedidosEmRota.length === 0) {
+      // Se não há pedidos "Em Rota", verificar se há resíduo de despacho ativo (rota_despachos ou despachos legado)
+      // para encerrá-lo e regularizar o estado da rota sem travar o usuário
+      let encerrouAlgumDespacho = false
+      const cleanObs = observacao?.trim() || undefined
+      const nowIso = new Date().toISOString()
+
+      try {
+        const rotaDespachosAtivos = await pb
+          .collection('rota_despachos')
+          .getFullList({ filter: `rota_id = "${rotaLogisticaId}" && ativo = true` })
+
+        for (const desp of rotaDespachosAtivos) {
+          await pb.collection('rota_despachos').update(desp.id, {
+            ativo: false,
+            observacao: cleanObs ?? (desp as any).observacao,
+          })
+          encerrouAlgumDespacho = true
+        }
+      } catch (errRd) {
+        console.warn('Aviso ao encerrar despachos ativos de rota_despachos:', errRd)
+      }
+
+      // Também encerrar registros em despachos legados se houver
+      const legadosEmRota = despachos.filter(
+        (d) => d.rota_id === rotaLogisticaId && d.status === 'Em Rota',
+      )
+      if (legadosEmRota.length > 0) {
+        setDespachos((prev) =>
+          prev.map((d) =>
+            d.rota_id === rotaLogisticaId && d.status === 'Em Rota'
+              ? { ...d, status: 'Entregue', observacao: cleanObs ?? d.observacao }
+              : d,
+          ),
+        )
+        for (const d of legadosEmRota) {
+          try {
+            await pb.collection('despachos').update(d.id, {
+              status: 'Entregue',
+              data_entrega: nowIso,
+              observacao: cleanObs ?? d.observacao,
+            })
+            encerrouAlgumDespacho = true
+          } catch (errD) {
+            console.warn('Aviso ao encerrar despacho legado:', errD)
+          }
+        }
+      }
+
+      // Limpar caminhão da rota
+      const limparCaminhao = (rList: RotaRecord[]) =>
+        rList.map((r) =>
+          r.id === rotaLogisticaId
+            ? { ...r, caminhao_escola_id: undefined, caminhao_posicao_atual: undefined }
+            : r,
+        )
+      setRotasLogisticas(limparCaminhao)
+      setRotas(limparCaminhao)
+      try {
+        await rotasService.atualizarPosicaoCaminhao(rotaLogisticaId, {
+          caminhao_escola_id: null,
+          caminhao_posicao_atual: null,
+        })
+      } catch (_) {
+        /* tolerante */
+      }
+
+      if (encerrouAlgumDespacho) {
+        toast.success('Rota já estava com entregas concluídas — despacho encerrado.')
+        return true
+      }
+
       toast.info('Não há pedidos "Em Rota" nesta rota para confirmar entrega.')
       return false
     }

@@ -1530,31 +1530,39 @@ export default function DeliveryRoutes() {
                         </CardTitle>
                         {(() => {
                           const despAtivo = despachosAtivosMap[item.rota.id]
-                          const isDespachadoConfirmado =
-                            Boolean(despAtivo) ||
-                            item.ultimoDespacho?.status === 'Em Rota' ||
-                            item.pedidosEmRota.length > 0
+
+                          // Resiliência contra resíduo de despacho ativo: se todos os pedidos da rota já estão Entregue
+                          // (nenhum Em Rota e nenhum Pendente), a rota é considerada Entregue com precedência.
+                          const todosPedidosEntregues =
+                            item.pedidosEmRota.length === 0 &&
+                            item.pedidosPendentes.length === 0 &&
+                            item.pedidosEntregues.length > 0
 
                           const isRotaEntregue =
-                            !despAtivo &&
-                            item.pedidosEmRota.length === 0 &&
-                            item.pedidosEntregues.length > 0 &&
-                            (item.ultimoDespacho?.status === 'Entregue' ||
-                              item.pedidosPendentes.length === 0)
-
-                          if (isDespachadoConfirmado) {
-                            return (
-                              <Badge className="bg-amber-600 hover:bg-amber-600 text-white text-[10px] animate-pulse">
-                                Em Rota
-                              </Badge>
-                            )
-                          }
+                            todosPedidosEntregues ||
+                            (!despAtivo &&
+                              item.pedidosEmRota.length === 0 &&
+                              item.pedidosEntregues.length > 0 &&
+                              item.ultimoDespacho?.status === 'Entregue')
 
                           if (isRotaEntregue) {
                             return (
                               <Badge className="bg-emerald-600 hover:bg-emerald-600 text-white text-[10px] gap-1">
                                 <CheckCircle2 className="h-3 w-3" />
                                 Rota Entregue
+                              </Badge>
+                            )
+                          }
+
+                          const isDespachadoConfirmado =
+                            Boolean(despAtivo) ||
+                            item.ultimoDespacho?.status === 'Em Rota' ||
+                            item.pedidosEmRota.length > 0
+
+                          if (isDespachadoConfirmado) {
+                            return (
+                              <Badge className="bg-amber-600 hover:bg-amber-600 text-white text-[10px] animate-pulse">
+                                Em Rota
                               </Badge>
                             )
                           }
@@ -1673,17 +1681,25 @@ export default function DeliveryRoutes() {
                     const isFaseColeta = faseNorm === 'coletando' || faseNorm === 'correcao'
                     const faseAmigavel = formatFaseAmigavel(faseCiclo)
                     const despAtivo = despachosAtivosMap[item.rota.id]
-                    const isDespachadoConfirmado =
-                      Boolean(despAtivo) ||
-                      item.ultimoDespacho?.status === 'Em Rota' ||
-                      item.pedidosEmRota.length > 0
+
+                    // Resiliência: se todos os pedidos já estão Entregue, Rota Entregue vence com precedência
+                    const todosPedidosEntregues =
+                      item.pedidosEmRota.length === 0 &&
+                      item.pedidosPendentes.length === 0 &&
+                      item.pedidosEntregues.length > 0
 
                     const isRotaEntregue =
-                      !despAtivo &&
-                      item.pedidosEmRota.length === 0 &&
-                      item.pedidosEntregues.length > 0 &&
-                      (item.ultimoDespacho?.status === 'Entregue' ||
-                        item.pedidosPendentes.length === 0)
+                      todosPedidosEntregues ||
+                      (!despAtivo &&
+                        item.pedidosEmRota.length === 0 &&
+                        item.pedidosEntregues.length > 0 &&
+                        item.ultimoDespacho?.status === 'Entregue')
+
+                    const isDespachadoConfirmado =
+                      !isRotaEntregue &&
+                      (Boolean(despAtivo) ||
+                        item.ultimoDespacho?.status === 'Em Rota' ||
+                        item.pedidosEmRota.length > 0)
                     const hasPedidosAtivos = totalEmTransito > 0
                     const hasParadas = item.paradasOrdenadas.length > 0
 

@@ -133,8 +133,25 @@ export function EntregasEmAndamentoWidget() {
   // 1. Possui despacho ativo em rota_despachos (via rotaDespachosService.getAtivoByRota)
   // 2. OU possui despacho ativo com status 'Em Rota' em despachos
   // 3. OU possui pedidos com status 'Em Rota' nesta rota
+  // RESILIÊNCIA: se a rota tiver pedidos vinculados e TODOS estiverem "Entregue" (sem nenhum "Em Rota" nem "Pendente"),
+  // ela NÃO é considerada em andamento, mesmo que haja resíduo de despacho ativo pendente de sincronização.
   const rotasEmAndamento = useMemo(() => {
     return rotasLogisticas.filter((rota) => {
+      // Checar pedidos da rota
+      const pedidosDaRota = orders.filter(
+        (o) => o.rotaLogisticaId === rota.id || o.rotaId === rota.id,
+      )
+      if (pedidosDaRota.length > 0) {
+        const temEmRotaOuPendente = pedidosDaRota.some(
+          (o) => o.status === 'Em Rota' || o.status === 'Pendente',
+        )
+        const temEntregues = pedidosDaRota.some((o) => o.status === 'Entregue')
+        // Se todos os pedidos estão entregues (ou cancelados) e há entregues, rota já foi concluída
+        if (!temEmRotaOuPendente && temEntregues) {
+          return false
+        }
+      }
+
       const temRotaDespachoAtivo = Boolean(despachosAtivos[rota.id])
       const temDespachoEmRota = despachos.some(
         (d) =>

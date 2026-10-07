@@ -843,6 +843,63 @@ export function Requirements() {
       {/* 7. Registro de Manutenção e Limpeza de Dados */}
       <SectionTitle>7. Registro de Manutenção & Higienização do Banco de Dados</SectionTitle>
       <div className="space-y-4">
+        {/* Regularização de Despachos Residuais e Encerramento Conclusivo (v0.0.213) */}
+        <div className="rounded-lg border border-border bg-card p-5 space-y-4">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="text-primary border-primary/30">
+                Release v0.0.213
+              </Badge>
+              <span className="font-semibold text-foreground">
+                Regularização de Despachos Ativos Residuais & Encerramento Conclusivo de Rota
+                (/rotas e Dashboard)
+              </span>
+            </div>
+            <span className="text-xs text-muted-foreground">Consolidado (v0.0.213)</span>
+          </div>
+          <p className="text-sm text-foreground/90 leading-relaxed">
+            Correção e resiliência ponta a ponta para casos em que todos os pedidos de uma rota já
+            foram entregues, mas um registro em <code>rota_despachos</code> permaneceu com{' '}
+            <code>ativo: true</code>:
+          </p>
+          <div className="grid sm:grid-cols-2 gap-4 text-sm">
+            <div className="rounded-md border border-border/60 bg-muted/20 p-3 space-y-1.5">
+              <span className="font-medium text-primary">Correções Aplicadas:</span>
+              <ul className="space-y-1 text-xs text-muted-foreground">
+                <li>
+                  • <strong>Migration 0137:</strong> encerrou registros de{' '}
+                  <code>rota_despachos</code> com <code>ativo: true</code> cujas rotas já tinham
+                  100% dos pedidos entregues (ex.: Rota C no ciclo 40/2026).
+                </li>
+                <li>
+                  • <strong>Resiliência em /rotas:</strong> quando todos os pedidos estão entregues,
+                  a rota assume com precedência o estado conclusivo &quot;Rota Entregue&quot; (badge
+                  verde e card conclusivo, sem botão travado).
+                </li>
+                <li>
+                  • <strong>Encerramento residual no Contexto:</strong> o acionamento de &quot;Rota
+                  Entregue&quot; não aborta se não houver pedidos &quot;Em Rota&quot;, prosseguindo
+                  para encerrar qualquer despacho ativo remanescente no banco.
+                </li>
+                <li>
+                  • <strong>Widget no Dashboard:</strong> rotas com todos os pedidos entregues não
+                  são listadas como entregas em andamento.
+                </li>
+              </ul>
+            </div>
+            <div className="rounded-md border border-primary/30 bg-primary/5 p-3 space-y-1.5">
+              <span className="font-medium text-primary">Preservação Integral:</span>
+              <ul className="space-y-1 text-xs text-foreground/80">
+                <li>
+                  • Preservados integralmente: ciclo de vida de fases do monitoramento (v0.0.212),
+                  badge &quot;Entregas Concluídas&quot;, card de Atestos Confirmados, regras do
+                  Ciclo Corrente e alertas sonoros do Bloco B.
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
         {/* Botão Colocar em Rota Oculto com Entregas Concluídas (v0.0.212) */}
         <div className="rounded-lg border border-border bg-card p-5 space-y-4">
           <div className="flex items-center justify-between flex-wrap gap-2">
