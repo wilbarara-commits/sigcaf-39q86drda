@@ -1987,20 +1987,22 @@ export default function DeliveryRoutes() {
                               </div>
                             </div>
                           ) : !isDespachadoConfirmado ? (
-                            /* ESTÁGIO 1 — NÃO despachado: APENAS o botão "Despachar Rota" */
-                            <Button
-                              size="sm"
-                              disabled={despachoBotaoDesabilitado}
-                              className="h-8 text-xs gap-1.5 font-bold disabled:opacity-50 bg-primary hover:bg-primary/90 text-primary-foreground"
-                              onClick={() => {
-                                setSelectedRotaForDriverModal(item.rota)
-                                setDespachoMotoristaOpen(true)
-                              }}
-                              title={despachoBotaoTooltip}
-                            >
-                              <Truck className="h-3.5 w-3.5" />
-                              <span>Despachar Rota</span>
-                            </Button>
+                            /* ESTÁGIO 1 — NÃO despachado: botão "Despachar Rota" visível APENAS quando a fase permitir despacho (sem botão nem placeholder durante coleta de pedidos) */
+                            isFaseElegivel ? (
+                              <Button
+                                size="sm"
+                                disabled={despachoBotaoDesabilitado}
+                                className="h-8 text-xs gap-1.5 font-bold disabled:opacity-50 bg-primary hover:bg-primary/90 text-primary-foreground"
+                                onClick={() => {
+                                  setSelectedRotaForDriverModal(item.rota)
+                                  setDespachoMotoristaOpen(true)
+                                }}
+                                title={despachoBotaoTooltip}
+                              >
+                                <Truck className="h-3.5 w-3.5" />
+                                <span>Despachar Rota</span>
+                              </Button>
+                            ) : null
                           ) : (
                             /* ESTÁGIO 2 — despachado confirmado: Botão "Reenviar Link Motorista" + Botão "Rota Entregue" */
                             <>

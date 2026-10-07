@@ -861,6 +861,62 @@ export function Requirements() {
       {/* 7. Registro de Manutenção e Limpeza de Dados */}
       <SectionTitle>7. Registro de Manutenção & Higienização do Banco de Dados</SectionTitle>
       <div className="space-y-4">
+        {/* Release v0.0.228: Exibição Condicional do Botão Despachar Rota por Fase do Ciclo */}
+        <div className="rounded-lg border border-border bg-card p-5 space-y-4">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="text-primary border-primary/30">
+                Release v0.0.228
+              </Badge>
+              <span className="font-semibold text-foreground">
+                0.0.228: Exibição do Botão &quot;Despachar Rota&quot; Apenas em Fases Elegíveis em
+                /rotas
+              </span>
+            </div>
+            <span className="text-xs text-muted-foreground">Consolidado (v0.0.228)</span>
+          </div>
+          <p className="text-sm text-foreground/90 leading-relaxed">
+            Em <code>/rotas</code>, o botão <strong>Despachar Rota</strong> só aparece quando a fase
+            do ciclo selecionado permite despacho; durante a coleta de pedidos o botão não é
+            exibido.
+          </p>
+          <div className="grid sm:grid-cols-2 gap-4 text-sm">
+            <div className="rounded-md border border-border/60 bg-muted/20 p-3 space-y-1.5">
+              <span className="font-medium text-primary">Regra de Exibição por Fase do Ciclo:</span>
+              <ul className="space-y-1 text-xs text-muted-foreground">
+                <li>
+                  • Durante a coleta de pedidos (<code>coletando</code>), o botão &quot;Despachar
+                  Rota&quot; é totalmente omitido do card da rota — nem habilitado, nem
+                  desabilitado, sem ocupar espaço com controles indevidos.
+                </li>
+                <li>
+                  • O botão só passa a ser renderizado quando a fase do ciclo selecionado for
+                  elegível para despacho (<code>coleta_encerrada</code> ou <code>coletado</code>) e
+                  a rota ainda não tiver sido despachada.
+                </li>
+              </ul>
+            </div>
+            <div className="rounded-md border border-primary/30 bg-primary/5 p-3 space-y-1.5">
+              <span className="font-medium text-primary">Preservação dos Comportamentos:</span>
+              <ul className="space-y-1 text-xs text-foreground/80">
+                <li>
+                  • Mantido o botão &quot;Em Rota&quot; / &quot;Reenviar Link Motorista&quot; e
+                  &quot;Rota Entregue&quot; quando há despacho ativo.
+                </li>
+                <li>
+                  • Preservado o badge verde &quot;Rota Entregue · Concluída&quot; para rotas
+                  finalizadas.
+                </li>
+                <li>
+                  • Mantidos o carimbo &quot;Entregue às HH:MM · Conferido por&quot;, o isolamento
+                  estrito por <code>ciclo_id</code> (0.0.226), a leitura de recibos permanente
+                  (0.0.227) e o duplo seletor chamada+ciclo (0.0.225).
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
         {/* Release v0.0.227: Leitura de Comprovantes Permanentes em /rotas */}
         <div className="rounded-lg border border-border bg-card p-5 space-y-4">
           <div className="flex items-center justify-between flex-wrap gap-2">
