@@ -843,6 +843,69 @@ export function Requirements() {
       {/* 7. Registro de Manutenção e Limpeza de Dados */}
       <SectionTitle>7. Registro de Manutenção & Higienização do Banco de Dados</SectionTitle>
       <div className="space-y-4">
+        {/* Badge Entregas Concluídas e Atestos Confirmados em Monitoramento (v0.0.211) */}
+        <div className="rounded-lg border border-border bg-card p-5 space-y-4">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="text-primary border-primary/30">
+                Release v0.0.211
+              </Badge>
+              <span className="font-semibold text-foreground">
+                Badge &quot;Entregas Concluídas&quot; na Fase 3 & Acompanhamento de Atestos
+                Confirmados (/monitoramento)
+              </span>
+            </div>
+            <span className="text-xs text-muted-foreground">Consolidado (v0.0.211)</span>
+          </div>
+          <p className="text-sm text-foreground/90 leading-relaxed">
+            Aprimoramento do painel de <code>/monitoramento</code> com foco em clareza operacional
+            pré-fechamento do ciclo:
+          </p>
+          <div className="grid sm:grid-cols-2 gap-4 text-sm">
+            <div className="rounded-md border border-border/60 bg-muted/20 p-3 space-y-1.5">
+              <span className="font-medium text-primary">
+                Badge &quot;Entregas Concluídas&quot; no Cartão de Fase:
+              </span>
+              <ul className="space-y-1 text-xs text-muted-foreground">
+                <li>
+                  • No cartão da Fase 3 (Coleta Encerrada), quando o ciclo monitorado estiver com
+                  entregas concluídas (despacho encerrado, pedidos com status &quot;Entregue&quot; e
+                  nenhum pedido &quot;Em Rota&quot;), é exibido o badge verde:{' '}
+                  <code>Entregas Concluídas</code>.
+                </li>
+                <li>
+                  • Decisão do usuário: terminologia objetiva &quot;Entregas Concluídas&quot; — sem
+                  o termo &quot;pronto para fechar&quot; (rejeitado por subjetividade) e sem
+                  contadores redundantes no cartão.
+                </li>
+              </ul>
+            </div>
+            <div className="rounded-md border border-primary/30 bg-primary/5 p-3 space-y-1.5">
+              <span className="font-medium text-primary">
+                Card de Atestos Confirmados (Tempo Real):
+              </span>
+              <ul className="space-y-1 text-xs text-foreground/80">
+                <li>
+                  • Seção discreta no painel de monitoramento apresentando o progresso{' '}
+                  <code>Atestos Confirmados: X de N</code> calculado sobre os pedidos entregues do
+                  ciclo selecionado e os atestos com status &quot;Confirmado&quot;.
+                </li>
+                <li>
+                  • Quando X &lt; N, exibe aviso <em>&quot;faltam N−X atesto(s)&quot;</em>; quando X
+                  = N e N &gt; 0, exibe o destaque verde{' '}
+                  <em>&quot;Todos os atestos confirmados&quot;</em> com link direto para{' '}
+                  <code>/atestos</code>.
+                </li>
+                <li>
+                  • Atualização reativa em tempo real através do contexto global (coleção{' '}
+                  <code>atestos</code>), visível enquanto o ciclo não é fechado (atesto com status
+                  &quot;Confirmado&quot; é evento monitorado antes de fechar o ciclo).
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
         {/* Registro do Conferente do Fechamento em Rotas e Detalhes (v0.0.210) */}
         <div className="rounded-lg border border-border bg-card p-5 space-y-4">
           <div className="flex items-center justify-between flex-wrap gap-2">

@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useApp } from '@/context/app-context'
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import {
@@ -29,6 +29,7 @@ import {
   CalendarPlus,
   Ban,
   Truck,
+  FileCheck2,
   FileText,
 } from 'lucide-react'
 import { toast } from 'sonner'
@@ -66,6 +67,7 @@ export default function Monitoring() {
     orders,
     chamadas,
     despachos,
+    atestos,
     cicloCorrente,
     setCicloCorrente,
   } = useApp()
@@ -243,6 +245,35 @@ export default function Monitoring() {
     return temPedidoEmRota
   }, [selectedCiclo, despachos, orders])
 
+  // Critério de Entregas Concluídas para o ciclo selecionado:
+  // Nenhum despacho com status 'Em Rota', nenhum pedido 'Em Rota', e pedidos ativos entregues
+  const isEntregasConcluidas = useMemo(() => {
+    if (!selectedCiclo) return false
+
+    // Não pode haver despacho "Em Rota"
+    const temDespachoEmRota = despachos.some((d) => {
+      if (d.status !== 'Em Rota') return false
+      if (d.ciclo_id && d.ciclo_id === selectedCiclo.id) return true
+      if (selectedCiclo.chamada_id && d.chamada_id === selectedCiclo.chamada_id) return true
+      return false
+    })
+    if (temDespachoEmRota) return false
+
+    // Pedidos do ciclo
+    const pedidosCiclo = orders.filter(
+      (o) => o.cicloId === selectedCiclo.id && o.status !== 'Cancelado',
+    )
+    if (pedidosCiclo.length === 0) return false
+
+    // Nenhum pedido "Em Rota"
+    const temPedidoEmRota = pedidosCiclo.some((o) => o.status === 'Em Rota')
+    if (temPedidoEmRota) return false
+
+    // Pelo menos um pedido "Entregue" e todos os pedidos não cancelados estão com status "Entregue"
+    const pedidosEntregues = pedidosCiclo.filter((o) => o.status === 'Entregue')
+    return pedidosEntregues.length > 0 && pedidosEntregues.length === pedidosCiclo.length
+  }, [selectedCiclo, despachos, orders])
+
   // Ciclo ativo da chamada do ciclo selecionado (ou fallback no ativo geral)
   const isSelectedAtivo = useMemo(() => {
     if (!selectedCiclo) return false
@@ -272,6 +303,23 @@ export default function Monitoring() {
     if (!selectedCiclo) return []
     return orders.filter((o) => o.cicloId === selectedCiclo.id && o.status !== 'Cancelado')
   }, [orders, selectedCiclo])
+
+  // Atestos confirmados em relação aos pedidos entregues do ciclo
+  const atestosMetrics = useMemo(() => {
+    const pedidosEntregues = cicloOrders.filter((o) => o.status === 'Entregue')
+    const totalEntregues = pedidosEntregues.length
+    const pedidosEntreguesIds = new Set(pedidosEntregues.map((o) => o.id))
+    const confirmados = atestos.filter(
+      (a) => pedidosEntreguesIds.has(a.orderId) && a.status === 'Confirmado',
+    ).length
+
+    return {
+      totalEntregues,
+      confirmados,
+      faltam: Math.max(0, totalEntregues - confirmados),
+      todosConfirmados: totalEntregues > 0 && confirmados === totalEntregues,
+    }
+  }, [cicloOrders, atestos])
 
   const schoolsWithOrders = useMemo(() => {
     return new Set(cicloOrders.map((o) => o.schoolId))
@@ -729,7 +777,14 @@ export default function Monitoring() {
                       <Truck className="h-4 w-4 stroke-[1.8]" />
                     </div>
                   </div>
-                  <h3 className="font-semibold text-base mb-1">Coleta Encerrada</h3>
+                  <div className="flex items-center gap-1.5 flex-wrap mb-1">
+                    <h3 className="font-semibold text-base">Coleta Encerrada</h3>
+                    {isEntregasConcluidas && (
+                      <Badge className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold">
+                        Entregas Concluídas
+                      </Badge>
+                    )}
+                  </div>
                   <p className="text-xs text-muted-foreground mb-3">
                     importa ✗ · entrada ✗ · despacho ✓ · cancela ✗ (exceto logístico)
                   </p>
@@ -830,6 +885,64 @@ export default function Monitoring() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Bloco: Atestos Confirmados do Ciclo (visível enquanto o ciclo não estiver fechado ou estático se fechado) */}
+      {selectedCiclo && (
+        <Card className="border border-border/80 bg-card">
+          <CardContent className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-start sm:items-center gap-3">
+              <div
+                className={`h-9 w-9 rounded-lg flex items-center justify-center shrink-0 ${
+                  atestosMetrics.todosConfirmados
+                    ? 'bg-emerald-100 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400'
+                    : 'bg-primary/10 text-primary'
+                }`}
+              >
+                <FileCheck2 className="h-5 w-5" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h4 className="font-semibold text-sm text-foreground">
+                    Atestos Confirmados: {atestosMetrics.confirmados} de{' '}
+                    {atestosMetrics.totalEntregues}
+                  </h4>
+                  {atestosMetrics.todosConfirmados ? (
+                    <Badge className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold">
+                      Todos os atestos confirmados
+                    </Badge>
+                  ) : atestosMetrics.totalEntregues > 0 ? (
+                    <Badge
+                      variant="outline"
+                      className="text-xs text-amber-700 dark:text-amber-400 border-amber-300 dark:border-amber-700"
+                    >
+                      faltam {atestosMetrics.faltam} atesto(s)
+                    </Badge>
+                  ) : (
+                    <span className="text-xs text-muted-foreground">
+                      Nenhum pedido entregue ainda no ciclo
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Acompanhamento de termos de recebimento com confirmação formal das escolas
+                  {currentFase === 'fechado'
+                    ? ' (ciclo já encerrado).'
+                    : ' antes do fechamento do ciclo.'}
+                </p>
+              </div>
+            </div>
+
+            <Button
+              asChild
+              size="sm"
+              variant="ghost"
+              className="text-xs text-muted-foreground hover:text-foreground shrink-0 self-end sm:self-center"
+            >
+              <Link to="/atestos">Ver Atestos →</Link>
+            </Button>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Resumo do Funil do Ciclo da Chamada */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
