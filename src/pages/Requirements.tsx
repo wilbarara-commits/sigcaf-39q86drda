@@ -286,12 +286,15 @@ const MODULES: ModuleSpec[] = [
   {
     id: '3.12',
     title: 'Histórico de Ciclos & Comparação de Consumo',
-    route: '/historico-ciclos',
-    goal: 'Auditoria cronológica, acompanhamento de fechamentos e análise comparativa de volume entre períodos.',
+    route: '/historico',
+    goal: 'Auditoria cronológica, acompanhamento de fechamentos e análise gráfica comparativa de volume e faturamento entre períodos.',
     details: [
+      'Abas organizadas em "Lista de Ciclos" e "Comparação de Consumo", permitindo transitar instantaneamente entre a auditoria da esteira semanal e a inteligência visual de tendências.',
       'Relação cronológica de todos os ciclos cadastrados exibindo a FASE PRÓPRIA de cada ciclo (Coletando, Correção, Coleta Encerrada, Fechado ou Cancelado), com indicação de período, previsão de despacho, total de escolas atendidas, pedidos, volume e valor.',
       'Badges Derivados e Motivo de Cancelamento: Exibe o badge "Fechamento Pendente (atrasado X dias)" para ciclos não-terminais que não sejam o ativo mais recente, e exibe o motivo de cancelamento de forma destacada em ciclos/contratos cancelados.',
-      'Ações Disponíveis: Botão "Abrir Ciclo" para iniciar novo período operacional, ação de visualização de "Detalhes", ação "Cancelar Ciclo" para ciclos não-terminais e modal de "Comparar Ciclos" (base vs comparado) com variação absoluta e percentual por produto.',
+      'Comparação de Consumo Multidimensional (v0.0.234): Gráficos semelhantes em linha com seletor de dimensão (Escolas, Chamadas e Contratos) e seletor configurável de janela (Últimos 4, 8 ou 12 Ciclos).',
+      'Dois Gráficos Sincronizados por Dimensão: (1) Quantidade em KG (ou unidade correspondente) do insumo selecionado somando os itens dos pedidos correspondentes; (2) Valor financeiro canônico em R$ apurado diretamente de order.total, sem risco de recálculo ou distorção por camadas de preço.',
+      'Ações Disponíveis: Botão "Abrir Ciclo" para iniciar novo período operacional, ação de visualização de "Detalhes", ação "Cancelar Ciclo" para ciclos não-terminais e modal de "Comparar Ciclos (Tabela)" (base vs comparado) com variação absoluta e percentual por produto.',
     ],
   },
   {
@@ -867,6 +870,70 @@ export function Requirements() {
       {/* 7. Registro de Manutenção e Limpeza de Dados */}
       <SectionTitle>7. Registro de Manutenção & Higienização do Banco de Dados</SectionTitle>
       <div className="space-y-4">
+        {/* Release v0.0.234: Gráficos de Comparação por Escolas, Chamadas e Contratos em KG e R$ */}
+        <div className="rounded-lg border border-border bg-card p-5 space-y-4">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="text-primary border-primary/30">
+                Release v0.0.234
+              </Badge>
+              <span className="font-semibold text-foreground">
+                0.0.234: Gráficos Semelhantes no Histórico de Ciclos por Chamadas e Contratos (KG e
+                R$)
+              </span>
+            </div>
+            <span className="text-xs text-muted-foreground">Consolidado (v0.0.234)</span>
+          </div>
+          <p className="text-sm text-foreground/90 leading-relaxed">
+            Evolução da aba <strong>Comparação de Consumo</strong> em <code>/historico</code>{' '}
+            (Histórico de Ciclos), expandindo a visualização para além das escolas com suporte a
+            dimensões estratégicas de Chamadas e Contratos, apresentando gráficos de linha de volume
+            físico (KG/unidade) e valor financeiro canônico (R$):
+          </p>
+          <div className="grid sm:grid-cols-2 gap-4 text-sm">
+            <div className="rounded-md border border-border/60 bg-muted/20 p-3 space-y-1.5">
+              <span className="font-medium text-primary">
+                Três Dimensões de Análise & Janela Temporal:
+              </span>
+              <ul className="space-y-1 text-xs text-muted-foreground">
+                <li>
+                  • Seletor de dimensão com 3 modos de comparação: <strong>Escolas</strong> (modo
+                  clássico preservado), <strong>Chamadas</strong> (ex.: 01/2025, 07/2025) e{' '}
+                  <strong>Contratos</strong> (ex.: C-2026-02-xx).
+                </li>
+                <li>
+                  • Janela de análise configurável em Últimos 4, 8 ou 12 ciclos com ordenação
+                  cronológica no eixo horizontal.
+                </li>
+                <li>
+                  • Seleção individualizada por checkbox e botões de conveniência &quot;Todos&quot;
+                  e &quot;Limpar&quot; com busca reativa.
+                </li>
+              </ul>
+            </div>
+            <div className="rounded-md border border-primary/30 bg-primary/5 p-3 space-y-1.5">
+              <span className="font-medium text-primary">
+                Dois Gráficos Sincronizados (Volume & Faturamento):
+              </span>
+              <ul className="space-y-1 text-xs text-foreground/80">
+                <li>
+                  • <strong>Gráfico 1 (KG/Unidade):</strong> soma as quantidades dos itens do
+                  produto selecionado nos pedidos dos ciclos para cada série da dimensão.
+                </li>
+                <li>
+                  • <strong>Gráfico 2 (R$):</strong> extrai estritamente o valor canônico{' '}
+                  <code>order.total</code> dos pedidos correspondentes, sem recálculos por camadas
+                  de preço.
+                </li>
+                <li>
+                  • Identificação das escolas estritamente por ID no banco (sem matching por nome),
+                  preservando a integridade das entidades homônimas.
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
         {/* Release v0.0.233: Chave ERP via config_sistema e Fallback Seguro */}
         <div className="rounded-lg border border-border bg-card p-5 space-y-4">
           <div className="flex items-center justify-between flex-wrap gap-2">

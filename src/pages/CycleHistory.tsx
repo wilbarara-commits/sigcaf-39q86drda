@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
   Table,
   TableBody,
@@ -42,6 +43,7 @@ import {
   Truck,
   CalendarPlus,
   Ban,
+  LineChart as LineChartIcon,
 } from 'lucide-react'
 import type { CicloRecord } from '@/lib/types'
 import {
@@ -57,9 +59,12 @@ import {
 } from '@/lib/cicloUtils'
 import { AbrirCicloDialog } from '@/components/AbrirCicloDialog'
 import { CancelarCicloDialog } from '@/components/CancelarCicloDialog'
+import { ConsumptionComparison } from '@/components/ConsumptionComparison'
 
 export default function CycleHistory() {
   const { chamadas, ciclos, contracts, activeCiclo, orders, products, schools } = useApp()
+
+  const [abaAtiva, setAbaAtiva] = useState<'lista' | 'comparacao'>('lista')
 
   const [dataInicio, setDataInicio] = useState('')
   const [dataFim, setDataFim] = useState('')
@@ -184,7 +189,7 @@ export default function CycleHistory() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Histórico de Ciclos</h1>
           <p className="text-muted-foreground">
-            Acompanhe a evolução de fechamento semanal, escolas atendidas e compare o consumo.
+            Consulte o histórico de pedidos passados e compare o consumo de insumos.
           </p>
         </div>
 
@@ -199,7 +204,7 @@ export default function CycleHistory() {
                 setCompareOpen(true)
               }}
             >
-              <BarChart2 className="h-4 w-4 text-primary" /> Comparar Ciclos
+              <BarChart2 className="h-4 w-4 text-primary" /> Comparar Ciclos (Tabela)
             </Button>
           )}
 
@@ -209,256 +214,291 @@ export default function CycleHistory() {
         </div>
       </div>
 
-      {/* Filtros */}
-      <Card>
-        <CardContent className="p-4">
-          <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
-            <div>
-              <Label className="text-xs">Buscar por nome</Label>
-              <div className="relative mt-1">
-                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Ex: Ciclo 01..."
-                  value={filtroNome}
-                  onChange={(e) => setFiltroNome(e.target.value)}
-                  className="pl-9 h-9"
-                />
+      {/* Abas: Lista de Ciclos e Comparação de Consumo */}
+      <Tabs value={abaAtiva} onValueChange={(val) => setAbaAtiva(val as any)} className="w-full">
+        <TabsList className="bg-muted p-1 inline-flex mb-4">
+          <TabsTrigger value="lista" className="text-xs sm:text-sm px-4 gap-2">
+            <History className="h-4 w-4" />
+            Lista de Ciclos
+          </TabsTrigger>
+          <TabsTrigger value="comparacao" className="text-xs sm:text-sm px-4 gap-2">
+            <LineChartIcon className="h-4 w-4" />
+            Comparação de Consumo
+          </TabsTrigger>
+        </TabsList>
+
+        {/* Aba 1: Lista de Ciclos */}
+        <TabsContent value="lista" className="space-y-6 mt-0">
+          {/* Filtros */}
+          <Card>
+            <CardContent className="p-4">
+              <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+                <div>
+                  <Label className="text-xs">Buscar por nome</Label>
+                  <div className="relative mt-1">
+                    <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      placeholder="Ex: Ciclo 01..."
+                      value={filtroNome}
+                      onChange={(e) => setFiltroNome(e.target.value)}
+                      className="pl-9 h-9"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <Label className="text-xs">Chamada Pública</Label>
+                  <Select value={filtroChamada} onValueChange={setFiltroChamada}>
+                    <SelectTrigger className="h-9 mt-1 text-xs">
+                      <SelectValue placeholder="Todas as chamadas" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="todas">Todas as chamadas</SelectItem>
+                      {chamadas.map((ch) => (
+                        <SelectItem key={ch.id} value={ch.id}>
+                          {ch.chamada}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label className="text-xs">Data Início (a partir de)</Label>
+                  <Input
+                    type="date"
+                    value={dataInicio}
+                    onChange={(e) => setDataInicio(e.target.value)}
+                    className="h-9 mt-1"
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs">Data Fim (até)</Label>
+                  <Input
+                    type="date"
+                    value={dataFim}
+                    onChange={(e) => setDataFim(e.target.value)}
+                    className="h-9 mt-1"
+                  />
+                </div>
               </div>
-            </div>
-            <div>
-              <Label className="text-xs">Chamada Pública</Label>
-              <Select value={filtroChamada} onValueChange={setFiltroChamada}>
-                <SelectTrigger className="h-9 mt-1 text-xs">
-                  <SelectValue placeholder="Todas as chamadas" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="todas">Todas as chamadas</SelectItem>
-                  {chamadas.map((ch) => (
-                    <SelectItem key={ch.id} value={ch.id}>
-                      {ch.chamada}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label className="text-xs">Data Início (a partir de)</Label>
-              <Input
-                type="date"
-                value={dataInicio}
-                onChange={(e) => setDataInicio(e.target.value)}
-                className="h-9 mt-1"
-              />
-            </div>
-            <div>
-              <Label className="text-xs">Data Fim (até)</Label>
-              <Input
-                type="date"
-                value={dataFim}
-                onChange={(e) => setDataFim(e.target.value)}
-                className="h-9 mt-1"
-              />
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+            </CardContent>
+          </Card>
 
-      {/* Lista de Ciclos */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base flex items-center gap-2">
-            <History className="h-5 w-5 text-primary" /> Ciclos Registrados
-          </CardTitle>
-          <CardDescription>
-            Relação cronológica dos ciclos semanais de coleta, correção e fechamento.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="rounded-md border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Ciclo</TableHead>
-                  <TableHead>Chamada</TableHead>
-                  <TableHead>Período Operacional</TableHead>
-                  <TableHead>Despacho Previsto</TableHead>
-                  <TableHead>Fase / Status</TableHead>
-                  <TableHead className="text-center">Escolas</TableHead>
-                  <TableHead className="text-center">Pedidos</TableHead>
-                  <TableHead className="text-right">Volume Consolidado</TableHead>
-                  <TableHead className="text-right">Valor Total</TableHead>
-                  <TableHead className="text-right">Ações</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredCiclos.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={10} className="text-center py-8 text-muted-foreground">
-                      Nenhum ciclo encontrado com os filtros aplicados.
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  filteredCiclos.map((c) => {
-                    const chamadaDoCiclo =
-                      c.expand?.chamada_id || chamadas.find((ch) => ch.id === c.chamada_id)
-                    const st = ciclosStats[c.id] || {
-                      pedidosCount: 0,
-                      escolasCount: 0,
-                      itensCount: 0,
-                      valorTotal: 0,
-                    }
+          {/* Lista de Ciclos */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base flex items-center gap-2">
+                <History className="h-5 w-5 text-primary" /> Ciclos Registrados
+              </CardTitle>
+              <CardDescription>
+                Relação cronológica dos ciclos semanais de coleta, correção e fechamento.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="rounded-md border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Ciclo</TableHead>
+                      <TableHead>Chamada</TableHead>
+                      <TableHead>Período Operacional</TableHead>
+                      <TableHead>Despacho Previsto</TableHead>
+                      <TableHead>Fase / Status</TableHead>
+                      <TableHead className="text-center">Escolas</TableHead>
+                      <TableHead className="text-center">Pedidos</TableHead>
+                      <TableHead className="text-right">Volume Consolidado</TableHead>
+                      <TableHead className="text-right">Valor Total</TableHead>
+                      <TableHead className="text-right">Ações</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredCiclos.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={10} className="text-center py-8 text-muted-foreground">
+                          Nenhum ciclo encontrado com os filtros aplicados.
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      filteredCiclos.map((c) => {
+                        const chamadaDoCiclo =
+                          c.expand?.chamada_id || chamadas.find((ch) => ch.id === c.chamada_id)
+                        const st = ciclosStats[c.id] || {
+                          pedidosCount: 0,
+                          escolasCount: 0,
+                          itensCount: 0,
+                          valorTotal: 0,
+                        }
 
-                    const isAtivo = activeCiclo?.id === c.id
-                    const statusDerivado = derivarStatusCiclo(c.status)
-                    const isNaoTerminal = isCicloNaoTerminal(statusDerivado)
-                    const diasAtraso = calcularDiasAtrasoFechamento(c.data_fim)
-                    // Um ciclo só tem fechamento pendente/atrasado se estiver em fase não terminal E com data fim no passado
-                    const isPendente = isNaoTerminal && diasAtraso > 0
+                        const isAtivo = activeCiclo?.id === c.id
+                        const statusDerivado = derivarStatusCiclo(c.status)
+                        const isNaoTerminal = isCicloNaoTerminal(statusDerivado)
+                        const diasAtraso = calcularDiasAtrasoFechamento(c.data_fim)
+                        // Um ciclo só tem fechamento pendente/atrasado se estiver em fase não terminal E com data fim no passado
+                        const isPendente = isNaoTerminal && diasAtraso > 0
 
-                    // Resumo da fase do ciclo
-                    const resumoFases = gerarResumoFasesCiclo(c)
+                        // Resumo da fase do ciclo
+                        const resumoFases = gerarResumoFasesCiclo(c)
 
-                    let statusBadge = (
-                      <Badge variant="secondary" className="capitalize">
-                        {formatFaseAmigavel(statusDerivado)}
-                      </Badge>
-                    )
+                        let statusBadge = (
+                          <Badge variant="secondary" className="capitalize">
+                            {formatFaseAmigavel(statusDerivado)}
+                          </Badge>
+                        )
 
-                    if (statusDerivado === 'coletando') {
-                      statusBadge = (
-                        <Badge className="bg-blue-600 hover:bg-blue-700">Coletando</Badge>
-                      )
-                    } else if (statusDerivado === 'correcao') {
-                      statusBadge = (
-                        <Badge className="bg-amber-600 hover:bg-amber-700">Correção</Badge>
-                      )
-                    } else if (
-                      statusDerivado === 'coleta_encerrada' ||
-                      statusDerivado === 'coletado' ||
-                      statusDerivado === 'coleta encerrada'
-                    ) {
-                      statusBadge = (
-                        <Badge className="bg-purple-600 hover:bg-purple-700">
-                          Coleta Encerrada
-                        </Badge>
-                      )
-                    } else if (statusDerivado === 'fechado') {
-                      statusBadge = <Badge variant="secondary">Fechado</Badge>
-                    } else if (statusDerivado === 'cancelado') {
-                      const motivoCancelExibir = c.motivo_cancelamento
-                      statusBadge = (
-                        <Badge
-                          variant="destructive"
-                          className="text-xs"
-                          title={motivoCancelExibir ? `Motivo: ${motivoCancelExibir}` : undefined}
-                        >
-                          Cancelado{motivoCancelExibir ? ` — ${motivoCancelExibir}` : ''}
-                        </Badge>
-                      )
-                    }
-
-                    const despachoDate = getDespachoEfetivoCiclo(c)
-
-                    return (
-                      <TableRow key={c.id}>
-                        <TableCell className="font-semibold text-primary">{c.nome}</TableCell>
-                        <TableCell className="text-xs">
-                          {chamadaDoCiclo ? (
-                            <Badge variant="outline" className="font-normal text-[11px]">
-                              {chamadaDoCiclo.chamada}
+                        if (statusDerivado === 'coletando') {
+                          statusBadge = (
+                            <Badge className="bg-blue-600 hover:bg-blue-700">Coletando</Badge>
+                          )
+                        } else if (statusDerivado === 'correcao') {
+                          statusBadge = (
+                            <Badge className="bg-amber-600 hover:bg-amber-700">Correção</Badge>
+                          )
+                        } else if (
+                          statusDerivado === 'coleta_encerrada' ||
+                          statusDerivado === 'coletado' ||
+                          statusDerivado === 'coleta encerrada'
+                        ) {
+                          statusBadge = (
+                            <Badge className="bg-purple-600 hover:bg-purple-700">
+                              Coleta Encerrada
                             </Badge>
-                          ) : (
-                            <span className="text-muted-foreground">—</span>
-                          )}
-                        </TableCell>
-                        <TableCell className="text-xs">
-                          {formatIntervaloCiclo(c.data_inicio, c.data_fim)}
-                        </TableCell>
-                        <TableCell className="text-xs">
-                          <span className="inline-flex items-center gap-1 font-medium text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded border border-emerald-200 dark:border-emerald-800">
-                            <Truck className="h-3 w-3" />
-                            {formatDespachoAmigavel(despachoDate)}
-                          </span>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex flex-col gap-1 items-start max-w-[280px]">
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              {statusBadge}
-                              {isAtivo && (
-                                <Badge
-                                  variant="outline"
-                                  className="text-[10px] bg-primary/10 text-primary border-primary/30"
-                                >
-                                  Ativo
-                                </Badge>
-                              )}
-                            </div>
-                            <span className="text-[11px] text-muted-foreground leading-tight">
-                              {resumoFases}
-                            </span>
-                            {c.motivo_cancelamento && statusDerivado === 'cancelado' && (
-                              <span className="text-[10px] text-destructive italic">
-                                Motivo: {c.motivo_cancelamento}
-                              </span>
-                            )}
-                            {isPendente && (
-                              <Badge className="bg-amber-600 hover:bg-amber-700 text-[10px]">
-                                Fechamento Pendente (atrasado {diasAtraso} dias)
-                              </Badge>
-                            )}
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-center font-medium">{st.escolasCount}</TableCell>
-                        <TableCell className="text-center font-medium">{st.pedidosCount}</TableCell>
-                        <TableCell className="text-right font-mono font-medium">
-                          {st.itensCount} itens / Kg
-                        </TableCell>
-                        <TableCell className="text-right font-mono font-bold">
-                          R${' '}
-                          {st.valorTotal.toLocaleString('pt-BR', {
-                            minimumFractionDigits: 2,
-                            maximumFractionDigits: 2,
-                          })}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex items-center justify-end gap-1">
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => handleOpenDetails(c)}
-                              className="gap-1 text-xs"
+                          )
+                        } else if (statusDerivado === 'fechado') {
+                          statusBadge = <Badge variant="secondary">Fechado</Badge>
+                        } else if (statusDerivado === 'cancelado') {
+                          const motivoCancelExibir = c.motivo_cancelamento
+                          statusBadge = (
+                            <Badge
+                              variant="destructive"
+                              className="text-xs"
+                              title={
+                                motivoCancelExibir ? `Motivo: ${motivoCancelExibir}` : undefined
+                              }
                             >
-                              <Eye className="h-3.5 w-3.5" /> Detalhes
-                            </Button>
-                            {statusDerivado !== 'fechado' &&
-                              statusDerivado !== 'cancelado' &&
-                              c.status !== 'fechado' &&
-                              c.status !== 'cancelado' && (
+                              Cancelado{motivoCancelExibir ? ` — ${motivoCancelExibir}` : ''}
+                            </Badge>
+                          )
+                        }
+
+                        const despachoDate = getDespachoEfetivoCiclo(c)
+
+                        return (
+                          <TableRow key={c.id}>
+                            <TableCell className="font-semibold text-primary">{c.nome}</TableCell>
+                            <TableCell className="text-xs">
+                              {chamadaDoCiclo ? (
+                                <Badge variant="outline" className="font-normal text-[11px]">
+                                  {chamadaDoCiclo.chamada}
+                                </Badge>
+                              ) : (
+                                <span className="text-muted-foreground">—</span>
+                              )}
+                            </TableCell>
+                            <TableCell className="text-xs">
+                              {formatIntervaloCiclo(c.data_inicio, c.data_fim)}
+                            </TableCell>
+                            <TableCell className="text-xs">
+                              <span className="inline-flex items-center gap-1 font-medium text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded border border-emerald-200 dark:border-emerald-800">
+                                <Truck className="h-3 w-3" />
+                                {formatDespachoAmigavel(despachoDate)}
+                              </span>
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex flex-col gap-1 items-start max-w-[280px]">
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  {statusBadge}
+                                  {isAtivo && (
+                                    <Badge
+                                      variant="outline"
+                                      className="text-[10px] bg-primary/10 text-primary border-primary/30"
+                                    >
+                                      Ativo
+                                    </Badge>
+                                  )}
+                                </div>
+                                <span className="text-[11px] text-muted-foreground leading-tight">
+                                  {resumoFases}
+                                </span>
+                                {c.motivo_cancelamento && statusDerivado === 'cancelado' && (
+                                  <span className="text-[10px] text-destructive italic">
+                                    Motivo: {c.motivo_cancelamento}
+                                  </span>
+                                )}
+                                {isPendente && (
+                                  <Badge className="bg-amber-600 hover:bg-amber-700 text-[10px]">
+                                    Fechamento Pendente (atrasado {diasAtraso} dias)
+                                  </Badge>
+                                )}
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-center font-medium">
+                              {st.escolasCount}
+                            </TableCell>
+                            <TableCell className="text-center font-medium">
+                              {st.pedidosCount}
+                            </TableCell>
+                            <TableCell className="text-right font-mono font-medium">
+                              {st.itensCount} itens / Kg
+                            </TableCell>
+                            <TableCell className="text-right font-mono font-bold">
+                              R${' '}
+                              {st.valorTotal.toLocaleString('pt-BR', {
+                                minimumFractionDigits: 2,
+                                maximumFractionDigits: 2,
+                              })}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <div className="flex items-center justify-end gap-1">
                                 <Button
                                   size="sm"
                                   variant="ghost"
-                                  onClick={() => {
-                                    setCancelarCiclo(c)
-                                    setCancelarCicloOpen(true)
-                                  }}
-                                  className="text-destructive hover:bg-destructive/10 text-xs px-2 gap-1"
-                                  title="Cancelar Ciclo"
+                                  onClick={() => handleOpenDetails(c)}
+                                  className="gap-1 text-xs"
                                 >
-                                  <Ban className="h-3.5 w-3.5" />
-                                  <span>Cancelar Ciclo</span>
+                                  <Eye className="h-3.5 w-3.5" /> Detalhes
                                 </Button>
-                              )}
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    )
-                  })
-                )}
-              </TableBody>
-            </Table>
-          </div>
-        </CardContent>
-      </Card>
+                                {statusDerivado !== 'fechado' &&
+                                  statusDerivado !== 'cancelado' &&
+                                  c.status !== 'fechado' &&
+                                  c.status !== 'cancelado' && (
+                                    <Button
+                                      size="sm"
+                                      variant="ghost"
+                                      onClick={() => {
+                                        setCancelarCiclo(c)
+                                        setCancelarCicloOpen(true)
+                                      }}
+                                      className="text-destructive hover:bg-destructive/10 text-xs px-2 gap-1"
+                                      title="Cancelar Ciclo"
+                                    >
+                                      <Ban className="h-3.5 w-3.5" />
+                                      <span>Cancelar Ciclo</span>
+                                    </Button>
+                                  )}
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        )
+                      })
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Aba 2: Comparação de Consumo (Gráficos por Escolas, Chamadas e Contratos em KG e R$) */}
+        <TabsContent value="comparacao" className="space-y-6 mt-0">
+          <ConsumptionComparison
+            ciclos={ciclos}
+            orders={orders}
+            products={products}
+            schools={schools}
+            chamadas={chamadas}
+            contracts={contracts}
+          />
+        </TabsContent>
+      </Tabs>
 
       {/* Modal de Detalhes do Ciclo */}
       <Dialog open={detailsOpen} onOpenChange={setDetailsOpen}>
