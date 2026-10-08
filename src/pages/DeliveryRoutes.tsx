@@ -102,6 +102,7 @@ import {
   type RotaDespachoRecord,
   type EntregaRegistroRecord,
   type EntregaComprovanteRecord,
+  type RotaSnapshotRecord,
 } from '@/lib/types'
 import { DeliveryDetailsDialog, type DeliveryDetailsData } from '@/components/DeliveryDetailsDialog'
 
@@ -1355,6 +1356,36 @@ export default function DeliveryRoutes() {
 
       const ok = await salvarSequenciamentoParadas(targetRotaId, payload)
       if (ok) {
+        // Se há um ciclo selecionado, salva a ordem no snapshot de edição do ciclo
+        if (selectedCiclo?.id) {
+          try {
+            const paradasParaSnapshot = reordered.map((item, idx) => {
+              const escolaInfo = schools.find((s) => s.id === item.escolaId)
+              const contratoOrigem = escolaContratoOrigemMap.get(item.escolaId)
+              return {
+                escola_id: item.escolaId,
+                ordem: idx + 1,
+                escola_nome: escolaInfo?.name || 'Escola',
+                endereco: escolaInfo?.address || '',
+                contrato: contratoOrigem?.contratoNumero || '',
+              }
+            })
+
+            await retencaoHistoricaService.salvarComposicaoCiclo({
+              rotaId: targetRotaId,
+              cicloId: selectedCiclo.id,
+              chamadaId: destRota?.chamada_id || currentChamada?.id,
+              rotaNome: destName,
+              paradas: paradasParaSnapshot,
+              observacao: 'Reordenamento manual de paradas no ciclo',
+            })
+
+            const snapsMap = await retencaoHistoricaService.getSnapshotsByCiclo(selectedCiclo.id)
+            setCicloSnapshotsMap(snapsMap)
+          } catch (err) {
+            console.warn('Aviso não-bloqueante ao salvar snapshot de reordenação no ciclo:', err)
+          }
+        }
         toast.success('Sequência de paradas atualizada!')
       }
       return
@@ -1789,13 +1820,33 @@ export default function DeliveryRoutes() {
             const isDraggingOverThisRota =
               dragOverRotaId === item.rota.id && draggedSourceRotaId !== item.rota.id
 
+            // Resiliência contra resíduo de despacho ativo: se todos os pedidos da rota já estão Entregue
+            // (nenhum Em Rota e nenhum Pendente), a rota é considerada Entregue com precedência.
+            const todosPedidosEntreguesCard =
+              item.pedidosEmRota.length === 0 &&
+              item.pedidosPendentes.length === 0 &&
+              item.pedidosEntregues.length > 0
+
+            const isRotaEntregueCard =
+              todosPedidosEntreguesCard ||
+              (!despAtivoRota &&
+                item.pedidosEmRota.length === 0 &&
+                item.pedidosEntregues.length > 0 &&
+                item.ultimoDespacho?.status === 'Entregue')
+
+            const isCicloTerminal =
+              selectedCiclo?.status === 'fechado' || selectedCiclo?.status === 'cancelado'
+
+            const isRotaBloqueada = isCicloTerminal || isRotaEntregueCard
+            const podeEditarRota = canEditRoutes && !isRotaBloqueada
+
             return (
               <Card
                 key={item.rota.id}
-                onDragOver={(e) => handleDragOverRota(e, item.rota.id)}
-                onDrop={(e) => handleDropOnRota(e, item.rota.id)}
+                onDragOver={podeEditarRota ? (e) => handleDragOverRota(e, item.rota.id) : undefined}
+                onDrop={podeEditarRota ? (e) => handleDropOnRota(e, item.rota.id) : undefined}
                 className={`flex flex-col border-t-4 border-t-primary shadow-sm hover:shadow-md transition-all ${
-                  isDraggingOverThisRota
+                  isDraggingOverThisRota && podeEditarRota
                     ? 'ring-2 ring-primary ring-offset-2 bg-primary/[0.04] border-primary scale-[1.008]'
                     : ''
                 }`}
@@ -1808,23 +1859,7 @@ export default function DeliveryRoutes() {
                           <Truck className="h-5 w-5 text-primary" /> {item.rota.nome}
                         </CardTitle>
                         {(() => {
-                          const despAtivo = despachosAtivosMap[item.rota.id]
-
-                          // Resiliência contra resíduo de despacho ativo: se todos os pedidos da rota já estão Entregue
-                          // (nenhum Em Rota e nenhum Pendente), a rota é considerada Entregue com precedência.
-                          const todosPedidosEntregues =
-                            item.pedidosEmRota.length === 0 &&
-                            item.pedidosPendentes.length === 0 &&
-                            item.pedidosEntregues.length > 0
-
-                          const isRotaEntregue =
-                            todosPedidosEntregues ||
-                            (!despAtivo &&
-                              item.pedidosEmRota.length === 0 &&
-                              item.pedidosEntregues.length > 0 &&
-                              item.ultimoDespacho?.status === 'Entregue')
-
-                          if (isRotaEntregue) {
+                          if (isRotaEntregueCard) {
                             return (
                               <Badge className="bg-emerald-600 hover:bg-emerald-600 text-white text-[10px] gap-1">
                                 <CheckCircle2 className="h-3 w-3" />
@@ -1833,12 +1868,7 @@ export default function DeliveryRoutes() {
                             )
                           }
 
-                          const isDespachadoConfirmado =
-                            Boolean(despAtivo) ||
-                            item.ultimoDespacho?.status === 'Em Rota' ||
-                            item.pedidosEmRota.length > 0
-
-                          if (isDespachadoConfirmado) {
+                          if (isDespachadoConfirmadoRota) {
                             return (
                               <Badge className="bg-amber-600 hover:bg-amber-600 text-white text-[10px] animate-pulse">
                                 Em Rota
@@ -1873,41 +1903,47 @@ export default function DeliveryRoutes() {
                           <Loader2 className="h-2.5 w-2.5 animate-spin" /> Salvando...
                         </Badge>
                       )}
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="h-7 text-xs gap-1 border-primary/40 text-primary hover:bg-primary/5"
-                        onClick={() => {
-                          setSelectedRotaForRouting(item.rota)
-                          setBatchImportFileModalOpen(true)
-                        }}
-                        title="Importar escolas em lote via arquivo Excel, Word, CSV ou texto simples"
-                      >
-                        <Upload className="h-3.5 w-3.5 text-primary" />
-                        Importar Arquivo
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="h-7 text-xs gap-1"
-                        onClick={() => handleOpenRouting(item.rota)}
-                        title="Atribuir escolas a esta rota"
-                      >
-                        <SlidersHorizontal className="h-3.5 w-3.5 text-primary" />
-                        Roteamento ({item.paradasOrdenadas.length} escolas)
-                      </Button>
+                      {podeEditarRota && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-7 text-xs gap-1 border-primary/40 text-primary hover:bg-primary/5"
+                          onClick={() => {
+                            setSelectedRotaForRouting(item.rota)
+                            setBatchImportFileModalOpen(true)
+                          }}
+                          title="Importar escolas em lote via arquivo Excel, Word, CSV ou texto simples"
+                        >
+                          <Upload className="h-3.5 w-3.5 text-primary" />
+                          Importar Arquivo
+                        </Button>
+                      )}
+                      {podeEditarRota && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-7 text-xs gap-1"
+                          onClick={() => handleOpenRouting(item.rota)}
+                          title="Atribuir escolas a esta rota"
+                        >
+                          <SlidersHorizontal className="h-3.5 w-3.5 text-primary" />
+                          Roteamento ({item.paradasOrdenadas.length} escolas)
+                        </Button>
+                      )}
                       {/* Opção para renomear rota */}
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7 text-muted-foreground hover:text-foreground"
-                        title="Renomear rota"
-                        onClick={() => handleOpenEditRoute(item.rota)}
-                      >
-                        <Pencil className="h-3.5 w-3.5" />
-                      </Button>
+                      {podeEditarRota && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                          title="Renomear rota"
+                          onClick={() => handleOpenEditRoute(item.rota)}
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </Button>
+                      )}
                       {/* Opção para excluir rota vazia */}
-                      {item.pedidosEmRota.length === 0 && (
+                      {podeEditarRota && item.pedidosEmRota.length === 0 && (
                         <Button
                           variant="ghost"
                           size="icon"
@@ -2406,7 +2442,7 @@ export default function DeliveryRoutes() {
                                 type="button"
                                 variant="outline"
                                 size="sm"
-                                disabled={desabilitado}
+                                disabled={desabilitado || !podeEditarRota}
                                 className="h-7 text-xs gap-1.5 text-primary border-primary/30 hover:bg-primary/5 hover:border-primary"
                                 onClick={() => handleOpenOptimizationDialog(item.rota, paradas)}
                               >
@@ -2429,6 +2465,27 @@ export default function DeliveryRoutes() {
                                     </TooltipTrigger>
                                     <TooltipContent side="top" className="text-xs max-w-xs">
                                       {tooltipText}
+                                    </TooltipContent>
+                                  </Tooltip>
+                                </TooltipProvider>
+                              )
+                            }
+
+                            if (!podeEditarRota) {
+                              return (
+                                <TooltipProvider>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <span
+                                        tabIndex={0}
+                                        className="inline-block cursor-not-allowed"
+                                      >
+                                        {buttonNode}
+                                      </span>
+                                    </TooltipTrigger>
+                                    <TooltipContent side="top" className="text-xs max-w-xs">
+                                      Rota bloqueada para edição (ciclo fechado/cancelado ou rota
+                                      entregue).
                                     </TooltipContent>
                                   </Tooltip>
                                 </TooltipProvider>
@@ -2464,21 +2521,30 @@ export default function DeliveryRoutes() {
 
                     {item.paradasOrdenadas.length === 0 ? (
                       <div
-                        onDragOver={(e) => handleDragOverRota(e, item.rota.id)}
-                        onDrop={(e) => handleDropOnRota(e, item.rota.id)}
+                        onDragOver={
+                          podeEditarRota ? (e) => handleDragOverRota(e, item.rota.id) : undefined
+                        }
+                        onDrop={
+                          podeEditarRota ? (e) => handleDropOnRota(e, item.rota.id) : undefined
+                        }
                         className={`py-6 text-center text-muted-foreground border border-dashed rounded-lg text-xs transition-colors ${
-                          isDraggingOverThisRota ? 'border-primary bg-primary/15' : ''
+                          isDraggingOverThisRota && podeEditarRota
+                            ? 'border-primary bg-primary/15'
+                            : ''
                         }`}
                       >
                         Nenhuma escola vinculada a esta rota.
-                        <p className="text-[10px] text-muted-foreground mt-1">
-                          Você pode arrastar uma escola de outra rota e soltá-la aqui.
-                        </p>
+                        {podeEditarRota && (
+                          <p className="text-[10px] text-muted-foreground mt-1">
+                            Você pode arrastar uma escola de outra rota e soltá-la aqui.
+                          </p>
+                        )}
                         <div className="mt-2">
                           <Button
                             variant="outline"
                             size="sm"
                             className="h-7 text-xs"
+                            disabled={!podeEditarRota}
                             onClick={() => handleOpenRouting(item.rota)}
                           >
                             Atribuir Escolas
@@ -2550,8 +2616,14 @@ export default function DeliveryRoutes() {
                             className={`space-y-2 overflow-y-auto pr-1 ${
                               viewMode === 'ambos' ? 'max-h-[390px]' : 'max-h-[460px]'
                             }`}
-                            onDragOver={(e) => handleDragOverRota(e, item.rota.id)}
-                            onDrop={(e) => handleDropOnRota(e, item.rota.id)}
+                            onDragOver={
+                              podeEditarRota
+                                ? (e) => handleDragOverRota(e, item.rota.id)
+                                : undefined
+                            }
+                            onDrop={
+                              podeEditarRota ? (e) => handleDropOnRota(e, item.rota.id) : undefined
+                            }
                           >
                             {item.paradasOrdenadas.map((parada) => {
                               const isOver = dragOverEscolaId === parada.escolaId
@@ -2601,30 +2673,42 @@ export default function DeliveryRoutes() {
                               return (
                                 <div
                                   key={parada.escolaId}
-                                  draggable
-                                  onDragStart={(e) =>
-                                    handleDragStart(e, parada.escolaId, item.rota.id)
+                                  draggable={podeEditarRota}
+                                  onDragStart={
+                                    podeEditarRota
+                                      ? (e) => handleDragStart(e, parada.escolaId, item.rota.id)
+                                      : undefined
                                   }
-                                  onDragEnd={handleDragEnd}
-                                  onDragOver={(e) =>
-                                    handleDragOverParada(e, parada.escolaId, item.rota.id)
+                                  onDragEnd={podeEditarRota ? handleDragEnd : undefined}
+                                  onDragOver={
+                                    podeEditarRota
+                                      ? (e) =>
+                                          handleDragOverParada(e, parada.escolaId, item.rota.id)
+                                      : undefined
                                   }
-                                  onDrop={(e) =>
-                                    handleDropOnParada(
-                                      e,
-                                      parada.escolaId,
-                                      item.rota.id,
-                                      item.paradasOrdenadas.map((p) => ({
-                                        escolaId: p.escolaId,
-                                        ordem: p.ordem,
-                                      })),
-                                    )
+                                  onDrop={
+                                    podeEditarRota
+                                      ? (e) =>
+                                          handleDropOnParada(
+                                            e,
+                                            parada.escolaId,
+                                            item.rota.id,
+                                            item.paradasOrdenadas.map((p) => ({
+                                              escolaId: p.escolaId,
+                                              ordem: p.ordem,
+                                            })),
+                                          )
+                                      : undefined
                                   }
                                   onClick={handleAbrirDetalhesParada}
-                                  className={`p-2.5 rounded-lg border text-xs space-y-2 shadow-xs transition-all cursor-grab active:cursor-grabbing select-none ${
+                                  className={`p-2.5 rounded-lg border text-xs space-y-2 shadow-xs transition-all select-none ${
+                                    podeEditarRota
+                                      ? 'cursor-grab active:cursor-grabbing'
+                                      : 'cursor-default'
+                                  } ${
                                     isBeingDragged
                                       ? 'opacity-40 border-dashed border-primary scale-[0.98] bg-card'
-                                      : isOver
+                                      : isOver && podeEditarRota
                                         ? 'border-primary border-2 bg-primary/10 shadow-sm'
                                         : isTruckHere
                                           ? 'border-amber-500/80 bg-amber-500/10 dark:bg-amber-950/20 shadow-sm ring-1 ring-amber-400'
@@ -2633,6 +2717,7 @@ export default function DeliveryRoutes() {
                                             : 'bg-card hover:border-primary/50 hover:shadow-xs'
                                   }`}
                                 >
+                                  {' '}
                                   <div className="flex items-center justify-between gap-2">
                                     <div className="flex items-center gap-2 min-w-0">
                                       <GripVertical className="h-4 w-4 text-muted-foreground/60 shrink-0" />
@@ -2887,7 +2972,7 @@ export default function DeliveryRoutes() {
                                       )}
 
                                       {/* Botão de transferir rota para mobile / facilidade com clique */}
-                                      {filteredRotasLogisticas.length > 1 && (
+                                      {podeEditarRota && filteredRotasLogisticas.length > 1 && (
                                         <Button
                                           variant="ghost"
                                           size="icon"
@@ -2908,7 +2993,6 @@ export default function DeliveryRoutes() {
                                       )}
                                     </div>
                                   </div>
-
                                   {/* Pedidos vinculados a esta parada (exibidos apenas quando expandido pelo usuário ao clicar no número de pedidos) */}
                                   {parada.pedidos.length > 0 &&
                                     expandedParadasPedidos.has(
