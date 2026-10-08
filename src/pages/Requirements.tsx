@@ -866,6 +866,115 @@ export function Requirements() {
       {/* 7. Registro de Manutenção e Limpeza de Dados */}
       <SectionTitle>7. Registro de Manutenção & Higienização do Banco de Dados</SectionTitle>
       <div className="space-y-4">
+        {/* Release v0.0.231: Sugestão de Coordenadas Geográficas pelo Motorista */}
+        <div className="rounded-lg border border-border bg-card p-5 space-y-4">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="text-primary border-primary/30">
+                Release v0.0.231
+              </Badge>
+              <span className="font-semibold text-foreground">
+                0.0.231: Sugestão de Coordenadas GPS pelo Motorista & Fila de Revisão em /escolas e
+                /rotas
+              </span>
+            </div>
+            <span className="text-xs text-muted-foreground">Consolidado (v0.0.231)</span>
+          </div>
+          <p className="text-sm text-foreground/90 leading-relaxed">
+            Captura automática e transparente da coordenada GPS pelo celular do motorista no momento
+            da confirmação da entrega no Portal do Motorista, direcionada para a fila de revisão
+            humana da cooperativa na coleção <code>coordenada_sugestoes</code>.
+          </p>
+          <div className="grid sm:grid-cols-2 gap-4 text-sm">
+            <div className="rounded-md border border-border/60 bg-muted/20 p-3 space-y-1.5">
+              <span className="font-medium text-primary">Captura & Deduplicação em Campo:</span>
+              <ul className="space-y-1 text-xs text-muted-foreground">
+                <li>
+                  • No Portal do Motorista (<code>/motorista</code>), ao confirmar a entrega, a
+                  geolocalização é capturada com alta precisão e gravada como sugestão pendente (sem
+                  alterar a escola diretamente).
+                </li>
+                <li>
+                  • Tolerância inteligente de 50 metros: se a escola já possui coordenada a menos de
+                  50m ou se já existe sugestão pendente recente próxima (&lt; 50m), o sistema
+                  deduplica silenciosamente para não poluir a fila.
+                </li>
+                <li>
+                  • Metadados completos preservados: precisão métrica, motorista autor, ciclo,
+                  chamada, rota e despacho.
+                </li>
+              </ul>
+            </div>
+            <div className="rounded-md border border-primary/30 bg-primary/5 p-3 space-y-1.5">
+              <span className="font-medium text-primary">
+                Fila de Revisão Humana (/escolas e /rotas):
+              </span>
+              <ul className="space-y-1 text-xs text-foreground/80">
+                <li>
+                  • Botão e diálogo modal &quot;Revisar Coordenadas&quot; com badge contador de
+                  pendências em tempo real.
+                </li>
+                <li>
+                  • Comparativo lado a lado: coordenada atual da escola vs. coordenada sugerida
+                  capturada, com distância Haversine em metros/km.
+                </li>
+                <li>• Link direto para inspeção no Google Maps em nova aba.</li>
+                <li>
+                  • Ações de &quot;Aprovar&quot; (aplica no cadastro mestre da escola) e
+                  &quot;Recusar&quot; (com justificativa opcional).
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        {/* Release v0.0.230: Bloqueio de Edição em Rotas Fechadas e Retenção por Ciclo */}
+        <div className="rounded-lg border border-border bg-card p-5 space-y-4">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="text-primary border-primary/30">
+                Release v0.0.230
+              </Badge>
+              <span className="font-semibold text-foreground">
+                0.0.230: Bloqueio de Edição em Rotas de Ciclo Fechado/Entregue & Isolamento da
+                Sequência por Ciclo
+              </span>
+            </div>
+            <span className="text-xs text-muted-foreground">Consolidado (v0.0.230)</span>
+          </div>
+          <p className="text-sm text-foreground/90 leading-relaxed">
+            Travamento estrito de modificações operacionais em rotas concluídas ou de ciclos em
+            estado terminal (fechado/cancelado) e congelamento da ordem de paradas por ciclo via
+            snapshots em <code>rota_snapshots</code>.
+          </p>
+          <div className="grid sm:grid-cols-2 gap-4 text-sm">
+            <div className="rounded-md border border-border/60 bg-muted/20 p-3 space-y-1.5">
+              <span className="font-medium text-primary">Travas Operacionais de Segurança:</span>
+              <ul className="space-y-1 text-xs text-muted-foreground">
+                <li>
+                  • Drag-and-drop de paradas estritamente desabilitado quando a rota estiver
+                  entregue ou ciclo fechado/cancelado.
+                </li>
+                <li>
+                  • Ações de importação, otimização automática, exclusão e renomeação de rota
+                  desabilitadas.
+                </li>
+                <li>• Consulta, histórico e visualização em mapa permanecem 100% liberados.</li>
+              </ul>
+            </div>
+            <div className="rounded-md border border-primary/30 bg-primary/5 p-3 space-y-1.5">
+              <span className="font-medium text-primary">Isolamento de Sequência de Paradas:</span>
+              <ul className="space-y-1 text-xs text-foreground/80">
+                <li>
+                  • Reordenação manual grava snapshot de edição associado exclusivamente ao{' '}
+                  <code>ciclo_id</code> selecionado.
+                </li>
+                <li>• Histórico imutável de ciclos passados preservado com precisão.</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
         {/* Release v0.0.228: Exibição Condicional do Botão Despachar Rota por Fase do Ciclo */}
         <div className="rounded-lg border border-border bg-card p-5 space-y-4">
           <div className="flex items-center justify-between flex-wrap gap-2">

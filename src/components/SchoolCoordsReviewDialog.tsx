@@ -100,21 +100,15 @@ export function SchoolCoordsReviewDialog({
     return map
   }, [schools])
 
-  const getEscolaNome = useCallback(
-    (esc?: any): string => {
-      if (!esc) return ''
-      return esc.nome || esc.name || ''
-    },
-    [],
-  )
+  const getEscolaNome = useCallback((esc?: any): string => {
+    if (!esc) return ''
+    return esc.nome || esc.name || ''
+  }, [])
 
-  const getEscolaEndereco = useCallback(
-    (esc?: any): string => {
-      if (!esc) return ''
-      return esc.endereco || esc.address || ''
-    },
-    [],
-  )
+  const getEscolaEndereco = useCallback((esc?: any): string => {
+    if (!esc) return ''
+    return esc.endereco || esc.address || ''
+  }, [])
 
   // Filtragem por busca textual (nome da escola ou motorista)
   const sugestoesFiltradas = useMemo(() => {
@@ -294,53 +288,52 @@ export function SchoolCoordsReviewDialog({
                   </TableHeader>
                   <TableBody>
                     {sugestoesFiltradas.map((sug) => {
-  const esc = sug.expand?.escola_id || escolasMap.get(sug.escola_id)
-  const escNome = getEscolaNome(esc) || 'Escola não identificada'
-  const escEndereco = getEscolaEndereco(esc)
-  const escLat = esc?.latitude
-  const escLng = esc?.longitude
+                      const esc = sug.expand?.escola_id || escolasMap.get(sug.escola_id)
+                      const escNome = getEscolaNome(esc) || 'Escola não identificada'
+                      const escEndereco = getEscolaEndereco(esc)
+                      const escLat = esc?.latitude
+                      const escLng = esc?.longitude
 
-  const comp = coordenadaSugestoesService.compararDistancia(
-    escLat,
-    escLng,
-    sug.lat,
-    sug.lng,
-  )
+                      const comp = coordenadaSugestoesService.compararDistancia(
+                        escLat,
+                        escLng,
+                        sug.lat,
+                        sug.lng,
+                      )
 
-  const motoristaNome =
-    sug.expand?.motorista_id?.nome || 'Motorista'
-  const cicloNome =
-    (sug.expand?.ciclo_id as any)?.nome ||
-    (sug.expand?.ciclo_id as any)?.numero ||
-    ''
-  const dataEntregaFormatada = sug.entregue_em
-    ? new Date(sug.entregue_em).toLocaleString('pt-BR', {
-        day: '2-digit',
-        month: '2-digit',
-        year: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
-      })
-    : sug.created
-    ? new Date(sug.created).toLocaleDateString('pt-BR')
-    : '—'
+                      const motoristaNome = sug.expand?.motorista_id?.nome || 'Motorista'
+                      const cicloNome =
+                        (sug.expand?.ciclo_id as any)?.nome ||
+                        (sug.expand?.ciclo_id as any)?.numero ||
+                        ''
+                      const dataEntregaFormatada = sug.entregue_em
+                        ? new Date(sug.entregue_em).toLocaleString('pt-BR', {
+                            day: '2-digit',
+                            month: '2-digit',
+                            year: '2-digit',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          })
+                        : sug.created
+                          ? new Date(sug.created).toLocaleDateString('pt-BR')
+                          : '—'
 
-  return (
-    <TableRow key={sug.id} className="hover:bg-muted/40 text-xs">
-      {/* 1. Escola */}
-      <TableCell className="align-top py-3">
-        <div className="space-y-1">
-          <div className="font-semibold text-foreground flex items-center gap-1.5">
-            <Building2 className="h-3.5 w-3.5 text-primary shrink-0" />
-            <span className="line-clamp-2" title={escNome}>
-              {escNome}
-            </span>
-          </div>
-          {escEndereco && (
-            <p className="text-[11px] text-muted-foreground line-clamp-1">
-              {escEndereco}
-            </p>
-          )}
+                      return (
+                        <TableRow key={sug.id} className="hover:bg-muted/40 text-xs">
+                          {/* 1. Escola */}
+                          <TableCell className="align-top py-3">
+                            <div className="space-y-1">
+                              <div className="font-semibold text-foreground flex items-center gap-1.5">
+                                <Building2 className="h-3.5 w-3.5 text-primary shrink-0" />
+                                <span className="line-clamp-2" title={escNome}>
+                                  {escNome}
+                                </span>
+                              </div>
+                              {escEndereco && (
+                                <p className="text-[11px] text-muted-foreground line-clamp-1">
+                                  {escEndereco}
+                                </p>
+                              )}
                               <div className="text-[10px] font-mono text-muted-foreground/80">
                                 ID: {sug.escola_id}
                               </div>
