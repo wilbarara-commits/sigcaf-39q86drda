@@ -400,8 +400,8 @@ const MODULES: ModuleSpec[] = [
     goal: 'Disponibilizar endpoint REST seguro e exclusivo de leitura para que o sistema de ERP da cooperativa importe os pedidos realizados e alimente automaticamente o faturamento, sem qualquer permissão de escrita.',
     details: [
       'Arquitetura Estritamente Somente Leitura: O ERP não grava nem altera pedidos no SIGCAF. O endpoint opera exclusivamente via método HTTP GET.',
-      'Autenticação e Proteção por Chave de API: Protegido por chave secreta validada no header HTTP (X-API-Key: <chave> ou Authorization: Bearer <chave>). A chave é comparada contra a variável de ambiente do servidor ERP_API_KEY. Requisição sem chave ou com chave incorreta retorna HTTP 401 Unauthorized com JSON limpo, sem vazar detalhes internos.',
-      'Gestão Segura da Chave: A cooperativa fornece a chave de integração diretamente à equipe do ERP. A chave é configurada nas variáveis de ambiente do painel/servidor, JAMAIS sendo hardcodada no código-fonte nem exibida publicamente em textos da interface.',
+      'Autenticação e Proteção por Chave de API: Protegido por chave secreta validada no header HTTP (X-API-Key: <chave> ou Authorization: Bearer <chave>). A chave pode vir da variável de ambiente do servidor (process.env.ERP_API_KEY) OU do registro interno ERP_API_KEY na coleção config_sistema, com prioridade máxima para a variável de ambiente. Requisição sem chave ou com chave incorreta retorna HTTP 401 Unauthorized com JSON limpo, sem vazar detalhes internos.',
+      'Gestão Segura da Chave & Coleção config_sistema: A chave é gerenciada de forma estritamente interna no servidor ou via coleção config_sistema (totalmente bloqueada contra leitura/gravação na REST API do app para clientes e anônimos, acessível exclusivamente pelo servidor/superuser). A chave JAMAIS é hardcodada no front-end nem exibida publicamente em qualquer tela ou componente da interface do sistema.',
       'Identificação Cadastral da Escola (sem casamento por nome): Cada pedido expõe os dados cadastrais da escola vinculada: ID único no banco de dados (escola.id), Nome oficial, Código INEP, Tipo, Dependência Administrativa, Bairro e Endereço. Respeita a regra fundamental do sistema: nunca casar escola por nome.',
       'Metadados de Chamada, Ciclo e Contrato: Expõe o ID e número da Chamada Pública, Programa e Dependência; ID, nome, número da semana e ano do Ciclo Operacional; ID e número do Contrato de vínculo; e ID e nome da Rota Logística.',
       'Itens do Pedido com Regra de Nome no Contrato e AKA Separado: Cada item do pedido expõe o Nome do Produto (apenas a parte antes da vírgula do Nome no Contrato), campo separado "aka" (apelido/referência interna para que o ERP reconcilie eventuais divergências de nomenclatura), quantidade, unidade de medida, preço unitário acordado e total do item.',
@@ -478,6 +478,7 @@ const DATA_MODEL = [
   'tokens_formulario (id, escola_id → escolas, contrato_id → contratos, ciclo_id → ciclos, token [string único], ativo [bool], criado_em, expira_em) [Link único por escola/contrato/ciclo para envio público]',
   'importacoes (id, ciclo_id → ciclos, contrato_id → contratos, arquivo, data, usuario_id, linhas_total, linhas_ok, linhas_erro, erros [json])',
   'atestos (id, numero, pedido_id → pedidos, data_emissao, status [Pendente Assinatura/Confirmado/Arquivado], assinatura_file [file], arquivo [file])',
+  'config_sistema (id, chave [texto único], valor [texto]) [Coleção interna de parâmetros/segredos de servidor — 100% bloqueada contra leitura/gravação na REST API do app]',
 ]
 
 /* ----------------------------------------------------------------------------
@@ -866,6 +867,62 @@ export function Requirements() {
       {/* 7. Registro de Manutenção e Limpeza de Dados */}
       <SectionTitle>7. Registro de Manutenção & Higienização do Banco de Dados</SectionTitle>
       <div className="space-y-4">
+        {/* Release v0.0.233: Chave ERP via config_sistema e Fallback Seguro */}
+        <div className="rounded-lg border border-border bg-card p-5 space-y-4">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="text-primary border-primary/30">
+                Release v0.0.233
+              </Badge>
+              <span className="font-semibold text-foreground">
+                0.0.233: Chave de API ERP via config_sistema e Resolução Híbrida Segura
+              </span>
+            </div>
+            <span className="text-xs text-muted-foreground">Consolidado (v0.0.233)</span>
+          </div>
+          <p className="text-sm text-foreground/90 leading-relaxed">
+            Habilitação do endpoint REST de leitura de pedidos para ERP (
+            <code>/backend/v1/erp/pedidos</code>) através de coleção interna de configurações (
+            <code>config_sistema</code>), sem expor a chave em nenhuma tela do app e mantendo a
+            precedência das variáveis de ambiente:
+          </p>
+          <div className="grid sm:grid-cols-2 gap-4 text-sm">
+            <div className="rounded-md border border-border/60 bg-muted/20 p-3 space-y-1.5">
+              <span className="font-medium text-primary">
+                Coleção Interna config_sistema (Migration 0141):
+              </span>
+              <ul className="space-y-1 text-xs text-muted-foreground">
+                <li>
+                  • Coleção criada com campos <code>chave</code> (único) e <code>valor</code>{' '}
+                  (texto), com todas as regras de acesso nulas (lock down total na REST API para
+                  usuários do app).
+                </li>
+                <li>
+                  • Registro <code>ERP_API_KEY</code> populado de forma idempotente, sem qualquer
+                  exposição em telas, diálogos ou tabelas do SIGCAF.
+                </li>
+              </ul>
+            </div>
+            <div className="rounded-md border border-primary/30 bg-primary/5 p-3 space-y-1.5">
+              <span className="font-medium text-primary">
+                Resolução Híbrida & Mitigação Timing:
+              </span>
+              <ul className="space-y-1 text-xs text-foreground/80">
+                <li>
+                  • Precedência estrita: 1º <code>process.env.ERP_API_KEY</code> (variável de
+                  ambiente); 2º busca em <code>config_sistema</code> com cache em memória (60s) para
+                  alta performance.
+                </li>
+                <li>
+                  • Validação com comparação em tempo constante (timing-safe) para proteção contra
+                  timing attacks e manutenção estrita dos retornos HTTP 401/400/500 e do payload
+                  intacto.
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
         {/* Release v0.0.231: Sugestão de Coordenadas Geográficas pelo Motorista */}
         <div className="rounded-lg border border-border bg-card p-5 space-y-4">
           <div className="flex items-center justify-between flex-wrap gap-2">
@@ -1292,9 +1349,11 @@ export function Requirements() {
                   <code>X-API-Key</code> (ou <code>Authorization: Bearer &lt;chave&gt;</code>).
                 </li>
                 <li>
-                  • <strong>Chave via Variável de Ambiente:</strong> A chave é validada contra{' '}
-                  <code>ERP_API_KEY</code> configurada no ambiente do servidor (nunca hardcodada no
-                  código nem exibida na interface). Chave inválida ou ausente retorna HTTP 401.
+                  • <strong>Chave de Autenticação Segura:</strong> A chave é validada com
+                  precedência contra <code>ERP_API_KEY</code> no ambiente do servidor ou,
+                  alternativamente, contra o registro interno <code>ERP_API_KEY</code> na coleção
+                  segura <code>config_sistema</code> (inacessível via API REST do app e nunca
+                  exibida em telas). Chave inválida ou ausente retorna HTTP 401.
                 </li>
                 <li>
                   • <strong>Tratamento de Erros:</strong> Mensagens limpas em formato JSON (401, 400

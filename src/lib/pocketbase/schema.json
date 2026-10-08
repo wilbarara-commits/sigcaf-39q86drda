@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-08T01:12:30.782Z",
+  "generatedAt": "2026-10-08T02:53:29.320Z",
   "collections": [
     {
       "name": "users",
@@ -2164,6 +2164,46 @@
         }
       ],
       "indexes": []
+    },
+    {
+      "name": "config_sistema",
+      "type": "base",
+      "apiRules": {
+        "list": null,
+        "view": null,
+        "create": null,
+        "update": null,
+        "delete": null
+      },
+      "fields": [
+        {
+          "name": "chave",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "valor",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": ["CREATE UNIQUE INDEX idx_config_sistema_chave ON config_sistema (chave)"]
     }
   ]
 }

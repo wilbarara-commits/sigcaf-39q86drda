@@ -5,7 +5,30 @@
 
 routerAdd('GET', '/backend/v1/erp/pedidos', (e) => {
   // 1. Verificação de Chave de API (ERP_API_KEY)
-  const configuredApiKey = $os.getenv('ERP_API_KEY') || ''
+  // Ordem de precedência:
+  // 1º: $os.getenv('ERP_API_KEY') (variável de ambiente do servidor, prioridade máxima)
+  // 2º: Registro interno chave='ERP_API_KEY' na coleção config_sistema no banco
+  let configuredApiKey = ($os.getenv('ERP_API_KEY') || '').trim()
+
+  if (!configuredApiKey) {
+    // Cache em memória compartilhado no escopo global deste runtime (TTL: 60s)
+    const now = Date.now()
+    if (globalThis.__sigcaf_erp_key_cache && globalThis.__sigcaf_erp_key_cache.expiresAt > now) {
+      configuredApiKey = globalThis.__sigcaf_erp_key_cache.key
+    } else {
+      try {
+        const record = $app.findFirstRecordByData('config_sistema', 'chave', 'ERP_API_KEY')
+        configuredApiKey = (record.getString('valor') || '').trim()
+        globalThis.__sigcaf_erp_key_cache = {
+          key: configuredApiKey,
+          expiresAt: now + 60 * 1000,
+        }
+      } catch (_) {
+        configuredApiKey = ''
+      }
+    }
+  }
+
   if (!configuredApiKey) {
     return e.json(401, {
       success: false,
@@ -22,7 +45,18 @@ routerAdd('GET', '/backend/v1/erp/pedidos', (e) => {
   }
 
   const providedKey = headerApiKey.trim() || bearerToken.trim()
-  if (!providedKey || providedKey !== configuredApiKey.trim()) {
+
+  // Comparação em tempo constante (timing-safe) para mitigar timing attacks
+  let keysMatch = false
+  if (providedKey && providedKey.length === configuredApiKey.length) {
+    let mismatch = 0
+    for (let i = 0; i < providedKey.length; i++) {
+      mismatch |= providedKey.charCodeAt(i) ^ configuredApiKey.charCodeAt(i)
+    }
+    keysMatch = mismatch === 0
+  }
+
+  if (!keysMatch) {
     return e.json(401, {
       success: false,
       error: 'Acesso não autorizado. Chave de API ausente ou inválida.',
