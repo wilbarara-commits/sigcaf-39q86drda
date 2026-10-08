@@ -57,6 +57,7 @@ import {
   ChevronRight,
   Info,
   Download,
+  Navigation,
 } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import { Badge } from '@/components/ui/badge'
@@ -67,11 +68,13 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect, useCallback } from 'react'
 import { toast } from 'sonner'
 import { escolasService } from '@/services/escolas'
 import { SchoolImportDialog } from '@/components/SchoolImportDialog'
 import { SchoolCoordsImportDialog } from '@/components/SchoolCoordsImportDialog'
+import { SchoolCoordsReviewDialog } from '@/components/SchoolCoordsReviewDialog'
+import { coordenadaSugestoesService } from '@/services/coordenada-sugestoes'
 import type { School, EscolaTipo, DependenciaAdministrativa } from '@/lib/types'
 import { DEPENDENCIAS_ADMINISTRATIVAS } from '@/lib/types'
 
@@ -120,6 +123,22 @@ export default function Schools() {
   const [dialogOpen, setDialogOpen] = useState(false)
   const [importDialogOpen, setImportDialogOpen] = useState(false)
   const [coordsImportDialogOpen, setCoordsImportDialogOpen] = useState(false)
+  const [coordsReviewDialogOpen, setCoordsReviewDialogOpen] = useState(false)
+  const [pendentesSugestoesCount, setPendentesSugestoesCount] = useState<number>(0)
+
+  const atualizarContagemSugestoes = useCallback(async () => {
+    try {
+      const count = await coordenadaSugestoesService.countPendentes()
+      setPendentesSugestoesCount(count)
+    } catch {
+      /* tolerante */
+    }
+  }, [])
+
+  useEffect(() => {
+    atualizarContagemSugestoes()
+  }, [atualizarContagemSugestoes])
+
   const [editingSchool, setEditingSchool] = useState<School | null>(null)
   const [name, setName] = useState('')
   const [address, setAddress] = useState('')
@@ -519,6 +538,23 @@ export default function Schools() {
 
           {isAdmin && (
             <>
+              <Button
+                variant="outline"
+                onClick={() => setCoordsReviewDialogOpen(true)}
+                className="gap-1.5 border-amber-500/50 text-amber-800 dark:text-amber-200 hover:bg-amber-50 dark:hover:bg-amber-950/40 relative"
+                title="Revisar sugestões de coordenadas GPS enviadas pelos motoristas"
+              >
+                <Navigation className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                Revisar Coordenadas
+                {pendentesSugestoesCount > 0 && (
+                  <Badge
+                    variant="default"
+                    className="ml-1 h-5 px-1.5 bg-amber-600 text-white font-bold text-[10px] rounded-full animate-pulse"
+                  >
+                    {pendentesSugestoesCount}
+                  </Badge>
+                )}
+              </Button>
               <Button
                 variant="outline"
                 onClick={() => setCoordsImportDialogOpen(true)}
@@ -1515,6 +1551,16 @@ export default function Schools() {
         schools={schools}
         onSuccess={async () => {
           await refreshData()
+        }}
+      />
+
+      {/* Modal de Revisão de Coordenadas Sugeridas pelo Motorista */}
+      <SchoolCoordsReviewDialog
+        open={coordsReviewDialogOpen}
+        onOpenChange={setCoordsReviewDialogOpen}
+        onApproved={async () => {
+          await refreshData()
+          await atualizarContagemSugestoes()
         }}
       />
     </div>

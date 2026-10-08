@@ -559,6 +559,10 @@ export const entregaRegistrosService = {
     foto?: string
     status_sync?: string
     client_uid?: string
+    origem?: string
+    lat_sugerida?: number
+    lng_sugerida?: number
+    precisao_gps?: number
   }): Promise<EntregaRegistroRecord> {
     const payload: Record<string, any> = {
       ...data,
@@ -733,6 +737,37 @@ export const entregaRegistrosService = {
       }
     } catch (errComp) {
       console.warn('Aviso ao sincronizar entrega_comprovantes no salvarRegistro:', errComp)
+    }
+
+    // 3. SUGESTÃO DE COORDENADA DA ESCOLA (REVISÃO HUMANA):
+    // Se o motorista capturou coordenada GPS válida no ato da entrega,
+    // registra como sugestão pendente para revisão da cooperativa (não aplica direto na escola).
+    if (
+      data.escola_id &&
+      typeof data.lat_sugerida === 'number' &&
+      Number.isFinite(data.lat_sugerida) &&
+      typeof data.lng_sugerida === 'number' &&
+      Number.isFinite(data.lng_sugerida)
+    ) {
+      try {
+        const { coordenadaSugestoesService } = await import('@/services/coordenada-sugestoes')
+        await coordenadaSugestoesService.registrarSugestao({
+          escola_id: data.escola_id,
+          lat: data.lat_sugerida,
+          lng: data.lng_sugerida,
+          precisao: data.precisao_gps,
+          rota_id: data.rota_id,
+          ciclo_id: resolvedCicloId || undefined,
+          chamada_id: resolvedChamadaId || undefined,
+          motorista_id: resolvedMotoristaId || undefined,
+          despacho_id: data.despacho_id || undefined,
+          registro_id: registroSalvo.id,
+          origem: data.origem || 'portal_motorista',
+          entregue_em: data.confirmado_em || new Date().toISOString(),
+        })
+      } catch (errSug) {
+        console.warn('Aviso ao registrar sugestão de coordenada:', errSug)
+      }
     }
 
     return registroSalvo

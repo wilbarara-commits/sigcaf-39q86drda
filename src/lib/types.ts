@@ -12,6 +12,41 @@ export interface ProdutoRecord {
   updated?: string
 }
 
+export type CoordenadaSugestaoStatus = 'pendente' | 'aprovada' | 'recusada'
+
+export interface CoordenadaSugestaoRecord {
+  id: string
+  escola_id: string
+  lat: number
+  lng: number
+  precisao?: number
+  status: CoordenadaSugestaoStatus
+  rota_id?: string
+  ciclo_id?: string
+  chamada_id?: string
+  motorista_id?: string
+  despacho_id?: string
+  registro_id?: string
+  revisado_por?: string
+  revisado_em?: string
+  motivo_recusa?: string
+  observacao?: string
+  origem?: string
+  entregue_em?: string
+  expand?: {
+    escola_id?: EscolaRecord
+    rota_id?: RotaRecord
+    ciclo_id?: CicloRecord
+    chamada_id?: ChamadaRecord
+    motorista_id?: MotoristaRecord
+    despacho_id?: RotaDespachoRecord
+    registro_id?: EntregaRegistroRecord
+    revisado_por?: UserRecord
+  }
+  created?: string
+  updated?: string
+}
+
 export type EscolaTipo = 'CMEI' | 'CRECHE' | 'INTEGRAL' | 'FUNDAMENTAL' | 'Médio' | 'Técnico'
 
 export type DependenciaAdministrativa = 'Federal' | 'Estadual' | 'Municipal' | 'Privada'

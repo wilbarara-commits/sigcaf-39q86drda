@@ -13,6 +13,9 @@ export interface FilaEntregaItem {
   assinatura?: string
   observacao?: string
   foto?: string // dataURL (base64) compactada para resiliência offline
+  lat_sugerida?: number // Coordenada GPS capturada para sugestão (revisão humana)
+  lng_sugerida?: number
+  precisao_gps?: number
   status_sync: 'pendente' | 'sincronizado' | 'erro'
   tentativas: number
   criado_em: string

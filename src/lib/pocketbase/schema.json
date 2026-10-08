@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-08T00:23:04.305Z",
+  "generatedAt": "2026-10-08T01:12:30.782Z",
   "collections": [
     {
       "name": "users",
@@ -2006,6 +2006,145 @@
         {
           "name": "client_uid",
           "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": []
+    },
+    {
+      "name": "coordenada_sugestoes",
+      "type": "base",
+      "apiRules": {
+        "list": "",
+        "view": "",
+        "create": "",
+        "update": "",
+        "delete": "@request.auth.id != \"\""
+      },
+      "fields": [
+        {
+          "name": "escola_id",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "escolas"
+        },
+        {
+          "name": "lat",
+          "type": "number",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "lng",
+          "type": "number",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "precisao",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "status",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": ["pendente", "aprovada", "recusada"]
+        },
+        {
+          "name": "rota_id",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "rotas"
+        },
+        {
+          "name": "ciclo_id",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "ciclos"
+        },
+        {
+          "name": "chamada_id",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "chamadas"
+        },
+        {
+          "name": "motorista_id",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "motoristas"
+        },
+        {
+          "name": "despacho_id",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "rota_despachos"
+        },
+        {
+          "name": "registro_id",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "entrega_registros"
+        },
+        {
+          "name": "revisado_por",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "users"
+        },
+        {
+          "name": "revisado_em",
+          "type": "date",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "motivo_recusa",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "observacao",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "origem",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "entregue_em",
+          "type": "date",
           "required": false,
           "system": false
         },

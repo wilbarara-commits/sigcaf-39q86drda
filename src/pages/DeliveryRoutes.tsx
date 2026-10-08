@@ -90,6 +90,8 @@ import {
 import { RouteOptimizationDialog } from '@/components/RouteOptimizationDialog'
 import { MotoristasManagerDialog } from '@/components/MotoristasManagerDialog'
 import { DespachoMotoristaModal } from '@/components/DespachoMotoristaModal'
+import { SchoolCoordsReviewDialog } from '@/components/SchoolCoordsReviewDialog'
+import { coordenadaSugestoesService } from '@/services/coordenada-sugestoes'
 import { motoristasService } from '@/services/motoristas'
 import { rotaDespachosService, entregaRegistrosService } from '@/services/rota-despachos'
 import { retencaoHistoricaService } from '@/services/retencao-historica'
@@ -389,6 +391,24 @@ export default function DeliveryRoutes() {
 
   // Estado para gestão de motoristas e despacho com token/whatsapp
   const [motoristasManagerOpen, setMotoristasManagerOpen] = useState(false)
+  const [coordsReviewDialogOpen, setCoordsReviewDialogOpen] = useState(false)
+  const [pendentesSugestoesCount, setPendentesSugestoesCount] = useState<number>(0)
+
+  useEffect(() => {
+    let mounted = true
+    const carregarContagem = async () => {
+      try {
+        const count = await coordenadaSugestoesService.countPendentes()
+        if (mounted) setPendentesSugestoesCount(count)
+      } catch {
+        /* tolerante */
+      }
+    }
+    carregarContagem()
+    return () => {
+      mounted = false
+    }
+  }, [])
   const [despachoMotoristaOpen, setDespachoMotoristaOpen] = useState(false)
   const [selectedRotaForDriverModal, setSelectedRotaForDriverModal] =
     useState<RotaLogisticaRecord | null>(null)
@@ -1691,6 +1711,25 @@ export default function DeliveryRoutes() {
               </SelectContent>
             </Select>
           </div>
+
+          <Button
+            onClick={() => setCoordsReviewDialogOpen(true)}
+            variant="outline"
+            size="sm"
+            className="gap-1.5 shrink-0 text-amber-800 dark:text-amber-200 border-amber-500/50 hover:bg-amber-50 dark:hover:bg-amber-950/40"
+            title="Revisar sugestões de coordenadas GPS das escolas capturadas pelos motoristas"
+          >
+            <Navigation className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+            Revisar Coordenadas
+            {pendentesSugestoesCount > 0 && (
+              <Badge
+                variant="default"
+                className="h-4 px-1 bg-amber-600 text-white font-bold text-[10px] rounded-full animate-pulse"
+              >
+                {pendentesSugestoesCount}
+              </Badge>
+            )}
+          </Button>
 
           <Button
             onClick={() => setMotoristasManagerOpen(true)}
@@ -4146,6 +4185,21 @@ Ou apenas o nome da escola copiado do Excel/Word`}
         open={deliveryDetailsOpen}
         onOpenChange={setDeliveryDetailsOpen}
         data={selectedDeliveryDetails}
+      />
+
+      {/* MODAL: Revisão de Coordenadas Sugeridas pelo Motorista */}
+      <SchoolCoordsReviewDialog
+        open={coordsReviewDialogOpen}
+        onOpenChange={setCoordsReviewDialogOpen}
+        onApproved={async () => {
+          await refreshData()
+          try {
+            const count = await coordenadaSugestoesService.countPendentes()
+            setPendentesSugestoesCount(count)
+          } catch {
+            /* intentionally ignored */
+          }
+        }}
       />
     </div>
   )

@@ -227,9 +227,11 @@ export const MotoristaPortal: React.FC = () => {
           foto: item.foto,
           observacao: item.observacao,
           client_uid: item.client_uid,
+          lat_sugerida: item.lat_sugerida,
+          lng_sugerida: item.lng_sugerida,
+          precisao_gps: item.precisao_gps,
         })
       })
-
       const novaFila = lerFilaLocal(token)
       setFilaLocal(novaFila)
 
@@ -350,6 +352,31 @@ export const MotoristaPortal: React.FC = () => {
     const nomeResponsavelSalvar = responsavelNome.trim() || undefined
     const cpfResponsavelSalvar = cpfDigitos.length === 11 ? formatarCPF(cpfDigitos) : undefined
 
+    // Captura da coordenada GPS atual do motorista no ato de confirmar a entrega
+    // A coordenada é enviada como SUGESTÃO para revisão humana posterior pela cooperativa
+    let latGpsCapturada: number | undefined
+    let lngGpsCapturada: number | undefined
+    let precisaoGpsCapturada: number | undefined
+
+    if (typeof navigator !== 'undefined' && 'geolocation' in navigator) {
+      try {
+        const pos = await new Promise<GeolocationPosition>((resolve, reject) => {
+          navigator.geolocation.getCurrentPosition(resolve, reject, {
+            enableHighAccuracy: true,
+            timeout: 5000,
+            maximumAge: 30000,
+          })
+        })
+        if (pos?.coords) {
+          latGpsCapturada = pos.coords.latitude
+          lngGpsCapturada = pos.coords.longitude
+          precisaoGpsCapturada = pos.coords.accuracy
+        }
+      } catch (errGeo) {
+        console.warn('GPS não obtido no ato da entrega (permissão ou timeout):', errGeo)
+      }
+    }
+
     const registroItem = {
       client_uid: clientUid,
       rota_id: data.rota.id,
@@ -363,6 +390,9 @@ export const MotoristaPortal: React.FC = () => {
       assinatura: assinaturaDataUrl,
       foto: fotoDataUrl,
       observacao: observacao.trim() || undefined,
+      lat_sugerida: latGpsCapturada,
+      lng_sugerida: lngGpsCapturada,
+      precisao_gps: precisaoGpsCapturada,
       status_sync: (navigator.onLine ? 'pendente' : 'pendente') as 'pendente',
     }
 
@@ -420,6 +450,9 @@ export const MotoristaPortal: React.FC = () => {
             foto: fotoDataUrl,
             observacao: observacao.trim() || undefined,
             client_uid: clientUid,
+            lat_sugerida: latGpsCapturada,
+            lng_sugerida: lngGpsCapturada,
+            precisao_gps: precisaoGpsCapturada,
           })
           // Atualiza a fila marcando sincronizado
           const f = lerFilaLocal(token).map((it) =>
