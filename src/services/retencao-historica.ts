@@ -342,4 +342,129 @@ export const retencaoHistoricaService = {
       return []
     }
   },
+
+  /**
+   * Busca o snapshot mais relevante de uma rota em um ciclo específico.
+   * Ordem de precedência: 'fechamento' -> 'despacho' -> 'edicao' -> mais recente.
+   */
+  async getSnapshotByRotaECiclo(
+    rotaId: string,
+    cicloId: string,
+  ): Promise<RotaSnapshotRecord | null> {
+    if (!rotaId || !cicloId) return null
+    try {
+      const list = await pb.collection('rota_snapshots').getFullList<RotaSnapshotRecord>({
+        filter: `rota_id = "${rotaId}" && ciclo_id = "${cicloId}"`,
+        sort: '-snapshot_em,-created',
+      })
+      if (list.length === 0) return null
+
+      // Procura primeiro fechamento, depois despacho, depois edicao/mais recente
+      const snapFechamento = list.find((s) => s.versao_evento === 'fechamento')
+      if (snapFechamento) return snapFechamento
+
+      const snapDespacho = list.find((s) => s.versao_evento === 'despacho')
+      if (snapDespacho) return snapDespacho
+
+      return list[0]
+    } catch (err) {
+      console.warn('Aviso ao consultar snapshot de rota por ciclo:', err)
+      return null
+    }
+  },
+
+  /**
+   * Busca todos os snapshots de rotas de um ciclo específico.
+   * Agrupa e retorna um Map de rotaId -> RotaSnapshotRecord com a versão mais qualificada.
+   */
+  async getSnapshotsByCiclo(cicloId: string): Promise<Map<string, RotaSnapshotRecord>> {
+    const map = new Map<string, RotaSnapshotRecord>()
+    if (!cicloId) return map
+    try {
+      const list = await pb.collection('rota_snapshots').getFullList<RotaSnapshotRecord>({
+        filter: `ciclo_id = "${cicloId}"`,
+        sort: '-snapshot_em,-created',
+      })
+
+      // Ordenar por prioridade de versão de evento para garantir a mais fidedigna
+      const getPriority = (versao?: string) => {
+        if (versao === 'fechamento') return 3
+        if (versao === 'despacho') return 2
+        if (versao === 'edicao') return 1
+        return 0
+      }
+
+      for (const snap of list) {
+        if (!snap.rota_id) continue
+        const atual = map.get(snap.rota_id)
+        if (!atual || getPriority(snap.versao_evento) > getPriority(atual.versao_evento)) {
+          map.set(snap.rota_id, snap)
+        }
+      }
+    } catch (err) {
+      console.warn('Aviso ao consultar snapshots do ciclo:', err)
+    }
+    return map
+  },
+
+  /**
+   * Salva a composição e ordem das paradas de uma rota estritamente para um ciclo_id (versaoEvento 'edicao').
+   * Idempotente e não-bloqueante: atualiza snapshot existente daquele ciclo ou cria um novo com versao_evento 'edicao'.
+   */
+  async salvarComposicaoCiclo(input: {
+    rotaId: string
+    cicloId: string
+    chamadaId?: string
+    paradas: ParadaSnapshotItem[]
+    rotaNome?: string
+    observacao?: string
+  }): Promise<RotaSnapshotRecord | null> {
+    if (!input.rotaId || !input.cicloId) return null
+    try {
+      const nowIso = new Date().toISOString()
+      const paradasJson = JSON.stringify(input.paradas)
+      const totalParadas = input.paradas.length
+
+      // Verificar se já existe um snapshot para este par (rota_id, ciclo_id)
+      const snapExistentes = await pb
+        .collection('rota_snapshots')
+        .getList<RotaSnapshotRecord>(1, 1, {
+          filter: `rota_id = "${input.rotaId}" && ciclo_id = "${input.cicloId}" && (versao_evento = "edicao" || versao_evento = "manual")`,
+          sort: '-snapshot_em,-created',
+        })
+
+      let rotaNome = input.rotaNome || ''
+      if (!rotaNome) {
+        try {
+          const rRec = await pb.collection('rotas').getOne(input.rotaId)
+          rotaNome = rRec.nome || 'Rota'
+        } catch {
+          rotaNome = 'Rota'
+        }
+      }
+
+      const payload: Record<string, any> = {
+        rota_id: input.rotaId,
+        ciclo_id: input.cicloId,
+        chamada_id: input.chamadaId || undefined,
+        rota_nome: rotaNome,
+        versao_evento: 'edicao',
+        total_paradas: totalParadas,
+        paradas_snapshot: paradasJson,
+        snapshot_em: nowIso,
+        observacao: input.observacao || 'Ordem de paradas personalizada para o ciclo',
+      }
+
+      if (snapExistentes.items.length > 0) {
+        return await pb
+          .collection('rota_snapshots')
+          .update<RotaSnapshotRecord>(snapExistentes.items[0].id, payload)
+      } else {
+        return await pb.collection('rota_snapshots').create<RotaSnapshotRecord>(payload)
+      }
+    } catch (err) {
+      console.warn('Aviso não-bloqueante ao salvar composição da rota por ciclo:', err)
+      return null
+    }
+  },
 }

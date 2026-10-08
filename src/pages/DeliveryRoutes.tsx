@@ -75,6 +75,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import {
   getCicloAtivo,
   formatFaseAmigavel,
+  isCicloTerminal,
   isCicloNaoTerminal,
   extractCicloCodigo,
 } from '@/lib/cicloUtils'
@@ -410,7 +411,13 @@ export default function DeliveryRoutes() {
   const [selectedDeliveryDetails, setSelectedDeliveryDetails] =
     useState<DeliveryDetailsData | null>(null)
 
-  // Carregar lista de motoristas, despachos ativos e comprovantes/registros do ciclo selecionado
+  // Mapa de snapshots do ciclo selecionado por rotaId (rota_snapshots)
+  // Permite exibir a composição e ordem das paradas estritamente daquele ciclo
+  const [cicloSnapshotsMap, setCicloSnapshotsMap] = useState<Map<string, RotaSnapshotRecord>>(
+    new Map(),
+  )
+
+  // Carregar lista de motoristas, despachos ativos, comprovantes/registros e snapshots do ciclo selecionado
   const carregarMotoristasEDespachos = async () => {
     try {
       const motList = await motoristasService.getAll()
@@ -421,7 +428,7 @@ export default function DeliveryRoutes() {
       const mapComps: Record<string, EntregaComprovanteRecord[]> = {}
       const cicloFiltroId = selectedCiclo?.id
 
-      // 1. Carregar comprovantes permanentes de retenção (entrega_comprovantes) do ciclo selecionado
+      // 1. Carregar comprovantes permanentes de retenção (entrega_comprovantes) e snapshots do ciclo selecionado
       if (cicloFiltroId) {
         try {
           const compsCiclo = await retencaoHistoricaService.getComprovantesByCiclo(cicloFiltroId)
@@ -434,6 +441,15 @@ export default function DeliveryRoutes() {
         } catch (errComp) {
           console.warn('Erro ao carregar comprovantes do ciclo:', errComp)
         }
+
+        try {
+          const snapsMap = await retencaoHistoricaService.getSnapshotsByCiclo(cicloFiltroId)
+          setCicloSnapshotsMap(snapsMap)
+        } catch (errSnap) {
+          console.warn('Erro ao carregar snapshots do ciclo:', errSnap)
+        }
+      } else {
+        setCicloSnapshotsMap(new Map())
       }
 
       for (const r of rotasLogisticas) {
@@ -647,20 +663,50 @@ export default function DeliveryRoutes() {
   const chamadaOrders = chamadaCicloOrders
 
   // Detalhes completos por rota logística (respeitando a dupla Chamada + Ciclo)
+  // Ordem de paradas e composição isoladas por ciclo: se o ciclo selecionado possui snapshot gravado
+  // (fechamento, despacho ou edicao), a ordem e as escolas exibidas vêm do snapshot histórico daquele ciclo.
+  // Caso contrário, usa paradas_rota como default/referência para o ciclo corrente/novo.
   const rotasLogisticasDetalhes = useMemo(() => {
     return filteredRotasLogisticas.map((rota) => {
       const chamadaObj = chamadas.find((ch) => ch.id === rota.chamada_id)
       const contrato = contracts.find((c) => c.id === rota.contrato_id)
 
-      // Paradas cadastradas no banco (collection paradas_rota) - estrutura da rota baseada em escolas
+      // Verificar se há snapshot gravado para esta rota no ciclo selecionado
+      const snapCiclo = selectedCiclo?.id ? cicloSnapshotsMap.get(rota.id) : null
+      let paradasSnapshotParsed: Array<{
+        escola_id: string
+        escola_nome?: string
+        ordem?: number
+        endereco?: string
+        contrato?: string
+      }> | null = null
+
+      if (snapCiclo?.paradas_snapshot) {
+        try {
+          paradasSnapshotParsed =
+            typeof snapCiclo.paradas_snapshot === 'string'
+              ? JSON.parse(snapCiclo.paradas_snapshot)
+              : snapCiclo.paradas_snapshot
+        } catch {
+          paradasSnapshotParsed = null
+        }
+      }
+
+      // Paradas cadastradas no banco (collection paradas_rota) - referência global/default
       const paradasCadastradas = paradasRota
         .filter((p) => (p.rota_id || (p as any).rota_logistica_id) === rota.id)
         .sort((a, b) => a.ordem - b.ordem)
 
-      const escolaIdsDaRota = new Set(paradasCadastradas.map((p) => p.escola_id))
+      // Se temos snapshot para o ciclo selecionado, respeitamos estritamente as escolas e a ordem daquele snapshot
+      const escolaIdsDaRota =
+        paradasSnapshotParsed &&
+        Array.isArray(paradasSnapshotParsed) &&
+        paradasSnapshotParsed.length > 0
+          ? new Set(paradasSnapshotParsed.map((p) => p.escola_id).filter(Boolean))
+          : new Set(paradasCadastradas.map((p) => p.escola_id))
 
       // Pedidos desta rota: filtrados pelo ciclo selecionado (chamadaCicloOrders)
-      // herdados da escola (paradas_rota) OU com rotaLogisticaId/rotaId definido
+      // herdados da escola OU com rotaLogisticaId/rotaId definido
       const pedidosDaRota = chamadaCicloOrders.filter(
         (o) =>
           escolaIdsDaRota.has(o.schoolId) || o.rotaLogisticaId === rota.id || o.rotaId === rota.id,
@@ -684,25 +730,58 @@ export default function DeliveryRoutes() {
         longitude?: number | string | null
       }> = []
 
-      paradasCadastradas.forEach((p, idx) => {
-        const sch = schools.find((s) => s.id === p.escola_id)
-        const peds = pedidosDaRota.filter(
-          (o) => o.schoolId === p.escola_id && o.status !== 'Cancelado',
+      if (
+        paradasSnapshotParsed &&
+        Array.isArray(paradasSnapshotParsed) &&
+        paradasSnapshotParsed.length > 0
+      ) {
+        // Ordenar paradas conforme o snapshot do ciclo selecionado
+        const sortedSnapshotItems = [...paradasSnapshotParsed].sort(
+          (a, b) => (Number(a.ordem) || 0) - (Number(b.ordem) || 0),
         )
-        const contratoOrigem = escolaContratoOrigemMap.get(p.escola_id)
 
-        paradasOrdenadas.push({
-          escolaId: p.escola_id,
-          nome: sch?.name || 'Escola',
-          endereco: sch?.address || '',
-          alunos: sch?.alunos,
-          ordem: idx + 1,
-          contratoNumero: contratoOrigem?.contratoNumero,
-          pedidos: peds,
-          latitude: sch?.latitude,
-          longitude: sch?.longitude,
+        sortedSnapshotItems.forEach((sp, idx) => {
+          if (!sp.escola_id) return
+          const sch = schools.find((s) => s.id === sp.escola_id)
+          const peds = pedidosDaRota.filter(
+            (o) => o.schoolId === sp.escola_id && o.status !== 'Cancelado',
+          )
+          const contratoOrigem = escolaContratoOrigemMap.get(sp.escola_id)
+
+          paradasOrdenadas.push({
+            escolaId: sp.escola_id,
+            nome: sp.escola_nome || sch?.name || 'Escola',
+            endereco: sp.endereco || sch?.address || '',
+            alunos: sch?.alunos,
+            ordem: idx + 1,
+            contratoNumero: sp.contrato || contratoOrigem?.contratoNumero,
+            pedidos: peds,
+            latitude: sch?.latitude,
+            longitude: sch?.longitude,
+          })
         })
-      })
+      } else {
+        // Fallback para a ordem default de paradas_rota
+        paradasCadastradas.forEach((p, idx) => {
+          const sch = schools.find((s) => s.id === p.escola_id)
+          const peds = pedidosDaRota.filter(
+            (o) => o.schoolId === p.escola_id && o.status !== 'Cancelado',
+          )
+          const contratoOrigem = escolaContratoOrigemMap.get(p.escola_id)
+
+          paradasOrdenadas.push({
+            escolaId: p.escola_id,
+            nome: sch?.name || 'Escola',
+            endereco: sch?.address || '',
+            alunos: sch?.alunos,
+            ordem: idx + 1,
+            contratoNumero: contratoOrigem?.contratoNumero,
+            pedidos: peds,
+            latitude: sch?.latitude,
+            longitude: sch?.longitude,
+          })
+        })
+      }
 
       // Último despacho realizado desta rota (respeitando o ciclo selecionado quando houver)
       const ultimoDespacho = despachos
@@ -760,6 +839,8 @@ export default function DeliveryRoutes() {
     paradasRota,
     despachos,
     escolaContratoOrigemMap,
+    cicloSnapshotsMap,
+    selectedCiclo?.id,
   ])
 
   // Escolas vinculadas à Chamada (em qualquer dos seus contratos) que AINDA NÃO têm rota logística atribuída
