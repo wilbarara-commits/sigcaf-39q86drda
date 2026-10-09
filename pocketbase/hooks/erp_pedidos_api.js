@@ -205,7 +205,15 @@ routerAdd('GET', '/backend/v1/erp/pedidos', (e) => {
       LEFT JOIN ciclos ci ON p.ciclo_id = ci.id
       LEFT JOIN chamadas ch ON ci.chamada_id = ch.id
       LEFT JOIN rotas r ON p.rota_id = r.id
-      LEFT JOIN contratos c ON r.contrato_id = c.id
+      LEFT JOIN contratos c_rota ON r.contrato_id = c_rota.id
+      LEFT JOIN (
+        SELECT ce_sub.escola_id, c_sub.chamada_id, MIN(c_sub.id) as contrato_id
+        FROM contrato_escolas ce_sub
+        INNER JOIN contratos c_sub ON ce_sub.contrato_id = c_sub.id
+        WHERE (ce_sub.encerrado_em IS NULL OR ce_sub.encerrado_em = '')
+        GROUP BY ce_sub.escola_id, c_sub.chamada_id
+      ) ce_match ON ce_match.escola_id = p.escola_id AND ce_match.chamada_id = ci.chamada_id
+      LEFT JOIN contratos c_vinc ON ce_match.contrato_id = c_vinc.id
       ${whereSql}
     `
     const countQuery = $app.db().newQuery(countSql)
@@ -221,6 +229,9 @@ routerAdd('GET', '/backend/v1/erp/pedidos', (e) => {
     const offset = (page - 1) * perPage
 
     // 3.2 Busca dos pedidos da página atual
+    // Resolução do contrato:
+    // Fonte primária: contrato_escolas casando escola_id = p.escola_id e chamada_id do ciclo (ci.chamada_id = contratos.chamada_id)
+    // Fallback secundário: contrato associado diretamente à rota do pedido (r.contrato_id)
     // Usamos COALESCE em todas as colunas de joins externos e campos nullable para que nunca
     // retornem NULL ao scanner SQL do PocketBase/Goja (Scan error converting NULL to string)
     const selectSql = `
@@ -250,8 +261,8 @@ routerAdd('GET', '/backend/v1/erp/pedidos', (e) => {
         COALESCE(ch.chamada, '') as chamada_numero,
         COALESCE(ch.programa, '') as chamada_programa,
         COALESCE(ch.dependencia_administrativa, '') as chamada_dependencia,
-        COALESCE(c.id, '') as contrato_id,
-        COALESCE(c.numero, '') as contrato_numero,
+        COALESCE(c_vinc.id, c_rota.id, '') as contrato_id,
+        COALESCE(c_vinc.numero, c_rota.numero, '') as contrato_numero,
         COALESCE(r.id, '') as rota_id,
         COALESCE(r.nome, '') as rota_nome
       FROM pedidos p
@@ -259,7 +270,15 @@ routerAdd('GET', '/backend/v1/erp/pedidos', (e) => {
       LEFT JOIN ciclos ci ON p.ciclo_id = ci.id
       LEFT JOIN chamadas ch ON ci.chamada_id = ch.id
       LEFT JOIN rotas r ON p.rota_id = r.id
-      LEFT JOIN contratos c ON r.contrato_id = c.id
+      LEFT JOIN contratos c_rota ON r.contrato_id = c_rota.id
+      LEFT JOIN (
+        SELECT ce_sub.escola_id, c_sub.chamada_id, MIN(c_sub.id) as contrato_id
+        FROM contrato_escolas ce_sub
+        INNER JOIN contratos c_sub ON ce_sub.contrato_id = c_sub.id
+        WHERE (ce_sub.encerrado_em IS NULL OR ce_sub.encerrado_em = '')
+        GROUP BY ce_sub.escola_id, c_sub.chamada_id
+      ) ce_match ON ce_match.escola_id = p.escola_id AND ce_match.chamada_id = ci.chamada_id
+      LEFT JOIN contratos c_vinc ON ce_match.contrato_id = c_vinc.id
       ${whereSql}
       ORDER BY p.created DESC
       LIMIT {:limit} OFFSET {:offset}

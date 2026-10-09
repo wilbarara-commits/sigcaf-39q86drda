@@ -406,7 +406,8 @@ const MODULES: ModuleSpec[] = [
       'Autenticação e Proteção por Chave de API: Protegido por chave secreta validada no header HTTP (X-API-Key: <chave> ou Authorization: Bearer <chave>). A chave pode vir da variável de ambiente do servidor (process.env.ERP_API_KEY) OU do registro interno ERP_API_KEY na coleção config_sistema, com prioridade máxima para a variável de ambiente. Requisição sem chave ou com chave incorreta retorna HTTP 401 Unauthorized com JSON limpo, sem vazar detalhes internos.',
       'Gestão Segura da Chave & Coleção config_sistema: A chave é gerenciada de forma estritamente interna no servidor ou via coleção config_sistema (totalmente bloqueada contra leitura/gravação na REST API do app para clientes e anônimos, acessível exclusivamente pelo servidor/superuser). A chave JAMAIS é hardcodada no front-end nem exibida publicamente em qualquer tela ou componente da interface do sistema.',
       'Identificação Cadastral da Escola (sem casamento por nome): Cada pedido expõe os dados cadastrais da escola vinculada: ID único no banco de dados (escola.id), Nome oficial, Código INEP, Tipo, Dependência Administrativa, Bairro e Endereço. Respeita a regra fundamental do sistema: nunca casar escola por nome.',
-      'Metadados de Chamada, Ciclo, Contrato e Rota (com Tratamento Robusto de Nullables): Expõe o ID e número da Chamada Pública, Programa e Dependência; ID, nome, número da semana e ano do Ciclo Operacional; ID e número do Contrato de vínculo; e ID e nome da Rota Logística. Quando um pedido não possui contrato, rota, chamada ou ciclo vinculado, o scanner SQL utiliza COALESCE para evitar erros de conversão de NULL no driver do banco e o JSON mapeia o objeto correspondente como null legítimo (ex.: "contrato": null, "rota": null), facilitando o consumo no Power BI e ERP.',
+      'Resolução Canônica do Contrato pelo Vínculo Escola×Contrato da Chamada (contrato_escolas): O contrato do pedido é resolvido prioritariamente a partir da tabela de vínculos `contrato_escolas`, casando `contrato_escolas.escola_id = pedidos.escola_id` com o contrato ativo (`contratos.chamada_id = ciclos.chamada_id`), refletindo a modelagem operacional onde rotas atendem escolas de múltiplos contratos e o vínculo real reside na escola. Se houver mais de um vínculo ativo, adota agregação determinística (`MIN(id)`). O campo `rotas.contrato_id` permanece estritamente como fallback quando não houver registro em `contrato_escolas`. Toda a blindagem de `COALESCE` é mantida contra retornos nulos.',
+      'Metadados de Chamada, Ciclo, Contrato e Rota (com Tratamento Robusto de Nullables): Expõe o ID e número da Chamada Pública, Programa e Dependência; ID, nome, número da semana e ano do Ciclo Operacional; ID e número do Contrato de vínculo (resolvido por contrato_escolas com fallback para rotas.contrato_id); e ID e nome da Rota Logística. Quando um pedido não possui contrato, rota, chamada ou ciclo vinculado, o scanner SQL utiliza COALESCE para evitar erros de conversão de NULL no driver do banco e o JSON mapeia o objeto correspondente como null legítimo (ex.: "contrato": null, "rota": null), viabilizando matrizes analíticas completas (Chamada → Ciclo → Contrato → Escola) no Power BI / Power Query.',
       'Itens do Pedido com Regra de Nome no Contrato e AKA Separado: Cada item do pedido expõe o Nome do Produto (apenas a parte antes da vírgula do Nome no Contrato), campo separado "aka" (apelido/referência interna para que o ERP reconcilie eventuais divergências de nomenclatura), quantidade, unidade de medida, preço unitário acordado e total do item.',
       'Total Consolidado Canônico do Pedido: O campo total_consolidado utiliza prioritariamente o valor canônico gravado no pedido (campo total ou validação canônica que alimenta o Relatório Mensal e Relatórios), recorrendo ao cálculo por soma dos itens estritamente como fallback quando o total gravado não existir. Itens duplicados por camadas de preço são deduplicados estritamente por ID para blindar contra qualquer receita dobrada.',
       'Filtro de Ciclo sem Curinga: O filtro ?ciclo=... aplica casamento exato por ID e por nome ("40/2026" casa com "Ciclo 40/2026", número isolado "40" casa com prefixo delimitado), sanitizando e bloqueando curingas SQL arbitrários (% e _) para prevenir bypass e vazamento amplo de dados.',
@@ -872,6 +873,71 @@ export function Requirements() {
       {/* 7. Registro de Manutenção e Limpeza de Dados */}
       <SectionTitle>7. Registro de Manutenção & Higienização do Banco de Dados</SectionTitle>
       <div className="space-y-4">
+        {/* Release v0.0.238: Resolução do Contrato do Pedido por contrato_escolas no Hook ERP de Faturamento */}
+        <div className="rounded-lg border border-border bg-card p-5 space-y-4">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="text-primary border-primary/30">
+                Release v0.0.238
+              </Badge>
+              <span className="font-semibold text-foreground">
+                0.0.238: Resolução do Contrato do Pedido por contrato_escolas no Hook ERP de
+                Faturamento
+              </span>
+            </div>
+            <span className="text-xs text-muted-foreground">Consolidado (v0.0.238)</span>
+          </div>
+          <p className="text-sm text-foreground/90 leading-relaxed">
+            Ajuste na consulta SQL do endpoint REST de integração ERP / Power BI (
+            <code>GET /backend/v1/erp/pedidos</code> em{' '}
+            <code>pocketbase/hooks/erp_pedidos_api.js</code>
+            ): substituição da dependência direta de <code>rotas.contrato_id</code> pela resolução
+            canônica através da tabela <code>contrato_escolas</code>, casando a escola do pedido com
+            o contrato correspondente da chamada do ciclo, viabilizando o preenchimento da coluna
+            Contrato na matriz analítica (Chamada → Ciclo → Contrato → Escola) do Power BI.
+          </p>
+          <div className="grid sm:grid-cols-2 gap-4 text-sm">
+            <div className="rounded-md border border-border/60 bg-muted/20 p-3 space-y-1.5">
+              <span className="font-medium text-primary">
+                1. Junção Canônica via contrato_escolas:
+              </span>
+              <ul className="space-y-1 text-xs text-muted-foreground">
+                <li>
+                  • Vínculo resolvido por subconsulta agregada agrupada por <code>escola_id</code> e{' '}
+                  <code>chamada_id</code> com <code>MIN(contrato_id)</code> em vínculos não
+                  encerrados.
+                </li>
+                <li>
+                  • Casamento exato com <code>pedidos.escola_id</code> e{' '}
+                  <code>ciclos.chamada_id</code>, refletindo que rotas atendem múltiplos contratos.
+                </li>
+                <li>
+                  • <code>rotas.contrato_id</code> preservado estritamente como fallback secundário.
+                </li>
+              </ul>
+            </div>
+            <div className="rounded-md border border-primary/30 bg-primary/5 p-3 space-y-1.5">
+              <span className="font-medium text-primary">
+                2. Blindagem e Compatibilidade Power BI:
+              </span>
+              <ul className="space-y-1 text-xs text-foreground/80">
+                <li>
+                  • Blindagem integral com <code>COALESCE</code> preservada tanto para o ID quanto
+                  para o número do contrato.
+                </li>
+                <li>
+                  • Resposta JSON intacta: objeto <code>contrato</code> com <code>id</code> e{' '}
+                  <code>numero</code>, ou <code>null</code> legítimo quando ausente.
+                </li>
+                <li>
+                  • Contagem total da paginação, autenticação timing-safe, total canônico e filtros
+                  mantidos 100% inalterados.
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
         {/* Release v0.0.237: Correção de Scan Error em Colunas Nullable no Hook ERP de Faturamento */}
         <div className="rounded-lg border border-border bg-card p-5 space-y-4">
           <div className="flex items-center justify-between flex-wrap gap-2">
