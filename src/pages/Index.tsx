@@ -206,13 +206,14 @@ export default function Index() {
     }
   }, [chamadasAtivas, activeCiclosList])
 
-  // Métricas enriquecidas por ciclo (pedidos, escolas atendidas, volume e valor)
+  // Métricas enriquecidas por ciclo (pedidos, escolas com pedidos, entregas concluídas, volume e valor)
   const cicloMetricsMap = useMemo(() => {
     const map = new Map<
       string,
       {
         pedidosCount: number
         escolasCount: number
+        entregasConcluidasCount: number
         volumeTotal: number
         valorTotal: number
       }
@@ -221,6 +222,10 @@ export default function Index() {
     for (const c of activeCiclosList) {
       const cOrders = orders.filter((o) => o.cicloId === c.id && o.status !== 'Cancelado')
       const escolasIds = new Set(cOrders.map((o) => o.schoolId))
+      // Escolas efetivamente com status "Entregue" NO ciclo (deduplicadas por escola_id)
+      const escolasEntreguesIds = new Set(
+        cOrders.filter((o) => o.status === 'Entregue').map((o) => o.schoolId),
+      )
       const volume = cOrders.reduce(
         (acc, o) => acc + (o.items || []).reduce((sum, it) => sum + (Number(it.quantity) || 0), 0),
         0,
@@ -230,6 +235,7 @@ export default function Index() {
       map.set(c.id, {
         pedidosCount: cOrders.length,
         escolasCount: escolasIds.size,
+        entregasConcluidasCount: escolasEntreguesIds.size,
         volumeTotal: volume,
         valorTotal: valor,
       })
@@ -489,6 +495,7 @@ export default function Index() {
               const metricsCiclo = cicloMetricsMap.get(ciclo.id) || {
                 pedidosCount: 0,
                 escolasCount: 0,
+                entregasConcluidasCount: 0,
                 volumeTotal: 0,
                 valorTotal: 0,
               }
@@ -534,8 +541,8 @@ export default function Index() {
                   </CardHeader>
 
                   <CardContent className="p-4 pt-2 space-y-3">
-                    {/* Indicadores do Ciclo: Pedidos, Escolas, Volume, Valor */}
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 border-t">
+                    {/* Indicadores do Ciclo: Pedidos, Escolas com Pedidos, Entregas Concluídas, Volume, Valor */}
+                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 pt-2 border-t">
                       <div className="bg-muted/40 rounded p-2 text-center">
                         <span className="text-[10px] uppercase font-semibold text-muted-foreground block">
                           Pedidos
@@ -545,11 +552,30 @@ export default function Index() {
                         </span>
                       </div>
                       <div className="bg-muted/40 rounded p-2 text-center">
-                        <span className="text-[10px] uppercase font-semibold text-muted-foreground block">
-                          Escolas Atendidas
+                        <span
+                          className="text-[10px] uppercase font-semibold text-muted-foreground block truncate"
+                          title="Escolas com Pedidos"
+                        >
+                          Escolas com Pedidos
                         </span>
-                        <span className="text-lg font-bold text-primary">
+                        <span className="text-lg font-bold text-foreground">
                           {metricsCiclo.escolasCount}
+                        </span>
+                      </div>
+                      <div className="bg-muted/40 rounded p-2 text-center">
+                        <span
+                          className="text-[10px] uppercase font-semibold text-muted-foreground block truncate"
+                          title="Entregas Concluídas"
+                        >
+                          Entregas Concluídas
+                        </span>
+                        <span
+                          className={`text-lg font-bold ${metricsCiclo.entregasConcluidasCount > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'}`}
+                        >
+                          {metricsCiclo.entregasConcluidasCount}{' '}
+                          <span className="text-xs font-normal text-muted-foreground">
+                            de {metricsCiclo.escolasCount}
+                          </span>
                         </span>
                       </div>
                       <div className="bg-muted/40 rounded p-2 text-center">
@@ -562,7 +588,7 @@ export default function Index() {
                             : '0'}
                         </span>
                       </div>
-                      <div className="bg-muted/40 rounded p-2 text-center">
+                      <div className="bg-muted/40 rounded p-2 text-center col-span-2 sm:col-span-1">
                         <span className="text-[10px] uppercase font-semibold text-muted-foreground block">
                           Valor Previsto
                         </span>

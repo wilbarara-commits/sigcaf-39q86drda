@@ -15,6 +15,7 @@ import {
 } from 'lucide-react'
 import { useApp } from '@/context/app-context'
 import { rotaDespachosService } from '@/services/rota-despachos'
+import { getCicloAtivo } from '@/lib/cicloUtils'
 import type { RotaDespachoRecord } from '@/lib/types'
 
 /**
@@ -56,6 +57,8 @@ export function EntregasEmAndamentoWidget() {
     ultimoEventoEntrega,
     chamadas,
     ciclos,
+    cicloCorrente,
+    activeCiclo,
   } = useApp()
 
   // Mapa de despachos ativos da collection rota_despachos por rota_id
@@ -79,7 +82,19 @@ export function EntregasEmAndamentoWidget() {
       try {
         const map: Record<string, RotaDespachoRecord> = {}
         for (const rota of rotasLogisticas) {
-          const desp = await rotaDespachosService.getAtivoByRota(rota.id)
+          // Resolver ciclo alvo da rota para evitar vazamento histórico entre ciclos
+          const rotaChamadaId = rota.chamada_id
+          const cicloAlvo =
+            (rotaChamadaId ? getCicloAtivo(ciclos, rotaChamadaId) : null) ||
+            (cicloCorrente?.cicloId ? ciclos.find((c) => c.id === cicloCorrente.cicloId) : null) ||
+            activeCiclo ||
+            null
+
+          const cicloDatas = cicloAlvo
+            ? { data_inicio: cicloAlvo.data_inicio, data_fim: cicloAlvo.data_fim }
+            : undefined
+
+          const desp = await rotaDespachosService.getAtivoByRota(rota.id, cicloAlvo?.id, cicloDatas)
           if (desp) {
             map[rota.id] = desp
           }
@@ -127,8 +142,7 @@ export function EntregasEmAndamentoWidget() {
       isMounted = false
       unsub()
     }
-  }, [rotasLogisticas])
-
+  }, [rotasLogisticas, ciclos, cicloCorrente?.cicloId, activeCiclo?.id])
   // Identifica rotas que estão em andamento:
   // 1. Possui despacho ativo em rota_despachos (via rotaDespachosService.getAtivoByRota)
   // 2. OU possui despacho ativo com status 'Em Rota' em despachos
@@ -238,8 +252,15 @@ export function EntregasEmAndamentoWidget() {
           // 1. Identificação: Nome/código da rota, chamada, ciclo e motorista
           const chamadaObj =
             chamadas.find((ch) => ch.id === (despachoAtivo?.chamada_id || rota.chamada_id)) || null
+          // Resolução estrita do ciclo da rota: despacho ativo -> ciclo ativo da chamada da rota -> ciclo corrente -> activeCiclo
           const cicloObj =
-            ciclos.find((c) => c.id === (despachoAtivo?.ciclo_id || (rota as any).ciclo_id)) || null
+            (despachoAtivo?.ciclo_id
+              ? ciclos.find((c) => c.id === despachoAtivo.ciclo_id)
+              : null) ||
+            (rota.chamada_id ? getCicloAtivo(ciclos, rota.chamada_id) : null) ||
+            (cicloCorrente?.cicloId ? ciclos.find((c) => c.id === cicloCorrente.cicloId) : null) ||
+            activeCiclo ||
+            null
           const motoristaNome =
             despachoAtivo?.expand?.motorista_id?.nome ||
             despachoAtivo?.motorista_id ||
@@ -255,19 +276,28 @@ export function EntregasEmAndamentoWidget() {
 
           const totalParadas = paradasCadastradas.length
 
-          // Registros de entrega da rota reativamente via contexto global
-          const registrosDaRota = getEntregaRegistrosDaRota(rota.id)
+          // 3. Registros de entrega da rota estritamente isolados pelo ciclo da rota
+          const cicloIdRota = cicloObj?.id || despachoAtivo?.ciclo_id
+          const registrosDaRota = cicloIdRota ? getEntregaRegistrosDaRota(rota.id, cicloIdRota) : []
+
+          // Pedidos da rota no ciclo resolvido
+          const pedidosDaRotaCiclo = orders.filter(
+            (o) =>
+              (o.rotaLogisticaId === rota.id || o.rotaId === rota.id) &&
+              (!cicloIdRota || o.cicloId === cicloIdRota),
+          )
+          const pedidosEmRotaNoCiclo = pedidosDaRotaCiclo.filter((o) => o.status === 'Em Rota')
 
           // Conjunto de escolas com entrega confirmada (confirmado_em preenchido, deduplicado por escola_id)
           // Tolera registros sem escola_id correspondente
           const escolasEntreguesIds = new Set<string>()
           for (const reg of registrosDaRota) {
-            if (reg.escola_id && reg.confirmado_em) {
+            if (reg.escola_id && reg.confirmado_em && reg.confirmado_em.trim() !== '') {
               escolasEntreguesIds.add(reg.escola_id)
             }
           }
 
-          // X = nº de escolas da rota com registro de entrega confirmado
+          // X = nº de escolas da rota com registro de entrega confirmado no ciclo
           // Interseção com as escolas da rota para garantir que pertencem à rota
           const escolasDaRotaSet = new Set(paradasCadastradas.map((p) => p.escola_id))
           let entregasConfirmadasCount = 0
@@ -275,6 +305,16 @@ export function EntregasEmAndamentoWidget() {
             if (escolasDaRotaSet.has(escolaId)) {
               entregasConfirmadasCount++
             }
+          }
+
+          // Regra anti-vazamento de ciclo da 0.0.239:
+          // Se o ciclo tem pedidos "Em Rota" e zero entregas confirmadas no ciclo,
+          // entregasConfirmadasCount = 0 e a rota jamais é dada como concluída.
+          const temPedidosEmRotaSemEntregasCiclo =
+            pedidosEmRotaNoCiclo.length > 0 && entregasConfirmadasCount === 0
+
+          if (temPedidosEmRotaSemEntregasCiclo) {
+            entregasConfirmadasCount = 0
           }
 
           // Percentual de progresso
@@ -291,7 +331,10 @@ export function EntregasEmAndamentoWidget() {
             ? schools.find((s) => s.id === proximaParada.escola_id)
             : null
 
-          const todasConcluidas = totalParadas > 0 && entregasConfirmadasCount >= totalParadas
+          const todasConcluidas =
+            !temPedidosEmRotaSemEntregasCiclo &&
+            totalParadas > 0 &&
+            entregasConfirmadasCount >= totalParadas
 
           return (
             <Link key={rota.id} to="/rotas" className="block group focus:outline-none">

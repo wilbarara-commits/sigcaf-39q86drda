@@ -26,8 +26,10 @@ const MODULES: ModuleSpec[] = [
     route: '/ (Página Inicial)',
     goal: 'Fornecer uma visão executiva dos contratos, do ciclo operacional e do acompanhamento das entregas em tempo real.',
     details: [
-      'Métricas em cards: Pedidos Pendentes, Contratos Ativos, Entregas Hoje e Receita Entregue do Mês com % de realização.',
+      'Métricas em cards: Pedidos Pendentes, Contratos Ativos, Chamadas Ativas e Receita Entregue do Mês com % de realização.',
       'Widget "Entregas em Andamento": Acompanhamento em tempo real (alimentado por realtime/eventos no banco) das rotas em execução. Exibe identificação completa da rota (nome da rota, chamada associada, ciclo operacional, motorista responsável e crachá "Em Rota"), barra de progresso visual "X de N entregas" com percentual concluído, indicador da última sincronização em tempo relativo amigável ("há 2 min"), indicação da próxima parada a atender (primeira escola sem entrega confirmada) ou "Rota concluída" quando todas as paradas forem finalizadas. Possui estado vazio informativo quando não há rotas em trânsito e atalho de clique direto para a tela de Rotas (/rotas).',
+      'Isolamento Estrito por Ciclo no Widget de Entregas (v0.0.240): O widget resolve estritamente o ciclo ativo da rota (ou ciclo corrente) ao consultar despachos ativos (getAtivoByRota com cicloId e intervalo temporal) e registros de entrega (getEntregaRegistrosDaRota com cicloId obrigatório). Blindagem anti-vazamento de ciclos: registros históricos de ciclos anteriores não contaminam o progresso do ciclo corrente; se o ciclo possuir pedidos em rota e zero entregas confirmadas naquele ciclo, o widget fixa entregasConfirmadasCount = 0 e crachá "Em Rota", nunca declarando "Rota concluída" indevidamente.',
+      'Cards de Ciclos Operacionais Ativos no Dashboard (v0.0.240): Apresentação transparente dos indicadores do ciclo com distinção entre "Escolas com Pedidos" (número de unidades escolares demandantes cadastradas no ciclo) e "Entregas Concluídas: X de Y" (X = escolas com entrega efetivamente concluída no ciclo e Y = total de escolas com pedidos), eliminando a ambiguidade da métrica anterior "Escolas Atendidas", além de Pedidos, Volume Total e Valor Previsto.',
       'Cartão informativo de ciclo: "Ciclo ativo: XX/AAAA — Fase: ..." e aviso destacado de "N ciclo(s) pendente(s) de fechamento" quando houver ciclos não-terminais anteriores em aberto.',
       'Lista de Entregas Recentes com badges de status e feed de atividade recente.',
       'Ações rápidas: "Novo Pedido", "Emitir Atesto" e fechamento mensal com geração de relatório.',
@@ -874,6 +876,83 @@ export function Requirements() {
       {/* 7. Registro de Manutenção e Limpeza de Dados */}
       <SectionTitle>7. Registro de Manutenção & Higienização do Banco de Dados</SectionTitle>
       <div className="space-y-4">
+        {/* Release v0.0.240: Correção de Vazamento de Ciclo no Dashboard e Clareza de Escolas */}
+        <div className="rounded-lg border border-border bg-card p-5 space-y-4">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="text-primary border-primary/30">
+                Release v0.0.240
+              </Badge>
+              <span className="font-semibold text-foreground">
+                0.0.240: Isolamento por Ciclo no Dashboard (Widget de Entregas) e Distinção de
+                Escolas com Pedidos vs. Entregas Concluídas
+              </span>
+            </div>
+            <span className="text-xs text-muted-foreground">Consolidado (v0.0.240)</span>
+          </div>
+          <p className="text-sm text-foreground/90 leading-relaxed">
+            Eliminação do vazamento de ciclo no Dashboard (<code>/</code>): correção da chamada a{' '}
+            <code>getEntregaRegistrosDaRota</code> e{' '}
+            <code>rotaDespachosService.getAtivoByRota</code> no{' '}
+            <code>EntregasEmAndamentoWidget</code> para passar obrigatoriamente o{' '}
+            <code>cicloId</code> resolvido da rota, aplicando a regra anti-vazamento da 0.0.239
+            (pedidos Em Rota com zero entregas no ciclo mantêm progresso em 0 e badge &quot;Em
+            Rota&quot;, nunca &quot;Rota concluída&quot;). No card de Ciclos Ativos do Dashboard,
+            substituição do rótulo ambíguo &quot;Escolas Atendidas&quot; por{' '}
+            <strong>&quot;Escolas com Pedidos&quot;</strong> e adição do indicador{' '}
+            <strong>&quot;Entregas Concluídas: X de Y&quot;</strong> (onde X são escolas
+            efetivamente entregues no ciclo), espelhando a clareza operacional de /monitoramento.
+          </p>
+          <div className="grid sm:grid-cols-2 gap-4 text-sm">
+            <div className="rounded-md border border-border/60 bg-muted/20 p-3 space-y-1.5">
+              <span className="font-medium text-primary">
+                1. EntregasEmAndamentoWidget.tsx (Dashboard):
+              </span>
+              <ul className="space-y-1 text-xs text-muted-foreground">
+                <li>
+                  • Resolução estrita do ciclo da rota a partir do despacho ativo, ciclo ativo da
+                  chamada da rota ou ciclo corrente.
+                </li>
+                <li>
+                  • Chamada a{' '}
+                  <code>
+                    rotaDespachosService.getAtivoByRota(rota.id, cicloAlvo?.id, cicloDatas)
+                  </code>{' '}
+                  evitando captura de despachos legados de outros ciclos.
+                </li>
+                <li>
+                  • Inclusão mandatória de <code>cicloIdRota</code> em{' '}
+                  <code>getEntregaRegistrosDaRota(rota.id, cicloIdRota)</code>, eliminando o
+                  vazamento dos registros de ciclos anteriores.
+                </li>
+                <li>
+                  • Regra anti-vazamento: se há pedidos Em Rota e 0 entregas confirmadas no ciclo,{' '}
+                  <code>entregasConfirmadasCount = 0</code> e <code>todasConcluidas = false</code>.
+                </li>
+              </ul>
+            </div>
+            <div className="rounded-md border border-primary/30 bg-primary/5 p-3 space-y-1.5">
+              <span className="font-medium text-primary">
+                2. Cards de Ciclos Ativos (src/pages/Index.tsx):
+              </span>
+              <ul className="space-y-1 text-xs text-foreground/80">
+                <li>
+                  • Nova métrica <code>entregasConcluidasCount</code> computando escolas com status
+                  Entregue no ciclo.
+                </li>
+                <li>
+                  • Exibição clara e separada de <strong>Escolas com Pedidos</strong> e{' '}
+                  <strong>Entregas Concluídas: X de Y</strong>.
+                </li>
+                <li>
+                  • Grade responsiva ampliada para 5 colunas (Pedidos, Escolas com Pedidos, Entregas
+                  Concluídas, Volume Total, Valor Previsto).
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
         {/* Release v0.0.239: Correção de Vazamento de Ciclo no Estado das Rotas */}
         <div className="rounded-lg border border-border bg-card p-5 space-y-4">
           <div className="flex items-center justify-between flex-wrap gap-2">
