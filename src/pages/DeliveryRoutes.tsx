@@ -473,17 +473,25 @@ export default function DeliveryRoutes() {
         setCicloSnapshotsMap(new Map())
       }
 
+      const cicloDatas = selectedCiclo
+        ? { data_inicio: selectedCiclo.data_inicio, data_fim: selectedCiclo.data_fim }
+        : undefined
+
       for (const r of rotasLogisticas) {
-        const desp = await rotaDespachosService.getAtivoByRota(r.id, cicloFiltroId)
-        if (desp) {
-          mapDesp[r.id] = desp
-        }
-        // Se há ciclo selecionado, passa cicloFiltroId. Se não houver ciclo selecionado,
-        // não traz registros de outros ciclos (isolamento por ciclo)
         if (cicloFiltroId) {
+          const desp = await rotaDespachosService.getAtivoByRota(r.id, cicloFiltroId, cicloDatas)
+          if (desp) {
+            mapDesp[r.id] = desp
+          }
           const regs = await entregaRegistrosService.getByRota(r.id, cicloFiltroId)
           if (regs.length > 0) {
             mapRegs[r.id] = regs
+          }
+        } else {
+          // Sem ciclo selecionado: não indexa despachos de ciclos para não haver vazamento
+          const desp = await rotaDespachosService.getAtivoByRota(r.id)
+          if (desp) {
+            mapDesp[r.id] = desp
           }
         }
       }
@@ -497,37 +505,66 @@ export default function DeliveryRoutes() {
 
   useEffect(() => {
     carregarMotoristasEDespachos()
-  }, [rotasLogisticas, selectedCiclo?.id])
+  }, [rotasLogisticas, selectedCiclo?.id, selectedCiclo?.data_inicio, selectedCiclo?.data_fim])
 
   // Subscrição em tempo real na coleção rota_despachos:
   // quando um despacho é desativado (ativo=false) ou excluído, remove rotaId do despachosAtivosMap
-  // e atualiza os dados em tempo real se alterado por outra sessão
+  // e atualiza os dados em tempo real se alterado por outra sessão (respeitando o ciclo selecionado)
   useEffect(() => {
     const unsub = rotaDespachosService.subscribe(({ action, record }) => {
       const rotaId = record.rota_id
       if (!rotaId) return
 
+      const targetCicloId = selectedCiclo?.id
+
       if (action === 'delete' || !record.ativo) {
         setDespachosAtivosMap((prev) => {
           if (!prev[rotaId]) return prev
+          // Se o despacho desativado pertencia a outro ciclo, não interfere no ciclo em tela
+          if (targetCicloId && record.ciclo_id && record.ciclo_id !== targetCicloId) {
+            return prev
+          }
           const next = { ...prev }
           delete next[rotaId]
           return next
         })
         refreshData().catch(() => {})
       } else if (record.ativo) {
-        setDespachosAtivosMap((prev) => ({
-          ...prev,
-          [rotaId]: record,
-        }))
-        refreshData().catch(() => {})
+        // Anti-vazamento de ciclo em tempo real: só adiciona ao despachosAtivosMap se pertencer ao ciclo selecionado
+        if (targetCicloId) {
+          if (record.ciclo_id === targetCicloId) {
+            setDespachosAtivosMap((prev) => ({
+              ...prev,
+              [rotaId]: record,
+            }))
+            refreshData().catch(() => {})
+          } else if (!record.ciclo_id && selectedCiclo?.data_inicio && selectedCiclo?.data_fim) {
+            const rawData = record.despachado_em || record.created
+            const tRec = rawData ? new Date(rawData).getTime() : 0
+            const tIni = new Date(selectedCiclo.data_inicio).getTime()
+            const tFim = new Date(selectedCiclo.data_fim).getTime() + 24 * 60 * 60 * 1000
+            if (tRec >= tIni && tRec <= tFim) {
+              setDespachosAtivosMap((prev) => ({
+                ...prev,
+                [rotaId]: record,
+              }))
+              refreshData().catch(() => {})
+            }
+          }
+        } else {
+          setDespachosAtivosMap((prev) => ({
+            ...prev,
+            [rotaId]: record,
+          }))
+          refreshData().catch(() => {})
+        }
       }
     })
 
     return () => {
       unsub()
     }
-  }, [refreshData])
+  }, [refreshData, selectedCiclo?.id, selectedCiclo?.data_inicio, selectedCiclo?.data_fim])
 
   // Estado para confirmação de despacho da rota inteira
   const [dispatchConfirmOpen, setDispatchConfirmOpen] = useState(false)
@@ -804,13 +841,23 @@ export default function DeliveryRoutes() {
         })
       }
 
-      // Último despacho realizado desta rota (respeitando o ciclo selecionado quando houver)
+      // Último despacho realizado desta rota (respeitando estritamente o ciclo selecionado)
       const ultimoDespacho = despachos
         .filter((d) => {
           const rotaMatch = (d.rota_id || (d as any).rota_logistica_id) === rota.id
           if (!rotaMatch) return false
           if (selectedCiclo?.id) {
-            return (d as any).ciclo_id === selectedCiclo.id
+            if ((d as any).ciclo_id === selectedCiclo.id) return true
+            // Para registros legados sem ciclo_id (ou vazios): casar estritamente pela janela de datas do ciclo selecionado
+            if (!(d as any).ciclo_id && selectedCiclo.data_inicio && selectedCiclo.data_fim) {
+              const rawData = d.data_despacho || d.created
+              if (!rawData) return false
+              const tDesp = new Date(rawData).getTime()
+              const tIni = new Date(selectedCiclo.data_inicio).getTime()
+              const tFim = new Date(selectedCiclo.data_fim).getTime() + 24 * 60 * 60 * 1000
+              return tDesp >= tIni && tDesp <= tFim
+            }
+            return false
           }
           return false
         })
@@ -862,6 +909,8 @@ export default function DeliveryRoutes() {
     escolaContratoOrigemMap,
     cicloSnapshotsMap,
     selectedCiclo?.id,
+    selectedCiclo?.data_inicio,
+    selectedCiclo?.data_fim,
   ])
 
   // Escolas vinculadas à Chamada (em qualquer dos seus contratos) que AINDA NÃO têm rota logística atribuída
@@ -1859,19 +1908,32 @@ export default function DeliveryRoutes() {
             const isDraggingOverThisRota =
               dragOverRotaId === item.rota.id && draggedSourceRotaId !== item.rota.id
 
-            // Resiliência contra resíduo de despacho ativo: se todos os pedidos da rota já estão Entregue
+            // Regra anti-vazamento de ciclo para status "Rota Entregue":
+            // Se o ciclo selecionado tem pedidos "Em Rota" e zero entregas confirmadas
+            // em entrega_registros / entrega_comprovantes daquele ciclo, a rota está obrigatoriamente
+            // "Em Rota" (âmbar) — NUNCA "Rota Entregue" vinda de outro ciclo.
+            const totalEntregasConfirmadasCiclo =
+              registrosRota.filter((r) => r.confirmado_em && r.confirmado_em.trim() !== '').length +
+              compsRota.length
+
+            const temPedidosEmRotaSemEntregasCiclo =
+              item.pedidosEmRota.length > 0 && totalEntregasConfirmadasCiclo === 0
+
+            // Resiliência: se todos os pedidos da rota NO ciclo selecionado já estão Entregue
             // (nenhum Em Rota e nenhum Pendente), a rota é considerada Entregue com precedência.
             const todosPedidosEntreguesCard =
+              !temPedidosEmRotaSemEntregasCiclo &&
               item.pedidosEmRota.length === 0 &&
               item.pedidosPendentes.length === 0 &&
               item.pedidosEntregues.length > 0
 
             const isRotaEntregueCard =
-              todosPedidosEntreguesCard ||
-              (!despAtivoRota &&
-                item.pedidosEmRota.length === 0 &&
-                item.pedidosEntregues.length > 0 &&
-                item.ultimoDespacho?.status === 'Entregue')
+              !temPedidosEmRotaSemEntregasCiclo &&
+              (todosPedidosEntreguesCard ||
+                (!despAtivoRota &&
+                  item.pedidosEmRota.length === 0 &&
+                  item.pedidosEntregues.length > 0 &&
+                  item.ultimoDespacho?.status === 'Entregue'))
 
             const isCicloTerminal =
               selectedCiclo?.status === 'fechado' || selectedCiclo?.status === 'cancelado'
@@ -2036,24 +2098,55 @@ export default function DeliveryRoutes() {
                     const faseAmigavel = formatFaseAmigavel(faseCiclo)
                     const despAtivo = despachosAtivosMap[item.rota.id]
 
-                    // Resiliência: se todos os pedidos já estão Entregue, Rota Entregue vence com precedência
+                    // Registros de entrega do ciclo selecionado
+                    const registrosRota = selectedCiclo?.id
+                      ? getEntregaRegistrosDaRota(item.rota.id, selectedCiclo.id)
+                      : []
+                    const rotaRegsEfetivosCalculo =
+                      registrosRota.length > 0
+                        ? registrosRota
+                        : selectedCiclo?.id
+                          ? (registrosEntregasMap[item.rota.id] || []).filter(
+                              (r) => r.ciclo_id === selectedCiclo.id,
+                            )
+                          : []
+                    const rotaCompsEfetivosCalculo = selectedCiclo?.id
+                      ? (comprovantesEntregasMap[item.rota.id] || []).filter(
+                          (c) => c.ciclo_id === selectedCiclo.id,
+                        )
+                      : []
+
+                    // Regra anti-vazamento de ciclo para status "Rota Entregue":
+                    // Se o ciclo selecionado tem pedidos "Em Rota" e zero entregas confirmadas
+                    // naquele ciclo, a rota está obrigatoriamente "Em Rota" — nunca "Rota Entregue".
+                    const totalEntregasConfirmadasCicloInterno =
+                      rotaRegsEfetivosCalculo.filter(
+                        (r) => r.confirmado_em && r.confirmado_em.trim() !== '',
+                      ).length + rotaCompsEfetivosCalculo.length
+
+                    const temPedidosEmRotaSemEntregasCicloInterno =
+                      item.pedidosEmRota.length > 0 && totalEntregasConfirmadasCicloInterno === 0
+
                     const todosPedidosEntregues =
+                      !temPedidosEmRotaSemEntregasCicloInterno &&
                       item.pedidosEmRota.length === 0 &&
                       item.pedidosPendentes.length === 0 &&
                       item.pedidosEntregues.length > 0
 
                     const isRotaEntregue =
-                      todosPedidosEntregues ||
-                      (!despAtivo &&
-                        item.pedidosEmRota.length === 0 &&
-                        item.pedidosEntregues.length > 0 &&
-                        item.ultimoDespacho?.status === 'Entregue')
+                      !temPedidosEmRotaSemEntregasCicloInterno &&
+                      (todosPedidosEntregues ||
+                        (!despAtivo &&
+                          item.pedidosEmRota.length === 0 &&
+                          item.pedidosEntregues.length > 0 &&
+                          item.ultimoDespacho?.status === 'Entregue'))
 
                     const isDespachadoConfirmado =
-                      !isRotaEntregue &&
-                      (Boolean(despAtivo) ||
-                        item.ultimoDespacho?.status === 'Em Rota' ||
-                        item.pedidosEmRota.length > 0)
+                      temPedidosEmRotaSemEntregasCicloInterno ||
+                      (!isRotaEntregue &&
+                        (Boolean(despAtivo) ||
+                          item.ultimoDespacho?.status === 'Em Rota' ||
+                          item.pedidosEmRota.length > 0))
                     const hasPedidosAtivos = totalEmTransito > 0
                     const hasParadas = item.paradasOrdenadas.length > 0
 
@@ -2090,22 +2183,6 @@ export default function DeliveryRoutes() {
                     // Verificação de modo de posicionamento do caminhão:
                     // Se a rota está "Em Rota" (hasEmRota) COM pelo menos um registro confirmado -> modo AUTOMÁTICO
                     // Exceção: rota despachada mas SEM nenhum registro confirmado -> modo MANUAL preservado
-                    const registrosRota = selectedCiclo?.id
-                      ? getEntregaRegistrosDaRota(item.rota.id, selectedCiclo.id)
-                      : []
-                    const rotaRegsEfetivosCalculo =
-                      registrosRota.length > 0
-                        ? registrosRota
-                        : selectedCiclo?.id
-                          ? (registrosEntregasMap[item.rota.id] || []).filter(
-                              (r) => r.ciclo_id === selectedCiclo.id,
-                            )
-                          : []
-                    const rotaCompsEfetivosCalculo = selectedCiclo?.id
-                      ? (comprovantesEntregasMap[item.rota.id] || []).filter(
-                          (c) => c.ciclo_id === selectedCiclo.id,
-                        )
-                      : []
                     const temEntregaConfirmadaPortal =
                       rotaRegsEfetivosCalculo.some(
                         (r) => r.confirmado_em && r.confirmado_em.trim() !== '',

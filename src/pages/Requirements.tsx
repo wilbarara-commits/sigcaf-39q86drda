@@ -191,6 +191,7 @@ const MODULES: ModuleSpec[] = [
       'Entrega por Rota Inteira (Fechamento pela Central): Fechamento "Rota Entregue" pela secretária: acionamento único, sem registro entrega a entrega, toda a rota entregue de uma vez, em nome do usuário logado, no horário do ato, com campo de observação opcional; o encerramento desativa o despacho na hora e todas as telas (Rotas de Entrega, Monitoramento, Dashboard) reagem em tempo real, sem recarregar a página.',
       'Bloqueio de Edição em Rotas de Ciclo Fechado/Cancelado ou Rota Entregue (v0.0.230): Rotas pertencentes a ciclos em status terminal (fechado ou cancelado) ou rotas com entregas concluídas (todos os pedidos com status Entregue, sem despacho ativo) ficam estritamente travadas contra edições operacionais. O arrastar-e-soltar (drag-and-drop) das paradas é desabilitado (cursor padrão), os containers não aceitam drop e os botões "Importar Arquivo", "Roteamento", "Sugerir rota otimizada", renomear (ícone lápis), excluir rota e transferir escola são desabilitados ou ocultados. A consulta aos dados, mapa e histórico da rota permanece 100% liberada.',
       'Isolamento da Ordem de Paradas por Ciclo via Retenção Histórica (v0.0.230): A reordenação manual das paradas de uma rota grava um snapshot de composição com versão de evento "edicao" especificamente vinculado ao ciclo selecionado (`salvarComposicaoCiclo`), isolando a ordem entre ciclos diferentes. Alterações efetuadas na sequência de um ciclo ativo não alteram a visualização de ciclos anteriores despachados ou fechados, que continuam exibindo com fidelidade a ordem congelada registrada no momento da respectiva operação.',
+      'Isolamento Estrito do Estado da Rota por Ciclo Selecionado & Anti-Vazamento (v0.0.239): O estado da rota (badges "Aguardando Despacho", "Em Rota" e "Rota Entregue", travas de edição e controles operacionais) é calculado e indexado de forma estritamente isolada pelo ciclo selecionado em /rotas e /monitoramento. Todos os novos despachos gravam obrigatoriamente `ciclo_id` na coleção `rota_despachos` e em `despachos`. Registros legados sem `ciclo_id` são correlacionados estritamente pela janela temporal do ciclo (datas de início e fim). Despachos de ciclos anteriores jamais vazam para ciclos subsequentes: caso o ciclo selecionado possua pedidos "Em Rota" e zero entregas confirmadas naquele ciclo, o badge da rota é obrigatoriamente "Em Rota" (âmbar), preservando a trava de edição e a integridade de ciclos concorrentes.',
     ],
   },
   {
@@ -873,6 +874,74 @@ export function Requirements() {
       {/* 7. Registro de Manutenção e Limpeza de Dados */}
       <SectionTitle>7. Registro de Manutenção & Higienização do Banco de Dados</SectionTitle>
       <div className="space-y-4">
+        {/* Release v0.0.239: Correção de Vazamento de Ciclo no Estado das Rotas */}
+        <div className="rounded-lg border border-border bg-card p-5 space-y-4">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="text-primary border-primary/30">
+                Release v0.0.239
+              </Badge>
+              <span className="font-semibold text-foreground">
+                0.0.239: Isolamento Estrito do Estado das Rotas por Ciclo Selecionado &
+                Anti-Vazamento
+              </span>
+            </div>
+            <span className="text-xs text-muted-foreground">Consolidado (v0.0.239)</span>
+          </div>
+          <p className="text-sm text-foreground/90 leading-relaxed">
+            Eliminação definitiva do vazamento de estado de despachos entre ciclos em{' '}
+            <code>/rotas</code> e <code>/monitoramento</code>: garantia de gravação obrigatória de{' '}
+            <code>ciclo_id</code> em <code>rota_despachos</code> e <code>despachos</code>, resolução
+            temporal não destrutiva para registros legados sem ciclo_id (casamento por janela de
+            datas início/fim), indexação de despachos ativos estritamente pelo ciclo selecionado e
+            regra estrita de que ciclos com pedidos em rota e zero entregas confirmadas exibem badge
+            &quot;Em Rota&quot; e nunca &quot;Rota Entregue&quot;.
+          </p>
+          <div className="grid sm:grid-cols-2 gap-4 text-sm">
+            <div className="rounded-md border border-border/60 bg-muted/20 p-3 space-y-1.5">
+              <span className="font-medium text-primary">
+                1. Serviços e Persistência de Despacho (rota-despachos.ts & AppContext):
+              </span>
+              <ul className="space-y-1 text-xs text-muted-foreground">
+                <li>
+                  • <code>despacharOuRenovar</code> resolve ativamente o ciclo ativo da chamada caso{' '}
+                  <code>cicloId</code> não seja informado, impedindo gravação com string vazia.
+                </li>
+                <li>
+                  • <code>getAtivoByRota</code> busca primeiro por <code>ciclo_id</code> exato e, em
+                  legados vazios, correlaciona estritamente pela janela temporal do ciclo (
+                  <code>data_inicio</code> a <code>data_fim</code>).
+                </li>
+                <li>
+                  • <code>despacharRotaInteira</code> e <code>confirmarEntregaRotaInteira</code>{' '}
+                  gravam e desativam despachos estritamente no escopo do respectivo ciclo.
+                </li>
+              </ul>
+            </div>
+            <div className="rounded-md border border-primary/30 bg-primary/5 p-3 space-y-1.5">
+              <span className="font-medium text-primary">
+                2. Visualização e Travas (/rotas e /monitoramento):
+              </span>
+              <ul className="space-y-1 text-xs text-foreground/80">
+                <li>
+                  • <code>despachosAtivosMap</code> e <code>ultimoDespacho</code> em{' '}
+                  <code>/rotas</code> indexados estritamente por <code>selectedCiclo.id</code> e
+                  janela de datas do ciclo em tela.
+                </li>
+                <li>
+                  • Badge e trava operacional corrigidos: se há pedidos Em Rota e zero entregas
+                  confirmadas no ciclo, a rota permanece Em Rota (âmbar), sem bloqueio indevido por
+                  conclusões de ciclos anteriores.
+                </li>
+                <li>
+                  • Em <code>/monitoramento</code>, critérios de <code>isCicloEmRota</code> e{' '}
+                  <code>isEntregasConcluidas</code> e alertas de entrega isolados por ciclo.
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
         {/* Release v0.0.238: Resolução do Contrato do Pedido por contrato_escolas no Hook ERP de Faturamento */}
         <div className="rounded-lg border border-border bg-card p-5 space-y-4">
           <div className="flex items-center justify-between flex-wrap gap-2">

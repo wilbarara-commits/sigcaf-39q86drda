@@ -37,7 +37,7 @@ import { atestosService } from '@/services/atestos'
 import { ciclosService } from '@/services/ciclos'
 import { rotasService } from '@/services/rotas'
 import { rotasLogisticasService } from '@/services/rotas-logisticas'
-import { entregaRegistrosService } from '@/services/rota-despachos'
+import { entregaRegistrosService, rotaDespachosService } from '@/services/rota-despachos'
 import { retencaoHistoricaService } from '@/services/retencao-historica'
 import pb from '@/lib/pocketbase/client'
 import { toast } from 'sonner'
@@ -1812,11 +1812,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setRotasLogisticas(limparPosicaoCaminhaoDespacho)
     setRotas(limparPosicaoCaminhaoDespacho)
 
+    const resolvedCicloIdDespacho =
+      cicloAtivoChamada?.id || pedidosDaRota[0]?.cicloId || activeCiclo?.id
+
     const tempDespacho: DespachoRecord = {
       id: `temp-desp-${Date.now()}`,
       chamada_id: effectiveChamadaId,
       contrato_id: effectiveContratoId,
-      ciclo_id: cicloAtivoChamada?.id,
+      ciclo_id: resolvedCicloIdDespacho,
       rota_id: rotaLogisticaId,
       usuario_id: userId,
       data_despacho: nowIso,
@@ -1831,9 +1834,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
         rota_logistica_id: rotaLogisticaId,
         chamada_id: effectiveChamadaId,
         contrato_id: effectiveContratoId,
-        ciclo_id: cicloAtivoChamada?.id || undefined,
+        ciclo_id: resolvedCicloIdDespacho || undefined,
         user_id: userId,
       })
+
+      // Garantir sincronização na coleção rota_despachos com ciclo_id explicitamente gravado
+      try {
+        const rotaObj = rotasLogisticas.find((r) => r.id === rotaLogisticaId)
+        await rotaDespachosService.despacharOuRenovar({
+          rotaId: rotaLogisticaId,
+          motoristaId: rotaObj?.motorista_id,
+          cicloId: resolvedCicloIdDespacho,
+          chamadaId: effectiveChamadaId,
+          isRedisparo: false,
+          userId,
+        })
+      } catch (errSyncRd) {
+        console.warn('Aviso ao sincronizar rota_despachos no despacharRotaInteira:', errSyncRd)
+      }
 
       // Substituir o despacho temporário pelo real (com proteção contra SSE)
       if (res.despacho) {
@@ -1928,14 +1946,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (pedidosEmRota.length === 0) {
       // Se não há pedidos "Em Rota", verificar se há resíduo de despacho ativo (rota_despachos ou despachos legado)
       // para encerrá-lo e regularizar o estado da rota sem travar o usuário
+      // Isolado pelo ciclo respectivo (ou do ciclo ativo da rota)
       let encerrouAlgumDespacho = false
       const cleanObs = observacao?.trim() || undefined
       const nowIso = new Date().toISOString()
+      const rotaLog = rotasLogisticas.find((r) => r.id === rotaLogisticaId)
+      const targetChamadaId = rotaLog?.chamada_id
+      const cicloAlvo = targetChamadaId ? getCicloAtivo(ciclos, targetChamadaId) : activeCiclo
+      const targetCicloId = cicloAlvo?.id
 
       try {
+        const filterAtivos = targetCicloId
+          ? `rota_id = "${rotaLogisticaId}" && ativo = true && (ciclo_id = "${targetCicloId}" || ciclo_id = "")`
+          : `rota_id = "${rotaLogisticaId}" && ativo = true`
+
         const rotaDespachosAtivos = await pb
           .collection('rota_despachos')
-          .getFullList({ filter: `rota_id = "${rotaLogisticaId}" && ativo = true` })
+          .getFullList({ filter: filterAtivos })
 
         for (const desp of rotaDespachosAtivos) {
           await pb.collection('rota_despachos').update(desp.id, {
@@ -1948,17 +1975,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
         console.warn('Aviso ao encerrar despachos ativos de rota_despachos:', errRd)
       }
 
-      // Também encerrar registros em despachos legados se houver
-      const legadosEmRota = despachos.filter(
-        (d) => d.rota_id === rotaLogisticaId && d.status === 'Em Rota',
-      )
+      // Também encerrar registros em despachos legados se houver (respeitando o ciclo correspondente)
+      const legadosEmRota = despachos.filter((d) => {
+        if (d.rota_id !== rotaLogisticaId || d.status !== 'Em Rota') return false
+        if (targetCicloId) {
+          return d.ciclo_id === targetCicloId || !d.ciclo_id
+        }
+        return true
+      })
+
       if (legadosEmRota.length > 0) {
         setDespachos((prev) =>
-          prev.map((d) =>
-            d.rota_id === rotaLogisticaId && d.status === 'Em Rota'
-              ? { ...d, status: 'Entregue', observacao: cleanObs ?? d.observacao }
-              : d,
-          ),
+          prev.map((d) => {
+            const matches =
+              d.rota_id === rotaLogisticaId &&
+              d.status === 'Em Rota' &&
+              (!targetCicloId || d.ciclo_id === targetCicloId || !d.ciclo_id)
+            return matches ? { ...d, status: 'Entregue', observacao: cleanObs ?? d.observacao } : d
+          }),
         )
         for (const d of legadosEmRota) {
           try {
@@ -2025,17 +2059,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
       ),
     )
 
-    // Optimistic Update: despachos da rota -> Entregue
+    const targetCicloIdFechamento =
+      pedidosEmRota[0]?.cicloId || activeCiclo?.id || cicloCorrente?.cicloId
+
+    // Optimistic Update: despachos da rota do respectivo ciclo -> Entregue
     setDespachos((prev) =>
-      prev.map((d) =>
-        d.rota_id === rotaLogisticaId && d.status === 'Em Rota'
+      prev.map((d) => {
+        const matchCiclo =
+          !targetCicloIdFechamento || d.ciclo_id === targetCicloIdFechamento || !d.ciclo_id
+        return d.rota_id === rotaLogisticaId && d.status === 'Em Rota' && matchCiclo
           ? {
               ...d,
               status: 'Entregue',
               observacao: cleanObservacao ?? d.observacao,
             }
-          : d,
-      ),
+          : d
+      }),
     )
 
     // Optimistic Update: limpar caminhão da rota concluída (para o caminhão sumir imediatamente)
@@ -2058,6 +2097,28 @@ export function AppProvider({ children }: { children: ReactNode }) {
         user_id: userId,
         observacao: cleanObservacao,
       })
+
+      // Desativar despacho ativo de rota_despachos apenas do respectivo ciclo
+      try {
+        const filterRd = targetCicloIdFechamento
+          ? `rota_id = "${rotaLogisticaId}" && ativo = true && (ciclo_id = "${targetCicloIdFechamento}" || ciclo_id = "")`
+          : `rota_id = "${rotaLogisticaId}" && ativo = true`
+
+        const despachosAtivos = await pb.collection('rota_despachos').getFullList({
+          filter: filterRd,
+        })
+        for (const desp of despachosAtivos) {
+          await pb.collection('rota_despachos').update(desp.id, {
+            ativo: false,
+            observacao: cleanObservacao ?? (desp as any).observacao,
+          })
+        }
+      } catch (errRdClose) {
+        console.warn(
+          'Aviso ao desativar despacho ativo em rota_despachos após entregar rota:',
+          errRdClose,
+        )
+      }
 
       // Garantir limpeza no backend via rotasService também caso o hook falhe parcialmente
       try {

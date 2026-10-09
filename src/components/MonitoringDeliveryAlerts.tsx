@@ -91,8 +91,12 @@ export function MonitoringDeliveryAlerts({
     async function carregarDespachos() {
       try {
         const map: Record<string, RotaDespachoRecord> = {}
+        const cicloDatas = ciclo
+          ? { data_inicio: ciclo.data_inicio, data_fim: ciclo.data_fim }
+          : undefined
+
         for (const rota of rotasLogisticas) {
-          const desp = await rotaDespachosService.getAtivoByRota(rota.id)
+          const desp = await rotaDespachosService.getAtivoByRota(rota.id, ciclo?.id, cicloDatas)
           if (desp) {
             map[rota.id] = desp
           }
@@ -117,24 +121,49 @@ export function MonitoringDeliveryAlerts({
 
     // Subscrição em tempo real na coleção rota_despachos:
     // ao receber evento de update/delete com ativo=false do despacho da rota monitorada,
-    // limpa o despacho do estado local e recalcula imediatamente
+    // limpa o despacho do estado local e recalcula imediatamente (respeitando o ciclo monitorado)
     const unsub = rotaDespachosService.subscribe(({ action, record }) => {
       if (!isMounted) return
       const rotaId = record.rota_id
       if (!rotaId) return
 
+      const targetCicloId = ciclo?.id
+
       if (action === 'delete' || !record.ativo) {
         setDespachosAtivos((prev) => {
           if (!prev[rotaId]) return prev
+          if (targetCicloId && record.ciclo_id && record.ciclo_id !== targetCicloId) {
+            return prev
+          }
           const next = { ...prev }
           delete next[rotaId]
           return next
         })
       } else if (record.ativo) {
-        setDespachosAtivos((prev) => ({
-          ...prev,
-          [rotaId]: record,
-        }))
+        if (targetCicloId) {
+          if (record.ciclo_id === targetCicloId) {
+            setDespachosAtivos((prev) => ({
+              ...prev,
+              [rotaId]: record,
+            }))
+          } else if (!record.ciclo_id && ciclo?.data_inicio && ciclo?.data_fim) {
+            const rawData = record.despachado_em || record.created
+            const tRec = rawData ? new Date(rawData).getTime() : 0
+            const tIni = new Date(ciclo.data_inicio).getTime()
+            const tFim = new Date(ciclo.data_fim).getTime() + 24 * 60 * 60 * 1000
+            if (tRec >= tIni && tRec <= tFim) {
+              setDespachosAtivos((prev) => ({
+                ...prev,
+                [rotaId]: record,
+              }))
+            }
+          }
+        } else {
+          setDespachosAtivos((prev) => ({
+            ...prev,
+            [rotaId]: record,
+          }))
+        }
       }
     })
 
@@ -142,19 +171,35 @@ export function MonitoringDeliveryAlerts({
       isMounted = false
       unsub()
     }
-  }, [rotasLogisticas])
+  }, [rotasLogisticas, ciclo?.id, ciclo?.data_inicio, ciclo?.data_fim])
 
   // Identifica rotas despachadas com status "Em Rota" (ou equivalente em andamento) do ciclo monitorado
   const rotasEmAndamentoDoCiclo = useMemo(() => {
     if (!ciclo) return []
 
+    const tCicloIni = ciclo.data_inicio ? new Date(ciclo.data_inicio).getTime() : null
+    const tCicloFim = ciclo.data_fim
+      ? new Date(ciclo.data_fim).getTime() + 24 * 60 * 60 * 1000
+      : null
+
     return rotasLogisticas.filter((rota) => {
       const despachoAtivo = despachosAtivos[rota.id]
 
-      // 1. Despacho ativo na collection rota_despachos
+      // 1. Despacho ativo na collection rota_despachos (isolado por ciclo)
       if (despachoAtivo) {
         if (despachoAtivo.ciclo_id && despachoAtivo.ciclo_id === ciclo.id) return true
-        if (ciclo.chamada_id && despachoAtivo.chamada_id === ciclo.chamada_id) return true
+        // Para registros legados sem ciclo_id, verificar chamada e janela temporal
+        if (
+          !despachoAtivo.ciclo_id &&
+          ciclo.chamada_id &&
+          despachoAtivo.chamada_id === ciclo.chamada_id
+        ) {
+          if (tCicloIni && tCicloFim) {
+            const rawData = despachoAtivo.despachado_em || despachoAtivo.created
+            const tD = rawData ? new Date(rawData).getTime() : 0
+            if (tD >= tCicloIni && tD <= tCicloFim) return true
+          }
+        }
       }
 
       // 2. Despacho na collection legada despachos com status 'Em Rota'
@@ -163,8 +208,14 @@ export function MonitoringDeliveryAlerts({
         const rotaCasa = d.rota_id === rota.id || (d as any).rota_logistica_id === rota.id
         if (!rotaCasa) return false
         if (d.ciclo_id && d.ciclo_id === ciclo.id) return true
-        if (ciclo.chamada_id && d.chamada_id === ciclo.chamada_id) return true
-        return true
+        if (!d.ciclo_id && ciclo.chamada_id && d.chamada_id === ciclo.chamada_id) {
+          if (tCicloIni && tCicloFim) {
+            const rawData = d.data_despacho || d.created
+            const tD = rawData ? new Date(rawData).getTime() : 0
+            return tD >= tCicloIni && tD <= tCicloFim
+          }
+        }
+        return false
       })
       if (temDespachoEmRota) return true
 

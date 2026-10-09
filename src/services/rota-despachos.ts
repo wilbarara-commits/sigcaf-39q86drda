@@ -5,6 +5,7 @@ import type {
   RotaRecord,
   ParadaRotaRecord,
   EscolaRecord,
+  CicloRecord,
 } from '@/lib/types'
 
 /**
@@ -68,16 +69,60 @@ export interface MotoristaPortalData {
 
 export const rotaDespachosService = {
   /**
-   * Busca o despacho ativo mais recente de uma rota (opcionalmente filtrado por ciclo)
+   * Busca o despacho ativo mais recente de uma rota (estritamente filtrado por ciclo quando informado)
+   * Regra anti-vazamento de ciclo:
+   * 1. Se cicloId for fornecido, busca primeiro por `ciclo_id` exato.
+   * 2. Se não encontrar e existirem registros com `ciclo_id = ""` (legado), correlaciona pela janela temporal
+   *    do ciclo (despachado_em / created entre data_inicio e data_fim).
+   * 3. NUNCA retorna despacho ativo pertencente a outro ciclo.
    */
-  async getAtivoByRota(rotaId: string, cicloId?: string): Promise<RotaDespachoRecord | null> {
+  async getAtivoByRota(
+    rotaId: string,
+    cicloId?: string,
+    cicloDatas?: { data_inicio?: string; data_fim?: string },
+  ): Promise<RotaDespachoRecord | null> {
     try {
-      let filter = `rota_id = "${rotaId}" && ativo = true`
       if (cicloId) {
-        filter += ` && ciclo_id = "${cicloId}"`
+        // 1. Busca estrita por ciclo_id exato
+        const records = await pb.collection('rota_despachos').getList<RotaDespachoRecord>(1, 1, {
+          filter: `rota_id = "${rotaId}" && ativo = true && ciclo_id = "${cicloId}"`,
+          sort: '-despachado_em,-created',
+          expand: 'motorista_id,rota_id,ciclo_id,chamada_id',
+        })
+        if (records.items[0]) {
+          return records.items[0]
+        }
+
+        // 2. Se não achar, verificar se há despacho legado ativo sem ciclo_id (ciclo_id = "")
+        // Correlaciona estritamente pela janela de datas do ciclo selecionado
+        const legados = await pb.collection('rota_despachos').getFullList<RotaDespachoRecord>({
+          filter: `rota_id = "${rotaId}" && ativo = true && ciclo_id = ""`,
+          sort: '-despachado_em,-created',
+          expand: 'motorista_id,rota_id,ciclo_id,chamada_id',
+        })
+
+        if (legados.length > 0 && cicloDatas?.data_inicio && cicloDatas?.data_fim) {
+          const tInicio = new Date(cicloDatas.data_inicio).getTime()
+          // Limite superior: fim do dia ou data_fim com tolerância
+          const tFim = new Date(cicloDatas.data_fim).getTime()
+          const matched = legados.find((rec) => {
+            const rawData = rec.despachado_em || rec.created
+            if (!rawData) return false
+            const tRec = new Date(rawData).getTime()
+            return tRec >= tInicio && tRec <= tFim + 24 * 60 * 60 * 1000
+          })
+          if (matched) {
+            return matched
+          }
+        }
+
+        // Se cicloId foi fornecido e nada casou, NÃO retorna despacho ativo de outro ciclo
+        return null
       }
+
+      // Sem cicloId fornecido (fallback legado sem escopo)
       const records = await pb.collection('rota_despachos').getList<RotaDespachoRecord>(1, 1, {
-        filter,
+        filter: `rota_id = "${rotaId}" && ativo = true`,
         sort: '-despachado_em,-created',
         expand: 'motorista_id,rota_id,ciclo_id,chamada_id',
       })
@@ -144,10 +189,45 @@ export const rotaDespachosService = {
     const nowIso = new Date().toISOString()
     const newToken = generateDriverToken()
 
-    // 1. Se houver despachos ativos anteriores desta rota, desativa-os (invalidação / renovação)
+    // Resolver cicloId obrigatório antes de persistir para evitar ciclo_id = ""
+    let resolvedCicloId = (data.cicloId || '').trim()
+    let resolvedChamadaId = (data.chamadaId || '').trim()
+
+    if (!resolvedCicloId || !resolvedChamadaId) {
+      try {
+        const rotaRec = await pb.collection('rotas').getOne<RotaRecord>(data.rotaId)
+        if (!resolvedChamadaId && rotaRec.chamada_id) {
+          resolvedChamadaId = rotaRec.chamada_id
+        }
+      } catch {
+        /* tolerante */
+      }
+    }
+
+    if (!resolvedCicloId && resolvedChamadaId) {
+      try {
+        const cicloRec = await pb
+          .collection('ciclos')
+          .getFirstListItem<CicloRecord>(
+            `chamada_id = "${resolvedChamadaId}" && status != "fechado" && status != "cancelado"`,
+            { sort: '-created' },
+          )
+        if (cicloRec?.id) {
+          resolvedCicloId = cicloRec.id
+        }
+      } catch {
+        /* tolerante */
+      }
+    }
+
+    // 1. Se houver despachos ativos anteriores desta rota (no ciclo correspondente ou legados), desativa-os
     try {
+      const filterDesativar = resolvedCicloId
+        ? `rota_id = "${data.rotaId}" && ativo = true && (ciclo_id = "${resolvedCicloId}" || ciclo_id = "")`
+        : `rota_id = "${data.rotaId}" && ativo = true`
+
       const anteriores = await pb.collection('rota_despachos').getFullList<RotaDespachoRecord>({
-        filter: `rota_id = "${data.rotaId}" && ativo = true`,
+        filter: filterDesativar,
       })
       for (const ant of anteriores) {
         await pb.collection('rota_despachos').update(ant.id, {
@@ -159,12 +239,12 @@ export const rotaDespachosService = {
       console.warn('Aviso ao desativar despachos anteriores:', err)
     }
 
-    // 2. Cria o novo registro de despacho com o token exclusivo
+    // 2. Cria o novo registro de despacho com o token exclusivo e ciclo_id garantido
     const createdDespacho = await pb.collection('rota_despachos').create<RotaDespachoRecord>({
       rota_id: data.rotaId,
       motorista_id: data.motoristaId || undefined,
-      ciclo_id: data.cicloId || undefined,
-      chamada_id: data.chamadaId || undefined,
+      ciclo_id: resolvedCicloId || undefined,
+      chamada_id: resolvedChamadaId || undefined,
       token: newToken,
       ativo: true,
       despachado_em: nowIso,
@@ -204,7 +284,7 @@ export const rotaDespachosService = {
       let totalPedidosCount = 0
       try {
         let pedFilter = `rota_id = "${data.rotaId}"`
-        if (data.cicloId) pedFilter += ` && ciclo_id = "${data.cicloId}"`
+        if (resolvedCicloId) pedFilter += ` && ciclo_id = "${resolvedCicloId}"`
         const pList = await pb.collection('pedidos').getFullList({ filter: pedFilter })
         totalPedidosCount = pList.length
       } catch {
@@ -212,8 +292,8 @@ export const rotaDespachosService = {
       }
 
       // Verificar existência de snapshot do ciclo/rota para despacho
-      const filterSnap = data.cicloId
-        ? `rota_id = "${data.rotaId}" && ciclo_id = "${data.cicloId}" && versao_evento = "despacho"`
+      const filterSnap = resolvedCicloId
+        ? `rota_id = "${data.rotaId}" && ciclo_id = "${resolvedCicloId}" && versao_evento = "despacho"`
         : `rota_id = "${data.rotaId}" && versao_evento = "despacho"`
 
       const snapExistentes = await pb.collection('rota_snapshots').getList(1, 1, {
@@ -223,8 +303,8 @@ export const rotaDespachosService = {
 
       const snapPayload: Record<string, any> = {
         rota_id: data.rotaId,
-        ciclo_id: data.cicloId || undefined,
-        chamada_id: data.chamadaId || undefined,
+        ciclo_id: resolvedCicloId || undefined,
+        chamada_id: resolvedChamadaId || undefined,
         motorista_id: data.motoristaId || undefined,
         despacho_id: createdDespacho.id,
         rota_nome: rotaNome,
@@ -237,7 +317,6 @@ export const rotaDespachosService = {
           ? 'Redisparo da rota pelo motorista'
           : 'Despacho da rota pelo motorista',
       }
-
       if (snapExistentes.items.length > 0) {
         await pb.collection('rota_snapshots').update(snapExistentes.items[0].id, snapPayload)
       } else {
@@ -344,8 +423,8 @@ export const rotaDespachosService = {
 
         // Buscar pedidos do ciclo ativo com status Pendente
         let pedidosFilter = `status = "Pendente"`
-        if (data.cicloId) {
-          pedidosFilter += ` && ciclo_id = "${data.cicloId}"`
+        if (resolvedCicloId) {
+          pedidosFilter += ` && ciclo_id = "${resolvedCicloId}"`
         }
 
         const pedidosPendentes = await pb.collection('pedidos').getFullList<any>({
@@ -369,14 +448,14 @@ export const rotaDespachosService = {
         try {
           const despExistentes = await pb.collection('despachos').getList(1, 1, {
             filter: `rota_id = "${data.rotaId}" && status = "Em Rota"${
-              data.cicloId ? ` && ciclo_id = "${data.cicloId}"` : ''
+              resolvedCicloId ? ` && ciclo_id = "${resolvedCicloId}"` : ''
             }`,
           })
           if (despExistentes.items.length === 0) {
             await pb.collection('despachos').create({
               rota_id: data.rotaId,
-              chamada_id: data.chamadaId || undefined,
-              ciclo_id: data.cicloId || undefined,
+              chamada_id: resolvedChamadaId || undefined,
+              ciclo_id: resolvedCicloId || undefined,
               usuario_id: data.userId || undefined,
               data_despacho: nowIso,
               status: 'Em Rota',

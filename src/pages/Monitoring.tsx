@@ -224,14 +224,34 @@ export default function Monitoring() {
   }, [selectedCiclo])
 
   // Critério de ciclo já colocado Em Rota (despacho ou pedido com status 'Em Rota')
+  // Regra anti-vazamento de ciclo: casar despachos sem ciclo_id estritamente pela janela temporal do ciclo selecionado
   const isCicloEmRota = useMemo(() => {
     if (!selectedCiclo) return false
 
-    // 1. Despacho com status 'Em Rota' associado ao ciclo_id ou (se houver chamada_id) à mesma chamada
+    // 1. Despacho com status 'Em Rota' associado ao ciclo_id ou janela temporal
+    const tCicloIni = selectedCiclo.data_inicio
+      ? new Date(selectedCiclo.data_inicio).getTime()
+      : null
+    const tCicloFim = selectedCiclo.data_fim
+      ? new Date(selectedCiclo.data_fim).getTime() + 24 * 60 * 60 * 1000
+      : null
+
     const temDespachoEmRota = despachos.some((d) => {
       if (d.status !== 'Em Rota') return false
-      if (d.ciclo_id && d.ciclo_id === selectedCiclo.id) return true
-      if (selectedCiclo.chamada_id && d.chamada_id === selectedCiclo.chamada_id) return true
+      // Se tiver ciclo_id, deve ser idêntico
+      if (d.ciclo_id) {
+        return d.ciclo_id === selectedCiclo.id
+      }
+      // Se não tiver ciclo_id (legado), deve pertencer à mesma chamada E coincidir com a janela temporal do ciclo
+      if (selectedCiclo.chamada_id && d.chamada_id && d.chamada_id !== selectedCiclo.chamada_id) {
+        return false
+      }
+      if (tCicloIni && tCicloFim) {
+        const rawData = d.data_despacho || d.created
+        if (!rawData) return false
+        const tDesp = new Date(rawData).getTime()
+        return tDesp >= tCicloIni && tDesp <= tCicloFim
+      }
       return false
     })
 
@@ -246,15 +266,32 @@ export default function Monitoring() {
   }, [selectedCiclo, despachos, orders])
 
   // Critério de Entregas Concluídas para o ciclo selecionado:
-  // Nenhum despacho com status 'Em Rota', nenhum pedido 'Em Rota', e pedidos ativos entregues
+  // Nenhum despacho com status 'Em Rota', nenhum pedido 'Em Rota', e pedidos ativos entregues NO ciclo selecionado
   const isEntregasConcluidas = useMemo(() => {
     if (!selectedCiclo) return false
 
-    // Não pode haver despacho "Em Rota"
+    // Não pode haver despacho "Em Rota" para o ciclo
+    const tCicloIni = selectedCiclo.data_inicio
+      ? new Date(selectedCiclo.data_inicio).getTime()
+      : null
+    const tCicloFim = selectedCiclo.data_fim
+      ? new Date(selectedCiclo.data_fim).getTime() + 24 * 60 * 60 * 1000
+      : null
+
     const temDespachoEmRota = despachos.some((d) => {
       if (d.status !== 'Em Rota') return false
-      if (d.ciclo_id && d.ciclo_id === selectedCiclo.id) return true
-      if (selectedCiclo.chamada_id && d.chamada_id === selectedCiclo.chamada_id) return true
+      if (d.ciclo_id) {
+        return d.ciclo_id === selectedCiclo.id
+      }
+      if (selectedCiclo.chamada_id && d.chamada_id && d.chamada_id !== selectedCiclo.chamada_id) {
+        return false
+      }
+      if (tCicloIni && tCicloFim) {
+        const rawData = d.data_despacho || d.created
+        if (!rawData) return false
+        const tDesp = new Date(rawData).getTime()
+        return tDesp >= tCicloIni && tDesp <= tCicloFim
+      }
       return false
     })
     if (temDespachoEmRota) return false
