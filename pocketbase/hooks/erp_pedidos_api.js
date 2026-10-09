@@ -65,11 +65,23 @@ routerAdd('GET', '/backend/v1/erp/pedidos', (e) => {
 
   // 2. Parâmetros de consulta (Query Params)
   const qChamada = (req.url.query().get('chamada') || '').trim() // id ou número da chamada (ex: 01/2025)
-  const qCiclo = (req.url.query().get('ciclo') || '').trim() // id ou nome/número do ciclo (ex: Ciclo 40/2026, 40)
+  const qCiclo = (req.url.query().get('ciclo') || '').trim() // id ou nome/número do ciclo (ex: 40/2026, 40, Ciclo 40/2026)
+  const qEscola = (req.url.query().get('escola') || '').trim() // ID da escola no banco (PocketBase ID alfanumérico)
   const qStatus = (req.url.query().get('status') || '').trim() // ex: Entregue, Em Rota, Pendente, Cancelado
   const qDataInicio = (req.url.query().get('data_inicio') || '').trim() // YYYY-MM-DD
   const qDataFim = (req.url.query().get('data_fim') || '').trim() // YYYY-MM-DD
   const qTipoData = (req.url.query().get('tipo_data') || 'entrega').trim().toLowerCase() // entrega ou criacao
+
+  // Validação do parâmetro escola: se fornecido, deve ser um ID alfanumérico válido (IDs do PocketBase têm 15 chars [a-z0-9] ou string alfanumérica segura 5-30 chars)
+  if (qEscola) {
+    const regexEscolaId = /^[a-zA-Z0-9_-]{5,50}$/
+    if (!regexEscolaId.test(qEscola)) {
+      return e.json(400, {
+        success: false,
+        error: 'Parâmetro escola inválido. Formato esperado: ID alfanumérico da escola.',
+      })
+    }
+  }
 
   // Validação simples de datas caso enviadas
   const regexData = /^\d{4}-\d{2}-\d{2}$/
@@ -105,7 +117,13 @@ routerAdd('GET', '/backend/v1/erp/pedidos', (e) => {
       sqlParams['status'] = qStatus
     }
 
-    // Filtro por chamada (pode ser id da chamada ou o campo número '01/2025')
+    // Filtro por escola (ID no banco de dados)
+    if (qEscola) {
+      whereClauses.push('p.escola_id = {:escola}')
+      sqlParams['escola'] = qEscola
+    }
+
+    // Filtro por chamada (sem curingas arbitrários; casamento exato por ID ou número da chamada)
     if (qChamada) {
       whereClauses.push(
         '(ch.id = {:chamada} OR ch.chamada = {:chamada} OR c.numero_chamada = {:chamada})',
@@ -113,11 +131,43 @@ routerAdd('GET', '/backend/v1/erp/pedidos', (e) => {
       sqlParams['chamada'] = qChamada
     }
 
-    // Filtro por ciclo (pode ser id do ciclo, nome 'Ciclo 40/2026' ou snapshot número do ciclo)
+    // Filtro por ciclo: casamento exato primeiro, sem permitir curingas SQL arbitrários
+    // Suporta formatos canônicos:
+    // - ID do ciclo (ci.id = :ciclo)
+    // - Nome exato no banco (ci.nome = :ciclo, ex: 'Ciclo 40/2026')
+    // - Formato '40/2026' -> ci.nome = 'Ciclo 40/2026'
+    // - Formato número '40' -> ci.nome LIKE 'Ciclo 40/%' ou casamento pelo snapshot/expressão delimitada segura
     if (qCiclo) {
-      whereClauses.push('(ci.id = {:ciclo} OR ci.nome = {:ciclo} OR ci.nome LIKE {:cicloLike})')
-      sqlParams['ciclo'] = qCiclo
-      sqlParams['cicloLike'] = '%' + qCiclo + '%'
+      const sanitizedCiclo = qCiclo.replace(/[%_]/g, '') // remove curingas SQL arbitrários para prevenir bypass
+      const cicloClauses = ['ci.id = {:cicloExact}']
+      sqlParams['cicloExact'] = qCiclo
+
+      if (sanitizedCiclo) {
+        cicloClauses.push('ci.nome = {:cicloSanitized}')
+        sqlParams['cicloSanitized'] = sanitizedCiclo
+
+        // Se veio no formato "40/2026", casar também com "Ciclo 40/2026"
+        if (/^\d+\/\d{4}$/.test(sanitizedCiclo)) {
+          cicloClauses.push('ci.nome = {:cicloFormatado}')
+          sqlParams['cicloFormatado'] = 'Ciclo ' + sanitizedCiclo
+        } else if (/^\d+$/.test(sanitizedCiclo)) {
+          // Se veio apenas o número do ciclo (ex: "40"), casar exato com "Ciclo 40" ou "Ciclo 40/AAAA"
+          // utilizando prefixo seguro com parâmetro vinculado (sem curingas do usuário)
+          cicloClauses.push('ci.nome = {:cicloNumExato}')
+          cicloClauses.push('ci.nome LIKE {:cicloNumPrefix}')
+          sqlParams['cicloNumExato'] = 'Ciclo ' + sanitizedCiclo
+          sqlParams['cicloNumPrefix'] = 'Ciclo ' + sanitizedCiclo + '/%'
+        } else if (sanitizedCiclo.toLowerCase().startsWith('ciclo ')) {
+          // Se veio "Ciclo 40", casar exato ou "Ciclo 40/%"
+          const rest = sanitizedCiclo.slice(6).trim()
+          if (/^\d+$/.test(rest)) {
+            cicloClauses.push('ci.nome LIKE {:cicloNumPrefix2}')
+            sqlParams['cicloNumPrefix2'] = 'Ciclo ' + rest + '/%'
+          }
+        }
+      }
+
+      whereClauses.push('(' + cicloClauses.join(' OR ') + ')')
     }
 
     // Filtro por período de data
@@ -178,6 +228,8 @@ routerAdd('GET', '/backend/v1/erp/pedidos', (e) => {
         p.created as pedido_created,
         p.updated as pedido_updated,
         p.data_prevista as pedido_data_prevista,
+        p.validacao as pedido_validacao,
+        (SELECT ROUND(SUM(pi_sub.quantidade * pi_sub.preco_unitario), 2) FROM pedido_itens pi_sub WHERE pi_sub.pedido_id = p.id) as pedido_total_calculado,
         p.entregue_em as pedido_entregue_em,
         p.observacao_entrega as pedido_observacao_entrega,
         e.id as escola_id,
@@ -307,13 +359,23 @@ routerAdd('GET', '/backend/v1/erp/pedidos', (e) => {
     // 5. Formatar payload de retorno para o ERP
     const formattedPedidos = pedidoRows.map((p) => {
       const rawItens = itemsByPedido.get(p.pedido_id) || []
-      let totalConsolidado = 0
 
-      const itensFormatados = rawItens.map((it) => {
+      // Deduplicação estrita de itens para evitar receita duplicada caso itens venham repetidos
+      const itensUnicos = []
+      const seenItemIds = new Set()
+      rawItens.forEach((it) => {
+        if (!it.item_id || !seenItemIds.has(it.item_id)) {
+          if (it.item_id) seenItemIds.add(it.item_id)
+          itensUnicos.push(it)
+        }
+      })
+
+      let somaItens = 0
+      const itensFormatados = itensUnicos.map((it) => {
         const qtd = Number(it.quantidade) || 0
         const precoUnit = Number(it.preco_unitario) || 0
         const totalItem = Math.round(qtd * precoUnit * 100) / 100
-        totalConsolidado += totalItem
+        somaItens += totalItem
 
         // Tentar resolver pelo cadastro em chamada_itens da chamada do ciclo
         const refChamada = p.chamada_id
@@ -337,6 +399,56 @@ routerAdd('GET', '/backend/v1/erp/pedidos', (e) => {
         }
       })
 
+      somaItens = Math.round(somaItens * 100) / 100
+
+      // 1ª Melhoria: Total Canônico do Pedido como valor principal de total_consolidado
+      // Extrair total gravado canônico no pedido:
+      // 1. Campo explícito se existir na tabela/linha (p.pedido_total ou p.total)
+      // 2. Campo no JSON de validação (ex: validacao.total ou validacao.valor_total)
+      // 3. Fallback: subquery SQL agregada direta (pedido_total_calculado) ou soma dos itens únicos
+      let totalGravado = null
+      if (p.pedido_total !== undefined && p.pedido_total !== null && p.pedido_total !== '') {
+        const n = Number(p.pedido_total)
+        if (!isNaN(n) && n > 0) {
+          totalGravado = Math.round(n * 100) / 100
+        }
+      }
+      if (totalGravado === null && p.total !== undefined && p.total !== null && p.total !== '') {
+        const n = Number(p.total)
+        if (!isNaN(n) && n > 0) {
+          totalGravado = Math.round(n * 100) / 100
+        }
+      }
+      if (totalGravado === null && p.pedido_validacao) {
+        try {
+          const valObj =
+            typeof p.pedido_validacao === 'string'
+              ? JSON.parse(p.pedido_validacao)
+              : p.pedido_validacao
+          if (valObj) {
+            const vTotal =
+              typeof valObj.total === 'number' ? valObj.total : Number(valObj.valor_total)
+            if (!isNaN(vTotal) && vTotal > 0) {
+              totalGravado = Math.round(vTotal * 100) / 100
+            }
+          }
+        } catch (_) {}
+      }
+
+      if (
+        totalGravado === null &&
+        p.pedido_total_calculado !== undefined &&
+        p.pedido_total_calculado !== null &&
+        p.pedido_total_calculado !== ''
+      ) {
+        const n = Number(p.pedido_total_calculado)
+        if (!isNaN(n) && n >= 0) {
+          totalGravado = Math.round(n * 100) / 100
+        }
+      }
+
+      const totalConsolidado = totalGravado !== null ? totalGravado : somaItens
+
       // Extrair metadados do ciclo (número / ano) a partir do snapshot ou nome
       let cicloNumero = null
       let cicloAno = null
@@ -355,8 +467,6 @@ routerAdd('GET', '/backend/v1/erp/pedidos', (e) => {
           cicloAno = parseInt(match[2], 10)
         }
       }
-
-      totalConsolidado = Math.round(totalConsolidado * 100) / 100
 
       return {
         id: p.pedido_id,

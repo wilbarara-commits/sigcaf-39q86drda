@@ -408,8 +408,10 @@ const MODULES: ModuleSpec[] = [
       'Identificação Cadastral da Escola (sem casamento por nome): Cada pedido expõe os dados cadastrais da escola vinculada: ID único no banco de dados (escola.id), Nome oficial, Código INEP, Tipo, Dependência Administrativa, Bairro e Endereço. Respeita a regra fundamental do sistema: nunca casar escola por nome.',
       'Metadados de Chamada, Ciclo e Contrato: Expõe o ID e número da Chamada Pública, Programa e Dependência; ID, nome, número da semana e ano do Ciclo Operacional; ID e número do Contrato de vínculo; e ID e nome da Rota Logística.',
       'Itens do Pedido com Regra de Nome no Contrato e AKA Separado: Cada item do pedido expõe o Nome do Produto (apenas a parte antes da vírgula do Nome no Contrato), campo separado "aka" (apelido/referência interna para que o ERP reconcilie eventuais divergências de nomenclatura), quantidade, unidade de medida, preço unitário acordado e total do item.',
-      'Total Consolidado do Pedido: Cada pedido inclui o valor financeiro consolidado canônico (total_consolidado), compatível com o modelo oficial de fechamento e relatórios do SIGCAF.',
-      'Filtros via Query String: Suporte a filtros por chamada (?chamada=...), por ciclo (?ciclo=...), por status (?status=Entregue, etc.) e por período de datas (?data_inicio=YYYY-MM-DD&data_fim=YYYY-MM-DD&tipo_data=entrega|criacao). Datas com validação estrita (HTTP 400 em caso de formato inválido).',
+      'Total Consolidado Canônico do Pedido: O campo total_consolidado utiliza prioritariamente o valor canônico gravado no pedido (campo total ou validação canônica que alimenta o Relatório Mensal e Relatórios), recorrendo ao cálculo por soma dos itens estritamente como fallback quando o total gravado não existir. Itens duplicados por camadas de preço são deduplicados estritamente por ID para blindar contra qualquer receita dobrada.',
+      'Filtro de Ciclo sem Curinga: O filtro ?ciclo=... aplica casamento exato por ID e por nome ("40/2026" casa com "Ciclo 40/2026", número isolado "40" casa com prefixo delimitado), sanitizando e bloqueando curingas SQL arbitrários (% e _) para prevenir bypass e vazamento amplo de dados.',
+      'Filtro por Escola no Banco de Dados: Novo parâmetro ?escola=<id> permite consultar pedidos escola a escola pelo ID alfanumérico no banco. IDs com formato inválido retornam HTTP 400 com JSON descritivo limpo, enquanto IDs válidos sem pedidos retornam HTTP 200 com array vazio e paginação normal.',
+      'Filtros via Query String Combináveis: Suporte a filtros combinados por escola (?escola=...), chamada (?chamada=...), ciclo (?ciclo=...), status (?status=Entregue, etc.) e período de datas (?data_inicio=YYYY-MM-DD&data_fim=YYYY-MM-DD&tipo_data=entrega|criacao). Validação estrita de formato (HTTP 400 em caso de formato inválido).',
       'Paginação com Contagem Total: Paginação via parâmetros ?page=1&per_page=50 (máximo 200 por página). O payload de resposta inclui total_items, total_pages, page, per_page e items_count para que o ERP saiba com exatidão quando parar de paginar.',
       'Respostas de Erro Padronizadas: Retornos 401 (não autorizado), 400 (filtros/datas inválidos) e 500 (erro interno) padronizados em JSON ({ success: false, error: "..." }).',
     ],
@@ -870,6 +872,71 @@ export function Requirements() {
       {/* 7. Registro de Manutenção e Limpeza de Dados */}
       <SectionTitle>7. Registro de Manutenção & Higienização do Banco de Dados</SectionTitle>
       <div className="space-y-4">
+        {/* Release v0.0.235: Melhorias no Endpoint ERP de Faturamento */}
+        <div className="rounded-lg border border-border bg-card p-5 space-y-4">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="text-primary border-primary/30">
+                Release v0.0.235
+              </Badge>
+              <span className="font-semibold text-foreground">
+                0.0.235: Melhorias na API ERP de Faturamento (Total Canônico, Ciclo Exato e Filtro
+                por Escola)
+              </span>
+            </div>
+            <span className="text-xs text-muted-foreground">Consolidado (v0.0.235)</span>
+          </div>
+          <p className="text-sm text-foreground/90 leading-relaxed">
+            Aplicação de 3 melhorias de integridade e segurança no endpoint REST de integração com o
+            ERP de faturamento externo (<code>GET /backend/v1/erp/pedidos</code> em{' '}
+            <code>pocketbase/hooks/erp_pedidos_api.js</code>):
+          </p>
+          <div className="grid sm:grid-cols-2 gap-4 text-sm">
+            <div className="rounded-md border border-border/60 bg-muted/20 p-3 space-y-1.5">
+              <span className="font-medium text-primary">
+                1. Total Canônico & Blindagem contra Receita Dobrada:
+              </span>
+              <ul className="space-y-1 text-xs text-muted-foreground">
+                <li>
+                  • O endpoint agora adota como valor principal de <code>total_consolidado</code> o
+                  total canônico gravado no pedido (<code>p.total</code> /{' '}
+                  <code>validacao.total</code> / subquery SQL consolidada), exatamente alinhado com
+                  o Relatório Mensal e Dashboard.
+                </li>
+                <li>
+                  • A soma por <code>quantidade × preco_unitario</code> é mantida estritamente como
+                  fallback caso o total gravado não exista.
+                </li>
+                <li>
+                  • Deduplicação estrita de itens por <code>item_id</code> para eliminar risco de
+                  contagem duplicada por camadas de preço.
+                </li>
+              </ul>
+            </div>
+            <div className="rounded-md border border-primary/30 bg-primary/5 p-3 space-y-1.5">
+              <span className="font-medium text-primary">
+                2. Ciclo sem Curinga & 3. Filtro por Escola:
+              </span>
+              <ul className="space-y-1 text-xs text-foreground/80">
+                <li>
+                  • <strong>Filtro de ciclo seguro:</strong> casamento exato primeiro com remoção de
+                  curingas SQL arbitrários (<code>%</code> e <code>_</code>), mantendo
+                  compatibilidade canônica com <code>40/2026</code> (mapeado para{' '}
+                  <em>Ciclo 40/2026</em>), <code>40</code> (prefixo vinculado seguro) e IDs diretos.
+                </li>
+                <li>
+                  • <strong>Filtro por escola:</strong> suporte ao parâmetro{' '}
+                  <code>?escola=&lt;id&gt;</code> para conciliação escola a escola pelo ERP.
+                </li>
+                <li>
+                  • Validação sintática do ID da escola (retorna HTTP 400 se malformado); escola
+                  inexistente retorna lista vazia legítima (HTTP 200) com paginação consistente.
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
         {/* Release v0.0.234: Gráficos de Comparação por Escolas, Chamadas e Contratos em KG e R$ */}
         <div className="rounded-lg border border-border bg-card p-5 space-y-4">
           <div className="flex items-center justify-between flex-wrap gap-2">
