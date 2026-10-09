@@ -212,7 +212,9 @@ routerAdd('GET', '/backend/v1/erp/pedidos', (e) => {
     for (const k in sqlParams) {
       countQuery.bind({ [k]: sqlParams[k] })
     }
-    const countRow = {}
+    const countRow = new DynamicModel({
+      total: 0,
+    })
     countQuery.one(countRow)
     const totalItems = parseInt(countRow.total || 0, 10)
     const totalPages = Math.ceil(totalItems / perPage) || 1
@@ -267,7 +269,39 @@ routerAdd('GET', '/backend/v1/erp/pedidos', (e) => {
     }
     selectQuery.bind({ limit: perPage, offset: offset })
 
-    const pedidoRows = []
+    const pedidoRows = arrayOf(
+      new DynamicModel({
+        pedido_id: '',
+        pedido_numero: '',
+        pedido_status: '',
+        pedido_origem: '',
+        pedido_created: '',
+        pedido_updated: '',
+        pedido_data_prevista: '',
+        pedido_validacao: '',
+        pedido_total_calculado: -0,
+        pedido_entregue_em: '',
+        pedido_observacao_entrega: '',
+        escola_id: '',
+        escola_nome: '',
+        escola_codigo_inep: '',
+        escola_tipo: '',
+        escola_dependencia: '',
+        escola_bairro: '',
+        escola_endereco: '',
+        ciclo_id: '',
+        ciclo_nome: '',
+        ciclo_snapshot: '',
+        chamada_id: '',
+        chamada_numero: '',
+        chamada_programa: '',
+        chamada_dependencia: '',
+        contrato_id: '',
+        contrato_numero: '',
+        rota_id: '',
+        rota_nome: '',
+      }),
+    )
     selectQuery.all(pedidoRows)
 
     if (pedidoRows.length === 0) {
@@ -299,7 +333,18 @@ routerAdd('GET', '/backend/v1/erp/pedidos', (e) => {
       WHERE pi.pedido_id IN (${pedidoIds})
       ORDER BY pi.id ASC
     `
-    const itemsRows = []
+    const itemsRows = arrayOf(
+      new DynamicModel({
+        item_id: '',
+        pedido_id: '',
+        produto_id: '',
+        quantidade: -0,
+        preco_unitario: -0,
+        produto_catalogo_nome: '',
+        produto_catalogo_unidade: '',
+        produto_catalogo_categoria: '',
+      }),
+    )
     $app.db().newQuery(itemsSql).all(itemsRows)
 
     // 4.1 Carregar tabela de referência para resolver Nome no Contrato e AKA
@@ -309,7 +354,16 @@ routerAdd('GET', '/backend/v1/erp/pedidos', (e) => {
       if (r.chamada_id) chamadaIdsSet.add(r.chamada_id)
     })
     const chamadaIdsList = Array.from(chamadaIdsSet)
-    let chamadaItensRows = []
+    let chamadaItensRows = arrayOf(
+      new DynamicModel({
+        chamada_id: '',
+        produto_id: '',
+        produto: '',
+        aka: '',
+        unidade: '',
+        preco: -0,
+      }),
+    )
     if (chamadaIdsList.length > 0) {
       const chIn = chamadaIdsList.map((id) => "'" + id + "'").join(',')
       try {
@@ -319,7 +373,9 @@ routerAdd('GET', '/backend/v1/erp/pedidos', (e) => {
             `SELECT chamada_id, produto_id, produto, aka, unidade, preco FROM chamada_itens WHERE chamada_id IN (${chIn})`,
           )
           .all(chamadaItensRows)
-      } catch (_) {}
+      } catch (errCh) {
+        console.warn('Aviso ao carregar chamada_itens de referência para ERP:', errCh)
+      }
     }
 
     // Mapear chamada_itens por chave: chamada_id + '_' + produto_id
@@ -526,6 +582,12 @@ routerAdd('GET', '/backend/v1/erp/pedidos', (e) => {
       pedidos: formattedPedidos,
     })
   } catch (err) {
+    // Registrar erro detalhado nos logs do backend (pb_hooks) para auditoria e diagnóstico
+    console.error(
+      'Erro na rota GET /backend/v1/erp/pedidos:',
+      err && (err.message || err.toString() || err),
+    )
+
     // Erro limpo em JSON sem vazar stack trace ou detalhes internos
     return e.json(500, {
       success: false,

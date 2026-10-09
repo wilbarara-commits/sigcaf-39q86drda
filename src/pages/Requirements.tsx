@@ -872,6 +872,74 @@ export function Requirements() {
       {/* 7. Registro de Manutenção e Limpeza de Dados */}
       <SectionTitle>7. Registro de Manutenção & Higienização do Banco de Dados</SectionTitle>
       <div className="space-y-4">
+        {/* Release v0.0.236: Correção de Execução DynamicModel no Hook ERP de Faturamento */}
+        <div className="rounded-lg border border-border bg-card p-5 space-y-4">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="text-primary border-primary/30">
+                Release v0.0.236
+              </Badge>
+              <span className="font-semibold text-foreground">
+                0.0.236: Correção do Erro 500 no Hook ERP de Faturamento (Execução com DynamicModel)
+              </span>
+            </div>
+            <span className="text-xs text-muted-foreground">Consolidado (v0.0.236)</span>
+          </div>
+          <p className="text-sm text-foreground/90 leading-relaxed">
+            Correção de execução no hook do endpoint REST de integração com o ERP de faturamento (
+            <code>GET /backend/v1/erp/pedidos</code> em{' '}
+            <code>pocketbase/hooks/erp_pedidos_api.js</code>
+            ): substituição de objetos JavaScript puros passados a <code>.one()</code> e{' '}
+            <code>.all()</code>
+            pelo padrão canônico do runtime PocketBase JSVM (<code>DynamicModel</code> e{' '}
+            <code>arrayOf</code>), além de inclusão de logging detalhado no catch interno para
+            rastreabilidade de diagnósticos no servidor.
+          </p>
+          <div className="grid sm:grid-cols-2 gap-4 text-sm">
+            <div className="rounded-md border border-border/60 bg-muted/20 p-3 space-y-1.5">
+              <span className="font-medium text-primary">
+                1. DynamicModel e arrayOf nas Consultas SQL:
+              </span>
+              <ul className="space-y-1 text-xs text-muted-foreground">
+                <li>
+                  • A contagem total agora utiliza{' '}
+                  <code>new DynamicModel(&#123; total: 0 &#125;)</code> em{' '}
+                  <code>countQuery.one()</code>.
+                </li>
+                <li>
+                  • A busca paginada de pedidos utiliza{' '}
+                  <code>arrayOf(new DynamicModel(&#123; ... &#125;))</code> com todos os aliases de
+                  colunas mapeados.
+                </li>
+                <li>
+                  • As buscas de itens do pedido e de chamada_itens utilizam instâncias de{' '}
+                  <code>arrayOf(new DynamicModel(&#123; ... &#125;))</code>.
+                </li>
+              </ul>
+            </div>
+            <div className="rounded-md border border-primary/30 bg-primary/5 p-3 space-y-1.5">
+              <span className="font-medium text-primary">
+                2. Rastreabilidade de Logs e Contrato Preservado:
+              </span>
+              <ul className="space-y-1 text-xs text-foreground/80">
+                <li>
+                  • No bloco <code>catch</code> interno, registro de erro com{' '}
+                  <code>console.error</code> para visualização imediata nos logs de hooks do
+                  backend.
+                </li>
+                <li>
+                  • Resposta HTTP 500 mantida limpa e genérica para o cliente externo, sem vazar
+                  stack traces ou detalhes internos.
+                </li>
+                <li>
+                  • Contrato JSON de resposta, paginação, filtros e lógica de autenticação 100%
+                  preservados.
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
         {/* Release v0.0.235: Melhorias no Endpoint ERP de Faturamento */}
         <div className="rounded-lg border border-border bg-card p-5 space-y-4">
           <div className="flex items-center justify-between flex-wrap gap-2">
