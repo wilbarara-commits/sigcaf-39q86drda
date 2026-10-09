@@ -221,37 +221,39 @@ routerAdd('GET', '/backend/v1/erp/pedidos', (e) => {
     const offset = (page - 1) * perPage
 
     // 3.2 Busca dos pedidos da página atual
+    // Usamos COALESCE em todas as colunas de joins externos e campos nullable para que nunca
+    // retornem NULL ao scanner SQL do PocketBase/Goja (Scan error converting NULL to string)
     const selectSql = `
       SELECT DISTINCT
-        p.id as pedido_id,
-        p.numero as pedido_numero,
-        p.status as pedido_status,
-        p.origem as pedido_origem,
-        p.created as pedido_created,
-        p.updated as pedido_updated,
-        p.data_prevista as pedido_data_prevista,
-        p.validacao as pedido_validacao,
-        (SELECT ROUND(SUM(pi_sub.quantidade * pi_sub.preco_unitario), 2) FROM pedido_itens pi_sub WHERE pi_sub.pedido_id = p.id) as pedido_total_calculado,
-        p.entregue_em as pedido_entregue_em,
-        p.observacao_entrega as pedido_observacao_entrega,
-        e.id as escola_id,
-        e.nome as escola_nome,
-        e.codigo_inep as escola_codigo_inep,
-        e.tipo as escola_tipo,
-        e.dependencia_administrativa as escola_dependencia,
-        e.bairro as escola_bairro,
-        e.endereco as escola_endereco,
-        ci.id as ciclo_id,
-        ci.nome as ciclo_nome,
-        ci.snapshot as ciclo_snapshot,
-        ch.id as chamada_id,
-        ch.chamada as chamada_numero,
-        ch.programa as chamada_programa,
-        ch.dependencia_administrativa as chamada_dependencia,
-        c.id as contrato_id,
-        c.numero as contrato_numero,
-        r.id as rota_id,
-        r.nome as rota_nome
+        COALESCE(p.id, '') as pedido_id,
+        COALESCE(p.numero, '') as pedido_numero,
+        COALESCE(p.status, '') as pedido_status,
+        COALESCE(p.origem, '') as pedido_origem,
+        COALESCE(p.created, '') as pedido_created,
+        COALESCE(p.updated, '') as pedido_updated,
+        COALESCE(p.data_prevista, '') as pedido_data_prevista,
+        COALESCE(p.validacao, '') as pedido_validacao,
+        COALESCE((SELECT ROUND(SUM(pi_sub.quantidade * pi_sub.preco_unitario), 2) FROM pedido_itens pi_sub WHERE pi_sub.pedido_id = p.id), 0) as pedido_total_calculado,
+        COALESCE(p.entregue_em, '') as pedido_entregue_em,
+        COALESCE(p.observacao_entrega, '') as pedido_observacao_entrega,
+        COALESCE(e.id, '') as escola_id,
+        COALESCE(e.nome, '') as escola_nome,
+        COALESCE(e.codigo_inep, '') as escola_codigo_inep,
+        COALESCE(e.tipo, '') as escola_tipo,
+        COALESCE(e.dependencia_administrativa, '') as escola_dependencia,
+        COALESCE(e.bairro, '') as escola_bairro,
+        COALESCE(e.endereco, '') as escola_endereco,
+        COALESCE(ci.id, '') as ciclo_id,
+        COALESCE(ci.nome, '') as ciclo_nome,
+        COALESCE(ci.snapshot, '') as ciclo_snapshot,
+        COALESCE(ch.id, '') as chamada_id,
+        COALESCE(ch.chamada, '') as chamada_numero,
+        COALESCE(ch.programa, '') as chamada_programa,
+        COALESCE(ch.dependencia_administrativa, '') as chamada_dependencia,
+        COALESCE(c.id, '') as contrato_id,
+        COALESCE(c.numero, '') as contrato_numero,
+        COALESCE(r.id, '') as rota_id,
+        COALESCE(r.nome, '') as rota_nome
       FROM pedidos p
       LEFT JOIN escolas e ON p.escola_id = e.id
       LEFT JOIN ciclos ci ON p.ciclo_id = ci.id
@@ -320,14 +322,14 @@ routerAdd('GET', '/backend/v1/erp/pedidos', (e) => {
     const pedidoIds = pedidoRows.map((r) => "'" + r.pedido_id + "'").join(',')
     const itemsSql = `
       SELECT 
-        pi.id as item_id,
-        pi.pedido_id as pedido_id,
-        pi.produto_id as produto_id,
-        pi.quantidade as quantidade,
-        pi.preco_unitario as preco_unitario,
-        prod.nome as produto_catalogo_nome,
-        prod.unidade as produto_catalogo_unidade,
-        prod.categoria as produto_catalogo_categoria
+        COALESCE(pi.id, '') as item_id,
+        COALESCE(pi.pedido_id, '') as pedido_id,
+        COALESCE(pi.produto_id, '') as produto_id,
+        COALESCE(pi.quantidade, 0) as quantidade,
+        COALESCE(pi.preco_unitario, 0) as preco_unitario,
+        COALESCE(prod.nome, '') as produto_catalogo_nome,
+        COALESCE(prod.unidade, '') as produto_catalogo_unidade,
+        COALESCE(prod.categoria, '') as produto_catalogo_categoria
       FROM pedido_itens pi
       LEFT JOIN produtos prod ON pi.produto_id = prod.id
       WHERE pi.pedido_id IN (${pedidoIds})
@@ -369,9 +371,17 @@ routerAdd('GET', '/backend/v1/erp/pedidos', (e) => {
       try {
         $app
           .db()
-          .newQuery(
-            `SELECT chamada_id, produto_id, produto, aka, unidade, preco FROM chamada_itens WHERE chamada_id IN (${chIn})`,
-          )
+          .newQuery(`
+            SELECT 
+              COALESCE(chamada_id, '') as chamada_id,
+              COALESCE(produto_id, '') as produto_id,
+              COALESCE(produto, '') as produto,
+              COALESCE(aka, '') as aka,
+              COALESCE(unidade, '') as unidade,
+              COALESCE(preco, 0) as preco
+            FROM chamada_itens 
+            WHERE chamada_id IN (${chIn})
+          `)
           .all(chamadaItensRows)
       } catch (errCh) {
         console.warn('Aviso ao carregar chamada_itens de referência para ERP:', errCh)
@@ -544,26 +554,34 @@ routerAdd('GET', '/backend/v1/erp/pedidos', (e) => {
           bairro: p.escola_bairro || null,
           endereco: p.escola_endereco || null,
         },
-        chamada: {
-          id: p.chamada_id || null,
-          numero: p.chamada_numero || null,
-          programa: p.chamada_programa || null,
-          dependencia_administrativa: p.chamada_dependencia || null,
-        },
-        ciclo: {
-          id: p.ciclo_id || null,
-          nome: p.ciclo_nome || null,
-          numero: cicloNumero,
-          ano: cicloAno,
-        },
-        contrato: {
-          id: p.contrato_id || null,
-          numero: p.contrato_numero || null,
-        },
-        rota: {
-          id: p.rota_id || null,
-          nome: p.rota_nome || null,
-        },
+        chamada: p.chamada_id
+          ? {
+              id: p.chamada_id,
+              numero: p.chamada_numero || null,
+              programa: p.chamada_programa || null,
+              dependencia_administrativa: p.chamada_dependencia || null,
+            }
+          : null,
+        ciclo: p.ciclo_id
+          ? {
+              id: p.ciclo_id,
+              nome: p.ciclo_nome || null,
+              numero: cicloNumero,
+              ano: cicloAno,
+            }
+          : null,
+        contrato: p.contrato_id
+          ? {
+              id: p.contrato_id,
+              numero: p.contrato_numero || null,
+            }
+          : null,
+        rota: p.rota_id
+          ? {
+              id: p.rota_id,
+              nome: p.rota_nome || null,
+            }
+          : null,
         itens_total_count: itensFormatados.length,
         total_consolidado: totalConsolidado,
         itens: itensFormatados,

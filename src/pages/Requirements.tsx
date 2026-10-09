@@ -406,7 +406,7 @@ const MODULES: ModuleSpec[] = [
       'Autenticação e Proteção por Chave de API: Protegido por chave secreta validada no header HTTP (X-API-Key: <chave> ou Authorization: Bearer <chave>). A chave pode vir da variável de ambiente do servidor (process.env.ERP_API_KEY) OU do registro interno ERP_API_KEY na coleção config_sistema, com prioridade máxima para a variável de ambiente. Requisição sem chave ou com chave incorreta retorna HTTP 401 Unauthorized com JSON limpo, sem vazar detalhes internos.',
       'Gestão Segura da Chave & Coleção config_sistema: A chave é gerenciada de forma estritamente interna no servidor ou via coleção config_sistema (totalmente bloqueada contra leitura/gravação na REST API do app para clientes e anônimos, acessível exclusivamente pelo servidor/superuser). A chave JAMAIS é hardcodada no front-end nem exibida publicamente em qualquer tela ou componente da interface do sistema.',
       'Identificação Cadastral da Escola (sem casamento por nome): Cada pedido expõe os dados cadastrais da escola vinculada: ID único no banco de dados (escola.id), Nome oficial, Código INEP, Tipo, Dependência Administrativa, Bairro e Endereço. Respeita a regra fundamental do sistema: nunca casar escola por nome.',
-      'Metadados de Chamada, Ciclo e Contrato: Expõe o ID e número da Chamada Pública, Programa e Dependência; ID, nome, número da semana e ano do Ciclo Operacional; ID e número do Contrato de vínculo; e ID e nome da Rota Logística.',
+      'Metadados de Chamada, Ciclo, Contrato e Rota (com Tratamento Robusto de Nullables): Expõe o ID e número da Chamada Pública, Programa e Dependência; ID, nome, número da semana e ano do Ciclo Operacional; ID e número do Contrato de vínculo; e ID e nome da Rota Logística. Quando um pedido não possui contrato, rota, chamada ou ciclo vinculado, o scanner SQL utiliza COALESCE para evitar erros de conversão de NULL no driver do banco e o JSON mapeia o objeto correspondente como null legítimo (ex.: "contrato": null, "rota": null), facilitando o consumo no Power BI e ERP.',
       'Itens do Pedido com Regra de Nome no Contrato e AKA Separado: Cada item do pedido expõe o Nome do Produto (apenas a parte antes da vírgula do Nome no Contrato), campo separado "aka" (apelido/referência interna para que o ERP reconcilie eventuais divergências de nomenclatura), quantidade, unidade de medida, preço unitário acordado e total do item.',
       'Total Consolidado Canônico do Pedido: O campo total_consolidado utiliza prioritariamente o valor canônico gravado no pedido (campo total ou validação canônica que alimenta o Relatório Mensal e Relatórios), recorrendo ao cálculo por soma dos itens estritamente como fallback quando o total gravado não existir. Itens duplicados por camadas de preço são deduplicados estritamente por ID para blindar contra qualquer receita dobrada.',
       'Filtro de Ciclo sem Curinga: O filtro ?ciclo=... aplica casamento exato por ID e por nome ("40/2026" casa com "Ciclo 40/2026", número isolado "40" casa com prefixo delimitado), sanitizando e bloqueando curingas SQL arbitrários (% e _) para prevenir bypass e vazamento amplo de dados.',
@@ -872,6 +872,76 @@ export function Requirements() {
       {/* 7. Registro de Manutenção e Limpeza de Dados */}
       <SectionTitle>7. Registro de Manutenção & Higienização do Banco de Dados</SectionTitle>
       <div className="space-y-4">
+        {/* Release v0.0.237: Correção de Scan Error em Colunas Nullable no Hook ERP de Faturamento */}
+        <div className="rounded-lg border border-border bg-card p-5 space-y-4">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="text-primary border-primary/30">
+                Release v0.0.237
+              </Badge>
+              <span className="font-semibold text-foreground">
+                0.0.237: Correção de Scan Error (NULL em contrato_id/rota_id) no Hook ERP de
+                Faturamento e Mapeamento Null
+              </span>
+            </div>
+            <span className="text-xs text-muted-foreground">Consolidado (v0.0.237)</span>
+          </div>
+          <p className="text-sm text-foreground/90 leading-relaxed">
+            Eliminação do erro HTTP 500 em produção (
+            <code>
+              sql: Scan error on column index 25, name &quot;contrato_id&quot;: converting NULL to
+              string is unsupported
+            </code>
+            ) no endpoint REST de faturamento/Power BI (<code>GET /backend/v1/erp/pedidos</code> em{' '}
+            <code>pocketbase/hooks/erp_pedidos_api.js</code>): blindagem das queries SQL de pedidos,
+            itens e chamada_itens com <code>COALESCE</code> em colunas nullable e devolução dos nós
+            relacionais ausentes como <code>null</code> legítimo para compatibilidade com o Power BI
+            / Power Query.
+          </p>
+          <div className="grid sm:grid-cols-2 gap-4 text-sm">
+            <div className="rounded-md border border-border/60 bg-muted/20 p-3 space-y-1.5">
+              <span className="font-medium text-primary">
+                1. COALESCE nas Consultas SQL & DynamicModel:
+              </span>
+              <ul className="space-y-1 text-xs text-muted-foreground">
+                <li>
+                  • Envolvimento de todas as colunas de joins externos (<code>c.id</code> /{' '}
+                  <code>contrato_id</code>, <code>r.id</code> / <code>rota_id</code>,{' '}
+                  <code>ch.id</code> / <code>chamada_id</code>, <code>ci.id</code> /{' '}
+                  <code>ciclo_id</code>, <code>e.id</code> / <code>escola_id</code> e atributos
+                  cadastrais) com <code>COALESCE(coluna, &apos;&apos;)</code> para garantir que o
+                  scanner Goja/PocketBase receba strings vazias em vez de NULL.
+                </li>
+                <li>
+                  • Proteção idêntica com <code>COALESCE</code> aplicada na busca de{' '}
+                  <code>pedido_itens</code> e <code>chamada_itens</code>, assegurando integridade
+                  mesmo em registros parciais.
+                </li>
+              </ul>
+            </div>
+            <div className="rounded-md border border-primary/30 bg-primary/5 p-3 space-y-1.5">
+              <span className="font-medium text-primary">
+                2. Mapeamento Null Canônico & Contrato Power BI:
+              </span>
+              <ul className="space-y-1 text-xs text-foreground/80">
+                <li>
+                  • Mapeamento de <code>contrato</code>, <code>rota</code>, <code>chamada</code> e{' '}
+                  <code>ciclo</code> como <code>null</code> no JSON final quando o ID respectivo
+                  estiver ausente/vazio (ex.: <code>&quot;contrato&quot;: null</code>).
+                </li>
+                <li>
+                  • Total compatibilidade com o conector Power BI / Power Query (M), evitando quebra
+                  de schema em pedidos sem contrato vinculado.
+                </li>
+                <li>
+                  • Preservação integral da autenticação por X-API-Key, total canônico consolidado,
+                  paginação, filtros e regra de nome/aka.
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
         {/* Release v0.0.236: Correção de Execução DynamicModel no Hook ERP de Faturamento */}
         <div className="rounded-lg border border-border bg-card p-5 space-y-4">
           <div className="flex items-center justify-between flex-wrap gap-2">
