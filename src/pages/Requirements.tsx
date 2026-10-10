@@ -26,7 +26,7 @@ const MODULES: ModuleSpec[] = [
     route: '/ (Página Inicial)',
     goal: 'Fornecer uma visão executiva dos contratos, do ciclo operacional e do acompanhamento das entregas em tempo real.',
     details: [
-      'Métricas em cards: Pedidos Pendentes, Contratos Ativos, Chamadas Ativas e Receita Entregue do Mês com % de realização.',
+      'Métricas em cards (v0.0.244): Grid principal ampliado para 5 colunas com os indicadores: Pedidos Pendentes (ciclos ativos), Pedidos em Rota (despachados/em trânsito no ciclo ativo, ícone Truck âmbar e atalho para /rotas), Contratos Ativos, Chamadas Ativas e Receita Entregue do Mês com % de realização.',
       'Widget "Entregas em Andamento": Acompanhamento em tempo real (alimentado por realtime/eventos no banco) das rotas em execução. Exibe identificação completa da rota (nome da rota, chamada associada, ciclo operacional, motorista responsável e crachá "Em Rota"), barra de progresso visual "X de N entregas" com percentual concluído, indicador da última sincronização em tempo relativo amigável ("há 2 min"), indicação da próxima parada a atender (primeira escola sem entrega confirmada) ou "Rota concluída" quando todas as paradas forem finalizadas. Possui estado vazio informativo quando não há rotas em trânsito e atalho de clique direto para a tela de Rotas (/rotas).',
       'Isolamento Estrito por Ciclo no Widget de Entregas (v0.0.240): O widget resolve estritamente o ciclo ativo da rota (ou ciclo corrente) ao consultar despachos ativos (getAtivoByRota com cicloId e intervalo temporal) e registros de entrega (getEntregaRegistrosDaRota com cicloId obrigatório). Blindagem anti-vazamento de ciclos: registros históricos de ciclos anteriores não contaminam o progresso do ciclo corrente; se o ciclo possuir pedidos em rota e zero entregas confirmadas naquele ciclo, o widget fixa entregasConfirmadasCount = 0 e crachá "Em Rota", nunca declarando "Rota concluída" indevidamente.',
       'Cards de Ciclos Operacionais Ativos no Dashboard (v0.0.240): Apresentação transparente dos indicadores do ciclo com distinção entre "Escolas com Pedidos" (número de unidades escolares demandantes cadastradas no ciclo) e "Entregas Concluídas: X de Y" (X = escolas com entrega efetivamente concluída no ciclo e Y = total de escolas com pedidos), eliminando a ambiguidade da métrica anterior "Escolas Atendidas", além de Pedidos, Volume Total e Valor Previsto.',
@@ -877,11 +877,87 @@ export function Requirements() {
       {/* 7. Registro de Manutenção e Limpeza de Dados */}
       <SectionTitle>7. Registro de Manutenção & Higienização do Banco de Dados</SectionTitle>
       <div className="space-y-4">
-        {/* Release v0.0.243: Documentação das Quatro Telas de Apresentação de Entregas & Ponto de Atenção Anti-Vazamento */}
+        {/* Release v0.0.244: Card "Pedidos em Rota" no Dashboard & Isolamento por Ciclos Ativos */}
         <div className="rounded-lg border-2 border-primary/40 bg-card p-5 space-y-4 shadow-sm">
           <div className="flex items-center justify-between flex-wrap gap-2">
             <div className="flex items-center gap-2">
               <Badge variant="outline" className="text-primary border-primary/40 font-semibold">
+                Release v0.0.244
+              </Badge>
+              <span className="font-semibold text-foreground">
+                0.0.244: Card &quot;Pedidos em Rota&quot; no Dashboard Executivo & Isolamento
+                Estrito por Ciclos Ativos
+              </span>
+            </div>
+            <span className="text-xs font-medium text-primary">Versão Vigente (v0.0.244)</span>
+          </div>
+
+          <p className="text-sm text-foreground/90 leading-relaxed">
+            Publicação do indicador <strong>&quot;Pedidos em Rota&quot;</strong> no Dashboard
+            principal (<code>/</code>, <code>src/pages/Index.tsx</code>) imediatamente ao lado do
+            card &quot;Pedidos Pendentes&quot;, ampliando o grid executivo para 5 colunas
+            responsivas (<code>md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5</code>). O novo card
+            utiliza ícone <code>Truck</code>, paleta âmbar (
+            <code>text-amber-600 dark:text-amber-400</code>, <code>bg-amber-500/10</code>), link
+            direto para <code>/rotas</code> e subtexto dinâmico (
+            <em>&quot;Despachados / em trânsito&quot;</em> com badge quando &gt; 0, e{' '}
+            <em>&quot;Nenhum pedido em trânsito&quot;</em> quando zerado). Tanto o card de Pedidos
+            Pendentes quanto o de Pedidos em Rota aplicam isolamento estrito pelos ciclos ativos (
+            <code>activeCiclosList</code>), impedindo vazamento de histórico encerrado e reafirmando
+            o Dashboard como uma das 4 telas de atenção obrigatória contra contaminação de estado.
+          </p>
+
+          <div className="grid sm:grid-cols-2 gap-4 text-sm">
+            <div className="rounded-md border border-border/60 bg-muted/20 p-3 space-y-1.5">
+              <span className="font-medium text-primary">
+                1. Card &quot;Pedidos em Rota&quot; e Grade Executiva:
+              </span>
+              <ul className="space-y-1 text-xs text-muted-foreground">
+                <li>
+                  • Posicionado estrategicamente logo após &quot;Pedidos Pendentes&quot; na grade
+                  superior de métricas.
+                </li>
+                <li>
+                  • Grade ajustada para 5 colunas responsivas sem deslocar nem remover as métricas
+                  existentes (Contratos Ativos, Chamadas Ativas, Receita Entregue).
+                </li>
+                <li>
+                  • Ícone Truck em moldura âmbar com badge dinâmico (&quot;X em rota&quot;) e link
+                  de navegação rápida para <code>/rotas</code>.
+                </li>
+              </ul>
+            </div>
+            <div className="rounded-md border border-primary/30 bg-primary/5 p-3 space-y-1.5">
+              <span className="font-medium text-primary">
+                2. Isolamento por Ciclos Ativos & Regra Anti-Vazamento:
+              </span>
+              <ul className="space-y-1 text-xs text-foreground/80">
+                <li>
+                  • Filtragem estrita:{' '}
+                  <code>
+                    orders.filter(o =&gt; o.status === &apos;Em Rota&apos; &amp;&amp; (!o.cicloId ||
+                    activeCicloIds.has(o.cicloId)))
+                  </code>
+                  .
+                </li>
+                <li>
+                  • NUNCA soma pedidos de ciclos fechados ou cancelados; espelha os dados em tempo
+                  real da esteira de <code>/rotas</code> e <code>/monitoramento</code>.
+                </li>
+                <li>
+                  • Reafirmação da regra anti-vazamento nas 4 telas: pedidos &quot;Em Rota&quot; com
+                  zero entregas no ciclo ativo mantêm progresso 0, nunca &quot;X de X&quot;.
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        {/* Release v0.0.243: Documentação das Quatro Telas de Apresentação de Entregas & Ponto de Atenção Anti-Vazamento */}
+        <div className="rounded-lg border border-border bg-card p-5 space-y-4">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="text-primary border-primary/30 font-semibold">
                 Release v0.0.243
               </Badge>
               <span className="font-semibold text-foreground">
@@ -889,7 +965,7 @@ export function Requirements() {
                 Atenção Obrigatórios & Regra Anti-Vazamento
               </span>
             </div>
-            <span className="text-xs font-medium text-primary">Versão Vigente (v0.0.243)</span>
+            <span className="text-xs text-muted-foreground">Consolidado (v0.0.243)</span>
           </div>
 
           <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-4 space-y-2">

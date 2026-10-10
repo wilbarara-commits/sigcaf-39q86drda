@@ -51,8 +51,6 @@ export default function Index() {
     setCicloCorrente,
   } = useApp()
 
-  const pendingOrders = orders.filter((o) => o.status === 'Pendente').length
-  const deliveriesToday = orders.filter((o) => o.status === 'Em Rota').length
   const activeContracts = contracts.filter((c) => c.status === 'Ativo').length
   const chamadasAtivas = useMemo(() => {
     return chamadas.filter((ch) => ch.status === 'Ativo')
@@ -244,6 +242,22 @@ export default function Index() {
     return map
   }, [activeCiclosList, orders])
 
+  // Pedidos Pendentes e Pedidos em Rota com isolamento por ciclos ativos (anti-vazamento)
+  const { pendingOrders, ordersEmRota } = useMemo(() => {
+    const activeCicloIds = new Set(activeCiclosList.map((c) => c.id))
+    const pendentes = orders.filter(
+      (o) => o.status === 'Pendente' && (!o.cicloId || activeCicloIds.has(o.cicloId)),
+    ).length
+    const emRota = orders.filter(
+      (o) => o.status === 'Em Rota' && (!o.cicloId || activeCicloIds.has(o.cicloId)),
+    ).length
+
+    return {
+      pendingOrders: pendentes,
+      ordersEmRota: emRota,
+    }
+  }, [orders, activeCiclosList])
+
   const metrics = [
     {
       title: 'Pedidos Pendentes',
@@ -251,6 +265,16 @@ export default function Index() {
       icon: ShoppingBasket,
       color: 'text-primary',
       bg: 'bg-primary/10',
+    },
+    {
+      title: 'Pedidos em Rota',
+      value: ordersEmRota,
+      subtext: ordersEmRota > 0 ? 'Despachados / em trânsito' : 'Nenhum pedido em trânsito',
+      badge: ordersEmRota > 0 ? `${ordersEmRota} em rota` : undefined,
+      icon: Truck,
+      color: 'text-amber-600 dark:text-amber-400',
+      bg: 'bg-amber-500/10',
+      linkTo: '/rotas',
     },
     {
       title: 'Contratos Ativos',
@@ -366,7 +390,7 @@ export default function Index() {
       {/* Widget de Entregas em Andamento em Tempo Real (Bloco 3) */}
       <EntregasEmAndamentoWidget />
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
         {metrics.map((m) => {
           const content = (
             <Card
@@ -382,7 +406,9 @@ export default function Index() {
                     <ArrowRight className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
                   )}
                 </CardTitle>
-                <div className="h-12 w-12 rounded-xl bg-primary/10 text-primary flex items-center justify-center transition-all hover:scale-105 hover:border hover:border-primary/40 shrink-0">
+                <div
+                  className={`h-12 w-12 rounded-xl ${m.bg || 'bg-primary/10'} ${m.color || 'text-primary'} flex items-center justify-center transition-all hover:scale-105 hover:border hover:border-primary/40 shrink-0`}
+                >
                   <m.icon className="h-6 w-6 stroke-[1.8]" />
                 </div>
               </CardHeader>
@@ -401,7 +427,9 @@ export default function Index() {
                           className={
                             m.title === 'Chamadas Ativas'
                               ? 'bg-indigo-100 text-indigo-800 dark:bg-indigo-950 dark:text-indigo-300 font-semibold text-xs px-2 py-0.5'
-                              : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 font-semibold text-xs px-2 py-0.5'
+                              : m.title === 'Pedidos em Rota'
+                                ? 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 font-semibold text-xs px-2 py-0.5'
+                                : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 font-semibold text-xs px-2 py-0.5'
                           }
                         >
                           {m.badge}
