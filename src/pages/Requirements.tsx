@@ -880,11 +880,77 @@ export function Requirements() {
       {/* 7. Registro de Manutenção e Limpeza de Dados */}
       <SectionTitle>7. Registro de Manutenção & Higienização do Banco de Dados</SectionTitle>
       <div className="space-y-4">
-        {/* Release v0.0.246: Cálculo Estável do Card Receita Entregue do Mês no Dashboard */}
+        {/* Release v0.0.247: Exclusão Pontual do Ciclo 42/2026 Cancelado */}
         <div className="rounded-lg border-2 border-primary/40 bg-card p-5 space-y-4 shadow-sm">
           <div className="flex items-center justify-between flex-wrap gap-2">
             <div className="flex items-center gap-2">
               <Badge variant="outline" className="text-primary border-primary/40 font-semibold">
+                Release v0.0.247
+              </Badge>
+              <span className="font-semibold text-foreground">
+                0.0.247: Exclusão Pontual do Ciclo 42/2026 Cancelado e Sem Registros Dependentes
+              </span>
+            </div>
+            <span className="text-xs font-medium text-primary">Versão Vigente (v0.0.247)</span>
+          </div>
+
+          <p className="text-sm text-foreground/90 leading-relaxed">
+            Exclusão definitiva e segura no banco de dados (Migration 0142) do registro pontual do{' '}
+            <strong>Ciclo 42/2026</strong> (id <code>sllf3p8i8wpm34i</code>, Chamada Pública 01/2025
+            Municipal) com status cancelado e motivo <em>&quot;Aberto antes da hora&quot;</em>, após
+            confirmação explícita do usuário e auditoria prévia comprovando a ausência total de
+            quaisquer registros dependentes em coleções correlatas (pedidos, despachos, rotas,
+            envios ou comprovantes).
+          </p>
+
+          <div className="grid sm:grid-cols-2 gap-4 text-sm">
+            <div className="rounded-md border border-border/60 bg-muted/20 p-3 space-y-1.5">
+              <span className="font-medium text-destructive">
+                Higienização Realizada (Migration 0142):
+              </span>
+              <ul className="space-y-1 text-xs text-muted-foreground">
+                <li>
+                  • <strong>Registro removido:</strong> Ciclo 42/2026 (id{' '}
+                  <code>sllf3p8i8wpm34i</code>) da coleção <code>ciclos</code>.
+                </li>
+                <li>
+                  • <strong>Validação prévia na migração:</strong> execução condicionada à
+                  existência do ID com nome exato &quot;Ciclo 42/2026&quot; e status
+                  &quot;cancelado&quot;, garantindo idempotência e segurança.
+                </li>
+                <li>
+                  • <strong>Zero dependências:</strong> checagem em <code>pedidos</code>,{' '}
+                  <code>despachos</code>, <code>rota_despachos</code>, <code>rota_snapshots</code>,{' '}
+                  <code>tokens_formulario</code>, <code>envios_whatsapp</code> e{' '}
+                  <code>importacoes</code>.
+                </li>
+              </ul>
+            </div>
+            <div className="rounded-md border border-primary/30 bg-primary/5 p-3 space-y-1.5">
+              <span className="font-medium text-primary">Integridade Operacional Preservada:</span>
+              <ul className="space-y-1 text-xs text-foreground/80">
+                <li>
+                  • <strong>Ciclos Ativos e Históricos:</strong> Ciclos 40/2026 e 41/2026 (Chamada
+                  01/2025 e Chamada 07/2025) 100% preservados.
+                </li>
+                <li>
+                  • <strong>Histórico de Ciclos:</strong> tela <code>/historico-ciclos</code> limpa
+                  de registro cancelado espúrio.
+                </li>
+                <li>
+                  • <strong>Regras intactas:</strong> nenhum código de telas, regras de negócio ou
+                  endpoints alterados.
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        {/* Release v0.0.246: Cálculo Estável do Card Receita Entregue do Mês no Dashboard */}
+        <div className="rounded-lg border border-border bg-card p-5 space-y-4">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="text-primary border-primary/30 font-semibold">
                 Release v0.0.246
               </Badge>
               <span className="font-semibold text-foreground">
@@ -892,7 +958,7 @@ export function Requirements() {
                 Base pela Entrega Prevista do Ciclo
               </span>
             </div>
-            <span className="text-xs font-medium text-primary">Versão Vigente (v0.0.246)</span>
+            <span className="text-xs text-muted-foreground">Consolidado (v0.0.246)</span>
           </div>
 
           <p className="text-sm text-foreground/90 leading-relaxed">
