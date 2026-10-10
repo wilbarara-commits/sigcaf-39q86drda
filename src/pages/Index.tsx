@@ -56,98 +56,122 @@ export default function Index() {
     return chamadas.filter((ch) => ch.status === 'Ativo')
   }, [chamadas])
 
-  // Receita Entregue e Total do Mês calculadas com base no valor canônico (order.total) com deduplicação de pedidos
-  const { receitaEntregueMes, receitaTotalMes, percentEntregue, currentMonthName } = useMemo(() => {
-    const now = new Date()
-    const currentYear = now.getFullYear()
-    const currentMonth = now.getMonth() // 0-indexed
+  // Mapa de ciclos indexado por ID para resolução rápida de datas de entrega/despacho
+  const ciclosMap = useMemo(() => {
+    const map = new Map<string, (typeof ciclos)[0]>()
+    for (const c of ciclos) {
+      if (c.id) map.set(c.id, c)
+    }
+    return map
+  }, [ciclos])
 
-    const monthNames = [
-      'Janeiro',
-      'Fevereiro',
-      'Março',
-      'Abril',
-      'Maio',
-      'Junho',
-      'Julho',
-      'Agosto',
-      'Setembro',
-      'Outubro',
-      'Novembro',
-      'Dezembro',
-    ]
-    const curMonthName = `${monthNames[currentMonth]} de ${currentYear}`
+  // Receita Entregue e Previsto do Mês (v0.0.246):
+  // Elimina oscilação semanal do percentual (100% -> 50% -> 100%):
+  // - Numerador: pedidos "Entregue" cuja data de entrega (entregue_em) cai no mês corrente.
+  // - Denominador ("Total previsto do mês"): numerador + pedidos NÃO entregues ("Pendente" ou "Em Rota")
+  //   cujo CICLO tem data de entrega prevista dentro do mês corrente (não pela data de criação do pedido).
+  // Deduplicação por pedido (0.0.214), cancelados fora, cap em 100%.
+  const { receitaEntregueMes, receitaPrevistaMes, percentEntregue, currentMonthName } =
+    useMemo(() => {
+      const now = new Date()
+      const currentYear = now.getFullYear()
+      const currentMonth = now.getMonth() // 0-indexed
 
-    // Resolução canônica de valor do pedido (mesmo modelo de Reports.tsx e MonthlyReportButton.tsx)
-    const obterValorPedidoCanonico = (order: (typeof orders)[0]): number => {
-      const recordedTotal = Number(order.total)
-      if (!isNaN(recordedTotal) && recordedTotal > 0) {
-        return recordedTotal
+      const monthNames = [
+        'Janeiro',
+        'Fevereiro',
+        'Março',
+        'Abril',
+        'Maio',
+        'Junho',
+        'Julho',
+        'Agosto',
+        'Setembro',
+        'Outubro',
+        'Novembro',
+        'Dezembro',
+      ]
+      const curMonthName = `${monthNames[currentMonth]} de ${currentYear}`
+
+      // Resolução canônica de valor do pedido (mesmo modelo de Reports.tsx e MonthlyReportButton.tsx)
+      const obterValorPedidoCanonico = (order: (typeof orders)[0]): number => {
+        const recordedTotal = Number(order.total)
+        if (!isNaN(recordedTotal) && recordedTotal > 0) {
+          return recordedTotal
+        }
+
+        // Fallback = soma dos itens do próprio pedido sem re-consultar contratos
+        if (order.items && order.items.length > 0) {
+          const somaItens = order.items.reduce((acc, it) => {
+            const qtd = Number(it.quantity) || 0
+            const preco = Number(it.price) || 0
+            return acc + qtd * preco
+          }, 0)
+          return Math.round(somaItens * 100) / 100
+        }
+
+        return 0
       }
 
-      // Fallback = soma dos itens do próprio pedido sem re-consultar contratos
-      if (order.items && order.items.length > 0) {
-        const somaItens = order.items.reduce((acc, it) => {
-          const qtd = Number(it.quantity) || 0
-          const preco = Number(it.price) || 0
-          return acc + qtd * preco
-        }, 0)
-        return Math.round(somaItens * 100) / 100
+      let entregueTotal = 0
+      let pendentePrevistoTotal = 0
+      const seenOrderIds = new Set<string>()
+
+      for (const order of orders) {
+        if (!order.id || seenOrderIds.has(order.id)) continue
+        seenOrderIds.add(order.id)
+
+        if (order.status === 'Cancelado') continue
+
+        if (order.status === 'Entregue') {
+          // Pedido Entregue: verifica se a data de entrega (entregue_em) cai no mês corrente
+          const rawDateStr = order.entregue_em || order.date || ''
+          if (!rawDateStr) continue
+          const orderDate = new Date(rawDateStr)
+          if (isNaN(orderDate.getTime())) continue
+
+          const isInCurrentMonth =
+            orderDate.getFullYear() === currentYear && orderDate.getMonth() === currentMonth
+
+          if (isInCurrentMonth) {
+            entregueTotal += obterValorPedidoCanonico(order)
+          }
+        } else if (order.status === 'Pendente' || order.status === 'Em Rota') {
+          // Pedidos ainda NÃO entregues: elegíveis para o previsto se o CICLO entrega no mês corrente
+          if (!order.cicloId) continue
+          const ciclo = ciclosMap.get(order.cicloId)
+          if (!ciclo) continue
+
+          const dataDespacho = getDespachoEfetivoCiclo(ciclo)
+          if (isNaN(dataDespacho.getTime())) continue
+
+          const isCicloInCurrentMonth =
+            dataDespacho.getFullYear() === currentYear && dataDespacho.getMonth() === currentMonth
+
+          if (isCicloInCurrentMonth) {
+            pendentePrevistoTotal += obterValorPedidoCanonico(order)
+          }
+        }
       }
 
-      return 0
-    }
+      const previstoTotal = entregueTotal + pendentePrevistoTotal
+      const rawPct = previstoTotal > 0 ? (entregueTotal / previstoTotal) * 100 : 0
+      // O percentual exibido nunca passa de 100%; se por dado legado passar, capar em 100%
+      const pct = Math.min(100, Math.max(0, rawPct))
 
-    // Filtrar pedidos cujo mês e ano correspondam ao mês corrente
-    // Não consideramos pedidos com status "Cancelado" na receita
-    let entregueTotal = 0
-    let geralMesTotal = 0
-    const seenOrderIds = new Set<string>()
-
-    for (const order of orders) {
-      if (!order.id || seenOrderIds.has(order.id)) continue
-      seenOrderIds.add(order.id)
-
-      if (order.status === 'Cancelado') continue
-
-      // Extrair data do pedido (ou entregue_em se entregue)
-      const rawDateStr =
-        (order.status === 'Entregue' && order.entregue_em ? order.entregue_em : null) ||
-        order.date ||
-        ''
-      if (!rawDateStr) continue
-
-      const orderDate = new Date(rawDateStr)
-      if (isNaN(orderDate.getTime())) continue
-
-      const isInCurrentMonth =
-        orderDate.getFullYear() === currentYear && orderDate.getMonth() === currentMonth
-
-      if (!isInCurrentMonth) continue
-
-      const valorPedido = obterValorPedidoCanonico(order)
-      geralMesTotal += valorPedido
-
-      if (order.status === 'Entregue') {
-        entregueTotal += valorPedido
+      return {
+        receitaEntregueMes: entregueTotal,
+        receitaPrevistaMes: previstoTotal,
+        percentEntregue: pct,
+        currentMonthName: curMonthName,
       }
-    }
-
-    const pct = geralMesTotal > 0 ? (entregueTotal / geralMesTotal) * 100 : 0
-
-    return {
-      receitaEntregueMes: entregueTotal,
-      receitaTotalMes: geralMesTotal,
-      percentEntregue: pct,
-      currentMonthName: curMonthName,
-    }
-  }, [orders])
+    }, [orders, ciclosMap])
 
   const formattedReceitaEntregue = receitaEntregueMes.toLocaleString('pt-BR', {
     style: 'currency',
     currency: 'BRL',
   })
-  const formattedReceitaTotal = receitaTotalMes.toLocaleString('pt-BR', {
+  const formattedReceitaPrevista = receitaPrevistaMes.toLocaleString('pt-BR', {
     style: 'currency',
     currency: 'BRL',
   })
@@ -297,7 +321,7 @@ export default function Index() {
     {
       title: 'Receita Entregue do Mês',
       value: formattedReceitaEntregue,
-      subtext: `${formattedPercent} do total do mês (${formattedReceitaTotal})`,
+      subtext: `${formattedPercent} do previsto do mês (${formattedReceitaPrevista})`,
       badge: formattedPercent,
       icon: PackageCheck,
       color: 'text-primary',

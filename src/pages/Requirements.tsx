@@ -26,7 +26,8 @@ const MODULES: ModuleSpec[] = [
     route: '/ (Página Inicial)',
     goal: 'Fornecer uma visão executiva dos contratos, do ciclo operacional e do acompanhamento das entregas em tempo real.',
     details: [
-      'Métricas em cards (v0.0.244): Grid principal ampliado para 5 colunas com os indicadores: Pedidos Pendentes (ciclos ativos), Pedidos em Rota (despachados/em trânsito no ciclo ativo, ícone Truck âmbar e atalho para /rotas), Contratos Ativos, Chamadas Ativas e Receita Entregue do Mês com % de realização.',
+      'Métricas em cards (v0.0.244 / v0.0.246): Grid principal em 5 colunas com os indicadores: Pedidos Pendentes (ciclos ativos), Pedidos em Rota (despachados/em trânsito no ciclo ativo, ícone Truck âmbar e atalho para /rotas), Contratos Ativos, Chamadas Ativas e Receita Entregue do Mês com % de realização calculada sobre o previsto do mês.',
+      'Cálculo de Receita Entregue e Previsto do Mês (v0.0.246 — Opção A): Eliminação definitiva da oscilação semanal do percentual (100% → 50% → 100%). Numerador: soma do valor canônico (campo total do pedido; fallback para soma dos itens) dos pedidos com status "Entregue" cuja data de entrega (entregue_em) cai no mês corrente (desduplicados por ID, cancelados excluídos). Denominador ("Total previsto do mês"): numerador + pedidos NÃO entregues (status "Pendente" ou "Em Rota") cujo CICLO tem data de entrega/despacho prevista (dia de despacho/entrega da chamada) dentro do mês corrente. Pedidos feitos no mês anterior cujo ciclo entrega no mês corrente entram no denominador (e no numerador quando entregues), mantendo o percentual coerente, estável e com teto em 100%. Rótulo explicativo no subtexto: "X% do previsto do mês (R$ Y)".',
       'Widget "Entregas em Andamento": Acompanhamento em tempo real (alimentado por realtime/eventos no banco) das rotas em execução. Exibe identificação completa da rota (nome da rota, chamada associada, ciclo operacional, motorista responsável e crachá "Em Rota"), barra de progresso visual "X de N entregas" com percentual concluído, indicador da última sincronização em tempo relativo amigável ("há 2 min"), indicação da próxima parada a atender (primeira escola sem entrega confirmada) ou "Rota concluída" quando todas as paradas forem finalizadas. Possui estado vazio informativo quando não há rotas em trânsito e atalho de clique direto para a tela de Rotas (/rotas).',
       'Isolamento Estrito por Ciclo no Widget de Entregas (v0.0.240): O widget resolve estritamente o ciclo ativo da rota (ou ciclo corrente) ao consultar despachos ativos (getAtivoByRota com cicloId e intervalo temporal) e registros de entrega (getEntregaRegistrosDaRota com cicloId obrigatório). Blindagem anti-vazamento de ciclos: registros históricos de ciclos anteriores não contaminam o progresso do ciclo corrente; se o ciclo possuir pedidos em rota e zero entregas confirmadas naquele ciclo, o widget fixa entregasConfirmadasCount = 0 e crachá "Em Rota", nunca declarando "Rota concluída" indevidamente.',
       'Cards de Ciclos Operacionais Ativos no Dashboard (v0.0.240): Apresentação transparente dos indicadores do ciclo com distinção entre "Escolas com Pedidos" (número de unidades escolares demandantes cadastradas no ciclo) e "Entregas Concluídas: X de Y" (X = escolas com entrega efetivamente concluída no ciclo e Y = total de escolas com pedidos), eliminando a ambiguidade da métrica anterior "Escolas Atendidas", além de Pedidos, Volume Total e Valor Previsto.',
@@ -879,11 +880,92 @@ export function Requirements() {
       {/* 7. Registro de Manutenção e Limpeza de Dados */}
       <SectionTitle>7. Registro de Manutenção & Higienização do Banco de Dados</SectionTitle>
       <div className="space-y-4">
-        {/* Release v0.0.245: Domínio Único de Ciclos no Eixo X da Comparação de Consumo */}
+        {/* Release v0.0.246: Cálculo Estável do Card Receita Entregue do Mês no Dashboard */}
         <div className="rounded-lg border-2 border-primary/40 bg-card p-5 space-y-4 shadow-sm">
           <div className="flex items-center justify-between flex-wrap gap-2">
             <div className="flex items-center gap-2">
               <Badge variant="outline" className="text-primary border-primary/40 font-semibold">
+                Release v0.0.246
+              </Badge>
+              <span className="font-semibold text-foreground">
+                0.0.246: Cálculo Estável do Card &quot;Receita Entregue do Mês&quot; no Dashboard —
+                Base pela Entrega Prevista do Ciclo
+              </span>
+            </div>
+            <span className="text-xs font-medium text-primary">Versão Vigente (v0.0.246)</span>
+          </div>
+
+          <p className="text-sm text-foreground/90 leading-relaxed">
+            Ajuste na lógica de consolidação do card{' '}
+            <strong>&quot;Receita Entregue do Mês&quot;</strong> no Dashboard executivo (
+            <code>/</code>, <code>src/pages/Index.tsx</code>) para eliminar a oscilação semanal do
+            percentual (onde a cada ciclo semanal novos pedidos entravam no denominador pela data de
+            criação e faziam a porcentagem saltar de 100% para 50% e voltar a 100%). A nova regra
+            (Opção A — base pela entrega prevista) alinha a temporalidade de ambos os termos: o{' '}
+            <strong>numerador</strong> computa os pedidos entregues cuja data efetiva de entrega (
+            <code>entregue_em</code>) cai no mês corrente, enquanto o <strong>denominador</strong>{' '}
+            (&quot;Total previsto do mês&quot;) computa a receita já entregue somada aos pedidos não
+            entregues (<em>Pendente</em> ou <em>Em Rota</em>) cujo{' '}
+            <strong>CICLO operacional possui data de entrega/despacho</strong> (
+            <code>getDespachoEfetivoCiclo</code>) programada para o mês corrente, em vez da data de
+            criação do pedido.
+          </p>
+
+          <div className="grid sm:grid-cols-2 gap-4 text-sm">
+            <div className="rounded-md border border-border/60 bg-muted/20 p-3 space-y-1.5">
+              <span className="font-medium text-primary">
+                1. Regras de Numerador, Denominador & Coerência Temporal:
+              </span>
+              <ul className="space-y-1 text-xs text-muted-foreground">
+                <li>
+                  • <strong>Numerador:</strong> soma do valor canônico (<code>order.total</code>;
+                  fallback para soma dos itens) dos pedidos com status &quot;Entregue&quot; cuja
+                  data de entrega (<code>entregue_em</code>) cai no mês corrente.
+                </li>
+                <li>
+                  • <strong>Denominador (Previsto do Mês):</strong> numerador + pedidos com status{' '}
+                  &quot;Pendente&quot; ou &quot;Em Rota&quot; cujo ciclo entrega no mês corrente (
+                  <code>getDespachoEfetivoCiclo(ciclo)</code>).
+                </li>
+                <li>
+                  • <strong>Pedidos entre meses:</strong> pedidos feitos no final do mês passado
+                  cujo ciclo entrega neste mês entram no denominador (e no numerador quando
+                  entregues), sem distorção de base.
+                </li>
+                <li>
+                  • Deduplicação estrita por <code>order.id</code> (regra da v0.0.214), pedidos
+                  Cancelados desconsiderados e percentual protegido com limite em 100%.
+                </li>
+              </ul>
+            </div>
+            <div className="rounded-md border border-primary/30 bg-primary/5 p-3 space-y-1.5">
+              <span className="font-medium text-primary">
+                2. Apresentação & Preservação das Quatro Telas de Entregas:
+              </span>
+              <ul className="space-y-1 text-xs text-foreground/80">
+                <li>
+                  • <strong>Apresentação Clara:</strong> Card mantém o valor entregue em destaque e
+                  subtexto explicativo: <em>&quot;X% do previsto do mês (R$ Y)&quot;</em>.
+                </li>
+                <li>
+                  • <strong>Outros cards preservados:</strong> Pedidos Pendentes, Pedidos em Rota,
+                  Contratos Ativos, Chamadas Ativas e ciclos operacionais permanecem intactos.
+                </li>
+                <li>
+                  • <strong>Ponto de Atenção v0.0.243 intacto:</strong> O widget &quot;Entregas em
+                  Andamento&quot; mantém estritamente o isolamento por <code>ciclo_id</code> e a
+                  regra anti-vazamento (pedidos &quot;Em Rota&quot; + zero entregas = progresso 0).
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        {/* Release v0.0.245: Domínio Único de Ciclos no Eixo X da Comparação de Consumo */}
+        <div className="rounded-lg border border-border bg-card p-5 space-y-4">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="text-primary border-primary/30">
                 Release v0.0.245
               </Badge>
               <span className="font-semibold text-foreground">
@@ -891,7 +973,7 @@ export function Requirements() {
                 Sem Pontos Repetidos
               </span>
             </div>
-            <span className="text-xs font-medium text-primary">Versão Vigente (v0.0.245)</span>
+            <span className="text-xs text-muted-foreground">Consolidado (v0.0.245)</span>
           </div>
 
           <p className="text-sm text-foreground/90 leading-relaxed">
