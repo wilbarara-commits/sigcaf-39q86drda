@@ -33,6 +33,8 @@ import {
   Layers,
 } from 'lucide-react'
 import type { CicloRecord, Order, Product, School, ChamadaRecord, Contract } from '@/lib/types'
+import { extractCicloCodigo } from '@/lib/cicloUtils'
+import { parseProductNameAka } from '@/lib/atestoPdfGenerator'
 
 export type DimensionMode = 'escolas' | 'chamadas' | 'contratos'
 
@@ -87,27 +89,99 @@ export function ConsumptionComparison({
   // Busca do filtro na lista lateral de checkboxes
   const [buscaItem, setBuscaItem] = useState('')
 
-  // Ciclos ordenados cronologicamente (mais antigos para mais recentes para o gráfico caminhar para frente)
-  // Pegamos os últimos N ciclos ordenando por data_inicio decrescente, pegamos N e invertemos
-  const recentCiclos = useMemo(() => {
-    const valid = ciclos.filter((c) => c.status !== 'cancelado')
-    const sortedDesc = [...valid].sort((a, b) => {
-      const dtA = a.data_inicio || a.created || ''
-      const dtB = b.data_inicio || b.created || ''
-      return dtB.localeCompare(dtA)
+  // Filtro opcional por Chamada Pública para focar os ciclos e pedidos (ex.: Todas, 01/2025 Municipal, 07/2025 Estadual)
+  const [filtroChamadaId, setFiltroChamadaId] = useState<string>('todas')
+
+  // Normalização do código canônico do ciclo "N/AAAA" (ex.: "40/2026")
+  // Cada ciclo semanal tem UMA ÚNICA coordenada no eixo X.
+  const formatCicloCanonical = (c: CicloRecord): string => {
+    const cod = extractCicloCodigo(c.nome)
+    if (cod) return cod
+    return c.nome.replace(/^Ciclo\s+/i, '').trim() || c.nome
+  }
+
+  // Ponto de ciclo canônico unificado no eixo X
+  interface CanonicalCyclePoint {
+    codigo: string // "40/2026"
+    displayLabel: string // "40/2026"
+    cicloIds: string[] // IDs físicos no banco de dados correspondentes a este mesmo ciclo semanal
+    dataRef: string
+  }
+
+  // Obter domínio único de ciclos (N/AAAA) cronologicamente ordenados:
+  // 1. Considera ciclos válidos (status !== 'cancelado')
+  // 2. Se houver filtro por chamada ativo, foca nos ciclos dessa chamada (ou todos se 'todas')
+  // 3. Agrupa por código canônico (ex.: "40/2026"), unificando ciclos homônimos de chamadas distintas em uma só coordenada
+  // 4. Seleciona os últimos N ciclos cronológicos únicos e inverte para o eixo X caminhar para frente
+  const recentCyclePoints = useMemo<CanonicalCyclePoint[]>(() => {
+    const valid = ciclos.filter((c) => {
+      if (c.status === 'cancelado') return false
+      if (filtroChamadaId !== 'todas' && c.chamada_id !== filtroChamadaId) return false
+      return true
     })
+
+    // Agrupar por código canônico (ex: "40/2026")
+    const grouped = new Map<string, { cicloIds: string[]; dataRef: string }>()
+
+    valid.forEach((c) => {
+      const codigo = formatCicloCanonical(c)
+      const dataRef = c.data_inicio || c.created || ''
+      const existing = grouped.get(codigo)
+      if (!existing) {
+        grouped.set(codigo, { cicloIds: [c.id], dataRef })
+      } else {
+        existing.cicloIds.push(c.id)
+        if (dataRef && (!existing.dataRef || dataRef < existing.dataRef)) {
+          existing.dataRef = dataRef
+        }
+      }
+    })
+
+    // Ordenar decrescente por dataRef e desempate por ano/semana
+    const sortedDesc = Array.from(grouped.entries())
+      .map(([codigo, val]) => ({
+        codigo,
+        displayLabel: codigo,
+        cicloIds: val.cicloIds,
+        dataRef: val.dataRef,
+      }))
+      .sort((a, b) => {
+        if (a.dataRef && b.dataRef && a.dataRef !== b.dataRef) {
+          return b.dataRef.localeCompare(a.dataRef)
+        }
+        const parseSemanaAno = (cod: string) => {
+          const parts = cod.split('/')
+          if (parts.length === 2) {
+            const sem = parseInt(parts[0], 10) || 0
+            const ano = parseInt(parts[1], 10) || 0
+            return ano * 100 + sem
+          }
+          return 0
+        }
+        return parseSemanaAno(b.codigo) - parseSemanaAno(a.codigo)
+      })
+
     const slice = sortedDesc.slice(0, numCiclos)
     return slice.reverse()
-  }, [ciclos, numCiclos])
+  }, [ciclos, numCiclos, filtroChamadaId])
 
-  // Identificador do ciclo -> label amigável no eixo X
-  const cicloLabels = useMemo(() => {
+  // Set de IDs de ciclo físicos elegíveis para cruzamento de pedidos
+  const eligibleCycleIdsSet = useMemo(() => {
+    const set = new Set<string>()
+    recentCyclePoints.forEach((cp) => {
+      cp.cicloIds.forEach((id) => set.add(id))
+    })
+    return set
+  }, [recentCyclePoints])
+
+  // Mapa de cada cicloId para seu código canônico no eixo X
+  const cicloIdToCanonicalCode = useMemo(() => {
     const map = new Map<string, string>()
-    recentCiclos.forEach((c) => {
-      map.set(c.id, c.nome)
+    recentCyclePoints.forEach((cp) => {
+      cp.cicloIds.forEach((id) => map.set(id, cp.codigo))
     })
     return map
-  }, [recentCiclos])
+  }, [recentCyclePoints])
 
   // Produto atualmente ativo
   const currentProduct = useMemo(() => {
@@ -243,14 +317,12 @@ export function ConsumptionComparison({
     }
   }, [availableContracts, selectedContractIds.length])
 
-  // Pedidos elegíveis dos ciclos recentes
-  const recentCycleIds = useMemo(() => new Set(recentCiclos.map((c) => c.id)), [recentCiclos])
-
+  // Pedidos elegíveis dos ciclos recentes (anti-vazamento: estritamente vinculados aos cicloIds da janela)
   const eligibleOrders = useMemo(() => {
     return orders.filter(
-      (o) => o.cicloId && recentCycleIds.has(o.cicloId) && o.status !== 'Cancelado',
+      (o) => o.cicloId && eligibleCycleIdsSet.has(o.cicloId) && o.status !== 'Cancelado',
     )
-  }, [orders, recentCycleIds])
+  }, [orders, eligibleCycleIdsSet])
 
   // Entidades selecionadas na dimensão atual
   const activeEntities = useMemo(() => {
@@ -296,34 +368,40 @@ export function ConsumptionComparison({
     return map
   }, [activeEntities])
 
-  // Montagem dos pontos dos gráficos para cada ciclo na janela
-  // chartDataKg e chartDataReais: [{ cicloId, cicloNome, [entidadeId]: valor }]
+  // Montagem dos pontos dos gráficos com DOMÍNIO ÚNICO DE CICLOS (N/AAAA) no eixo X
+  // Cada ciclo da janela de análise aparece EXATAMENTE UMA VEZ no eixo horizontal.
+  // chartDataKg e chartDataReais: [{ cicloCodigo: '40/2026', cicloLabel: '40/2026', [entidadeId]: valor | null }]
+  // Se uma entidade não opera/participa naquele ciclo, o valor pode ser 0 ou null (lacuna suave).
   const { chartDataKg, chartDataReais, maxKg, maxReais } = useMemo(() => {
     const kgRows: Array<Record<string, any>> = []
     const reaisRows: Array<Record<string, any>> = []
     let peakKg = 0
     let peakReais = 0
 
-    // Pré-agrupar pedidos por ciclo
-    const ordersByCiclo = new Map<string, Order[]>()
-    recentCiclos.forEach((c) => ordersByCiclo.set(c.id, []))
+    // Pré-agrupar pedidos diretamente pelo CÓDIGO CANÔNICO DO CICLO (ex.: "40/2026")
+    // Desta forma, se houver pedidos do Ciclo 40/2026 na Chamada Municipal e outros pedidos
+    // do Ciclo 40/2026 na Chamada Estadual, todos eles se encontram na MESMA coordenada horizontal 40/2026!
+    const ordersByCanonicalCiclo = new Map<string, Order[]>()
+    recentCyclePoints.forEach((cp) => ordersByCanonicalCiclo.set(cp.codigo, []))
+
     eligibleOrders.forEach((o) => {
-      if (o.cicloId && ordersByCiclo.has(o.cicloId)) {
-        ordersByCiclo.get(o.cicloId)!.push(o)
+      if (o.cicloId && cicloIdToCanonicalCode.has(o.cicloId)) {
+        const canonicalCode = cicloIdToCanonicalCode.get(o.cicloId)!
+        ordersByCanonicalCiclo.get(canonicalCode)?.push(o)
       }
     })
 
-    recentCiclos.forEach((c) => {
-      const cOrders = ordersByCiclo.get(c.id) || []
-      const cicloLabel = cicloLabels.get(c.id) || c.nome
+    // Cada ciclo canonical é UMA ÚNICA coordenada horizontal no eixo X
+    recentCyclePoints.forEach((cp) => {
+      const cOrders = ordersByCanonicalCiclo.get(cp.codigo) || []
 
       const kgRow: Record<string, any> = {
-        cicloId: c.id,
-        cicloNome: cicloLabel,
+        cicloCodigo: cp.codigo,
+        cicloLabel: cp.displayLabel, // Ex: "40/2026"
       }
       const reaisRow: Record<string, any> = {
-        cicloId: c.id,
-        cicloNome: cicloLabel,
+        cicloCodigo: cp.codigo,
+        cicloLabel: cp.displayLabel,
       }
 
       // Inicializa 0 para todas as entidades ativas
@@ -379,9 +457,9 @@ export function ConsumptionComparison({
       maxReais: peakReais,
     }
   }, [
-    recentCiclos,
+    recentCyclePoints,
     eligibleOrders,
-    cicloLabels,
+    cicloIdToCanonicalCode,
     activeEntities,
     dimensao,
     selectedProductId,
@@ -540,6 +618,24 @@ export function ConsumptionComparison({
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
+          {/* Filtro Opcional de Chamada Pública */}
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-muted-foreground">Chamada:</span>
+            <Select value={filtroChamadaId} onValueChange={setFiltroChamadaId}>
+              <SelectTrigger className="h-8 w-[150px] text-xs">
+                <SelectValue placeholder="Todas as chamadas" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todas">Todas as chamadas</SelectItem>
+                {chamadas.map((ch) => (
+                  <SelectItem key={ch.id} value={ch.id}>
+                    Chamada {ch.chamada}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
           <div className="flex items-center gap-2">
             <span className="text-xs text-muted-foreground">Janela de análise:</span>
             <Select
@@ -558,8 +654,8 @@ export function ConsumptionComparison({
           </div>
 
           <Badge variant="outline" className="text-xs">
-            {recentCiclos.length}{' '}
-            {recentCiclos.length === 1 ? 'ciclo analisado' : 'ciclos analisados'}
+            {recentCyclePoints.length}{' '}
+            {recentCyclePoints.length === 1 ? 'ciclo no eixo' : 'ciclos no eixo'}
           </Badge>
         </div>
       </div>
@@ -588,11 +684,15 @@ export function ConsumptionComparison({
                   <SelectValue placeholder="Selecione um produto..." />
                 </SelectTrigger>
                 <SelectContent className="max-h-[300px]">
-                  {products.map((p) => (
-                    <SelectItem key={p.id} value={p.id} className="text-xs">
-                      {p.name} {p.unit ? `(${p.unit})` : ''}
-                    </SelectItem>
-                  ))}
+                  {products.map((p) => {
+                    const parsed = parseProductNameAka(p.name)
+                    const displayName = parsed.nomePrincipal || p.name
+                    return (
+                      <SelectItem key={p.id} value={p.id} className="text-xs">
+                        {displayName} {p.unit ? `(${p.unit})` : ''}
+                      </SelectItem>
+                    )
+                  })}
                 </SelectContent>
               </Select>
             </CardContent>
@@ -714,8 +814,11 @@ export function ConsumptionComparison({
                 <div>
                   <CardTitle className="text-base flex items-center gap-2">
                     <Scale className="h-4 w-4 text-primary" />
-                    Tendência de Consumo ({currentProduct?.name || 'Insumo'}) — Últimos {numCiclos}{' '}
-                    Ciclos
+                    Tendência de Consumo (
+                    {parseProductNameAka(currentProduct?.name || '').nomePrincipal ||
+                      currentProduct?.name ||
+                      'Insumo'}
+                    ) — Últimos {recentCyclePoints.length} Ciclos
                   </CardTitle>
                   <CardDescription className="text-xs">
                     Evolução do volume consumido em {unidadeLabel} por{' '}
@@ -738,9 +841,9 @@ export function ConsumptionComparison({
                   Selecione ao menos um item na lista ao lado para exibir a tendência de consumo em{' '}
                   {unidadeLabel}.
                 </div>
-              ) : recentCiclos.length === 0 ? (
+              ) : recentCyclePoints.length === 0 ? (
                 <div className="h-[280px] flex items-center justify-center border border-dashed rounded-md text-xs text-muted-foreground">
-                  Nenhum ciclo registrado para comparação.
+                  Nenhum ciclo registrado para comparação no período selecionado.
                 </div>
               ) : (
                 <div className="h-[300px] w-full">
@@ -751,7 +854,7 @@ export function ConsumptionComparison({
                     >
                       <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" opacity={0.6} />
                       <XAxis
-                        dataKey="cicloNome"
+                        dataKey="cicloLabel"
                         tick={{ fontSize: 11, fill: '#64748b' }}
                         tickLine={false}
                         axisLine={{ stroke: '#cbd5e1' }}
@@ -817,7 +920,7 @@ export function ConsumptionComparison({
                 <div>
                   <CardTitle className="text-base flex items-center gap-2">
                     <DollarSign className="h-4 w-4 text-emerald-600" />
-                    Valor Consolidado (R$) — Últimos {numCiclos} Ciclos
+                    Valor Consolidado (R$) — Últimos {recentCyclePoints.length} Ciclos
                   </CardTitle>
                   <CardDescription className="text-xs">
                     Evolução do faturamento total canônico dos pedidos por{' '}
@@ -847,9 +950,9 @@ export function ConsumptionComparison({
                   Selecione ao menos um item na lista ao lado para exibir a tendência financeira em
                   R$.
                 </div>
-              ) : recentCiclos.length === 0 ? (
+              ) : recentCyclePoints.length === 0 ? (
                 <div className="h-[280px] flex items-center justify-center border border-dashed rounded-md text-xs text-muted-foreground">
-                  Nenhum ciclo registrado para comparação.
+                  Nenhum ciclo registrado para comparação no período selecionado.
                 </div>
               ) : (
                 <div className="h-[300px] w-full">
@@ -860,7 +963,7 @@ export function ConsumptionComparison({
                     >
                       <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" opacity={0.6} />
                       <XAxis
-                        dataKey="cicloNome"
+                        dataKey="cicloLabel"
                         tick={{ fontSize: 11, fill: '#64748b' }}
                         tickLine={false}
                         axisLine={{ stroke: '#cbd5e1' }}

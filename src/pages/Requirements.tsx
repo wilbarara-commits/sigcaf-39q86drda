@@ -296,8 +296,10 @@ const MODULES: ModuleSpec[] = [
       'Abas organizadas em "Lista de Ciclos" e "Comparação de Consumo", permitindo transitar instantaneamente entre a auditoria da esteira semanal e a inteligência visual de tendências.',
       'Relação cronológica de todos os ciclos cadastrados exibindo a FASE PRÓPRIA de cada ciclo (Coletando, Correção, Coleta Encerrada, Fechado ou Cancelado), com indicação de período, previsão de despacho, total de escolas atendidas, pedidos, volume e valor.',
       'Badges Derivados e Motivo de Cancelamento: Exibe o badge "Fechamento Pendente (atrasado X dias)" para ciclos não-terminais que não sejam o ativo mais recente, e exibe o motivo de cancelamento de forma destacada em ciclos/contratos cancelados.',
-      'Comparação de Consumo Multidimensional (v0.0.234): Gráficos semelhantes em linha com seletor de dimensão (Escolas, Chamadas e Contratos) e seletor configurável de janela (Últimos 4, 8 ou 12 Ciclos).',
-      'Dois Gráficos Sincronizados por Dimensão: (1) Quantidade em KG (ou unidade correspondente) do insumo selecionado somando os itens dos pedidos correspondentes; (2) Valor financeiro canônico em R$ apurado diretamente de order.total, sem risco de recálculo ou distorção por camadas de preço.',
+      'Comparação de Consumo Multidimensional (v0.0.234 / v0.0.245): Gráficos semelhantes em linha com seletor de dimensão (Escolas, Chamadas e Contratos), seletor de janela de análise (Últimos 4, 8 ou 12 Ciclos) e filtro dedicado por Chamada Pública.',
+      'Domínio Único de Ciclos no Eixo X (v0.0.245): O eixo horizontal estabelece um domínio único de coordenadas semanais cronológicas no padrão canônico N/AAAA (ex.: 40/2026, 41/2026). Cada ciclo aparece exatamente UMA vez no eixo X, sem duplicação ou fragmentação de pontos entre séries ou chamadas paralelas.',
+      'Consolidação Canônica em Coordenada Vertical Única: Em cada ciclo, os valores de cada série selecionada (escola, chamada ou contrato) são consolidados na mesma coordenada temporal. O gráfico de Volume em KG soma os itens do insumo selecionado (respeitando o nome principal antes da vírgula) e o gráfico de Valor em R$ consolida canonicamente os pedidos ativos via order.total.',
+      'Isolamento Estrito e Anti-Vazamento: Apenas pedidos com status diferente de Cancelado pertencentes aos ciclos físicos correspondentes da janela são computados, sem vazamento temporal.',
       'Ações Disponíveis: Botão "Abrir Ciclo" para iniciar novo período operacional, ação de visualização de "Detalhes", ação "Cancelar Ciclo" para ciclos não-terminais e modal de "Comparar Ciclos (Tabela)" (base vs comparado) com variação absoluta e percentual por produto.',
     ],
   },
@@ -877,11 +879,83 @@ export function Requirements() {
       {/* 7. Registro de Manutenção e Limpeza de Dados */}
       <SectionTitle>7. Registro de Manutenção & Higienização do Banco de Dados</SectionTitle>
       <div className="space-y-4">
-        {/* Release v0.0.244: Card "Pedidos em Rota" no Dashboard & Isolamento por Ciclos Ativos */}
+        {/* Release v0.0.245: Domínio Único de Ciclos no Eixo X da Comparação de Consumo */}
         <div className="rounded-lg border-2 border-primary/40 bg-card p-5 space-y-4 shadow-sm">
           <div className="flex items-center justify-between flex-wrap gap-2">
             <div className="flex items-center gap-2">
               <Badge variant="outline" className="text-primary border-primary/40 font-semibold">
+                Release v0.0.245
+              </Badge>
+              <span className="font-semibold text-foreground">
+                0.0.245: Domínio Único de Ciclos no Eixo X da Comparação de Consumo & Consolidação
+                Sem Pontos Repetidos
+              </span>
+            </div>
+            <span className="text-xs font-medium text-primary">Versão Vigente (v0.0.245)</span>
+          </div>
+
+          <p className="text-sm text-foreground/90 leading-relaxed">
+            Correção definitiva dos gráficos de tendência de consumo e valor consolidado na aba{' '}
+            <strong>&quot;Comparação de Consumo&quot;</strong> em <code>/historico-ciclos</code> (
+            <code>src/components/ConsumptionComparison.tsx</code>). Anteriormente, a coexistência de
+            ciclos semanais com o mesmo número/ano em chamadas públicas distintas (ex.:{' '}
+            <em>Ciclo 40/2026 Municipal</em> e <em>Ciclo 40/2026 Estadual</em>) provocava a
+            repetição de rótulos no eixo horizontal (duas posições separadas para 40/2026 no eixo
+            X). A arquitetura foi refatorada para estabelecer um{' '}
+            <strong>domínio unificado de ciclos</strong> ordenado cronologicamente, com rótulo no
+            padrão canônico <code>N/AAAA</code> (ex.: <code>40/2026</code>), onde cada ciclo aparece
+            exatamente <strong>uma única vez no eixo horizontal</strong>, com todas as séries
+            (Escolas, Chamadas e Contratos) compartilhando rigorosamente a mesma coordenada
+            temporal.
+          </p>
+
+          <div className="grid sm:grid-cols-2 gap-4 text-sm">
+            <div className="rounded-md border border-border/60 bg-muted/20 p-3 space-y-1.5">
+              <span className="font-medium text-primary">
+                1. Domínio Único de Ciclos & Coordenada Compartilhada:
+              </span>
+              <ul className="space-y-1 text-xs text-muted-foreground">
+                <li>
+                  • Unificação de ciclos com mesmo código semanal (<code>extractCicloCodigo</code>)
+                  em uma só categoria cronológica.
+                </li>
+                <li>
+                  • Cada ponto do eixo X agrega todos os IDs de ciclos correspondentes (ex.: 40/2026
+                  da Municipal e 40/2026 da Estadual).
+                </li>
+                <li>
+                  • Eliminação total de duplicidade no eixo X nos três modos: Escolas, Chamadas e
+                  Contratos.
+                </li>
+              </ul>
+            </div>
+            <div className="rounded-md border border-primary/30 bg-primary/5 p-3 space-y-1.5">
+              <span className="font-medium text-primary">
+                2. Filtro por Chamada & Regras Canônicas de Produtos e Valores:
+              </span>
+              <ul className="space-y-1 text-xs text-foreground/80">
+                <li>
+                  • Inclusão de filtro dedicado por <strong>Chamada Pública</strong> na barra
+                  superior, permitindo focar a análise em uma chamada específica ou comparar todas.
+                </li>
+                <li>
+                  • Aplicação estrita da regra do nome do produto (<code>parseProductNameAka</code>:
+                  nome antes da vírgula no seletor e títulos).
+                </li>
+                <li>
+                  • Preservação do cálculo canônico do valor em R$ (<code>order.total</code>) e
+                  volume em KG/unidade sem vazamento entre ciclos.
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        {/* Release v0.0.244: Card "Pedidos em Rota" no Dashboard & Isolamento por Ciclos Ativos */}
+        <div className="rounded-lg border border-border bg-card p-5 space-y-4">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="text-primary border-primary/30 font-semibold">
                 Release v0.0.244
               </Badge>
               <span className="font-semibold text-foreground">
@@ -889,7 +963,7 @@ export function Requirements() {
                 Estrito por Ciclos Ativos
               </span>
             </div>
-            <span className="text-xs font-medium text-primary">Versão Vigente (v0.0.244)</span>
+            <span className="text-xs text-muted-foreground">Consolidado (v0.0.244)</span>
           </div>
 
           <p className="text-sm text-foreground/90 leading-relaxed">
