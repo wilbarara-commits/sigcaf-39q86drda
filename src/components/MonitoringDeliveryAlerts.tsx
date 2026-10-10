@@ -252,6 +252,11 @@ export function MonitoringDeliveryAlerts({
     let hasNewConfirmedDelivery = false
     const rotasEmAndamentoIds = new Set(rotasEmAndamentoDoCiclo.map((r) => r.id))
 
+    const tCicloIni = ciclo?.data_inicio ? new Date(ciclo.data_inicio).getTime() : null
+    const tCicloFim = ciclo?.data_fim
+      ? new Date(ciclo.data_fim).getTime() + 24 * 60 * 60 * 1000
+      : null
+
     for (const r of entregaRegistros) {
       const chaveId = r.id
       const chaveUid = r.client_uid
@@ -266,7 +271,24 @@ export function MonitoringDeliveryAlerts({
 
         // Se o registro pertence a uma rota do ciclo em andamento e possui confirmação
         if (r.confirmado_em && r.rota_id && rotasEmAndamentoIds.has(r.rota_id)) {
-          hasNewConfirmedDelivery = true
+          // Validação estrita de pertencimento ao ciclo selecionado
+          let pertenceAoCiclo = false
+          if (ciclo?.id) {
+            if (r.ciclo_id) {
+              pertenceAoCiclo = r.ciclo_id === ciclo.id
+            } else if (tCicloIni && tCicloFim) {
+              // Registro legado sem ciclo_id: validação na janela data_inicio a data_fim + 24h
+              const rawData = r.confirmado_em || (r as any).created
+              const tRec = rawData ? new Date(rawData).getTime() : 0
+              pertenceAoCiclo = tRec >= tCicloIni && tRec <= tCicloFim
+            }
+          } else {
+            pertenceAoCiclo = true
+          }
+
+          if (pertenceAoCiclo) {
+            hasNewConfirmedDelivery = true
+          }
         }
       }
     }
@@ -274,7 +296,14 @@ export function MonitoringDeliveryAlerts({
     if (hasNewConfirmedDelivery) {
       playDeliveryNotificationSound()
     }
-  }, [entregaRegistros, rotasEmAndamentoDoCiclo, ultimoEventoEntrega])
+  }, [
+    entregaRegistros,
+    rotasEmAndamentoDoCiclo,
+    ultimoEventoEntrega,
+    ciclo?.id,
+    ciclo?.data_inicio,
+    ciclo?.data_fim,
+  ])
 
   // Análise detalhada de cada rota em andamento
   const analiseRotas = useMemo(() => {
@@ -295,16 +324,59 @@ export function MonitoringDeliveryAlerts({
         .filter((p) => (p.rota_id || (p as any).rota_logistica_id) === rota.id)
         .sort((a, b) => a.ordem - b.ordem)
 
-      // Registros deduplicados da rota (do contexto)
-      const registrosDeduplicados = getEntregaRegistrosDaRota(rota.id)
+      // Registros deduplicados da rota (do contexto) estritamente pelo ciclo selecionado
+      const rawRegistros = ciclo?.id
+        ? getEntregaRegistrosDaRota(rota.id, ciclo.id)
+        : getEntregaRegistrosDaRota(rota.id)
+
+      // Filtro defensivo: manter apenas registros do ciclo selecionado
+      // Se tiver ciclo_id, deve ser idêntico ao ciclo.id.
+      // Se for registro legado sem ciclo_id, aceitar apenas se confirmado_em / created estiver na janela data_inicio a data_fim + 24h
+      const tCicloIni = ciclo?.data_inicio ? new Date(ciclo.data_inicio).getTime() : null
+      const tCicloFim = ciclo?.data_fim
+        ? new Date(ciclo.data_fim).getTime() + 24 * 60 * 60 * 1000
+        : null
+
+      const registrosDeduplicados = rawRegistros.filter((reg) => {
+        if (!ciclo?.id) return true
+        if (reg.ciclo_id) {
+          return reg.ciclo_id === ciclo.id
+        }
+        // Legado sem ciclo_id
+        if (tCicloIni && tCicloFim) {
+          const rawData = reg.confirmado_em || (reg as any).created
+          const tReg = rawData ? new Date(rawData).getTime() : 0
+          return tReg >= tCicloIni && tReg <= tCicloFim
+        }
+        return false
+      })
+
+      // Regra anti-vazamento: se existem pedidos da rota com cicloId === ciclo.id e status "Em Rota"
+      // e nenhuma entrega confirmada no ciclo, então entregasFeitas = 0 e paradas pendentes = todas.
+      const pedidosDaRotaNoCiclo = ciclo?.id
+        ? orders.filter(
+            (o) =>
+              o.cicloId === ciclo.id && (o.rotaLogisticaId === rota.id || o.rotaId === rota.id),
+          )
+        : []
+      const temPedidosEmRota = pedidosDaRotaNoCiclo.some((o) => o.status === 'Em Rota')
+
+      // Entregas confirmadas válidas no ciclo para escolas da rota
+      const temEntregaConfirmadaNoCiclo = registrosDeduplicados.some((r) =>
+        Boolean(r.confirmado_em && r.confirmado_em.trim() !== ''),
+      )
+
+      const aplicarRegraAntiVazamento = temPedidosEmRota && !temEntregaConfirmadaNoCiclo
 
       // Mapa de confirmações indexado pelo ID do banco da escola (nunca por nome)
       const registrosPorEscolaId = new Map<string, EntregaRegistroRecord>()
-      registrosDeduplicados.forEach((reg) => {
-        if (reg.escola_id && reg.confirmado_em) {
-          registrosPorEscolaId.set(reg.escola_id, reg)
-        }
-      })
+      if (!aplicarRegraAntiVazamento) {
+        registrosDeduplicados.forEach((reg) => {
+          if (reg.escola_id && reg.confirmado_em) {
+            registrosPorEscolaId.set(reg.escola_id, reg)
+          }
+        })
+      }
 
       // Cálculo de sincronização e alerta de "Rota parada" (> 30 minutos)
       // Base de cálculo: horário da última entrega confirmada da rota (o registro mais recente).
@@ -412,6 +484,8 @@ export function MonitoringDeliveryAlerts({
     rotasEmAndamentoDoCiclo,
     despachosAtivos,
     paradasRota,
+    ciclo,
+    orders,
     getEntregaRegistrosDaRota,
     schools,
   ])

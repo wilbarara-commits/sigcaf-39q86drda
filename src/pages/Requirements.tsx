@@ -246,7 +246,7 @@ const MODULES: ModuleSpec[] = [
       'Ciclo de Vida do Botão "Colocar em Rota" na Fase 3 (v0.0.195 / v0.0.212): No cartão da Fase 3 (Coleta Encerrada), o botão segue o ciclo de vida: (1) Disponível e habilitado ("Colocar em Rota") quando a coleta estiver encerrada e não houver despacho ativo nem entregas concluídas; (2) "Em Rota" (desabilitado) quando houver despacho ou pedidos com status "Em Rota"; (3) Oculto quando as entregas forem concluídas (isEntregasConcluidas: despachos encerrados, todos os pedidos ativos entregues e nenhum em rota), cedendo lugar ao badge visual definitivo "Entregas Concluídas" no cabeçalho do cartão.',
       'Navegação Contextual Dashboard → Monitoramento (v0.0.195): Os links do Dashboard (card de ciclo ativo e atalho "Ver Ciclo" das chamadas públicas ativas) navegam com parâmetros de URL contextuais `?cicloId=&chamadaId=`. A tela /monitoramento consome searchParams e pré-seleciona imediatamente o ciclo e chamada correspondentes em todas as seções (cabeçalho, painel informativo, fases, funil e alertas de escolas).',
       'Ciclo Operacional Corrente (v0.0.198): O ciclo em foco na operação diária é gerenciado globalmente via `AppContext` e sincronizado no `localStorage` (chave "sigcaf_ciclo_corrente"). Ao clicar na seta "Monitorar" nos cards de ciclo ativo do Dashboard ou na ação de monitoramento, o ciclo corrente é registrado. As telas de Monitoramento, Novo Pedido e Rotas de Entrega seguem a ordem de precedência: (1) query params de URL (?cicloId=&chamadaId=), (2) ciclo corrente gravado se existir no banco de dados, (3) fallback padrão atual. A troca pontual de ciclo no seletor de consulta dentro da tela NÃO altera o ciclo corrente (consulta local isolada). A página Histórico de Ciclos não é afetada por essa regra.',
-      'Alertas da Fase de Entrega em Monitoramento — Bloco B (v0.0.204 / v0.0.208): Seção dinâmica no painel de monitoramento visível quando o ciclo monitorado possui rotas despachadas com status "Em Rota" (ou equivalente em andamento). Incorpora três alertas operacionais em tempo real: (1) "Rota parada": motorista sem sincronizar há mais de 30 minutos (limite exato definido pela cooperativa, baseado na hora da última entrega confirmada da rota deduplicada ou no horário do despacho caso nenhuma entrega tenha ocorrido ainda; atualização reativa via realtime + timer a cada 30 segundos); (2) "Paradas pendentes": escolas da rota ainda não entregues com contagem "faltam X de N" e identificação estrita pelo ID do banco (nunca casando por nome); (3) "Entrega sem assinatura": lista de escolas cuja entrega foi confirmada sem assinatura do responsável, com clique direto para o modal "Dados da Entrega" compartilhado; (4) Aviso sonoro melódico curto via Web Audio API disparado na central a cada nova entrega confirmada recebida via realtime (sem dependências externas, bloqueado na carga inicial, protegido contra repetições por client_uid/ID e com toggle de MUTE persistido no localStorage); (5) Reatividade total ao fechamento: ao ser confirmada a "Rota Entregue" pela secretária, o despacho é desativado na hora e a rota, seus alertas e paradas pendentes somem imediatamente em tempo real, sem F5.',
+      'Alertas da Fase de Entrega em Monitoramento — Bloco B (v0.0.204 / v0.0.208 / v0.0.242): Seção dinâmica no painel de monitoramento visível quando o ciclo monitorado possui rotas despachadas com status "Em Rota" (ou equivalente em andamento). Incorpora três alertas operacionais em tempo real e isolamento estrito por ciclo (v0.0.242): (1) "Rota parada": motorista sem sincronizar há mais de 30 minutos (limite exato definido pela cooperativa, baseado na hora da última entrega confirmada da rota deduplicada ou no horário do despacho caso nenhuma entrega tenha ocorrido ainda; atualização reativa via realtime + timer a cada 30 segundos); (2) "Paradas pendentes": escolas da rota ainda não entregues com contagem "faltam X de N" e identificação estrita pelo ID do banco (nunca casando por nome); (3) "Entrega sem assinatura": lista de escolas cuja entrega foi confirmada sem assinatura do responsável, com clique direto para o modal "Dados da Entrega" compartilhado; (4) Aviso sonoro melódico curto via Web Audio API disparado na central a cada nova entrega confirmada pertencente ao ciclo monitorado recebida via realtime (sem dependências externas, bloqueado na carga inicial, validado por ciclo_id e janela de datas, protegido contra repetições por client_uid/ID e com toggle de MUTE persistido no localStorage); (5) Isolamento Estrito & Regra Anti-Vazamento (v0.0.242): getEntregaRegistrosDaRota invocado com ciclo.id; filtro defensivo aceitando apenas registros do ciclo selecionado (ou legados dentro da janela data_inicio a data_fim + 24h); regra anti-vazamento garantindo que caso existam pedidos da rota "Em Rota" no ciclo e nenhuma entrega confirmada no ciclo, a contagem de entregas feitas inicia em 0 de N e todas as paradas ficam pendentes, sem exibir "X de X entregas realizadas" nem "Todas as escolas desta rota já foram entregues!"; (6) Reatividade total ao fechamento: ao ser confirmada a "Rota Entregue" pela secretária, o despacho é desativado na hora e a rota, seus alertas e paradas pendentes somem imediatamente em tempo real, sem F5.',
       'Painel de Alertas das Escolas: Identificação imediata e distinção operacional entre escolas que "Já receberam o link do formulário" (disparo registrado no envios_whatsapp) e escolas que "Já preencheram" (pedido com origem=formulario no ciclo) versus escolas sem nenhum pedido, facilitando cobrar diretamente quem falta via WhatsApp.',
     ],
   },
@@ -877,6 +877,79 @@ export function Requirements() {
       {/* 7. Registro de Manutenção e Limpeza de Dados */}
       <SectionTitle>7. Registro de Manutenção & Higienização do Banco de Dados</SectionTitle>
       <div className="space-y-4">
+        {/* Release v0.0.242: Correção de Vazamento de Ciclo na Página /monitoramento (MonitoringDeliveryAlerts) */}
+        <div className="rounded-lg border border-border bg-card p-5 space-y-4">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="text-primary border-primary/30">
+                Release v0.0.242
+              </Badge>
+              <span className="font-semibold text-foreground">
+                0.0.242: Isolamento Estrito por Ciclo em /monitoramento (MonitoringDeliveryAlerts) &
+                Regra Anti-Vazamento
+              </span>
+            </div>
+            <span className="text-xs text-muted-foreground">Consolidado (v0.0.242)</span>
+          </div>
+          <p className="text-sm text-foreground/90 leading-relaxed">
+            Eliminação definitiva do vazamento de registros de entrega entre ciclos na tela de
+            Monitoramento (<code>/monitoramento</code> / <code>MonitoringDeliveryAlerts.tsx</code>):
+            correção da chamada <code>getEntregaRegistrosDaRota(rota.id, ciclo.id)</code> para
+            passar obrigatoriamente o ciclo selecionado, aplicando filtro defensivo restrito ao
+            ciclo (registros legados sem <code>ciclo_id</code> validados estritamente pela janela
+            temporal <code>data_inicio</code> até <code>data_fim + 24h</code>). Implementação da
+            regra anti-vazamento: se a rota possui pedidos &quot;Em Rota&quot; no ciclo selecionado
+            e zero entregas confirmadas naquele ciclo, a rota exibe{' '}
+            <code>0 de N entregas realizadas</code> e todas as paradas como pendentes, impedindo a
+            exibição espúria de &quot;11 de 11 entregas realizadas&quot; e &quot;Todas as escolas
+            desta rota já foram entregues!&quot;. Adicionalmente, o efeito sonoro via Web Audio API
+            foi blindado para disparar exclusivamente quando a nova entrega confirmada pertencer ao
+            ciclo monitorado.
+          </p>
+          <div className="grid sm:grid-cols-2 gap-4 text-sm">
+            <div className="rounded-md border border-border/60 bg-muted/20 p-3 space-y-1.5">
+              <span className="font-medium text-primary">
+                1. Consulta Estrita e Filtro Defensivo (MonitoringDeliveryAlerts.tsx):
+              </span>
+              <ul className="space-y-1 text-xs text-muted-foreground">
+                <li>
+                  • Inclusão mandatória de <code>ciclo.id</code> em{' '}
+                  <code>getEntregaRegistrosDaRota(rota.id, ciclo.id)</code>.
+                </li>
+                <li>
+                  • Filtro defensivo: preserva apenas <code>reg.ciclo_id === ciclo.id</code>;
+                  legados sem ciclo_id aceitos somente dentro da janela temporal do ciclo (início
+                  até fim + 24h).
+                </li>
+                <li>
+                  • Efeito sonoro restrito: validação de <code>ciclo_id</code> e janela temporal
+                  antes de disparar o alerta sonoro de nova entrega.
+                </li>
+              </ul>
+            </div>
+            <div className="rounded-md border border-primary/30 bg-primary/5 p-3 space-y-1.5">
+              <span className="font-medium text-primary">
+                2. Regra Anti-Vazamento e Alertas da Rota:
+              </span>
+              <ul className="space-y-1 text-xs text-foreground/80">
+                <li>
+                  • Detecção de pedidos da rota com <code>cicloId === ciclo.id</code> e status
+                  &quot;Em Rota&quot;.
+                </li>
+                <li>
+                  • Se há pedidos &quot;Em Rota&quot; e nenhuma entrega confirmada no ciclo,{' '}
+                  <code>entregasFeitas = 0</code> e todas as paradas cadastradas permanecem
+                  pendentes.
+                </li>
+                <li>
+                  • Bloqueio absoluto do texto &quot;Todas as escolas desta rota já foram
+                  entregues!&quot; em ciclos recém-iniciados.
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
         {/* Release v0.0.241: Correção de Vazamento de Ciclo no Portal do Motorista */}
         <div className="rounded-lg border border-border bg-card p-5 space-y-4">
           <div className="flex items-center justify-between flex-wrap gap-2">
