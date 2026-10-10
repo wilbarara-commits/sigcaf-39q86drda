@@ -483,23 +483,51 @@ export const MotoristaPortal: React.FC = () => {
     }
   }
 
-  // Contagem de entregas realizadas
+  // Helper defensivo para validar se um registro pertence ao ciclo/despacho ativo
+  const isRegistroDoCicloAtivo = useCallback(
+    (reg?: EntregaRegistroRecord | null) => {
+      if (!reg || !reg.confirmado_em) return false
+      if (!data) return false
+      const cicloAtivoId = data.despacho.ciclo_id
+      const despachoAtivoId = data.despacho.id
+
+      // Se o registro tem ciclo_id ou despacho_id, deve casar com o ciclo ou despacho ativo
+      if (reg.ciclo_id && cicloAtivoId) {
+        return reg.ciclo_id === cicloAtivoId
+      }
+      if (reg.despacho_id && despachoAtivoId) {
+        return reg.despacho_id === despachoAtivoId
+      }
+      // Se não tem ciclo_id nem despacho_id gravados (legado), aceita apenas se vinculado pelo carregarPortalMotorista
+      return Boolean(cicloAtivoId || despachoAtivoId)
+    },
+    [data],
+  )
+
+  // Contagem de entregas realizadas no ciclo ativo
   const contagemEntregas = useMemo(() => {
     if (!data?.paradas) return { feitas: 0, total: 0 }
     const total = data.paradas.length
-    // Conta se tem registro confirmado no banco ou na fila local
+    // Conta se tem registro confirmado no banco pertencente ao ciclo do despacho ativo ou na fila local do token
     const entreguesSet = new Set<string>()
     data.paradas.forEach((p) => {
-      if (p.registro?.confirmado_em) entreguesSet.add(p.escola_id)
+      if (isRegistroDoCicloAtivo(p.registro)) {
+        entreguesSet.add(p.escola_id)
+      }
     })
     filaLocal.forEach((f) => {
-      entreguesSet.add(f.escola_id)
+      if (f.confirmado_em) {
+        // Se a fila tiver despacho_id, deve coincidir com o despacho atual
+        if (!f.despacho_id || f.despacho_id === data.despacho.id) {
+          entreguesSet.add(f.escola_id)
+        }
+      }
     })
     return {
       feitas: entreguesSet.size,
       total,
     }
-  }, [data, filaLocal])
+  }, [data, filaLocal, isRegistroDoCicloAtivo])
 
   const pendentesSyncCount = useMemo(() => {
     return filaLocal.filter((f) => f.status_sync === 'pendente').length
@@ -510,14 +538,17 @@ export const MotoristaPortal: React.FC = () => {
     if (!data?.paradas) return null
     return (
       data.paradas.find((p) => {
-        const estaEntregueNoBanco = Boolean(p.registro?.confirmado_em)
+        const estaEntregueNoBanco = isRegistroDoCicloAtivo(p.registro)
         const estaEntregueNaFila = filaLocal.some(
-          (f) => f.escola_id === p.escola_id && f.confirmado_em,
+          (f) =>
+            f.escola_id === p.escola_id &&
+            Boolean(f.confirmado_em) &&
+            (!f.despacho_id || f.despacho_id === data.despacho.id),
         )
         return !estaEntregueNoBanco && !estaEntregueNaFila
       }) || null
     )
-  }, [data, filaLocal])
+  }, [data, filaLocal, isRegistroDoCicloAtivo])
 
   // Última parada FECHADA (já entregue) na ordem da rota
   const ultimaParadaEntregue = useMemo(() => {
@@ -525,16 +556,19 @@ export const MotoristaPortal: React.FC = () => {
     // Filtra todas as paradas já entregues e pega a de maior ordem (última entregue)
     const entregues = data.paradas
       .filter((p) => {
-        const estaEntregueNoBanco = Boolean(p.registro?.confirmado_em)
+        const estaEntregueNoBanco = isRegistroDoCicloAtivo(p.registro)
         const estaEntregueNaFila = filaLocal.some(
-          (f) => f.escola_id === p.escola_id && f.confirmado_em,
+          (f) =>
+            f.escola_id === p.escola_id &&
+            Boolean(f.confirmado_em) &&
+            (!f.despacho_id || f.despacho_id === data.despacho.id),
         )
         return estaEntregueNoBanco || estaEntregueNaFila
       })
       .sort((a, b) => b.ordem - a.ordem)
 
     return entregues[0] || null
-  }, [data, filaLocal])
+  }, [data, filaLocal, isRegistroDoCicloAtivo])
 
   // Coordenadas válidas para o trecho:
   // - Antes da primeira entrega: origem = Depósito Central (das configurações)
@@ -790,8 +824,13 @@ export const MotoristaPortal: React.FC = () => {
                   nome: p.escola?.nome || 'Escola',
                   ordem: p.ordem,
                   entregue: Boolean(
-                    p.registro?.confirmado_em ||
-                    filaLocal.some((f) => f.escola_id === p.escola_id && f.confirmado_em),
+                    isRegistroDoCicloAtivo(p.registro) ||
+                    filaLocal.some(
+                      (f) =>
+                        f.escola_id === p.escola_id &&
+                        Boolean(f.confirmado_em) &&
+                        (!f.despacho_id || f.despacho_id === data.despacho.id),
+                    ),
                   ),
                 }
               })}
@@ -825,14 +864,25 @@ export const MotoristaPortal: React.FC = () => {
             data.paradas.map((parada) => {
               const escola = parada.escola
               const filaItem = filaLocal.find((f) => f.escola_id === parada.escola_id)
+              const registroValidoCiclo = isRegistroDoCicloAtivo(parada.registro)
+                ? parada.registro
+                : undefined
+              const filaValidaCiclo =
+                filaItem && (!filaItem.despacho_id || filaItem.despacho_id === data.despacho.id)
+                  ? filaItem
+                  : undefined
+
               const estaEntregue = Boolean(
-                parada.registro?.confirmado_em || filaItem?.confirmado_em,
+                registroValidoCiclo?.confirmado_em || filaValidaCiclo?.confirmado_em,
               )
-              const horaChegada = formatTime(parada.registro?.chegada_em || filaItem?.chegada_em)
+              const horaChegada = formatTime(
+                registroValidoCiclo?.chegada_em || filaValidaCiclo?.chegada_em,
+              )
               const horaConfirmacao = formatTime(
-                parada.registro?.confirmado_em || filaItem?.confirmado_em,
+                registroValidoCiclo?.confirmado_em || filaValidaCiclo?.confirmado_em,
               )
-              const statusSyncItem = filaItem?.status_sync || parada.registro?.status_sync
+              const statusSyncItem =
+                filaValidaCiclo?.status_sync || registroValidoCiclo?.status_sync
 
               // Resolução defensiva de campos da escola (compatível com EscolaRecord real e UI School)
               const escolaNome =

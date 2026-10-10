@@ -222,6 +222,7 @@ const MODULES: ModuleSpec[] = [
       '• Sincronização Automática em Ordem: O portal monitora a reconexão à internet (evento "online" do dispositivo e rotina periódica de retry). Assim que a conexão é restabelecida, a sincronização é disparada automaticamente, transmitindo os registros na ordem cronológica em que foram efetuados.',
       '• Preservação dos Horários Reais da Entrega: A persistência no banco grava os horários reais em que o motorista realizou a entrega no campo (chegada e confirmação originais), e NÃO o momento posterior em que os dados foram sincronizados.',
       'Sugestão de Coordenadas Geográficas da Escola pelo Motorista (v0.0.231): Ao confirmar a entrega no celular, a coordenada GPS capturada naquele instante é registrada como SUGESTÃO na coleção `coordenada_sugestoes` (com precisão métrica, data/hora, motorista e ciclo). A coordenada NÃO é aplicada diretamente na escola: entra em fila pendente para revisão da cooperativa em /escolas e /rotas. Conta com deduplicação inteligente (tolerância < 50m) para não poluir a fila em entregas subsequentes.',
+      'Isolamento Estrito por Ciclo e Anti-Vazamento no Portal do Motorista (v0.0.241): O carregamento da rota no portal do motorista (`carregarPortalMotorista`) resolve estritamente o `ciclo_id` e a janela de datas do despacho ativo (com fallback legado pelo ciclo ativo da chamada), consultando registros de entrega estritamente casados com `ciclo_id` ou `despacho_id`. Aplica regra anti-vazamento absoluta: quando o ciclo possui pedidos "Em Rota" e zero entregas confirmadas naquele ciclo, nenhum registro de ciclo anterior contamina a tela; todas as paradas permanecem com o botão "Registrar Entrega", o contador de entregas feitas inicia em 0/N e o banner verde de conclusão não é exibido indevidamente.',
     ],
   },
   {
@@ -876,6 +877,81 @@ export function Requirements() {
       {/* 7. Registro de Manutenção e Limpeza de Dados */}
       <SectionTitle>7. Registro de Manutenção & Higienização do Banco de Dados</SectionTitle>
       <div className="space-y-4">
+        {/* Release v0.0.241: Correção de Vazamento de Ciclo no Portal do Motorista */}
+        <div className="rounded-lg border border-border bg-card p-5 space-y-4">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="text-primary border-primary/30">
+                Release v0.0.241
+              </Badge>
+              <span className="font-semibold text-foreground">
+                0.0.241: Isolamento Estrito por Ciclo no Portal do Motorista & Regra Anti-Vazamento
+              </span>
+            </div>
+            <span className="text-xs text-muted-foreground">Consolidado (v0.0.241)</span>
+          </div>
+          <p className="text-sm text-foreground/90 leading-relaxed">
+            Eliminação definitiva do vazamento de ciclo no Portal do Motorista (
+            <code>/motorista?token=...</code>): correção em <code>carregarPortalMotorista</code> (
+            <code>src/services/rota-despachos.ts</code>) para resolver ativamente o ciclo do
+            despacho (<code>despacho.ciclo_id</code>, ou ciclo ativo da chamada em legados) e
+            filtrar <code>entrega_registros</code> estritamente por{' '}
+            <code>rota_id = X && (ciclo_id = cicloResolvido || despacho_id = despachoAtivo)</code>,
+            com fallback por janela temporal restrito a registros legados com{' '}
+            <code>ciclo_id = &quot;&quot;</code>. Aplicação da regra anti-vazamento: se a rota
+            possui pedidos &quot;Em Rota&quot; no ciclo e zero entregas confirmadas, nenhuma parada
+            é marcada como entregue. No front-end (<code>MotoristaPortal.tsx</code>), as contagens
+            de entregas feitas, a identificação da próxima parada pendente e a exibição do banner de
+            conclusão validam estritamente o ciclo do despacho ativo, iniciando em 0/N com botões
+            &quot;Registrar Entrega&quot; ativos.
+          </p>
+          <div className="grid sm:grid-cols-2 gap-4 text-sm">
+            <div className="rounded-md border border-border/60 bg-muted/20 p-3 space-y-1.5">
+              <span className="font-medium text-primary">
+                1. carregarPortalMotorista (src/services/rota-despachos.ts):
+              </span>
+              <ul className="space-y-1 text-xs text-muted-foreground">
+                <li>
+                  • Resolução mandatória de <code>resolvedCicloId</code> pelo despacho ou ciclo
+                  ativo da chamada.
+                </li>
+                <li>
+                  • Filtro estrito em <code>entrega_registros</code> por <code>ciclo_id</code> do
+                  ciclo do despacho ou <code>despacho_id</code> ativo.
+                </li>
+                <li>
+                  • Regra anti-vazamento: se há pedidos &quot;Em Rota&quot; e 0 entregas no ciclo
+                  ativo, registros retorna array vazio.
+                </li>
+                <li>
+                  • Despacho retornado contém <code>ciclo_id</code> e <code>chamada_id</code>{' '}
+                  devidamente propagados.
+                </li>
+              </ul>
+            </div>
+            <div className="rounded-md border border-primary/30 bg-primary/5 p-3 space-y-1.5">
+              <span className="font-medium text-primary">
+                2. MotoristaPortal.tsx (src/pages/MotoristaPortal.tsx):
+              </span>
+              <ul className="space-y-1 text-xs text-foreground/80">
+                <li>
+                  • Função <code>isRegistroDoCicloAtivo</code> validando se cada entrega pertence ao
+                  ciclo/despacho ativo.
+                </li>
+                <li>
+                  • Contagem <code>contagemEntregas</code> (feitas/total) e mapa de trecho filtrados
+                  estritamente pelo ciclo ativo.
+                </li>
+                <li>
+                  • Paradas do ciclo sem entregas confirmadas exibem botão &quot;Registrar
+                  Entrega&quot;, horários limpos e sem banner indevido.
+                </li>
+                <li>• Fila local offline validada contra o despacho atual do token.</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
         {/* Release v0.0.240: Correção de Vazamento de Ciclo no Dashboard e Clareza de Escolas */}
         <div className="rounded-lg border border-border bg-card p-5 space-y-4">
           <div className="flex items-center justify-between flex-wrap gap-2">

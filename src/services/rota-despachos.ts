@@ -563,15 +563,115 @@ export const rotaDespachosService = {
       console.warn('Não foi possível obter números de contrato dos vínculos:', e)
     }
 
-    // 4. Buscar registros de entrega já existentes para esta rota
+    // 4. Resolver ciclo_id e chamada_id do despacho para isolamento estrito contra vazamento de ciclos
+    let resolvedCicloId = (despacho.ciclo_id || '').trim()
+    let resolvedChamadaId = (despacho.chamada_id || (rota as any).chamada_id || '').trim()
+    let cicloDataInicio: string | undefined
+    let cicloDataFim: string | undefined
+
+    if (resolvedCicloId) {
+      try {
+        const cicloRec = await pb.collection('ciclos').getOne<CicloRecord>(resolvedCicloId)
+        if (cicloRec) {
+          cicloDataInicio = cicloRec.data_inicio
+          cicloDataFim = cicloRec.data_fim
+          if (!resolvedChamadaId && cicloRec.chamada_id) {
+            resolvedChamadaId = cicloRec.chamada_id
+          }
+        }
+      } catch (e) {
+        console.warn('Erro ao carregar ciclo vinculado ao despacho:', e)
+      }
+    } else if (resolvedChamadaId) {
+      // Fallback legado se ciclo_id estiver vazio: busca ciclo ativo da chamada
+      try {
+        const ciclosAtivos = await pb.collection('ciclos').getList<CicloRecord>(1, 1, {
+          filter: `chamada_id = "${resolvedChamadaId}" && status != "fechado" && status != "cancelado"`,
+          sort: '-created,-data_inicio',
+        })
+        if (ciclosAtivos.items.length > 0) {
+          const cAtivo = ciclosAtivos.items[0]
+          resolvedCicloId = cAtivo.id
+          cicloDataInicio = cAtivo.data_inicio
+          cicloDataFim = cAtivo.data_fim
+        }
+      } catch (e) {
+        console.warn('Erro ao resolver ciclo ativo por chamada:', e)
+      }
+    }
+
+    // 5. Buscar registros de entrega já existentes para esta rota e este ciclo/despacho
     let registros: EntregaRegistroRecord[] = []
     try {
-      registros = await pb.collection('entrega_registros').getFullList<EntregaRegistroRecord>({
-        filter: `rota_id = "${rotaId}"`,
-        sort: '-confirmado_em',
-      })
+      if (resolvedCicloId) {
+        // Filtrar estritamente pelo ciclo do despacho ou pelo id do despacho ativo
+        let filterRegistros = `rota_id = "${rotaId}" && (ciclo_id = "${resolvedCicloId}" || despacho_id = "${despacho.id}")`
+        registros = await pb.collection('entrega_registros').getFullList<EntregaRegistroRecord>({
+          filter: filterRegistros,
+          sort: '-confirmado_em,-created',
+        })
+
+        // Fallback resiliente para registros legados que possuem ciclo_id = "" mas foram confirmados na janela do ciclo
+        if (cicloDataInicio && cicloDataFim) {
+          try {
+            const legados = await pb
+              .collection('entrega_registros')
+              .getFullList<EntregaRegistroRecord>({
+                filter: `rota_id = "${rotaId}" && ciclo_id = ""`,
+                sort: '-confirmado_em,-created',
+              })
+            if (legados.length > 0) {
+              const tInicio = new Date(cicloDataInicio).getTime()
+              const tFim = new Date(cicloDataFim).getTime() + 24 * 60 * 60 * 1000
+              const legadosValidos = legados.filter((reg) => {
+                const dataConf = reg.confirmado_em || reg.created
+                if (!dataConf) return false
+                const t = new Date(dataConf).getTime()
+                return t >= tInicio && t <= tFim
+              })
+              // Adiciona apenas se não houver registro já encontrado para a mesma escola
+              const escolasJaPresentes = new Set(registros.map((r) => r.escola_id))
+              for (const leg of legadosValidos) {
+                if (!escolasJaPresentes.has(leg.escola_id)) {
+                  registros.push(leg)
+                  escolasJaPresentes.add(leg.escola_id)
+                }
+              }
+            }
+          } catch (e) {
+            console.warn('Fallback por janela temporal de registros legados falhou:', e)
+          }
+        }
+      } else {
+        // Se realmente não houver ciclo identificável, filtra ao menos pelo despacho_id
+        registros = await pb.collection('entrega_registros').getFullList<EntregaRegistroRecord>({
+          filter: `rota_id = "${rotaId}" && despacho_id = "${despacho.id}"`,
+          sort: '-confirmado_em,-created',
+        })
+      }
     } catch (err) {
       console.warn('Não foi possível carregar registros prévios de entrega:', err)
+    }
+
+    // 6. Regra Anti-Vazamento Estrita:
+    // Se a rota possui pedidos "Em Rota" cadastrados no ciclo ativo e zero entregas confirmadas naquele ciclo,
+    // garantimos registros = [] para que nenhuma parada venha indevidamente marcada como entregue de ciclos anteriores.
+    if (resolvedCicloId) {
+      try {
+        const pedidosRotaNoCiclo = await pb.collection('pedidos').getFullList<any>({
+          filter: `rota_id = "${rotaId}" && ciclo_id = "${resolvedCicloId}"`,
+        })
+        const temPedidosEmRota = pedidosRotaNoCiclo.some((p) => p.status === 'Em Rota')
+        const temPedidosEntregues = pedidosRotaNoCiclo.some((p) => p.status === 'Entregue')
+
+        // Se há pedidos em rota e NENHUM pedido com status "Entregue" no ciclo,
+        // a rota acabou de ser despachada ou está em trânsito sem entregas: registros deve ser vazio.
+        if (temPedidosEmRota && !temPedidosEntregues && registros.length === 0) {
+          registros = []
+        }
+      } catch (e) {
+        console.warn('Verificação anti-vazamento por pedidos da rota no ciclo falhou:', e)
+      }
     }
 
     const registrosPorEscola = new Map<string, EntregaRegistroRecord>()
@@ -588,8 +688,15 @@ export const rotaDespachosService = {
       registro: registrosPorEscola.get(p.escola_id),
     }))
 
+    // Assegurar que despacho retornado carregue ciclo_id e chamada_id resolvidos
+    const despachoCompleto: RotaDespachoRecord = {
+      ...despacho,
+      ciclo_id: resolvedCicloId || despacho.ciclo_id,
+      chamada_id: resolvedChamadaId || despacho.chamada_id,
+    }
+
     return {
-      despacho,
+      despacho: despachoCompleto,
       rota,
       paradas: paradasCompletas,
     }
