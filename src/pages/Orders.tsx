@@ -152,6 +152,8 @@ export default function Orders() {
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   // Filtros de listagem
+  const [filterChamada, setFilterChamada] = useState<string>('todas')
+  const [filterCiclo, setFilterCiclo] = useState<string>('todos')
   const [filterOrigem, setFilterOrigem] = useState<string>('todos')
   const [filterStatus, setFilterStatus] = useState<string>('todos')
   const [filterValidacao, setFilterValidacao] = useState<string>('todos')
@@ -764,6 +766,36 @@ export default function Orders() {
     }
   }
 
+  // Mapa de ciclo_id -> chamada_id derivado dos ciclos cadastrados
+  const cicloParaChamadaMap = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const c of ciclos) {
+      if (c.id && c.chamada_id) {
+        map.set(c.id, c.chamada_id)
+      }
+    }
+    return map
+  }, [ciclos])
+
+  // Ciclos disponíveis para a chamada selecionada no filtro (ou vazia se 'todas')
+  const availableCiclosFiltro = useMemo(() => {
+    if (filterChamada === 'todas') return []
+    return ciclos
+      .filter((c) => c.chamada_id === filterChamada)
+      .sort((a, b) => {
+        // Ordenação cronológica decrescente: por data de despacho ou início, depois nome
+        const dataA = a.data_despacho || a.data_inicio || ''
+        const dataB = b.data_despacho || b.data_inicio || ''
+        return dataB.localeCompare(dataA)
+      })
+  }, [ciclos, filterChamada])
+
+  // Handler para troca do filtro de Chamada com cascata resetando filterCiclo
+  const handleFilterChamadaChange = (novaChamada: string) => {
+    setFilterChamada(novaChamada)
+    setFilterCiclo('todos')
+  }
+
   // Rotas da Planilha distintas presentes nos pedidos
   const availableRotasPlanilha = useMemo(() => {
     const routeSet = new Set<string>()
@@ -789,9 +821,21 @@ export default function Orders() {
     return Array.from(routeSet).sort((a, b) => a.localeCompare(b, 'pt-BR'))
   }, [orders])
 
-  // Filtragem da lista com filtros separados de Rota (Planilha) e Rota Logística
+  // Filtragem da lista com filtros separados de Chamada, Ciclo, Origem, Status, Validação, Rota (Planilha) e Rota Logística
   const filteredOrders = useMemo(() => {
     return orders.filter((o) => {
+      // Filtro por Chamada: quando filterChamada !== 'todas', aceitar só pedidos cujo cicloId pertença à chamada selecionada (pedidos sem cicloId ficam fora)
+      if (filterChamada !== 'todas') {
+        if (!o.cicloId) return false
+        const chId = cicloParaChamadaMap.get(o.cicloId)
+        if (chId !== filterChamada) return false
+      }
+
+      // Filtro por Ciclo: quando filterCiclo !== 'todos', comparação estrita o.cicloId === filterCiclo (nunca por data)
+      if (filterCiclo !== 'todos') {
+        if (o.cicloId !== filterCiclo) return false
+      }
+
       if (filterOrigem !== 'todos' && o.origem !== filterOrigem) return false
       if (filterStatus !== 'todos' && o.status !== filterStatus) return false
       if (filterValidacao !== 'todos' && o.validacao?.status !== filterValidacao) return false
@@ -821,7 +865,17 @@ export default function Orders() {
 
       return true
     })
-  }, [orders, filterOrigem, filterStatus, filterValidacao, filterRotaPlanilha, filterRotaLogistica])
+  }, [
+    orders,
+    filterChamada,
+    filterCiclo,
+    cicloParaChamadaMap,
+    filterOrigem,
+    filterStatus,
+    filterValidacao,
+    filterRotaPlanilha,
+    filterRotaLogistica,
+  ])
 
   const getOrigemBadge = (origem: Order['origem']) => {
     switch (origem) {
@@ -2209,7 +2263,62 @@ export default function Orders() {
       {/* Barra de Filtros */}
       <Card>
         <CardContent className="p-4 space-y-3">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 items-center">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-3 items-center">
+            {/* Filtro Chamada */}
+            <div>
+              <Label className="text-xs">Chamada</Label>
+              <Select value={filterChamada} onValueChange={handleFilterChamadaChange}>
+                <SelectTrigger className="h-9 mt-1 text-xs">
+                  <SelectValue placeholder="Todas as Chamadas" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todas">Todas as Chamadas</SelectItem>
+                  {chamadas.map((ch) => {
+                    const rotulo = ch.programa ? `${ch.chamada} (${ch.programa})` : ch.chamada
+                    return (
+                      <SelectItem key={ch.id} value={ch.id}>
+                        {rotulo}
+                      </SelectItem>
+                    )
+                  })}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Filtro Ciclo (cascata dependente da Chamada) */}
+            <div>
+              <Label className="text-xs">Ciclo</Label>
+              <Select
+                value={filterCiclo}
+                onValueChange={setFilterCiclo}
+                disabled={filterChamada === 'todas' || availableCiclosFiltro.length === 0}
+              >
+                <SelectTrigger className="h-9 mt-1 text-xs">
+                  <SelectValue
+                    placeholder={
+                      filterChamada === 'todas'
+                        ? 'Selecione uma chamada'
+                        : availableCiclosFiltro.length === 0
+                          ? 'Sem ciclos'
+                          : 'Todos os Ciclos'
+                    }
+                  />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todos">Todos os Ciclos</SelectItem>
+                  {availableCiclosFiltro.map((c) => {
+                    const cod = extractCicloCodigo(c.nome) || c.nome
+                    const fase = formatFaseAmigavel(c.status)
+                    return (
+                      <SelectItem key={c.id} value={c.id}>
+                        Ciclo {cod} — {fase}
+                      </SelectItem>
+                    )
+                  })}
+                </SelectContent>
+              </Select>
+            </div>
+
             <div>
               <Label className="text-xs">Origem do Pedido</Label>
               <Select value={filterOrigem} onValueChange={setFilterOrigem}>
@@ -2298,7 +2407,9 @@ export default function Orders() {
             </div>
           </div>
 
-          {(filterOrigem !== 'todos' ||
+          {(filterChamada !== 'todas' ||
+            filterCiclo !== 'todos' ||
+            filterOrigem !== 'todos' ||
             filterStatus !== 'todos' ||
             filterValidacao !== 'todos' ||
             filterRotaPlanilha !== 'todas' ||
@@ -2310,6 +2421,8 @@ export default function Orders() {
                 size="sm"
                 className="h-6 px-2 text-xs"
                 onClick={() => {
+                  setFilterChamada('todas')
+                  setFilterCiclo('todos')
                   setFilterOrigem('todos')
                   setFilterStatus('todos')
                   setFilterValidacao('todos')

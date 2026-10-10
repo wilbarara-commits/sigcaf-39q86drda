@@ -136,6 +136,7 @@ const MODULES: ModuleSpec[] = [
       'Regras Estritas de Cancelamento: pedidos Pendentes (não despachados) podem ser cancelados com motivo livre; pedidos despachados (Em Rota) só podem ser cancelados por motivos logísticos da cooperativa (veículo indisponível, produto indisponível, endereço inacessível, escola fechada, outro motivo logístico com detalhe livre). O cancelamento é definitivo e irreversível (sem retorno para Pendente).',
       'Coluna e Detalhes de Cancelamento: exibição destacada do motivo do cancelamento e timestamp cancelado_em tanto na tabela de pedidos quanto no diálogo de visualização detalhada.',
       'Validação Automática do Pedido: inválido apenas se vazio ou com todas as quantidades zeradas. Não existe regra de compensação de escassez (regra removida — a correção de escassez é negociada diretamente com a cooperativa fora do formulário).',
+      'Filtros Avançados com Chamada e Ciclo em Cascata (v0.0.248): Barra de filtros em /pedidos equipada com seletores dedicados de Chamada Pública e Ciclo Operacional. O seletor de Chamada lista "Todas as Chamadas" e as chamadas cadastradas (número e programa, ex.: "01/2025 (Municipal)"); o seletor de Ciclo lista "Todos os Ciclos" e opera em cascata estrita, desabilitado quando nenhuma chamada estiver selecionada ou quando não houver ciclos para a chamada, com reset automático para "Todos os Ciclos" ao alternar a chamada. A filtragem na listagem é cumulativa e estrita: por chamada (filtra pedidos cujo ciclo_id pertença à chamada selecionada via mapa cicloId→chamada_id, excluindo pedidos sem cicloId) e por ciclo (comparação estrita o.cicloId === filterCiclo, nunca por data de entrega). O botão "Limpar filtros" reseta simultaneamente todos os seletores. Preserva 100% intactos o modal de criação "Lançar Pedido", o Ciclo Corrente e as 4 telas de entrega.',
       'Filtros avançados por origem (incluindo filtro por Formulário), status de entrega e validação.',
     ],
   },
@@ -880,18 +881,101 @@ export function Requirements() {
       {/* 7. Registro de Manutenção e Limpeza de Dados */}
       <SectionTitle>7. Registro de Manutenção & Higienização do Banco de Dados</SectionTitle>
       <div className="space-y-4">
-        {/* Release v0.0.247: Exclusão Pontual do Ciclo 42/2026 Cancelado */}
+        {/* Release v0.0.248: Filtros de Chamada e Ciclo em Gestão de Pedidos */}
         <div className="rounded-lg border-2 border-primary/40 bg-card p-5 space-y-4 shadow-sm">
           <div className="flex items-center justify-between flex-wrap gap-2">
             <div className="flex items-center gap-2">
               <Badge variant="outline" className="text-primary border-primary/40 font-semibold">
+                Release v0.0.248
+              </Badge>
+              <span className="font-semibold text-foreground">
+                0.0.248: Filtros de Chamada Pública e Ciclo Operacional em Gestão de Pedidos
+                (/pedidos)
+              </span>
+            </div>
+            <span className="text-xs font-medium text-primary">Versão Vigente (v0.0.248)</span>
+          </div>
+
+          <p className="text-sm text-foreground/90 leading-relaxed">
+            Inclusão de filtros dedicados por <strong>Chamada Pública</strong> e{' '}
+            <strong>Ciclo Operacional</strong> na barra superior de filtros da Gestão de Pedidos (
+            <code>/pedidos</code>, <code>src/pages/Orders.tsx</code>). Os novos seletores operam de
+            forma integrada e cumulativa com os filtros já existentes (Origem, Status, Validação,
+            Aba da Planilha e Rota), garantindo navegação rápida e filtragem estrita na esteira de
+            pedidos lançados.
+          </p>
+
+          <div className="grid sm:grid-cols-2 gap-4 text-sm">
+            <div className="rounded-md border border-border/60 bg-muted/20 p-3 space-y-1.5">
+              <span className="font-medium text-primary">
+                1. Controles Visuais & Cascata Inteligente:
+              </span>
+              <ul className="space-y-1 text-xs text-muted-foreground">
+                <li>
+                  • <strong>Seletor de Chamada:</strong> Exibe{' '}
+                  <em>&quot;Todas as Chamadas&quot;</em> + chamadas cadastradas com número e
+                  programa (ex.: <code>01/2025 (Municipal)</code> e <code>07/2025 (Estadual)</code>
+                  ).
+                </li>
+                <li>
+                  • <strong>Seletor de Ciclo em Cascata:</strong> Exibe{' '}
+                  <em>&quot;Todos os Ciclos&quot;</em> + ciclos vinculados à chamada selecionada
+                  (código semanal e fase amigável). Fica automaticamente desabilitado quando a
+                  chamada for <em>&quot;Todas as Chamadas&quot;</em> ou quando a chamada não possuir
+                  ciclos.
+                </li>
+                <li>
+                  • <strong>Reset em Cascata:</strong> Ao alterar a chamada selecionada, o seletor
+                  de ciclo é imediatamente redefinido para <em>&quot;Todos os Ciclos&quot;</em>.
+                </li>
+                <li>
+                  • <strong>Limpar Filtros:</strong> A ação &quot;Limpar filtros&quot; existente
+                  reseta simultaneamente ambos os novos seletores e os cinco filtros anteriores.
+                </li>
+              </ul>
+            </div>
+            <div className="rounded-md border border-primary/30 bg-primary/5 p-3 space-y-1.5">
+              <span className="font-medium text-primary">
+                2. Filtragem Estrita & Regras Anti-Vazamento Preservadas:
+              </span>
+              <ul className="space-y-1 text-xs text-foreground/80">
+                <li>
+                  • <strong>Filtragem Estrita por Chamada:</strong> Quando selecionada uma chamada,
+                  computa apenas pedidos cujo <code>cicloId</code> pertença àquela chamada (mapa{' '}
+                  <code>cicloId → chamada_id</code> derivado dos ciclos; pedidos sem cicloId são
+                  excluídos).
+                </li>
+                <li>
+                  • <strong>Filtragem Estrita por Ciclo:</strong> Comparação exata por chave de
+                  banco (<code>o.cicloId === filterCiclo</code>), nunca por heurística ou datas.
+                </li>
+                <li>
+                  • <strong>Modal & Ciclo Corrente Intactos:</strong> O fluxo e modal &quot;Lançar
+                  Pedido&quot; e a chave global do <code>cicloCorrente</code> não sofrem qualquer
+                  interferência (filtros são exclusivamente de consulta da tabela).
+                </li>
+                <li>
+                  • <strong>Ponto de Atenção v0.0.243 intacto:</strong> Nenhuma alteração nas 4
+                  telas críticas de entregas (<code>/rotas</code>, Dashboard, Portal do Motorista e{' '}
+                  <code>/monitoramento</code>).
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        {/* Release v0.0.247: Exclusão Pontual do Ciclo 42/2026 Cancelado */}
+        <div className="rounded-lg border border-border bg-card p-5 space-y-4">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="text-primary border-primary/30 font-semibold">
                 Release v0.0.247
               </Badge>
               <span className="font-semibold text-foreground">
                 0.0.247: Exclusão Pontual do Ciclo 42/2026 Cancelado e Sem Registros Dependentes
               </span>
             </div>
-            <span className="text-xs font-medium text-primary">Versão Vigente (v0.0.247)</span>
+            <span className="text-xs text-muted-foreground">Consolidado (v0.0.247)</span>
           </div>
 
           <p className="text-sm text-foreground/90 leading-relaxed">
