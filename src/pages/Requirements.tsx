@@ -877,6 +877,192 @@ export function Requirements() {
       {/* 7. Registro de Manutenção e Limpeza de Dados */}
       <SectionTitle>7. Registro de Manutenção & Higienização do Banco de Dados</SectionTitle>
       <div className="space-y-4">
+        {/* Release v0.0.243: Documentação das Quatro Telas de Apresentação de Entregas & Ponto de Atenção Anti-Vazamento */}
+        <div className="rounded-lg border-2 border-primary/40 bg-card p-5 space-y-4 shadow-sm">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="text-primary border-primary/40 font-semibold">
+                Release v0.0.243
+              </Badge>
+              <span className="font-semibold text-foreground">
+                0.0.243: Documentação das Quatro Telas de Apresentação de Entregas — Pontos de
+                Atenção Obrigatórios & Regra Anti-Vazamento
+              </span>
+            </div>
+            <span className="text-xs font-medium text-primary">Versão Vigente (v0.0.243)</span>
+          </div>
+
+          <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-4 space-y-2">
+            <div className="flex items-center gap-2 text-amber-700 dark:text-amber-400 font-semibold text-sm">
+              <span className="text-base">⚠️</span>
+              <span>PONTO DE ATENÇÃO OBRIGATÓRIO PARA QUALQUER MODIFICAÇÃO FUTURA EM ENTREGAS</span>
+            </div>
+            <p className="text-xs text-foreground/90 leading-relaxed">
+              Qualquer modificação futura no sistema que afete o estado de entregas — incluindo
+              gravação ou atualização em <code>entrega_registros</code>, ciclo de vida de{' '}
+              <code>rota_despachos</code>/<code>despachos</code>, status de <code>pedidos</code>{' '}
+              (Pendente, Em Rota, Entregue), cálculo de progresso de rotas ou totalizadores de
+              entregas —{' '}
+              <strong>DEVE SER OBRIGATORIAMENTE VERIFICADA NAS QUATRO TELAS ABAIXO</strong>. A
+              contagem e o estado de entregas devem{' '}
+              <strong>ficar estritamente isolados pelo ciclo selecionado</strong> (filtro
+              obrigatório por <code>ciclo_id</code>, com fallback por janela temporal{' '}
+              <code>data_inicio</code> até <code>data_fim + 24h</code> apenas para registros legados
+              sem <code>ciclo_id</code>), aplicando sem exceção a{' '}
+              <strong>Regra Anti-Vazamento Fundamental</strong>: quando houver pedidos &quot;Em
+              Rota&quot; no ciclo e zero entregas confirmadas naquele ciclo, o progresso deve ser{' '}
+              <strong>0 de N</strong> (nunca &quot;X de X&quot; herdado de ciclo anterior) e o
+              crachá/banner deve permanecer ativo.
+            </p>
+          </div>
+
+          {/* As Quatro Telas Isoladas por Ciclo */}
+          <div className="space-y-3">
+            <span className="text-sm font-semibold text-foreground flex items-center gap-1.5">
+              <span>📋</span> As Quatro Telas de Apresentação de Entregas e seus Comportamentos
+              Exigidos:
+            </span>
+
+            <div className="grid sm:grid-cols-2 gap-3 text-sm">
+              {/* Tela 1: /rotas */}
+              <div className="rounded-md border border-border/80 bg-muted/20 p-3.5 space-y-2">
+                <div className="flex items-center justify-between gap-1">
+                  <span className="font-semibold text-primary flex items-center gap-1.5 text-xs sm:text-sm">
+                    <span>1.</span> Rotas de Entrega (<code>/rotas</code>)
+                  </span>
+                  <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
+                    v0.0.239
+                  </Badge>
+                </div>
+                <ul className="space-y-1.5 text-xs text-muted-foreground leading-relaxed">
+                  <li>
+                    • <strong>Estado da Rota:</strong> Badges &quot;Aguardando Despacho&quot;,
+                    &quot;Em Rota&quot; (laranja) e &quot;Rota Entregue&quot; (verde) calculados
+                    estritamente pelo <code>selectedCiclo.id</code>.
+                  </li>
+                  <li>
+                    • <strong>Sequência de Paradas:</strong> Ordem isolada por ciclo via snapshot em{' '}
+                    <code>rota_snapshots</code> (versão <code>edicao</code>).
+                  </li>
+                  <li>
+                    • <strong>Anti-Vazamento:</strong> Se há pedidos &quot;Em Rota&quot; no ciclo e
+                    zero entregas confirmadas no ciclo, a rota permanece &quot;Em Rota&quot;, com
+                    travas ativas e sem bloqueio espúrio por despachos de ciclos anteriores.
+                  </li>
+                </ul>
+              </div>
+
+              {/* Tela 2: Dashboard */}
+              <div className="rounded-md border border-border/80 bg-muted/20 p-3.5 space-y-2">
+                <div className="flex items-center justify-between gap-1">
+                  <span className="font-semibold text-primary flex items-center gap-1.5 text-xs sm:text-sm">
+                    <span>2.</span> Dashboard Executivo (<code>/</code>)
+                  </span>
+                  <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
+                    v0.0.240
+                  </Badge>
+                </div>
+                <ul className="space-y-1.5 text-xs text-muted-foreground leading-relaxed">
+                  <li>
+                    • <strong>Widget &quot;Entregas em Andamento&quot;:</strong> Consulta{' '}
+                    <code>getAtivoByRota</code> e <code>getEntregaRegistrosDaRota</code> com{' '}
+                    <code>cicloId</code> resolvido da rota.
+                  </li>
+                  <li>
+                    • <strong>Cards de Ciclos Ativos:</strong> Distinção explícita entre{' '}
+                    <em>&quot;Escolas com Pedidos&quot;</em> (escolas demandantes) e{' '}
+                    <em>&quot;Entregas Concluídas: X de Y&quot;</em> (X = escolas entregues no
+                    ciclo).
+                  </li>
+                  <li>
+                    • <strong>Anti-Vazamento:</strong> Pedidos Em Rota com zero entregas no ciclo
+                    mantém <code>entregasConfirmadasCount = 0</code> e crachá &quot;Em Rota&quot;,
+                    nunca &quot;Rota concluída&quot;.
+                  </li>
+                </ul>
+              </div>
+
+              {/* Tela 3: Portal do Motorista */}
+              <div className="rounded-md border border-border/80 bg-muted/20 p-3.5 space-y-2">
+                <div className="flex items-center justify-between gap-1">
+                  <span className="font-semibold text-primary flex items-center gap-1.5 text-xs sm:text-sm">
+                    <span>3.</span> Portal do Motorista (<code>/motorista?token=...</code>)
+                  </span>
+                  <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
+                    v0.0.241
+                  </Badge>
+                </div>
+                <ul className="space-y-1.5 text-xs text-muted-foreground leading-relaxed">
+                  <li>
+                    • <strong>Resolução no Serviço:</strong> <code>carregarPortalMotorista</code>{' '}
+                    filtra registros de entrega estritamente pelo <code>ciclo_id</code> do despacho
+                    ativo.
+                  </li>
+                  <li>
+                    • <strong>Contador e Paradas:</strong> Contador de progresso &quot;X de N
+                    entregas&quot;, mapa de trecho e botões &quot;Registrar Entrega&quot; isolados
+                    no ciclo ativo.
+                  </li>
+                  <li>
+                    • <strong>Anti-Vazamento:</strong> Ciclo com pedidos &quot;Em Rota&quot; e zero
+                    entregas inicia em 0/N, todas as paradas ficam abertas e o banner verde de
+                    conclusão é estritamente bloqueado.
+                  </li>
+                </ul>
+              </div>
+
+              {/* Tela 4: /monitoramento */}
+              <div className="rounded-md border border-border/80 bg-muted/20 p-3.5 space-y-2">
+                <div className="flex items-center justify-between gap-1">
+                  <span className="font-semibold text-primary flex items-center gap-1.5 text-xs sm:text-sm">
+                    <span>4.</span> Monitoramento Operacional (<code>/monitoramento</code>)
+                  </span>
+                  <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
+                    v0.0.242
+                  </Badge>
+                </div>
+                <ul className="space-y-1.5 text-xs text-muted-foreground leading-relaxed">
+                  <li>
+                    • <strong>Painel de Alertas (Bloco B):</strong>{' '}
+                    <code>MonitoringDeliveryAlerts</code> invoca{' '}
+                    <code>getEntregaRegistrosDaRota(rota.id, ciclo.id)</code> com ciclo obrigatório.
+                  </li>
+                  <li>
+                    • <strong>Aviso Sonoro e Paradas Pendentes:</strong> Efeito sonoro Melódico Web
+                    Audio API validado por ciclo; contagem de paradas pendentes &quot;faltam X de
+                    N&quot; sem misturar ciclos.
+                  </li>
+                  <li>
+                    • <strong>Anti-Vazamento:</strong> Zero entregas no ciclo selecionado exibe
+                    &quot;0 de N entregas realizadas&quot; e bloqueia &quot;Todas as escolas desta
+                    rota já foram entregues!&quot;.
+                  </li>
+                </ul>
+              </div>
+            </div>
+          </div>
+
+          {/* Resumo da Regra de Homologação */}
+          <div className="rounded-md border border-primary/20 bg-primary/5 p-3 text-xs text-foreground/90 space-y-1">
+            <span className="font-semibold text-primary">
+              Protocolo de Verificação Obrigatória (Checklist de Homologação):
+            </span>
+            <p className="leading-relaxed">
+              Toda PR, refatoração de serviços (<code>rota-despachos.ts</code>,{' '}
+              <code>AppContext</code>, etc.) ou alteração em banco/realtime que envolva entregas
+              deve passar pelo checklist:
+              <strong> (1)</strong> Rota em <code>/rotas</code> exibe estado do ciclo selecionado e
+              não do histórico;
+              <strong> (2)</strong> Dashboard (<code>/</code>) reflete entregas do ciclo corrente
+              sem vazamento no widget e nos cards;
+              <strong> (3)</strong> Portal do Motorista abre com 0/N entregas em rotas
+              recém-despachadas sem banner de conclusão;
+              <strong> (4)</strong> Painel de alertas em <code>/monitoramento</code> lista paradas
+              pendentes corretas e só toca áudio de novas entregas do ciclo monitorado.
+            </p>
+          </div>
+        </div>
+
         {/* Release v0.0.242: Correção de Vazamento de Ciclo na Página /monitoramento (MonitoringDeliveryAlerts) */}
         <div className="rounded-lg border border-border bg-card p-5 space-y-4">
           <div className="flex items-center justify-between flex-wrap gap-2">
