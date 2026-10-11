@@ -881,11 +881,76 @@ export function Requirements() {
       {/* 7. Registro de Manutenção e Limpeza de Dados */}
       <SectionTitle>7. Registro de Manutenção & Higienização do Banco de Dados</SectionTitle>
       <div className="space-y-4">
-        {/* Release v0.0.248: Filtros de Chamada e Ciclo em Gestão de Pedidos */}
+        {/* Release v0.0.249: Limpeza Geral do Campo Telefone de Todas as Escolas */}
         <div className="rounded-lg border-2 border-primary/40 bg-card p-5 space-y-4 shadow-sm">
           <div className="flex items-center justify-between flex-wrap gap-2">
             <div className="flex items-center gap-2">
               <Badge variant="outline" className="text-primary border-primary/40 font-semibold">
+                Release v0.0.249
+              </Badge>
+              <span className="font-semibold text-foreground">
+                0.0.249: Higienização & Limpeza do Campo Telefone de Todas as Escolas
+              </span>
+            </div>
+            <span className="text-xs font-medium text-primary">Versão Vigente (v0.0.249)</span>
+          </div>
+
+          <p className="text-sm text-foreground/90 leading-relaxed">
+            Execução de rotina de manutenção e higienização cadastral via migração PocketBase
+            (Migration <code>0143_limpar_telefones_escolas.js</code>) para limpeza do campo{' '}
+            <code>telefone</code> de{' '}
+            <strong>
+              todos os registros da coleção <code>escolas</code>
+            </strong>
+            , atendendo à solicitação direta do usuário (&quot;apagar os telefones das escolas&quot;
+            → &quot;limpar os valores&quot;).
+          </p>
+
+          <div className="grid sm:grid-cols-2 gap-4 text-sm">
+            <div className="rounded-md border border-border/60 bg-muted/20 p-3 space-y-1.5">
+              <span className="font-medium text-primary">
+                1. Escopo & Execução da Migração 0143:
+              </span>
+              <ul className="space-y-1 text-xs text-muted-foreground">
+                <li>
+                  • <strong>Campo higienizado:</strong> <code>telefone = &quot;&quot;</code> (string
+                  vazia) em todos os registros da coleção <code>escolas</code> cujo telefone se
+                  encontrava preenchido.
+                </li>
+                <li>
+                  • <strong>Padrão defensivo e idempotente:</strong> Atualização via SQL direto e
+                  varredura via SDK PocketBase, segura contra execuções repetidas.
+                </li>
+                <li>
+                  • <strong>Auditoria pós-aplicação:</strong> Consulta direta ao banco confirmou
+                  zero escolas com campo telefone preenchido após a migração.
+                </li>
+              </ul>
+            </div>
+            <div className="rounded-md border border-primary/30 bg-primary/5 p-3 space-y-1.5">
+              <span className="font-medium text-primary">
+                2. Preservação Rigorosa dos Demais Dados Cadastrais:
+              </span>
+              <ul className="space-y-1 text-xs text-foreground/80">
+                <li>
+                  • <strong>Campos intactos:</strong> Nome, contato, e-mail, endereço, bairro, CEP,
+                  código INEP, tipo escolar, dependência administrativa, número de alunos e
+                  coordenadas geográficas permaneceram rigorosamente inalterados.
+                </li>
+                <li>
+                  • <strong>Sem efeitos colaterais:</strong> Nenhuma alteração em rotas, contratos,
+                  chamadas, pedidos ou regras de negócio do sistema.
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        {/* Release v0.0.248: Filtros de Chamada e Ciclo em Gestão de Pedidos */}
+        <div className="rounded-lg border border-border bg-card p-5 space-y-4">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="text-primary border-primary/30 font-semibold">
                 Release v0.0.248
               </Badge>
               <span className="font-semibold text-foreground">
@@ -893,7 +958,7 @@ export function Requirements() {
                 (/pedidos)
               </span>
             </div>
-            <span className="text-xs font-medium text-primary">Versão Vigente (v0.0.248)</span>
+            <span className="text-xs text-muted-foreground">Consolidado (v0.0.248)</span>
           </div>
 
           <p className="text-sm text-foreground/90 leading-relaxed">
