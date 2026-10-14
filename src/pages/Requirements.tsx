@@ -899,18 +899,90 @@ export function Requirements() {
       {/* 7. Registro de Manutenção e Limpeza de Dados */}
       <SectionTitle>7. Registro de Manutenção & Higienização do Banco de Dados</SectionTitle>
       <div className="space-y-4">
-        {/* Release v0.0.250: Novo Módulo Fornecedores Completo */}
+        {/* Release v0.0.251: Compressão e Redimensionamento de Fotos no Módulo Fornecedores */}
         <div className="rounded-lg border-2 border-primary/40 bg-card p-5 space-y-4 shadow-sm">
           <div className="flex items-center justify-between flex-wrap gap-2">
             <div className="flex items-center gap-2">
               <Badge variant="outline" className="text-primary border-primary/40 font-semibold">
+                Release v0.0.251
+              </Badge>
+              <span className="font-semibold text-foreground">
+                0.0.251: Otimização de Fotos de Fornecedores — Compressão e Redimensionamento
+                Client-Side (300x300 JPEG)
+              </span>
+            </div>
+            <span className="text-xs font-medium text-primary">Versão Vigente (v0.0.251)</span>
+          </div>
+
+          <p className="text-sm text-foreground/90 leading-relaxed">
+            Implementação da rotina de compressão e redimensionamento automático de imagens no
+            módulo <strong>Fornecedores</strong> (<code>/fornecedores</code>,{' '}
+            <code>src/pages/Fornecedores.tsx</code> e <code>src/services/fornecedores.ts</code>),
+            atendendo à solicitação direta do usuário para evitar estouro de cota ou de limite de
+            armazenamento por upload de fotos em tamanho original. As imagens são agora processadas
+            no navegador via Canvas antes de qualquer gravação ou envio ao PocketBase.
+          </p>
+
+          <div className="grid sm:grid-cols-2 gap-4 text-sm">
+            <div className="rounded-md border border-border/60 bg-muted/20 p-3 space-y-1.5">
+              <span className="font-medium text-primary">
+                1. Compressão Client-Side & Proteção de Cota:
+              </span>
+              <ul className="space-y-1 text-xs text-muted-foreground">
+                <li>
+                  • <strong>Caixa máxima 300x300 pixels:</strong> Redimensionamento preservando a
+                  proporção original sem upscale para fotos menores que 300px.
+                </li>
+                <li>
+                  • <strong>Exportação em JPEG (qualidade 0.85):</strong> Redução drástica do
+                  payload (ex.: fotos de 3MB–5MB são reduzidas para ~15KB–35KB), enviando
+                  exclusivamente a versão otimizada ao backend PocketBase.
+                </li>
+                <li>
+                  • <strong>Processamento no Input & Camada de Serviço:</strong> A compressão ocorre
+                  imediatamente na seleção do arquivo com indicador de progresso e badge visual,
+                  além de dupla verificação defensiva no <code>fornecedoresService</code> antes de
+                  montar o FormData.
+                </li>
+              </ul>
+            </div>
+            <div className="rounded-md border border-primary/30 bg-primary/5 p-3 space-y-1.5">
+              <span className="font-medium text-primary">
+                2. Avisos Explícitos & Preservação das Quatro Telas:
+              </span>
+              <ul className="space-y-1 text-xs text-foreground/80">
+                <li>
+                  • <strong>Tratamento Explícito de Falhas:</strong> Caso a imagem ou requisição
+                  falhe por cota, tamanho ou limite de storage (códigos 400 ou 413 do PocketBase),
+                  um toast de alerta claro é exibido ao usuário sem qualquer falha silenciosa.
+                </li>
+                <li>
+                  • <strong>Módulo Fornecedores 100% Intacto:</strong> Validações de CPF/CNPJ,
+                  máscaras, destaque de CAF vencido em vermelho e confirmações de exclusão
+                  permanecem plenamente funcionais.
+                </li>
+                <li>
+                  • <strong>Ponto de Atenção v0.0.243 intacto:</strong> Nenhuma alteração nas 4
+                  telas críticas de entregas (<code>/rotas</code>, Dashboard, Portal do Motorista e{' '}
+                  <code>/monitoramento</code>).
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        {/* Release v0.0.250: Novo Módulo Fornecedores Completo */}
+        <div className="rounded-lg border border-border bg-card p-5 space-y-4">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="text-primary border-primary/30 font-semibold">
                 Release v0.0.250
               </Badge>
               <span className="font-semibold text-foreground">
                 0.0.250: Módulo "Fornecedores" Completo com Gestão de Produtores, CAF e Vínculo
               </span>
             </div>
-            <span className="text-xs font-medium text-primary">Versão Vigente (v0.0.250)</span>
+            <span className="text-xs text-muted-foreground">Consolidado (v0.0.250)</span>
           </div>
 
           <p className="text-sm text-foreground/90 leading-relaxed">

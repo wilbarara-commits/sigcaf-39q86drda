@@ -59,6 +59,7 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { fornecedoresService } from '@/services/fornecedores'
+import { compressFornecedorFoto } from '@/lib/imageCompressor'
 import type { FornecedorRecord, FornecedorVinculo, FornecedorSexo } from '@/lib/types'
 import {
   formatarDocumentoIdentidade,
@@ -129,6 +130,13 @@ export default function Fornecedores() {
   // Foto
   const [fotoFile, setFotoFile] = useState<File | null>(null)
   const [fotoPreview, setFotoPreview] = useState<string>('')
+  const [fotoOriginalInfo, setFotoOriginalInfo] = useState<{
+    originalSize: number
+    compressedSize: number
+    width: number
+    height: number
+  } | null>(null)
+  const [isCompressingFoto, setIsCompressingFoto] = useState(false)
   const [removerFoto, setRemoverFoto] = useState(false)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
 
@@ -206,6 +214,8 @@ export default function Fornecedores() {
     setWhatsapp('')
     setFotoFile(null)
     setFotoPreview('')
+    setFotoOriginalInfo(null)
+    setIsCompressingFoto(false)
     setRemoverFoto(false)
     if (fileInputRef.current) fileInputRef.current.value = ''
     setDialogOpen(true)
@@ -228,32 +238,68 @@ export default function Fornecedores() {
     setWhatsapp(f.whatsapp ? formatarWhatsApp(f.whatsapp) : '')
     setFotoFile(null)
     setFotoPreview(f.fotoUrl || '')
+    setFotoOriginalInfo(null)
+    setIsCompressingFoto(false)
     setRemoverFoto(false)
     if (fileInputRef.current) fileInputRef.current.value = ''
     setDialogOpen(true)
   }
 
-  // Foto change
-  const handleFotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Foto change com compressão imediata no cliente (máx 300x300 JPEG)
+  const handleFotoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
-    if (file) {
-      if (file.size > 5 * 1024 * 1024) {
-        toast.error('A imagem deve ter no máximo 5MB.')
+    if (!file) return
+
+    // Limite prévio de 15MB para rejeitar arquivos gigantes que travariam o navegador
+    if (file.size > 15 * 1024 * 1024) {
+      toast.error('O arquivo selecionado é excessivamente grande (máx. 15MB para processamento).')
+      if (fileInputRef.current) fileInputRef.current.value = ''
+      return
+    }
+
+    setIsCompressingFoto(true)
+    try {
+      const originalSize = file.size
+      // Comprime e redimensiona para no máximo 300x300 em JPEG (0.85), sem upscale
+      const compressed = await compressFornecedorFoto(file, file.name)
+
+      // Se mesmo após comprimir estourar 5MB (o que é praticamente impossível em 300x300 JPEG)
+      if (compressed.sizeBytes > 5 * 1024 * 1024) {
+        toast.error('A imagem comprimida ainda excede a cota permitida de 5MB. Escolha outra foto.')
         return
       }
-      setFotoFile(file)
+
+      setFotoFile(compressed.file)
+      setFotoPreview(compressed.dataUrl)
+      setFotoOriginalInfo({
+        originalSize,
+        compressedSize: compressed.sizeBytes,
+        width: compressed.width,
+        height: compressed.height,
+      })
       setRemoverFoto(false)
-      const reader = new FileReader()
-      reader.onload = () => {
-        setFotoPreview(reader.result as string)
-      }
-      reader.readAsDataURL(file)
+
+      const origKb = Math.round(originalSize / 1024)
+      const compKb = Math.max(1, Math.round(compressed.sizeBytes / 1024))
+      toast.success(
+        `Foto reduzida: ${compressed.width}x${compressed.height}px JPEG (${origKb} KB → ${compKb} KB)`,
+      )
+    } catch (err: any) {
+      console.error('Erro ao comprimir imagem:', err)
+      toast.error(
+        'Falha ao redimensionar a foto. Certifique-se de que é uma imagem válida (JPG, PNG ou WEBP).',
+      )
+      if (fileInputRef.current) fileInputRef.current.value = ''
+    } finally {
+      setIsCompressingFoto(false)
     }
   }
 
   const handleRemoverFoto = () => {
     setFotoFile(null)
     setFotoPreview('')
+    setFotoOriginalInfo(null)
+    setIsCompressingFoto(false)
     setRemoverFoto(true)
     if (fileInputRef.current) fileInputRef.current.value = ''
   }
@@ -351,8 +397,13 @@ export default function Fornecedores() {
       await refreshData()
     } catch (err: any) {
       console.error('Erro ao salvar fornecedor:', err)
-      const msg = err?.response?.message || err?.message || 'Falha ao salvar dados do fornecedor'
-      toast.error(msg)
+      // Mensagem clara: nunca falhar silenciosamente nem omitir erros de cota/limite
+      const msg =
+        err?.friendlyMessage ||
+        err?.response?.message ||
+        err?.message ||
+        'Falha ao salvar dados do fornecedor. Se o armazenamento estiver próximo do limite, contate o administrador.'
+      toast.error(msg, { duration: 6000 })
     } finally {
       setIsSubmitting(false)
     }
@@ -720,7 +771,7 @@ export default function Fornecedores() {
                     {nome ? nome.slice(0, 2).toUpperCase() : 'FT'}
                   </AvatarFallback>
                 </Avatar>
-                {fotoPreview && (
+                {fotoPreview && !isCompressingFoto && (
                   <button
                     type="button"
                     onClick={handleRemoverFoto}
@@ -730,23 +781,43 @@ export default function Fornecedores() {
                     <X className="h-3 w-3" />
                   </button>
                 )}
+                {isCompressingFoto && (
+                  <div className="absolute inset-0 bg-background/80 rounded-full flex items-center justify-center">
+                    <Loader2 className="h-5 w-5 animate-spin text-primary" />
+                  </div>
+                )}
               </div>
               <div className="flex-1 space-y-1 text-center sm:text-left">
-                <Label htmlFor="foto-upload" className="text-xs font-medium cursor-pointer">
-                  Foto do Fornecedor
-                </Label>
+                <div className="flex items-center gap-2 justify-center sm:justify-start">
+                  <Label htmlFor="foto-upload" className="text-xs font-medium cursor-pointer">
+                    Foto do Fornecedor
+                  </Label>
+                  {fotoOriginalInfo && (
+                    <Badge
+                      variant="outline"
+                      className="text-[10px] text-emerald-700 border-emerald-300"
+                    >
+                      Otimizada {fotoOriginalInfo.width}×{fotoOriginalInfo.height}
+                    </Badge>
+                  )}
+                </div>
                 <div className="flex items-center gap-2 justify-center sm:justify-start">
                   <Input
                     ref={fileInputRef}
                     id="foto-upload"
                     type="file"
                     accept="image/*"
+                    disabled={isCompressingFoto || isSubmitting}
                     onChange={handleFotoChange}
                     className="max-w-xs text-xs file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:bg-primary file:text-primary-foreground"
                   />
                 </div>
                 <p className="text-[11px] text-muted-foreground">
-                  Formatos aceitos: JPG, PNG, WEBP (máx. 5MB).
+                  {isCompressingFoto
+                    ? 'Comprimindo e redimensionando foto para 300x300 JPEG...'
+                    : fotoOriginalInfo
+                      ? `Reduzida: ${Math.round(fotoOriginalInfo.originalSize / 1024)} KB → ${Math.max(1, Math.round(fotoOriginalInfo.compressedSize / 1024))} KB (JPEG). Cota protegida contra estouro.`
+                      : 'A imagem será automaticamente comprimida e redimensionada para até 300x300 pixels em JPEG.'}
                 </p>
               </div>
             </div>
@@ -974,8 +1045,10 @@ export default function Fornecedores() {
               >
                 Cancelar
               </Button>
-              <Button type="submit" disabled={isSubmitting} className="gap-2">
-                {isSubmitting && <Loader2 className="h-4 w-4 animate-spin" />}
+              <Button type="submit" disabled={isSubmitting || isCompressingFoto} className="gap-2">
+                {(isSubmitting || isCompressingFoto) && (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                )}
                 {editingFornecedor ? 'Salvar Alterações' : 'Cadastrar Fornecedor'}
               </Button>
             </DialogFooter>

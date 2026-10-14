@@ -1,4 +1,5 @@
 import pb from '@/lib/pocketbase/client'
+import { compressFornecedorFoto } from '@/lib/imageCompressor'
 import type { FornecedorRecord, FornecedorVinculo, FornecedorSexo } from '@/lib/types'
 
 function normalizeFornecedorRecord(record: any): FornecedorRecord {
@@ -93,11 +94,27 @@ export const fornecedoresService = {
     }
 
     if (data.fotoFile) {
-      formData.append('foto', data.fotoFile)
+      let finalFoto: File = data.fotoFile
+      // Compressão defensiva garantida antes do upload: máx 300x300 JPEG
+      try {
+        const compressed = await compressFornecedorFoto(
+          data.fotoFile,
+          data.fotoFile.name || 'foto.jpg',
+        )
+        finalFoto = compressed.file
+      } catch (errComp) {
+        console.warn('Compressão antes do create falhou, usando arquivo original:', errComp)
+      }
+      formData.append('foto', finalFoto)
     }
 
-    const created = await pb.collection('fornecedores').create(formData)
-    return normalizeFornecedorRecord(created)
+    try {
+      const created = await pb.collection('fornecedores').create(formData)
+      return normalizeFornecedorRecord(created)
+    } catch (err: any) {
+      handleStorageOrPocketBaseError(err)
+      throw err
+    }
   },
 
   async update(id: string, data: Partial<FornecedorFormData>): Promise<FornecedorRecord> {
@@ -133,16 +150,74 @@ export const fornecedoresService = {
     }
 
     if (data.fotoFile) {
-      formData.append('foto', data.fotoFile)
+      let finalFoto: File = data.fotoFile
+      // Compressão defensiva garantida antes do upload: máx 300x300 JPEG
+      try {
+        const compressed = await compressFornecedorFoto(
+          data.fotoFile,
+          data.fotoFile.name || 'foto.jpg',
+        )
+        finalFoto = compressed.file
+      } catch (errComp) {
+        console.warn('Compressão antes do update falhou, usando arquivo original:', errComp)
+      }
+      formData.append('foto', finalFoto)
     } else if (data.removerFoto) {
       formData.append('foto', '')
     }
 
-    const updated = await pb.collection('fornecedores').update(id, formData)
-    return normalizeFornecedorRecord(updated)
+    try {
+      const updated = await pb.collection('fornecedores').update(id, formData)
+      return normalizeFornecedorRecord(updated)
+    } catch (err: any) {
+      handleStorageOrPocketBaseError(err)
+      throw err
+    }
   },
 
   async delete(id: string): Promise<boolean> {
     return await pb.collection('fornecedores').delete(id)
   },
+}
+
+/**
+ * Normaliza e enriquece mensagens de erro de storage/quota/tamanho
+ * para impedir falhas silenciosas e garantir avisos claros ao usuário.
+ */
+function handleStorageOrPocketBaseError(err: any): void {
+  const status = err?.status || err?.response?.code
+  const data = err?.response?.data || {}
+  const rawMsg = String(err?.message || err?.response?.message || '')
+
+  // Se o campo foto falhou por tamanho ou formato
+  if (data.foto) {
+    const fotoMsg = String(typeof data.foto === 'object' ? data.foto.message : data.foto)
+    if (/size|tamanho|large|exceed|bytes/i.test(fotoMsg)) {
+      err.friendlyMessage =
+        'A foto enviada excede a cota permitida pelo armazenamento. Tente uma imagem menor.'
+      return
+    }
+    err.friendlyMessage = `Erro na foto: ${fotoMsg}`
+    return
+  }
+
+  // Erro 413 Payload Too Large ou 400 com indicação de quota/storage/tamanho
+  if (status === 413 || /413|payload too large|file too large|quota|storage/i.test(rawMsg)) {
+    err.friendlyMessage =
+      'O armazenamento está próximo do limite ou o arquivo excedeu a cota permitida. A foto foi reduzida, mas o servidor rejeitou o envio.'
+    return
+  }
+
+  // 400 com erro em outros campos
+  const firstFieldKey = Object.keys(data)[0]
+  if (firstFieldKey && data[firstFieldKey]) {
+    const fieldMsg =
+      typeof data[firstFieldKey] === 'object' ? data[firstFieldKey].message : data[firstFieldKey]
+    err.friendlyMessage = `Erro no campo ${firstFieldKey}: ${fieldMsg}`
+    return
+  }
+
+  if (rawMsg) {
+    err.friendlyMessage = rawMsg
+  }
 }

@@ -8,6 +8,7 @@ export interface ImageCompressionOptions {
   maxWidth?: number
   maxHeight?: number
   quality?: number
+  allowUpscale?: boolean
 }
 
 export async function compressImage(
@@ -17,6 +18,7 @@ export async function compressImage(
   const maxWidth = options?.maxWidth ?? 1280
   const maxHeight = options?.maxHeight ?? 1280
   const quality = options?.quality ?? 0.8
+  const allowUpscale = options?.allowUpscale ?? false
 
   return new Promise((resolve, reject) => {
     const reader = new FileReader()
@@ -29,6 +31,10 @@ export async function compressImage(
         let height = img.naturalHeight || img.height
 
         if (width > maxWidth || height > maxHeight) {
+          const ratio = Math.min(maxWidth / width, maxHeight / height)
+          width = Math.max(1, Math.round(width * ratio))
+          height = Math.max(1, Math.round(height * ratio))
+        } else if (allowUpscale && width < maxWidth && height < maxHeight) {
           const ratio = Math.min(maxWidth / width, maxHeight / height)
           width = Math.round(width * ratio)
           height = Math.round(height * ratio)
@@ -63,6 +69,47 @@ export async function compressImage(
     }
     reader.readAsDataURL(fileOrBlob)
   })
+}
+
+/**
+ * Comprime e redimensiona especificamente fotos de fornecedores
+ * Limite de caixa: 300x300 pixels (mantendo proporção, sem upscale se menor)
+ * Formato: image/jpeg com qualidade 0.85
+ * Retorna um File pronto para envio via FormData ao PocketBase.
+ */
+export async function compressFornecedorFoto(
+  fileOrBlob: File | Blob,
+  fileName = 'fornecedor-foto.jpg',
+): Promise<{
+  file: File
+  dataUrl: string
+  blob: Blob
+  width: number
+  height: number
+  sizeBytes: number
+}> {
+  const result = await compressImage(fileOrBlob, {
+    maxWidth: 300,
+    maxHeight: 300,
+    quality: 0.85,
+    allowUpscale: false,
+  })
+
+  // Constrói objeto File nomeado em JPEG
+  const safeName = fileName.replace(/\.[^/.]+$/, '') + '.jpg'
+  const file = new File([result.blob], safeName, {
+    type: 'image/jpeg',
+    lastModified: Date.now(),
+  })
+
+  return {
+    file,
+    dataUrl: result.dataUrl,
+    blob: result.blob,
+    width: result.width,
+    height: result.height,
+    sizeBytes: result.blob.size,
+  }
 }
 
 /**
