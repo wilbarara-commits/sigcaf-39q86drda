@@ -899,11 +899,76 @@ export function Requirements() {
       {/* 7. Registro de Manutenção e Limpeza de Dados */}
       <SectionTitle>7. Registro de Manutenção & Higienização do Banco de Dados</SectionTitle>
       <div className="space-y-4">
-        {/* Release v0.0.251: Compressão e Redimensionamento de Fotos no Módulo Fornecedores */}
+        {/* Release v0.0.252: Reordenamento do Item Fornecedores no Menu Lateral */}
         <div className="rounded-lg border-2 border-primary/40 bg-card p-5 space-y-4 shadow-sm">
           <div className="flex items-center justify-between flex-wrap gap-2">
             <div className="flex items-center gap-2">
               <Badge variant="outline" className="text-primary border-primary/40 font-semibold">
+                Release v0.0.252
+              </Badge>
+              <span className="font-semibold text-foreground">
+                0.0.252: Reordenamento do Item &quot;Fornecedores&quot; no Menu Lateral
+              </span>
+            </div>
+            <span className="text-xs font-medium text-primary">Versão Vigente (v0.0.252)</span>
+          </div>
+
+          <p className="text-sm text-foreground/90 leading-relaxed">
+            Ajuste na hierarquia de navegação do menu lateral do sistema (
+            <code>src/components/Layout.tsx</code>), movendo o item{' '}
+            <strong>&quot;Fornecedores&quot;</strong> de sua posição inicial anterior no topo do
+            menu (onde havia sido incluído na release 0.0.250) para a posição imediatamente{' '}
+            <strong>depois do item &quot;Dashboard&quot;</strong>. A sequência de navegação passa a
+            ser: 1º <em>Dashboard</em> (<code>/</code>), 2º <em>Fornecedores</em> (
+            <code>/fornecedores</code>), seguido pelos demais itens na ordem operacional vigente.
+          </p>
+
+          <div className="grid sm:grid-cols-2 gap-4 text-sm">
+            <div className="rounded-md border border-border/60 bg-muted/20 p-3 space-y-1.5">
+              <span className="font-medium text-primary">
+                1. Especificações da Mudança no Menu:
+              </span>
+              <ul className="space-y-1 text-xs text-muted-foreground">
+                <li>
+                  • <strong>Nova Posição:</strong> Segundo item do menu (logo após o Dashboard).
+                </li>
+                <li>
+                  • <strong>Preservação Integral de Propriedades:</strong> Mesmo ícone/emoji (🚜),
+                  mesmo rótulo (&quot;Fornecedores&quot;) e mesma rota de acesso (
+                  <code>/fornecedores</code>).
+                </li>
+                <li>
+                  • <strong>Visibilidade e Responsividade:</strong> Disponível no menu lateral
+                  desktop e no menu móvel gaveta (drawer), respeitando todas as regras de controle
+                  de acesso.
+                </li>
+              </ul>
+            </div>
+            <div className="rounded-md border border-primary/30 bg-primary/5 p-3 space-y-1.5">
+              <span className="font-medium text-primary">
+                2. Integridade do Sistema & Ponto de Atenção v0.0.243:
+              </span>
+              <ul className="space-y-1 text-xs text-foreground/80">
+                <li>
+                  • <strong>Módulo Fornecedores 100% Inalterado:</strong> CRUD nativo PocketBase,
+                  compressão client-side de fotos 300x300 JPEG, validação estrita de CPF/CNPJ e
+                  checagem de CAF mantidos sem alterações.
+                </li>
+                <li>
+                  • <strong>Preservação das 4 Telas Críticas:</strong> Nenhuma alteração em rotas,
+                  entregas ou lógica de ciclos em <code>/rotas</code>, Dashboard, Portal do
+                  Motorista e <code>/monitoramento</code>.
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        {/* Release v0.0.251: Compressão e Redimensionamento de Fotos no Módulo Fornecedores */}
+        <div className="rounded-lg border border-border bg-card p-5 space-y-4">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="text-primary border-primary/30 font-semibold">
                 Release v0.0.251
               </Badge>
               <span className="font-semibold text-foreground">
@@ -911,7 +976,7 @@ export function Requirements() {
                 Client-Side (300x300 JPEG)
               </span>
             </div>
-            <span className="text-xs font-medium text-primary">Versão Vigente (v0.0.251)</span>
+            <span className="text-xs text-muted-foreground">Consolidado (v0.0.251)</span>
           </div>
 
           <p className="text-sm text-foreground/90 leading-relaxed">
