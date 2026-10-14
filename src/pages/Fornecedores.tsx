@@ -747,307 +747,336 @@ export default function Fornecedores() {
         </div>
       </Card>
 
-      {/* MODAL DE CRIAÇÃO / EDIÇÃO */}
+      {/* MODAL DE CRIAÇÃO / EDIÇÃO - Layout compacto sem scroll vertical em desktop */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>{editingFornecedor ? 'Editar Fornecedor' : 'Novo Fornecedor'}</DialogTitle>
-            <DialogDescription>
+        <DialogContent className="max-w-3xl sm:max-w-3xl w-[96vw] max-h-[96vh] flex flex-col p-4 sm:p-5 gap-3">
+          <DialogHeader className="space-y-1 pb-1 border-b">
+            <div className="flex items-center justify-between pr-6">
+              <DialogTitle className="text-lg font-bold flex items-center gap-2">
+                <span role="img" aria-label="Fornecedor">
+                  🚜
+                </span>
+                {editingFornecedor ? 'Editar Fornecedor' : 'Novo Fornecedor'}
+              </DialogTitle>
+              {editingFornecedor && (
+                <Badge
+                  variant={vinculo === 'COOPERADO' ? 'default' : 'secondary'}
+                  className="text-[11px] font-semibold"
+                >
+                  {vinculo === 'COOPERADO' ? 'Cooperado' : 'Externo'}
+                </Badge>
+              )}
+            </div>
+            <DialogDescription className="text-xs text-muted-foreground">
               {editingFornecedor
-                ? 'Atualize os dados cadastrais e as informações do CAF do fornecedor.'
-                : 'Preencha os dados abaixo para cadastrar um novo fornecedor no sistema.'}
+                ? 'Atualize os dados cadastrais, contato e validade do CAF deste fornecedor.'
+                : 'Cadastre os dados completos do fornecedor cooperado ou externo.'}
             </DialogDescription>
           </DialogHeader>
 
-          <form onSubmit={handleSubmit} className="space-y-4 pt-2">
-            {/* Foto e Dados Básicos */}
-            <div className="flex flex-col sm:flex-row items-center gap-4 p-3 bg-muted/30 rounded-lg border">
-              <div className="relative">
-                <Avatar className="h-20 w-20 border-2 border-border shadow-xs">
-                  {fotoPreview ? (
-                    <AvatarImage src={fotoPreview} alt="Preview" className="object-cover" />
-                  ) : null}
-                  <AvatarFallback className="text-lg font-bold bg-primary/10 text-primary">
-                    {nome ? nome.slice(0, 2).toUpperCase() : 'FT'}
-                  </AvatarFallback>
-                </Avatar>
-                {fotoPreview && !isCompressingFoto && (
-                  <button
-                    type="button"
-                    onClick={handleRemoverFoto}
-                    className="absolute -top-1 -right-1 bg-destructive text-white rounded-full p-1 shadow-xs hover:bg-destructive/90"
-                    title="Remover foto"
-                  >
-                    <X className="h-3 w-3" />
-                  </button>
-                )}
-                {isCompressingFoto && (
-                  <div className="absolute inset-0 bg-background/80 rounded-full flex items-center justify-center">
-                    <Loader2 className="h-5 w-5 animate-spin text-primary" />
+          <form onSubmit={handleSubmit} className="flex-1 flex flex-col min-h-0 space-y-3">
+            {/* Área de campos: cabe em desktop 1366x768 sem scroll; scroll interno apenas se a tela for muito baixa (ex.: mobile/landscape estreito) */}
+            <div className="flex-1 overflow-y-auto sm:overflow-y-visible pr-0.5 space-y-3">
+              {/* Bloco Superior: Foto compacta + Identificação Geral */}
+              <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5 items-start p-2.5 bg-muted/20 rounded-lg border border-border/70">
+                {/* Coluna da Foto (compacta) */}
+                <div className="sm:col-span-4 flex items-center gap-2.5">
+                  <div className="relative shrink-0">
+                    <Avatar className="h-14 w-14 border-2 border-border shadow-xs">
+                      {fotoPreview ? (
+                        <AvatarImage src={fotoPreview} alt="Preview" className="object-cover" />
+                      ) : null}
+                      <AvatarFallback className="text-sm font-bold bg-primary/10 text-primary">
+                        {nome ? nome.slice(0, 2).toUpperCase() : 'FT'}
+                      </AvatarFallback>
+                    </Avatar>
+                    {fotoPreview && !isCompressingFoto && (
+                      <button
+                        type="button"
+                        onClick={handleRemoverFoto}
+                        className="absolute -top-1 -right-1 bg-destructive text-white rounded-full p-0.5 shadow-xs hover:bg-destructive/90"
+                        title="Remover foto"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    )}
+                    {isCompressingFoto && (
+                      <div className="absolute inset-0 bg-background/80 rounded-full flex items-center justify-center">
+                        <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
-              <div className="flex-1 space-y-1 text-center sm:text-left">
-                <div className="flex items-center gap-2 justify-center sm:justify-start">
-                  <Label htmlFor="foto-upload" className="text-xs font-medium cursor-pointer">
-                    Foto do Fornecedor
-                  </Label>
-                  {fotoOriginalInfo && (
-                    <Badge
-                      variant="outline"
-                      className="text-[10px] text-emerald-700 border-emerald-300"
-                    >
-                      Otimizada {fotoOriginalInfo.width}×{fotoOriginalInfo.height}
-                    </Badge>
-                  )}
+
+                  <div className="flex-1 min-w-0 space-y-1">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <Label
+                        htmlFor="foto-upload"
+                        className="text-[11px] font-semibold cursor-pointer"
+                      >
+                        Foto (Perfil)
+                      </Label>
+                      {fotoOriginalInfo ? (
+                        <Badge
+                          variant="outline"
+                          className="text-[9px] px-1 py-0 text-emerald-700 border-emerald-300"
+                        >
+                          {fotoOriginalInfo.width}×{fotoOriginalInfo.height}
+                        </Badge>
+                      ) : null}
+                    </div>
+                    <Input
+                      ref={fileInputRef}
+                      id="foto-upload"
+                      type="file"
+                      accept="image/*"
+                      disabled={isCompressingFoto || isSubmitting}
+                      onChange={handleFotoChange}
+                      className="h-7 text-[11px] file:mr-1.5 file:py-0.5 file:px-1.5 file:rounded file:border-0 file:text-[10px] file:bg-primary file:text-primary-foreground"
+                    />
+                    <p className="text-[10px] text-muted-foreground truncate">
+                      {isCompressingFoto
+                        ? 'Otimizando JPEG...'
+                        : fotoOriginalInfo
+                          ? `${Math.round(fotoOriginalInfo.originalSize / 1024)}KB → ${Math.max(1, Math.round(fotoOriginalInfo.compressedSize / 1024))}KB (JPEG)`
+                          : 'Auto 300×300 JPEG'}
+                    </p>
+                  </div>
                 </div>
-                <div className="flex items-center gap-2 justify-center sm:justify-start">
+
+                {/* Coluna de Identificação (Nome + Vínculo) */}
+                <div className="sm:col-span-8 grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  <div className="sm:col-span-2 space-y-1">
+                    <Label htmlFor="fornecedor-nome" className="text-[11px] font-semibold">
+                      Nome do Fornecedor <span className="text-destructive">*</span>
+                    </Label>
+                    <Input
+                      id="fornecedor-nome"
+                      required
+                      placeholder="Nome completo ou Razão Social"
+                      value={nome}
+                      onChange={(e) => setNome(e.target.value)}
+                      className="h-8 text-xs"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <Label htmlFor="fornecedor-vinculo" className="text-[11px] font-semibold">
+                      Vínculo <span className="text-destructive">*</span>
+                    </Label>
+                    <Select
+                      value={vinculo}
+                      onValueChange={(val: FornecedorVinculo) => setVinculo(val)}
+                    >
+                      <SelectTrigger id="fornecedor-vinculo" className="h-8 text-xs">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="COOPERADO">Cooperado</SelectItem>
+                        <SelectItem value="EXTERNO">Externo</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              </div>
+
+              {/* Linha 2: Documento (CPF/CNPJ), WhatsApp, Sexo e Nascimento */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                <div className="space-y-1">
+                  <Label htmlFor="fornecedor-identidade" className="text-[11px] font-medium">
+                    CPF ou CNPJ
+                  </Label>
                   <Input
-                    ref={fileInputRef}
-                    id="foto-upload"
-                    type="file"
-                    accept="image/*"
-                    disabled={isCompressingFoto || isSubmitting}
-                    onChange={handleFotoChange}
-                    className="max-w-xs text-xs file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:bg-primary file:text-primary-foreground"
+                    id="fornecedor-identidade"
+                    placeholder="000.000.000-00 ou CNPJ"
+                    value={identidade}
+                    onChange={(e) => setIdentidade(formatarDocumentoIdentidade(e.target.value))}
+                    className="h-8 text-xs font-mono"
                   />
                 </div>
-                <p className="text-[11px] text-muted-foreground">
-                  {isCompressingFoto
-                    ? 'Comprimindo e redimensionando foto para 300x300 JPEG...'
-                    : fotoOriginalInfo
-                      ? `Reduzida: ${Math.round(fotoOriginalInfo.originalSize / 1024)} KB → ${Math.max(1, Math.round(fotoOriginalInfo.compressedSize / 1024))} KB (JPEG). Cota protegida contra estouro.`
-                      : 'A imagem será automaticamente comprimida e redimensionada para até 300x300 pixels em JPEG.'}
-                </p>
-              </div>
-            </div>
 
-            {/* Linha 1: Nome e Vínculo */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <div className="sm:col-span-2 space-y-1">
-                <Label htmlFor="fornecedor-nome" className="text-xs font-semibold">
-                  Nome do Fornecedor <span className="text-destructive">*</span>
-                </Label>
-                <Input
-                  id="fornecedor-nome"
-                  required
-                  placeholder="Nome completo ou Razão Social"
-                  value={nome}
-                  onChange={(e) => setNome(e.target.value)}
-                />
-              </div>
+                <div className="space-y-1">
+                  <Label htmlFor="fornecedor-whatsapp" className="text-[11px] font-medium">
+                    WhatsApp
+                  </Label>
+                  <Input
+                    id="fornecedor-whatsapp"
+                    placeholder="(00) 00000-0000"
+                    value={whatsapp}
+                    onChange={(e) => setWhatsapp(formatarWhatsApp(e.target.value))}
+                    className="h-8 text-xs font-mono"
+                  />
+                </div>
 
-              <div className="space-y-1">
-                <Label htmlFor="fornecedor-vinculo" className="text-xs font-semibold">
-                  Vínculo <span className="text-destructive">*</span>
-                </Label>
-                <Select value={vinculo} onValueChange={(val: FornecedorVinculo) => setVinculo(val)}>
-                  <SelectTrigger id="fornecedor-vinculo">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="COOPERADO">Cooperado</SelectItem>
-                    <SelectItem value="EXTERNO">Externo</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
+                <div className="space-y-1">
+                  <Label htmlFor="fornecedor-sexo" className="text-[11px] font-medium">
+                    Sexo
+                  </Label>
+                  <Select value={sexo} onValueChange={setSexo}>
+                    <SelectTrigger id="fornecedor-sexo" className="h-8 text-xs">
+                      <SelectValue placeholder="Selecione..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="MASCULINO">Masculino</SelectItem>
+                      <SelectItem value="FEMININO">Feminino</SelectItem>
+                      <SelectItem value="OUTRO">Outro</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
 
-            {/* Linha 2: Sexo e Data de Nascimento */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <Label htmlFor="fornecedor-sexo" className="text-xs">
-                  Sexo
-                </Label>
-                <Select value={sexo} onValueChange={setSexo}>
-                  <SelectTrigger id="fornecedor-sexo">
-                    <SelectValue placeholder="Selecione o sexo" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="MASCULINO">Masculino</SelectItem>
-                    <SelectItem value="FEMININO">Feminino</SelectItem>
-                    <SelectItem value="OUTRO">Outro</SelectItem>
-                  </SelectContent>
-                </Select>
+                <div className="space-y-1">
+                  <Label htmlFor="fornecedor-nascimento" className="text-[11px] font-medium">
+                    Nascimento
+                  </Label>
+                  <Input
+                    id="fornecedor-nascimento"
+                    type="date"
+                    value={dataNascimento}
+                    onChange={(e) => setDataNascimento(e.target.value)}
+                    className="h-8 text-xs"
+                  />
+                </div>
               </div>
 
-              <div className="space-y-1">
-                <Label htmlFor="fornecedor-nascimento" className="text-xs">
-                  Data de Nascimento
-                </Label>
-                <Input
-                  id="fornecedor-nascimento"
-                  type="date"
-                  value={dataNascimento}
-                  onChange={(e) => setDataNascimento(e.target.value)}
-                />
-              </div>
-            </div>
+              {/* Linha 3: Endereço (Propriedade) + Bairro */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                <div className="sm:col-span-2 space-y-1">
+                  <Label htmlFor="fornecedor-endereco" className="text-[11px] font-medium">
+                    Endereço / Propriedade Rural
+                  </Label>
+                  <Input
+                    id="fornecedor-endereco"
+                    placeholder="Linha, Estrada, Rua, Comunidade..."
+                    value={endereco}
+                    onChange={(e) => setEndereco(e.target.value)}
+                    className="h-8 text-xs"
+                  />
+                </div>
 
-            {/* Linha 3: Identidade (CPF ou CNPJ) e WhatsApp */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <Label htmlFor="fornecedor-identidade" className="text-xs">
-                  Identidade (CPF ou CNPJ)
-                </Label>
-                <Input
-                  id="fornecedor-identidade"
-                  placeholder="000.000.000-00 ou CNPJ"
-                  value={identidade}
-                  onChange={(e) => setIdentidade(formatarDocumentoIdentidade(e.target.value))}
-                />
-                <p className="text-[11px] text-muted-foreground">
-                  Validação automática de dígitos verificadores de CPF e CNPJ.
-                </p>
+                <div className="space-y-1">
+                  <Label htmlFor="fornecedor-bairro" className="text-[11px] font-medium">
+                    Bairro / Localidade
+                  </Label>
+                  <Input
+                    id="fornecedor-bairro"
+                    placeholder="Distrito ou Bairro"
+                    value={bairro}
+                    onChange={(e) => setBairro(e.target.value)}
+                    className="h-8 text-xs"
+                  />
+                </div>
               </div>
 
-              <div className="space-y-1">
-                <Label htmlFor="fornecedor-whatsapp" className="text-xs">
-                  WhatsApp
-                </Label>
-                <Input
-                  id="fornecedor-whatsapp"
-                  placeholder="(00) 00000-0000"
-                  value={whatsapp}
-                  onChange={(e) => setWhatsapp(formatarWhatsApp(e.target.value))}
-                />
-              </div>
-            </div>
+              {/* Linha 4: CEP, Latitude, Longitude + Validade do CAF integrado */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 items-end">
+                <div className="space-y-1">
+                  <Label htmlFor="fornecedor-cep" className="text-[11px] font-medium">
+                    CEP
+                  </Label>
+                  <Input
+                    id="fornecedor-cep"
+                    placeholder="00000-000"
+                    value={cep}
+                    onChange={(e) => setCep(formatarCEP(e.target.value))}
+                    className="h-8 text-xs font-mono"
+                  />
+                </div>
 
-            {/* Linha 4: Data de Validade do CAF com destaque para Vencido */}
-            <div
-              className={`p-3 rounded-lg border transition-colors ${
-                formCafStatus.isVencido
-                  ? 'bg-red-50/80 border-red-300 dark:bg-red-950/30 dark:border-red-800'
-                  : 'bg-muted/20 border-border'
-              }`}
-            >
-              <div className="flex items-center justify-between gap-2 mb-1">
-                <Label
-                  htmlFor="fornecedor-caf"
-                  className={`text-xs font-semibold ${
-                    formCafStatus.isVencido ? 'text-red-700 dark:text-red-400' : ''
+                <div className="space-y-1">
+                  <Label htmlFor="fornecedor-latitude" className="text-[11px] font-medium">
+                    Latitude
+                  </Label>
+                  <Input
+                    id="fornecedor-latitude"
+                    placeholder="Ex: -27.5954"
+                    value={latitude}
+                    onChange={(e) => setLatitude(e.target.value)}
+                    className="h-8 text-xs"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <Label htmlFor="fornecedor-longitude" className="text-[11px] font-medium">
+                    Longitude
+                  </Label>
+                  <Input
+                    id="fornecedor-longitude"
+                    placeholder="Ex: -48.5480"
+                    value={longitude}
+                    onChange={(e) => setLongitude(e.target.value)}
+                    className="h-8 text-xs"
+                  />
+                </div>
+
+                {/* Validade do CAF com destaque compacto para vencido */}
+                <div
+                  className={`space-y-1 p-1.5 rounded-md border transition-colors ${
+                    formCafStatus.isVencido
+                      ? 'bg-red-50/90 border-red-300 dark:bg-red-950/40 dark:border-red-800'
+                      : formCafStatus.status === 'valido'
+                        ? 'bg-emerald-50/60 border-emerald-300 dark:bg-emerald-950/20 dark:border-emerald-800'
+                        : 'bg-muted/10 border-border/70'
                   }`}
                 >
-                  Data de Validade do CAF (Opcional)
-                </Label>
-                {formCafStatus.isVencido && (
-                  <Badge
-                    variant="destructive"
-                    className="gap-1 font-semibold text-[10px] uppercase"
-                  >
-                    <AlertTriangle className="h-3 w-3" />
-                    CAF Vencido
-                  </Badge>
-                )}
-                {formCafStatus.status === 'valido' && (
-                  <Badge
-                    variant="outline"
-                    className="gap-1 text-emerald-700 border-emerald-300 text-[10px]"
-                  >
-                    <CheckCircle2 className="h-3 w-3" />
-                    CAF Válido
-                  </Badge>
-                )}
-              </div>
-              <Input
-                id="fornecedor-caf"
-                type="date"
-                value={dataValidadeCaf}
-                onChange={(e) => setDataValidadeCaf(e.target.value)}
-                className={
-                  formCafStatus.isVencido ? 'border-red-400 focus-visible:ring-red-400' : ''
-                }
-              />
-              <p
-                className={`text-[11px] mt-1 ${
-                  formCafStatus.isVencido ? 'text-red-600 font-medium' : 'text-muted-foreground'
-                }`}
-              >
-                {formCafStatus.isVencido
-                  ? 'Atenção: A data informada indica que o CAF deste fornecedor está vencido.'
-                  : 'Preencha apenas caso o produtor possua CAF ativo/registrado.'}
-              </p>
-            </div>
-
-            {/* Linha 5: Endereço, Bairro e CEP */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <div className="sm:col-span-2 space-y-1">
-                <Label htmlFor="fornecedor-endereco" className="text-xs">
-                  Endereço / Propriedade
-                </Label>
-                <Input
-                  id="fornecedor-endereco"
-                  placeholder="Linha, Estrada, Rua, Comunidade..."
-                  value={endereco}
-                  onChange={(e) => setEndereco(e.target.value)}
-                />
-              </div>
-
-              <div className="space-y-1">
-                <Label htmlFor="fornecedor-bairro" className="text-xs">
-                  Bairro / Localidade
-                </Label>
-                <Input
-                  id="fornecedor-bairro"
-                  placeholder="Distrito ou Bairro"
-                  value={bairro}
-                  onChange={(e) => setBairro(e.target.value)}
-                />
+                  <div className="flex items-center justify-between gap-1">
+                    <Label
+                      htmlFor="fornecedor-caf"
+                      className={`text-[11px] font-semibold truncate ${
+                        formCafStatus.isVencido ? 'text-red-700 dark:text-red-400' : ''
+                      }`}
+                    >
+                      Validade CAF
+                    </Label>
+                    {formCafStatus.isVencido && (
+                      <Badge
+                        variant="destructive"
+                        className="text-[9px] px-1 py-0 uppercase shrink-0"
+                      >
+                        Vencido
+                      </Badge>
+                    )}
+                    {formCafStatus.status === 'valido' && (
+                      <Badge
+                        variant="outline"
+                        className="text-[9px] px-1 py-0 text-emerald-700 border-emerald-300 shrink-0"
+                      >
+                        Válido
+                      </Badge>
+                    )}
+                  </div>
+                  <Input
+                    id="fornecedor-caf"
+                    type="date"
+                    value={dataValidadeCaf}
+                    onChange={(e) => setDataValidadeCaf(e.target.value)}
+                    className={`h-8 text-xs ${
+                      formCafStatus.isVencido
+                        ? 'border-red-400 focus-visible:ring-red-400 bg-white dark:bg-background'
+                        : ''
+                    }`}
+                  />
+                </div>
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <div className="space-y-1">
-                <Label htmlFor="fornecedor-cep" className="text-xs">
-                  CEP
-                </Label>
-                <Input
-                  id="fornecedor-cep"
-                  placeholder="00000-000"
-                  value={cep}
-                  onChange={(e) => setCep(formatarCEP(e.target.value))}
-                />
-              </div>
-
-              {/* Coordenadas (campos numéricos simples) */}
-              <div className="space-y-1">
-                <Label htmlFor="fornecedor-latitude" className="text-xs">
-                  Latitude
-                </Label>
-                <Input
-                  id="fornecedor-latitude"
-                  placeholder="Ex: -27.5954"
-                  value={latitude}
-                  onChange={(e) => setLatitude(e.target.value)}
-                />
-              </div>
-
-              <div className="space-y-1">
-                <Label htmlFor="fornecedor-longitude" className="text-xs">
-                  Longitude
-                </Label>
-                <Input
-                  id="fornecedor-longitude"
-                  placeholder="Ex: -48.5480"
-                  value={longitude}
-                  onChange={(e) => setLongitude(e.target.value)}
-                />
-              </div>
-            </div>
-
-            <DialogFooter className="pt-2">
+            {/* Footer Fixo: sempre visível sem rolagem */}
+            <DialogFooter className="pt-2 border-t mt-1 shrink-0 flex-row justify-end gap-2 sm:gap-2">
               <Button
                 type="button"
                 variant="outline"
+                size="sm"
                 onClick={() => setDialogOpen(false)}
                 disabled={isSubmitting}
               >
                 Cancelar
               </Button>
-              <Button type="submit" disabled={isSubmitting || isCompressingFoto} className="gap-2">
+              <Button
+                type="submit"
+                size="sm"
+                disabled={isSubmitting || isCompressingFoto}
+                className="gap-1.5 shadow-xs font-semibold"
+              >
                 {(isSubmitting || isCompressingFoto) && (
-                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
                 )}
                 {editingFornecedor ? 'Salvar Alterações' : 'Cadastrar Fornecedor'}
               </Button>

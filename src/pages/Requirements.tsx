@@ -899,18 +899,95 @@ export function Requirements() {
       {/* 7. Registro de Manutenção e Limpeza de Dados */}
       <SectionTitle>7. Registro de Manutenção & Higienização do Banco de Dados</SectionTitle>
       <div className="space-y-4">
-        {/* Release v0.0.252: Reordenamento do Item Fornecedores no Menu Lateral */}
+        {/* Release v0.0.253: Layout Compacto do Modal de Fornecedores sem Scroll Vertical */}
         <div className="rounded-lg border-2 border-primary/40 bg-card p-5 space-y-4 shadow-sm">
           <div className="flex items-center justify-between flex-wrap gap-2">
             <div className="flex items-center gap-2">
               <Badge variant="outline" className="text-primary border-primary/40 font-semibold">
+                Release v0.0.253
+              </Badge>
+              <span className="font-semibold text-foreground">
+                0.0.253: Layout Compacto do Modal de Cadastro/Edição de Fornecedores sem Rolagem
+                Vertical em Desktop
+              </span>
+            </div>
+            <span className="text-xs font-medium text-primary">Versão Vigente (v0.0.253)</span>
+          </div>
+
+          <p className="text-sm text-foreground/90 leading-relaxed">
+            Reorganização do formulário modal de cadastro e edição de fornecedores no módulo{' '}
+            <strong>Fornecedores</strong> (<code>/fornecedores</code>,{' '}
+            <code>src/pages/Fornecedores.tsx</code>), atendendo ao pedido do usuário (&quot;colocar
+            todas as informações da edição inclusive o botão de salvar no cartão sem precisar rolar
+            vertical&quot;). O layout foi reestruturado em grade compacta e proporcional, integrando
+            foto/avatar de perfil compacta ao lado do nome e vínculo, campos de documento e contato
+            lado a lado, endereço e bairro, e coordenadas com o bloco de validade do CAF, além de
+            footer com botões &quot;Cancelar&quot; e &quot;Salvar&quot; fixados e imediatamente
+            visíveis na viewport em desktops típicos (ex.: 1366×768).
+          </p>
+
+          <div className="grid sm:grid-cols-2 gap-4 text-sm">
+            <div className="rounded-md border border-border/60 bg-muted/20 p-3 space-y-1.5">
+              <span className="font-medium text-primary">
+                1. Reorganização Ergonômica & Compactação do Formulário:
+              </span>
+              <ul className="space-y-1 text-xs text-muted-foreground">
+                <li>
+                  • <strong>Avatar & Upload Otimizado:</strong> Posicionamento lateral compacto do
+                  avatar e botão de upload ao lado dos campos Nome e Vínculo, eliminando o bloco
+                  vertical extenso anterior.
+                </li>
+                <li>
+                  • <strong>Grade de Identificação & Contato:</strong> CPF/CNPJ, WhatsApp, Sexo e
+                  Data de Nascimento alinhados em 4 colunas compactas com tipografia equilibrada.
+                </li>
+                <li>
+                  • <strong>Localização & CAF Integrado:</strong> Endereço (2 cols) e Bairro (1
+                  col); linha seguinte com CEP, Latitude, Longitude e Validade do CAF com destaque
+                  colorido (verde para válido e vermelho para vencido) totalmente integrados.
+                </li>
+                <li>
+                  • <strong>Footer Fixo & Zero Scroll em Desktop:</strong> O rodapé com os botões
+                  Salvar/Cancelar é fixo e visível sem rolagem na tela desktop; rolagem interna
+                  mantida apenas defensivamente para telas verticais extremamente baixas ou mobile.
+                </li>
+              </ul>
+            </div>
+            <div className="rounded-md border border-primary/30 bg-primary/5 p-3 space-y-1.5">
+              <span className="font-medium text-primary">
+                2. Integridade Funcional & Ponto de Atenção v0.0.243:
+              </span>
+              <ul className="space-y-1 text-xs text-foreground/80">
+                <li>
+                  • <strong>100% das Validações Preservadas:</strong> Validação de dígitos
+                  verificadores de CPF e CNPJ (módulo 11), máscaras de WhatsApp e CEP, compressão
+                  client-side (300×300 JPEG), e verificação de CAF ativo/vencido rigorosamente
+                  mantidas.
+                </li>
+                <li>
+                  • <strong>Preservação Rigorosa das 4 Telas Críticas:</strong> Nenhuma alteração
+                  nas quatro telas de entregas protegidas (<code>/rotas</code>, Dashboard, Portal do
+                  Motorista e <code>/monitoramento</code>), preservando integralmente o isolamento
+                  por
+                  <code>ciclo_id</code> e regras anti-vazamento.
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        {/* Release v0.0.252: Reordenamento do Item Fornecedores no Menu Lateral */}
+        <div className="rounded-lg border border-border bg-card p-5 space-y-4">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="text-primary border-primary/30 font-semibold">
                 Release v0.0.252
               </Badge>
               <span className="font-semibold text-foreground">
                 0.0.252: Reordenamento do Item &quot;Fornecedores&quot; no Menu Lateral
               </span>
             </div>
-            <span className="text-xs font-medium text-primary">Versão Vigente (v0.0.252)</span>
+            <span className="text-xs text-muted-foreground">Consolidado (v0.0.252)</span>
           </div>
 
           <p className="text-sm text-foreground/90 leading-relaxed">
