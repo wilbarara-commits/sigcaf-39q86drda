@@ -57,6 +57,7 @@ interface NavItem {
 }
 
 const NAV_ITEMS: NavItem[] = [
+  { name: 'Fornecedores', path: '/fornecedores', emoji: '🚜' },
   { name: 'Dashboard', path: '/', emoji: '📊' },
   { name: 'Produtos', path: '/produtos', emoji: '🌱', adminOnly: true },
   { name: 'Escolas', path: '/escolas', emoji: '🏫', adminOnly: true },

@@ -21,6 +21,23 @@ interface ModuleSpec {
 
 const MODULES: ModuleSpec[] = [
   {
+    id: '3.0',
+    title: 'Fornecedores (Produtores Cooperados & Fornecedores Externos)',
+    route: '/fornecedores',
+    goal: 'Cadastro e gestão unificada de produtores rurais cooperados e fornecedores externos com controle de validade do CAF (Cadastro Nacional da Agricultura Familiar), foto, documentos e canais de contato.',
+    details: [
+      'Posicionamento de Destaque no Menu: Primeiro item do menu lateral principal (rota /fornecedores com ícone 🚜), acessível a todos os operadores do sistema com permissões de gestão (criação, edição e exclusão) atribuídas aos perfis Administrador e Master.',
+      'Coleção PocketBase `fornecedores` (v0.0.250): Persistência em nuvem nativa sem uso de armazenamento local temporário/ilha de dados, contendo os campos: nome (obrigatório), sexo (Masculino, Feminino, Outro), data_nascimento, foto (upload de imagem até 5MB armazenada em storage e servida com preview/avatar), vinculo (COOPERADO ou EXTERNO), identidade (CPF com 11 dígitos ou CNPJ com 14 dígitos, aceitando ambos no mesmo campo), data_validade_caf (opcional), endereco, bairro, cep, latitude e longitude (campos numéricos simples), whatsapp e timestamps created/updated.',
+      'Validação Matemática Estrita de Documentos (CPF ou CNPJ): Algoritmo validador em tempo real no cliente com rejeição de sequências inválidas e cálculo rigoroso dos dígitos verificadores (módulo 11 para CPF de 11 dígitos e duplo ponderador para CNPJ de 14 dígitos), impedindo cadastros com números corrompidos ou fictícios.',
+      'Máscaras e Formatações Automáticas: Máscara progressiva inteligente de CPF/CNPJ conforme digitação, máscara de WhatsApp no padrão brasileiro (XX) XXXXX-XXXX e formatação de CEP (XXXXX-XXX).',
+      'Controle Visual & Alertas de Situação do CAF: Indicador trilateral de situação do CAF: "Válido" (quando data_validade_caf >= hoje em verde), "Vencido" (quando data_validade_caf < hoje em VERMELHO com ícone de alerta) e "—" (quando não informado). O destaque em vermelho do CAF vencido manifesta-se tanto na listagem geral quanto em caixa de aviso destacada no formulário de edição/criação.',
+      'Listagem, Busca e Filtros Operacionais: Busca textual rápida por nome, CPF/CNPJ e WhatsApp; filtro por Vínculo (Todos, Cooperado, Externo); cards de resumo com totalizadores de fornecedores, cooperados, externos e quantidade de CAF vencidos; paginação/tabela responsiva com avatar.',
+      'Exclusão Segura com Diálogo de Confirmação: Exclusão condicionada obrigatoriamente a diálogo de confirmação (AlertDialog) com aviso claro de irreversibilidade e limpeza física da foto associada no PocketBase.',
+      'Reatividade em Tempo Real: Inscrição realtime na coleção `fornecedores` sincronizando instantaneamente inclusões, alterações e exclusões com o estado global do AppContext.',
+      'Preservação Estrita das Quatro Telas de Entregas (v0.0.243): Isolamento arquitetural total sem interferência nas rotas logísticas (/rotas), no Dashboard (/), no Portal do Motorista (/motorista) e no Monitoramento (/monitoramento).',
+    ],
+  },
+  {
     id: '3.1',
     title: 'Dashboard & Acompanhamento Executivo',
     route: '/ (Página Inicial)',
@@ -469,6 +486,7 @@ const STACK = [
 ]
 
 const DATA_MODEL = [
+  'fornecedores (id, nome, sexo [MASCULINO/FEMININO/OUTRO], data_nascimento, foto [file], vinculo [COOPERADO/EXTERNO], identidade [CPF/CNPJ com validação de DV], data_validade_caf [data], endereco, bairro, cep, latitude [numérico], longitude [numérico], whatsapp) [Cadastro mestre de produtores e fornecedores com controle de CAF]',
   'users (id, email, nome/name, celular, foto [file], perfil [MASTER/ADMINISTRADOR/SECRETARIA], ativo [bool])',
   'configuracoes (id, nome_cooperativa, sigla, cnpj, telefone, email, cidade_uf, exibir_atalhos_demo [bool], logotipo [file], subtitulo_sistema, deposito_nome, deposito_latitude, deposito_longitude, atesto_vias [1 ou 2], atesto_rotulo_via1 [texto], atesto_rotulo_via2 [texto])',
   'ciclos (id, nome, chamada_id → chamadas, data_inicio, data_fim, data_despacho, status [texto extensível: coletando / correcao / coleta_encerrada / fechado / cancelado], motivo_cancelamento [texto], data_cancelamento [data], snapshot [json com regra semanal e despacho]) [1 ciclo ativo por chamada; número = semana ISO; fase única do ciclo governando todos os contratos da chamada]',
@@ -881,8 +899,90 @@ export function Requirements() {
       {/* 7. Registro de Manutenção e Limpeza de Dados */}
       <SectionTitle>7. Registro de Manutenção & Higienização do Banco de Dados</SectionTitle>
       <div className="space-y-4">
-        {/* Release v0.0.249: Limpeza Geral do Campo Telefone de Todas as Escolas */}
+        {/* Release v0.0.250: Novo Módulo Fornecedores Completo */}
         <div className="rounded-lg border-2 border-primary/40 bg-card p-5 space-y-4 shadow-sm">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="text-primary border-primary/40 font-semibold">
+                Release v0.0.250
+              </Badge>
+              <span className="font-semibold text-foreground">
+                0.0.250: Módulo "Fornecedores" Completo com Gestão de Produtores, CAF e Vínculo
+              </span>
+            </div>
+            <span className="text-xs font-medium text-primary">Versão Vigente (v0.0.250)</span>
+          </div>
+
+          <p className="text-sm text-foreground/90 leading-relaxed">
+            Entrega do módulo mestre <strong>&quot;Fornecedores&quot;</strong> (
+            <code>/fornecedores</code>, <code>src/pages/Fornecedores.tsx</code>), posicionado no
+            topo do menu lateral principal (primeiro item com ícone 🚜), persistido nativamente na
+            nova coleção PocketBase <code>fornecedores</code> (Migration 0144) com suporte a foto de
+            perfil, documentos com validação matemática estrita de CPF/CNPJ, máscaras automáticas,
+            coordenadas simples, indicadores visuais de validade do CAF (com destaque vermelho em
+            caso de vencimento) e isolamento arquitetural rigoroso das 4 telas de entrega.
+          </p>
+
+          <div className="grid sm:grid-cols-2 gap-4 text-sm">
+            <div className="rounded-md border border-border/60 bg-muted/20 p-3 space-y-1.5">
+              <span className="font-medium text-primary">
+                1. Estrutura de Dados & Persistência PocketBase:
+              </span>
+              <ul className="space-y-1 text-xs text-muted-foreground">
+                <li>
+                  •{' '}
+                  <strong>
+                    Coleção <code>fornecedores</code> (Migration 0144):
+                  </strong>{' '}
+                  Campos <code>nome</code> (obrigatório), <code>sexo</code> (MASCULINO, FEMININO,
+                  OUTRO), <code>data_nascimento</code>, <code>foto</code> (arquivo até 5MB),{' '}
+                  <code>vinculo</code> (COOPERADO ou EXTERNO), <code>identidade</code> (CPF ou
+                  CNPJ), <code>data_validade_caf</code>, <code>endereco</code>, <code>bairro</code>,{' '}
+                  <code>cep</code>, <code>latitude</code> e <code>longitude</code> (numéricos
+                  simples) e <code>whatsapp</code>.
+                </li>
+                <li>
+                  • <strong>Persistência Nativa:</strong> CRUD via <code>fornecedoresService</code>{' '}
+                  e <code>AppContext</code> sincronizado com PocketBase e realtime nativo, sem ilhas
+                  de <code>localStorage</code>.
+                </li>
+                <li>
+                  • <strong>Exclusão Segura:</strong> Exclusão física com diálogo modal de
+                  confirmação <code>AlertDialog</code> com avisos preventivos.
+                </li>
+              </ul>
+            </div>
+            <div className="rounded-md border border-primary/30 bg-primary/5 p-3 space-y-1.5">
+              <span className="font-medium text-primary">
+                2. Regras de Validação, CAF & Preservação das Quatro Telas:
+              </span>
+              <ul className="space-y-1 text-xs text-foreground/80">
+                <li>
+                  • <strong>Validação de CPF/CNPJ:</strong> Verificação rigorosa de dígitos
+                  verificadores com algoritmo módulo 11 para CPF (11 dígitos) e duplo ponderador
+                  para CNPJ (14 dígitos), aceitando ambos no mesmo campo.
+                </li>
+                <li>
+                  • <strong>Destaque em Vermelho do CAF:</strong> Comparação da data do CAF com o
+                  dia atual (&ge; hoje Válido verde; &lt; hoje Vencido vermelho com ícone de alerta;
+                  — quando não informado), sinalizado tanto na listagem quanto no formulário.
+                </li>
+                <li>
+                  • <strong>Máscara de WhatsApp:</strong> Formatação automática no padrão celular
+                  brasileiro <code>(XX) XXXXX-XXXX</code>.
+                </li>
+                <li>
+                  • <strong>Ponto de Atenção v0.0.243 intacto:</strong> Zero impacto ou
+                  interferência nas 4 telas de entregas (<code>/rotas</code>, Dashboard, Portal do
+                  Motorista e <code>/monitoramento</code>).
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        {/* Release v0.0.249: Limpeza Geral do Campo Telefone de Todas as Escolas */}
+        <div className="rounded-lg border border-border bg-card p-5 space-y-4">
           <div className="flex items-center justify-between flex-wrap gap-2">
             <div className="flex items-center gap-2">
               <Badge variant="outline" className="text-primary border-primary/40 font-semibold">
@@ -892,7 +992,7 @@ export function Requirements() {
                 0.0.249: Higienização & Limpeza do Campo Telefone de Todas as Escolas
               </span>
             </div>
-            <span className="text-xs font-medium text-primary">Versão Vigente (v0.0.249)</span>
+            <span className="text-xs text-muted-foreground">Consolidado (v0.0.249)</span>
           </div>
 
           <p className="text-sm text-foreground/90 leading-relaxed">

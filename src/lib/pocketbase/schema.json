@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-11T01:25:11.494Z",
+  "generatedAt": "2026-10-14T00:49:27.482Z",
   "collections": [
     {
       "name": "users",
@@ -2204,6 +2204,119 @@
         }
       ],
       "indexes": ["CREATE UNIQUE INDEX idx_config_sistema_chave ON config_sistema (chave)"]
+    },
+    {
+      "name": "fornecedores",
+      "type": "base",
+      "apiRules": {
+        "list": "",
+        "view": "",
+        "create": "@request.auth.id != \"\"",
+        "update": "@request.auth.id != \"\"",
+        "delete": "@request.auth.id != \"\""
+      },
+      "fields": [
+        {
+          "name": "nome",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "sexo",
+          "type": "select",
+          "required": false,
+          "system": false,
+          "selectValues": ["MASCULINO", "FEMININO", "OUTRO"]
+        },
+        {
+          "name": "data_nascimento",
+          "type": "date",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "foto",
+          "type": "file",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "vinculo",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": ["COOPERADO", "EXTERNO"]
+        },
+        {
+          "name": "identidade",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "data_validade_caf",
+          "type": "date",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "endereco",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "bairro",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "cep",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "latitude",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "longitude",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "whatsapp",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": [
+        "CREATE INDEX idx_fornecedores_nome ON fornecedores (nome)",
+        "CREATE INDEX idx_fornecedores_vinculo ON fornecedores (vinculo)",
+        "CREATE INDEX idx_fornecedores_identidade ON fornecedores (identidade)",
+        "CREATE INDEX idx_fornecedores_caf ON fornecedores (data_validade_caf)"
+      ]
     }
   ]
 }

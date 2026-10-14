@@ -22,6 +22,7 @@ import type {
   ContratoEscolaRecord,
   ContratoItemRecord,
   PedidoValidacao,
+  FornecedorRecord,
   ConfiguracoesRecord,
   ChamadaRecord,
   ChamadaItemRecord,
@@ -31,6 +32,7 @@ import { configuracoesService } from '@/services/configuracoes'
 import { chamadasService } from '@/services/chamadas'
 import { produtosService } from '@/services/produtos'
 import { escolasService } from '@/services/escolas'
+import { fornecedoresService } from '@/services/fornecedores'
 import { contratosService } from '@/services/contratos'
 import { pedidosService } from '@/services/pedidos'
 import { atestosService } from '@/services/atestos'
@@ -61,6 +63,7 @@ export interface CreateOrderData {
 interface AppState {
   products: Product[]
   schools: School[]
+  fornecedores: FornecedorRecord[]
   chamadas: ChamadaRecord[]
   chamadaItems: ChamadaItemRecord[]
   contracts: Contract[]
@@ -193,6 +196,7 @@ const AppContext = createContext<AppState | undefined>(undefined)
 export function AppProvider({ children }: { children: ReactNode }) {
   const [products, setProducts] = useState<Product[]>([])
   const [schools, setSchools] = useState<School[]>([])
+  const [fornecedores, setFornecedores] = useState<FornecedorRecord[]>([])
   const [chamadas, setChamadas] = useState<ChamadaRecord[]>([])
   const [chamadaItems, setChamadaItems] = useState<ChamadaItemRecord[]>([])
   const [contracts, setContracts] = useState<Contract[]>([])
@@ -275,6 +279,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         rawConfig,
         rawChamadas,
         rawChamadaItens,
+        rawFornecedores,
       ] = await Promise.all([
         produtosService.getAll(),
         escolasService.getAll(),
@@ -292,8 +297,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
         configuracoesService.get(),
         chamadasService.getAll().catch(() => [] as ChamadaRecord[]),
         chamadasService.getAllItems().catch(() => [] as ChamadaItemRecord[]),
+        fornecedoresService.getAll().catch(() => [] as FornecedorRecord[]),
       ])
 
+      setFornecedores(rawFornecedores || [])
       setChamadas(rawChamadas || [])
       setChamadaItems(rawChamadaItens || [])
       setConfig(rawConfig)
@@ -872,6 +879,58 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
       setRotas(updateList)
       setRotasLogisticas(updateList)
+    }
+  })
+
+  useRealtime<any>('fornecedores', (e) => {
+    if (e.action === 'delete') {
+      setFornecedores((prev) => prev.filter((f) => f.id !== e.record.id))
+    } else if (e.action === 'create' || e.action === 'update') {
+      const rec = e.record
+      let fotoUrl = ''
+      if (rec.foto) {
+        fotoUrl = pb.files.getURL(rec, rec.foto)
+      }
+      const rawVinculo = String(rec.vinculo || 'COOPERADO').toUpperCase()
+      const vinculo = rawVinculo === 'EXTERNO' ? 'EXTERNO' : 'COOPERADO'
+      const item: FornecedorRecord = {
+        id: rec.id,
+        nome: rec.nome || '',
+        sexo: rec.sexo || undefined,
+        data_nascimento: rec.data_nascimento || undefined,
+        foto: rec.foto || '',
+        fotoUrl,
+        vinculo,
+        identidade: rec.identidade || '',
+        data_validade_caf: rec.data_validade_caf || undefined,
+        endereco: rec.endereco || '',
+        bairro: rec.bairro || '',
+        cep: rec.cep || '',
+        latitude:
+          typeof rec.latitude === 'number'
+            ? rec.latitude
+            : rec.latitude
+              ? Number(rec.latitude)
+              : undefined,
+        longitude:
+          typeof rec.longitude === 'number'
+            ? rec.longitude
+            : rec.longitude
+              ? Number(rec.longitude)
+              : undefined,
+        whatsapp: rec.whatsapp || '',
+        created: rec.created,
+        updated: rec.updated,
+      }
+      setFornecedores((prev) => {
+        const idx = prev.findIndex((f) => f.id === rec.id)
+        if (idx !== -1) {
+          const copy = [...prev]
+          copy[idx] = item
+          return copy.sort((a, b) => a.nome.localeCompare(b.nome))
+        }
+        return [...prev, item].sort((a, b) => a.nome.localeCompare(b.nome))
+      })
     }
   })
 
@@ -3602,6 +3661,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       value={{
         products,
         schools,
+        fornecedores,
         chamadas,
         chamadaItems,
         contracts,

@@ -10,6 +10,7 @@ import Layout from './components/Layout'
 import Login from './pages/Login'
 import Index from './pages/Index'
 import NotFound from './pages/NotFound'
+import Fornecedores from './pages/Fornecedores'
 import Products from './pages/Products'
 import Schools from './pages/Schools'
 import Producao from './pages/Producao'
@@ -56,6 +57,7 @@ const App = () => (
               }
             >
               {/* Rotas operacionais gerais (MASTER, ADMINISTRADOR, SECRETÁRIA) */}
+              <Route path="/fornecedores" element={<Fornecedores />} />
               <Route path="/" element={<Index />} />
               <Route path="/pedidos" element={<Orders />} />
               <Route path="/rotas" element={<DeliveryRoutes />} />

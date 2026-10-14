@@ -687,3 +687,26 @@ export interface EntregaComprovanteRecord {
   created?: string
   updated?: string
 }
+
+export type FornecedorVinculo = 'COOPERADO' | 'EXTERNO'
+export type FornecedorSexo = 'MASCULINO' | 'FEMININO' | 'OUTRO'
+
+export interface FornecedorRecord {
+  id: string
+  nome: string
+  sexo?: FornecedorSexo | string
+  data_nascimento?: string
+  foto?: string
+  fotoUrl?: string
+  vinculo: FornecedorVinculo
+  identidade?: string
+  data_validade_caf?: string
+  endereco?: string
+  bairro?: string
+  cep?: string
+  latitude?: number
+  longitude?: number
+  whatsapp?: string
+  created?: string
+  updated?: string
+}
