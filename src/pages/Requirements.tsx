@@ -119,6 +119,7 @@ const MODULES: ModuleSpec[] = [
       'Quantidades Contratadas Inteiras & Valor Total Calculado (v0.0.108): Cada item do contrato aceita quantidade contratada exclusivamente em números inteiros (sem frações decimais — regra de meio quilo é específica de itens em pedidos). Digitação descarta decimais/vírgulas; campo pode ficar em branco. Colunas de Preço Unitário, Quantidade e Subtotal com largura expandida, sem truncamento, no modal ampliado (até 96vw / 6xl).',
       'Importador em Massa de Contratos e Vínculos de Escolas por Chamada (v0.0.124): Botão "Importar Contratos em Massa" na barra de ações de /contratos para perfis Master e Administrador. Permite carga via arquivo (.xlsx, .csv) ou colar dados diretamente da área de transferência. O usuário seleciona a Chamada Pública obrigatória que acolherá os contratos (herdando Programa, Modalidade e Dependência Administrativa). A carga opera no formato "uma linha por vínculo contrato×escola", suportando tanto 1 escola por contrato quanto múltiplas escolas vinculadas ao mesmo contrato mediante repetição do código (idempotente: contrato existente com mesmo código na chamada não é duplicado, apenas recebe as novas escolas participantes). Cabeçalhos flexíveis para Contrato, Nome da Escola, Código INEP (chave preferencial opcional), Valor Total e Datas de Início/Fim (com descarte estrito de colunas de rotas). Algoritmo inteligente de casamento de escolas com normalização de prefixos/títulos e seletor manual na pré-visualização para pendências e ambiguidades antes da gravação.',
       'Preço Soberano da Chamada na Importação em Massa de Contratos (v0.0.109): Na importação em massa de itens do contrato (seja via planilha/CSV ou colar em massa), qualquer preço contido no arquivo ou texto colado é estritamente ignorado — o sistema mantém sempre o preço soberano da chamada (chamada_itens.preco). Apenas a quantidade é capturada do arquivo/colagem como inteiro >= 0 (vazio = não contratado). Na pré-visualização dos dois modais, a coluna de preço é somente leitura "Preço da Chamada (Soberano)" formatada à direita em R$ 0,00, com nota explicativa ("Preços herdados da chamada; valores do arquivo são ignorados.") e subtotais/total recalculados com o preço soberano.',
+      'Soberania dos Preços da Chamada Pública (v0.0.254): A fonte soberana e canônica de preço de produtos é a coleção chamada_itens da Chamada Pública vinculada ao ciclo/contrato. A coleção contrato_itens atua estritamente como espelho de compatibilidade e fallback. Todos os fluxos operacionais de entrada de pedidos (Lançar Pedido manual, Colar Pedido, Importação Excel de Pedidos e Formulário Público do WhatsApp) resolvem o preço prioritariamente em chamada_itens da respectiva chamada, evitando pedidos com preços defasados quando a chamada é atualizada sem re-salvamento do contrato.',
       'Desacoplamento de Rotas na Importação de Escolas em Contratos (v0.0.110): Na importação de escolas vinculadas a um contrato (/contratos), a exigência de atribuição de rota foi completamente removida. Contrato não detém rotas (rotas pertencem à Chamada pública, rotas.chamada_id). A importação de escolas por planilha/CSV ou colagem em massa cria e atualiza diretamente os vínculos escola↔contrato (contrato_escolas) e atualiza os dados no cadastro mestre, sem validação, campo obrigatório, seletor de fallback ou bloqueio referente a rotas.',
       'Herança Estrita de Produtos da Chamada & Remoção do Seletor de Catálogo (v0.0.111): No modal de Editar Contrato (/contratos, aba "Itens & Preços"), o botão "Selecionar Produtos" e seu modal de seleção de catálogo em lote foram removidos. No modelo de herança do SIGCAF, os itens, nomes/AKAs, unidades e preços unitários do contrato são herdados exclusivamente da Chamada Pública vinculada (chamada_itens). O contrato informa apenas as quantidades contratadas (números inteiros, podendo ficar em branco). Os botões "Importar Planilha / CSV" e "Colar em Massa" foram preservados para inserção ágil de quantidades, operando sempre sobre os preços soberanos da chamada.',
       'Valor Total Opcional na Criação e Recálculo Sobreposto (v0.0.106): No formulário de criação/edição de contrato, o campo Valor Total é opcional — permite salvar com valor zero ou vazio (gravando 0) sem bloquear a validação. Quando o contrato não tem itens, o valor total 0 é um estado perfeitamente válido. Quando quantidades forem informadas posteriormente nos itens do contrato (tela de itens, planilha importada ou colada), o valor total do contrato é recalculado (soma de quantidade × preço de cada item) e sobreposto ao valor anterior, inclusive o zero da criação.',
@@ -172,6 +173,7 @@ const MODULES: ModuleSpec[] = [
       'Regras Estritas de Matching: Mantém regras de tolerância a acentos, maiúsculas, pontuação e apelidos entre parênteses (CEDAL, CEROM, CMEI Várzea), com tratamento comprovado dos casos "EM PAULINO CUSTÓDUIO REZENDE" ≡ "EM PAULINO CUSTÓDIO DE REZENDE" e distinção mandatória "CM LAR DE ISABEL" ≠ "EM LAR DE ISABEL".',
       'Suporte a 5 abas: ROTA A, ROTA B, ROTA C (a importar), TOTAL e TODAS UNIDADES (a ignorar).',
       'Mapeamento Escola-por-Coluna (transposto): linha 7 (nome das escolas), linhas 10-34 (25 produtos na coluna C e quantidades nas colunas das escolas), linha 35 (totais). Ignora seção FIXOS.',
+      'Resolução de Preço Soberano da Chamada (v0.0.254): Ao processar o Excel da secretaria, o importador resolve o preço unitário de cada item buscando primeiramente em chamada_itens da chamada vinculada ao contrato/ciclo selecionado (casando por produto_id ou nome normalizado); o preço de contrato_itens é utilizado apenas como fallback caso o item não esteja na chamada.',
       'Detecção de anomalias de duplicidade (escola presente em mais de uma rota) e auditoria na collection importacoes.',
     ],
   },
@@ -296,6 +298,7 @@ const MODULES: ModuleSpec[] = [
       'Link único por escola × contrato × ciclo via token (sem login): Gerado no Hub de Comunicação e embutido no template do WhatsApp (com substituição automática do placeholder "[Link do Formulário]"). O token único reside na collection tokens_formulario, atuando como credencial segura que renova a cada ciclo semanal e expira após o ciclo (token inativo ou expirado bloqueia o acesso com aviso claro).',
       'Acesso seguro por token público: Validação automática do token ao carregar a página; tokens inválidos exibem mensagem explicativa e impedem submissão.',
       'Formulário com produtos do contrato: Lista os produtos cadastrados no contrato da escola (contrato_itens), com destaque para nome_contrato/apelidos reconhecidos pela instituição e nome mestre do catálogo atenuado quando diferente.',
+      'Resolução Soberana de Preços na Chamada (v0.0.254): Os preços unitários exibidos à escola e gravados no pedido derivam soberanamente de chamada_itens da chamada vinculada ao contrato do token; caso o item não possua preço na chamada, recorre-se a contrato_itens como fallback e, em último caso, ao cadastro mestre de produtos. O nome_contrato e os apelidos (AKA) do contrato são rigorosamente preservados.',
       'Indicação de disponibilidade por produto (4 níveis): Badges visuais de Normal, Abundante, Escassez e Indisponível em cada item do formulário.',
       'Bloqueio de pedido de produto em escassez ou indisponível: Campos de quantidade estritamente desabilitados/bloqueados para produtos com disponibilidade em escassez ou indisponível; esses itens não podem ser pedidos e não contam na validação.',
       'Caso extremo protegido: Se todos os produtos do contrato estiverem bloqueados por escassez ou indisponibilidade, a página exibe aviso de indisponibilidade geral ("Nenhum produto disponível para pedido neste ciclo — entre em contato com a cooperativa") e o envio fica completamente bloqueado.',
@@ -899,11 +902,87 @@ export function Requirements() {
       {/* 7. Registro de Manutenção e Limpeza de Dados */}
       <SectionTitle>7. Registro de Manutenção & Higienização do Banco de Dados</SectionTitle>
       <div className="space-y-4">
-        {/* Release v0.0.253: Layout Compacto do Modal de Fornecedores sem Scroll Vertical */}
+        {/* Release v0.0.254: Resolução Soberana de Preço via Itens da Chamada */}
         <div className="rounded-lg border-2 border-primary/40 bg-card p-5 space-y-4 shadow-sm">
           <div className="flex items-center justify-between flex-wrap gap-2">
             <div className="flex items-center gap-2">
               <Badge variant="outline" className="text-primary border-primary/40 font-semibold">
+                Release v0.0.254
+              </Badge>
+              <span className="font-semibold text-foreground">
+                0.0.254: Resolução Soberana de Preço na Chamada Pública (Eliminação de Dependência
+                de contrato_itens)
+              </span>
+            </div>
+            <span className="text-xs font-medium text-primary">Versão Vigente (v0.0.254)</span>
+          </div>
+
+          <p className="text-sm text-foreground/90 leading-relaxed">
+            Alinhamento arquitetural da resolução de preços nos fluxos de entrada de pedidos à fonte
+            soberana (<strong>chamada_itens</strong> da Chamada Pública vinculada ao
+            ciclo/contrato), eliminando a dependência crítica do espelho secundário em{' '}
+            <code>contrato_itens</code>. Esse alinhamento impede a criação de pedidos com preços
+            defasados caso a chamada seja atualizada sem que o contrato seja expressamente re-salvo.
+          </p>
+
+          <div className="grid sm:grid-cols-2 gap-4 text-sm">
+            <div className="rounded-md border border-border/60 bg-muted/20 p-3 space-y-1.5">
+              <span className="font-medium text-primary">
+                1. Fluxos Atualizados com Preço Soberano:
+              </span>
+              <ul className="space-y-1 text-xs text-muted-foreground">
+                <li>
+                  • <strong>Importação Excel (/importacao e /pedidos):</strong> O importador (
+                  <code>excelImporter.ts</code> e <code>ExcelImport.tsx</code>) recebe os itens da
+                  chamada do ciclo/contrato selecionado (<code>selectedChamadaItems</code>) e busca
+                  primeiro em <code>chamada_itens</code> por <code>produto_id</code> (com fallback
+                  por nome); <code>contrato_itens.preco</code> é utilizado apenas como fallback caso
+                  o item não esteja na chamada.
+                </li>
+                <li>
+                  • <strong>Formulário Público do WhatsApp (/formulario/:token):</strong> Em{' '}
+                  <code>SchoolOrderForm.tsx</code>, o carregamento do formulário busca{' '}
+                  <code>chamada_itens</code> da chamada vinculada ao contrato do token (
+                  <code>contrato.chamada_id</code>); os preços exibidos à escola e gravados no
+                  pedido derivam de <code>chamada_itens</code> primeiro, com fallback para{' '}
+                  <code>contrato_itens</code> e produto mestre.
+                </li>
+                <li>
+                  • <strong>Identificadores do Contrato Preservados:</strong>{' '}
+                  <code>nome_contrato</code> e apelidos (AKA) permanecem intactos e exclusivos de
+                  cada contrato.
+                </li>
+              </ul>
+            </div>
+            <div className="rounded-md border border-primary/30 bg-primary/5 p-3 space-y-1.5">
+              <span className="font-medium text-primary">
+                2. Preservações Mandatórias & Ponto de Atenção v0.0.243:
+              </span>
+              <ul className="space-y-1 text-xs text-foreground/80">
+                <li>
+                  • <strong>Snapshot em pedido_itens Intocado:</strong> Preços gravados em pedidos
+                  existentes nunca são alterados retroativamente.
+                </li>
+                <li>
+                  • <strong>Preservação Rigorosa das 4 Telas de Entregas:</strong> Nenhuma alteração
+                  em <code>/rotas</code>, Dashboard, Portal do Motorista e{' '}
+                  <code>/monitoramento</code> — isolamento estrito por <code>ciclo_id</code> e
+                  regras anti-vazamento 100% mantidos.
+                </li>
+                <li>
+                  • <strong>Validações e Nomes Canônicos:</strong> Nome com AKA separado, total
+                  consolidado canônico e validação de múltiplos de 0,5 rigorosamente preservados.
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        {/* Release v0.0.253: Layout Compacto do Modal de Fornecedores sem Scroll Vertical */}
+        <div className="rounded-lg border border-border bg-card p-5 space-y-4">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="text-primary border-primary/30 font-semibold">
                 Release v0.0.253
               </Badge>
               <span className="font-semibold text-foreground">
@@ -911,7 +990,7 @@ export function Requirements() {
                 Vertical em Desktop
               </span>
             </div>
-            <span className="text-xs font-medium text-primary">Versão Vigente (v0.0.253)</span>
+            <span className="text-xs text-muted-foreground">Consolidado (v0.0.253)</span>
           </div>
 
           <p className="text-sm text-foreground/90 leading-relaxed">

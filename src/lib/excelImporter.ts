@@ -24,7 +24,13 @@
  */
 
 import * as XLSX from 'xlsx'
-import type { School, Product, ContractSchoolLink, ContratoItemRecord } from '@/lib/types'
+import type {
+  School,
+  Product,
+  ContractSchoolLink,
+  ContratoItemRecord,
+  ChamadaItemRecord,
+} from '@/lib/types'
 import { dePluralizeName } from '@/lib/productCsvImporter'
 
 export type ProductMatchMethod = 'contract_name' | 'alias' | 'none'
@@ -820,6 +826,7 @@ export function parseSecretaryExcel(
   contractRotas?: Array<{ nome: string } | string>,
   contractItems?: ContratoItemRecord[],
   contractNumero?: string,
+  chamadaItems?: ChamadaItemRecord[],
 ): ParsedExcelResult {
   const sheetNames = workbook.SheetNames
   const candidateSheets: string[] = []
@@ -1114,7 +1121,23 @@ export function parseSecretaryExcel(
           continue
         }
 
-        const resolvedPrice = Number(matchedContractItem.preco) || 0
+        // Resolução de Preço Soberano: 1º chamada_itens (da chamada do ciclo selecionado),
+        // fallback em contrato_itens (espelho de compatibilidade), fallback em 0
+        const matchedChamadaItem =
+          matchedProd && chamadaItems
+            ? chamadaItems.find(
+                (ch) =>
+                  ch.produto_id === matchedProd.id ||
+                  (ch.produto && normalizeName(ch.produto) === normalizeName(matchedProd.name)),
+              )
+            : undefined
+
+        const resolvedPrice =
+          matchedChamadaItem &&
+          typeof matchedChamadaItem.preco === 'number' &&
+          !isNaN(matchedChamadaItem.preco)
+            ? Number(matchedChamadaItem.preco) || 0
+            : Number(matchedContractItem.preco) || 0
         const resolvedNomeContrato =
           matchInfo.nomeContratoMatched || matchedContractItem.nome_contrato || matchedProd.name
 

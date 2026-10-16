@@ -87,6 +87,7 @@ export default function ExcelImport() {
     schools,
     products,
     contractItems,
+    chamadaItems,
     chamadas,
     ciclos,
     activeCiclo,
@@ -147,6 +148,12 @@ export default function ExcelImport() {
     if (!selectedContractId) return []
     return contractItems.filter((ci) => ci.contrato_id === selectedContractId)
   }, [contractItems, selectedContractId])
+
+  // Itens da chamada vinculada ao contrato selecionado (fonte soberana de preço)
+  const selectedChamadaItems = useMemo(() => {
+    if (!selectedContract?.chamada_id) return []
+    return chamadaItems.filter((ci) => ci.chamada_id === selectedContract.chamada_id)
+  }, [selectedContract, chamadaItems])
 
   // Ciclo ativo específico da chamada do contrato selecionado
   const cicloAtivoDoContrato = useMemo(() => {
@@ -432,6 +439,9 @@ export default function ExcelImport() {
       const currentContractItems = contractItems.filter(
         (ci) => ci.contrato_id === selectedContract.id,
       )
+      const currentChamadaItems = selectedContract.chamada_id
+        ? chamadaItems.filter((ci) => ci.chamada_id === selectedContract.chamada_id)
+        : []
       const result = parseSecretaryExcel(
         workbook,
         schools,
@@ -440,6 +450,7 @@ export default function ExcelImport() {
         rotasNamesList.length > 0 ? rotasNamesList : existingContractRotas,
         currentContractItems,
         selectedContract.numero,
+        currentChamadaItems,
       )
 
       setParsedData(result)
@@ -535,6 +546,9 @@ export default function ExcelImport() {
     const currentContractItems = contractItems.filter(
       (ci) => ci.contrato_id === selectedContract.id,
     )
+    const currentChamadaItems = selectedContract.chamada_id
+      ? chamadaItems.filter((ci) => ci.chamada_id === selectedContract.chamada_id)
+      : []
     const result = parseSecretaryExcel(
       rawWorkbook,
       currentSchools,
@@ -543,6 +557,7 @@ export default function ExcelImport() {
       rotasNamesList.length > 0 ? rotasNamesList : existingContractRotas,
       currentContractItems,
       selectedContract.numero,
+      currentChamadaItems,
     )
     setParsedData(result)
   }

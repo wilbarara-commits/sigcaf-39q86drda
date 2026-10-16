@@ -7,6 +7,7 @@ import type {
   ContratoRecord,
   CicloRecord,
   ContratoItemRecord,
+  ChamadaItemRecord,
   ProdutoRecord,
   PedidoRecord,
   DisponibilidadeProduto,
@@ -150,6 +151,24 @@ export default function SchoolOrderForm() {
             sort: 'nome_contrato',
           })
 
+        // Carregar itens da chamada vinculada ao contrato (fonte soberana de preço)
+        let chamadaItens: ChamadaItemRecord[] = []
+        if (contratoRec?.chamada_id) {
+          try {
+            chamadaItens = await pb.collection('chamada_itens').getFullList<ChamadaItemRecord>({
+              filter: `chamada_id = "${contratoRec.chamada_id}"`,
+            })
+          } catch (chErr) {
+            console.warn('Não foi possível carregar chamada_itens para resolução soberana:', chErr)
+          }
+        }
+        const chamadaItensPorProdutoMap = new Map<string, ChamadaItemRecord>()
+        for (const chi of chamadaItens) {
+          if (chi.produto_id) {
+            chamadaItensPorProdutoMap.set(chi.produto_id, chi)
+          }
+        }
+
         // Carregar todos os produtos para caso expand não venha completo
         const produtosList = await pb.collection('produtos').getFullList<ProdutoRecord>()
         const produtosMap = new Map(produtosList.map((p) => [p.id, p]))
@@ -195,6 +214,15 @@ export default function SchoolOrderForm() {
               ? formatQuantityOneDecimal(prevQtd)
               : ''
 
+          // Resolução soberana de preço: chamada_itens primeiro; contrato_itens como fallback; prod.preco_unitario depois
+          const matchedChamada = chamadaItensPorProdutoMap.get(ci.produto_id)
+          const precoUnitarioSoberano =
+            matchedChamada &&
+            typeof matchedChamada.preco === 'number' &&
+            !isNaN(matchedChamada.preco)
+              ? Number(matchedChamada.preco)
+              : ci.preco || prod?.preco_unitario || 0
+
           return {
             contratoItemId: ci.id,
             produtoId: ci.produto_id,
@@ -202,7 +230,7 @@ export default function SchoolOrderForm() {
             apelidos: ci.apelidos || '',
             produtoMestreNome: prod?.nome || ci.nome_contrato,
             unidade: prod?.unidade || 'kg',
-            precoUnitario: ci.preco || prod?.preco_unitario || 0,
+            precoUnitario: precoUnitarioSoberano,
             disponibilidade: dispNorm,
             quantidade: initialQtd,
             bloqueado,
