@@ -120,6 +120,7 @@ const MODULES: ModuleSpec[] = [
       'Importador em Massa de Contratos e Vínculos de Escolas por Chamada (v0.0.124): Botão "Importar Contratos em Massa" na barra de ações de /contratos para perfis Master e Administrador. Permite carga via arquivo (.xlsx, .csv) ou colar dados diretamente da área de transferência. O usuário seleciona a Chamada Pública obrigatória que acolherá os contratos (herdando Programa, Modalidade e Dependência Administrativa). A carga opera no formato "uma linha por vínculo contrato×escola", suportando tanto 1 escola por contrato quanto múltiplas escolas vinculadas ao mesmo contrato mediante repetição do código (idempotente: contrato existente com mesmo código na chamada não é duplicado, apenas recebe as novas escolas participantes). Cabeçalhos flexíveis para Contrato, Nome da Escola, Código INEP (chave preferencial opcional), Valor Total e Datas de Início/Fim (com descarte estrito de colunas de rotas). Algoritmo inteligente de casamento de escolas com normalização de prefixos/títulos e seletor manual na pré-visualização para pendências e ambiguidades antes da gravação.',
       'Preço Soberano da Chamada na Importação em Massa de Contratos (v0.0.109): Na importação em massa de itens do contrato (seja via planilha/CSV ou colar em massa), qualquer preço contido no arquivo ou texto colado é estritamente ignorado — o sistema mantém sempre o preço soberano da chamada (chamada_itens.preco). Apenas a quantidade é capturada do arquivo/colagem como inteiro >= 0 (vazio = não contratado). Na pré-visualização dos dois modais, a coluna de preço é somente leitura "Preço da Chamada (Soberano)" formatada à direita em R$ 0,00, com nota explicativa ("Preços herdados da chamada; valores do arquivo são ignorados.") e subtotais/total recalculados com o preço soberano.',
       'Soberania dos Preços da Chamada Pública (v0.0.254): A fonte soberana e canônica de preço de produtos é a coleção chamada_itens da Chamada Pública vinculada ao ciclo/contrato. A coleção contrato_itens atua estritamente como espelho de compatibilidade e fallback. Todos os fluxos operacionais de entrada de pedidos (Lançar Pedido manual, Colar Pedido, Importação Excel de Pedidos e Formulário Público do WhatsApp) resolvem o preço prioritariamente em chamada_itens da respectiva chamada, evitando pedidos com preços defasados quando a chamada é atualizada sem re-salvamento do contrato.',
+      'Sincronização Automática do Espelho de Preços (v0.0.255): A fonte soberana e canônica de preços de produtos é a coleção chamada_itens. Ao salvar ou importar preços da Chamada Pública (edição de chamada, colagem de itens ou importação de planilha em ChamadaItemsManager), o espelho em contrato_itens de TODOS os contratos vinculados a essa chamada é sincronizado no ato (sincronizarEspelhoChamadaContratos). A atualização altera SOMENTE o campo preco em contrato_itens (resolvendo 1º por produto_id e 2º por nome normalizado), sem tocar em quantidade_contratada, nome_contrato, apelidos ou pedido_itens (cujos snapshots históricos são 100% preservados). Itens existentes apenas no contrato ou na chamada são respeitados sem exclusões ou criações indevidas. Se algum preço mudar e o contrato possuir itens com quantidade > 0, o campo contratos.valor_total é recalculado e persistido automaticamente.',
       'Desacoplamento de Rotas na Importação de Escolas em Contratos (v0.0.110): Na importação de escolas vinculadas a um contrato (/contratos), a exigência de atribuição de rota foi completamente removida. Contrato não detém rotas (rotas pertencem à Chamada pública, rotas.chamada_id). A importação de escolas por planilha/CSV ou colagem em massa cria e atualiza diretamente os vínculos escola↔contrato (contrato_escolas) e atualiza os dados no cadastro mestre, sem validação, campo obrigatório, seletor de fallback ou bloqueio referente a rotas.',
       'Herança Estrita de Produtos da Chamada & Remoção do Seletor de Catálogo (v0.0.111): No modal de Editar Contrato (/contratos, aba "Itens & Preços"), o botão "Selecionar Produtos" e seu modal de seleção de catálogo em lote foram removidos. No modelo de herança do SIGCAF, os itens, nomes/AKAs, unidades e preços unitários do contrato são herdados exclusivamente da Chamada Pública vinculada (chamada_itens). O contrato informa apenas as quantidades contratadas (números inteiros, podendo ficar em branco). Os botões "Importar Planilha / CSV" e "Colar em Massa" foram preservados para inserção ágil de quantidades, operando sempre sobre os preços soberanos da chamada.',
       'Valor Total Opcional na Criação e Recálculo Sobreposto (v0.0.106): No formulário de criação/edição de contrato, o campo Valor Total é opcional — permite salvar com valor zero ou vazio (gravando 0) sem bloquear a validação. Quando o contrato não tem itens, o valor total 0 é um estado perfeitamente válido. Quando quantidades forem informadas posteriormente nos itens do contrato (tela de itens, planilha importada ou colada), o valor total do contrato é recalculado (soma de quantidade × preço de cada item) e sobreposto ao valor anterior, inclusive o zero da criação.',
@@ -902,11 +903,100 @@ export function Requirements() {
       {/* 7. Registro de Manutenção e Limpeza de Dados */}
       <SectionTitle>7. Registro de Manutenção & Higienização do Banco de Dados</SectionTitle>
       <div className="space-y-4">
-        {/* Release v0.0.254: Resolução Soberana de Preço via Itens da Chamada */}
+        {/* Release v0.0.255: Sincronização Automática do Espelho de Preço em contrato_itens */}
         <div className="rounded-lg border-2 border-primary/40 bg-card p-5 space-y-4 shadow-sm">
           <div className="flex items-center justify-between flex-wrap gap-2">
             <div className="flex items-center gap-2">
               <Badge variant="outline" className="text-primary border-primary/40 font-semibold">
+                Release v0.0.255
+              </Badge>
+              <span className="font-semibold text-foreground">
+                0.0.255: Sincronização Automática do Espelho de Preço em contrato_itens a partir de
+                chamada_itens
+              </span>
+            </div>
+            <span className="text-xs font-medium text-primary">Versão Vigente (v0.0.255)</span>
+          </div>
+
+          <p className="text-sm text-foreground/90 leading-relaxed">
+            Implementação da sincronização automática em tempo real do espelho de preços em{' '}
+            <code>contrato_itens</code> para todos os contratos vinculados à Chamada Pública,
+            garantindo que <strong>chamada_itens</strong> atue como fonte soberana sem que nenhum
+            contrato fique defasado. Ao salvar preços da chamada, os registros em{' '}
+            <code>contrato_itens</code> são atualizados instantaneamente, recalculando e persistindo
+            o <code>valor_total</code> dos contratos quando houver quantidades contratadas
+            informadas.
+          </p>
+
+          <div className="grid sm:grid-cols-2 gap-4 text-sm">
+            <div className="rounded-md border border-border/60 bg-muted/20 p-3 space-y-1.5">
+              <span className="font-medium text-primary">
+                1. Regras de Sincronização & Gatilhos Operacionais:
+              </span>
+              <ul className="space-y-1 text-xs text-muted-foreground">
+                <li>
+                  • <strong>Fonte Soberana & Casamento em Cascata:</strong> O espelho resolve o novo
+                  preço primeiramente por <code>produto_id</code> e, como fallback, por nome
+                  normalizado (trim + lowercase via <code>nome_contrato</code> ou produto mestre).
+                </li>
+                <li>
+                  • <strong>Isolamento de Campos no Contrato:</strong> Altera estritamente o campo{' '}
+                  <code>preco</code> em <code>contrato_itens</code>; nunca toca em{' '}
+                  <code>quantidade_contratada</code>, <code>nome_contrato</code> ou{' '}
+                  <code>apelidos</code>. Itens não existentes no contrato não são inseridos; itens
+                  do contrato sem correspondência na chamada não são excluídos.
+                </li>
+                <li>
+                  • <strong>Recálculo de valor_total:</strong> Se algum preço mudar e o contrato
+                  possuir itens com quantidade contratada &gt; 0, o{' '}
+                  <code>contratos.valor_total</code> é recalculado (soma de preço final ×
+                  quantidade) e salvo no ato.
+                </li>
+                <li>
+                  • <strong>Três Gatilhos com Tolerância a Falha:</strong> Disparado imediatamente
+                  após <code>syncItems</code> na edição da chamada (<code>Producao.tsx</code>),
+                  colagem em lote e importação de planilha em <code>ChamadaItemsManager.tsx</code>;
+                  falhas de sincronização não travam o salvamento da chamada.
+                </li>
+                <li>
+                  • <strong>Inicialização em Novos Contratos:</strong> Novos contratos criados
+                  manual ou em massa (<code>Contracts.tsx</code> e{' '}
+                  <code>ContractBatchImportDialog.tsx</code>) já nascem com seus itens espelhados e
+                  com os preços oficiais da chamada selecionada.
+                </li>
+              </ul>
+            </div>
+            <div className="rounded-md border border-primary/30 bg-primary/5 p-3 space-y-1.5">
+              <span className="font-medium text-primary">
+                2. Preservações Mandatórias & Ponto de Atenção v0.0.243:
+              </span>
+              <ul className="space-y-1 text-xs text-foreground/80">
+                <li>
+                  • <strong>Snapshots em pedido_itens Intocados:</strong> Nenhum pedido existente ou
+                  histórico é alterado; os preços congelados no momento do pedido permanecem 100%
+                  íntegros.
+                </li>
+                <li>
+                  • <strong>Preservação Rigorosa das 4 Telas de Entregas:</strong> Zero alterações
+                  em <code>/rotas</code>, Dashboard, Portal do Motorista e{' '}
+                  <code>/monitoramento</code> — isolamento por <code>ciclo_id</code> e blindagem
+                  anti-vazamento rigorosamente mantidos.
+                </li>
+                <li>
+                  • <strong>Passo 1 (0.0.254) Preservado:</strong> Resolução soberana na importação
+                  Excel e no formulário WhatsApp continua operando com precedência de{' '}
+                  <code>chamada_itens</code>.
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        {/* Release v0.0.254: Resolução Soberana de Preço via Itens da Chamada */}
+        <div className="rounded-lg border border-border bg-card p-5 space-y-4">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="text-primary border-primary/30 font-semibold">
                 Release v0.0.254
               </Badge>
               <span className="font-semibold text-foreground">
@@ -914,7 +1004,7 @@ export function Requirements() {
                 de contrato_itens)
               </span>
             </div>
-            <span className="text-xs font-medium text-primary">Versão Vigente (v0.0.254)</span>
+            <span className="text-xs text-muted-foreground">Consolidado (v0.0.254)</span>
           </div>
 
           <p className="text-sm text-foreground/90 leading-relaxed">

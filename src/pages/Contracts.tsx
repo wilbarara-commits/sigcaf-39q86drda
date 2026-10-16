@@ -930,9 +930,10 @@ export default function Contracts() {
           })
         }
 
-        // 3. Sincronizar itens do contrato: grava só contrato_id, produto_id e quantidade_contratada
-        // Apenas itens com productId válido e quantidade_contratada informada > 0 são persistidos
-        const itemsToSave = contractItems.filter(
+        // 3. Sincronizar itens do contrato com os preços da chamada selecionada
+        // Se houver itens com quantidade > 0, grava os itens informados.
+        // Se for contrato NOVO sem itens com quantidade > 0, espelha todos os itens da chamada com seus preços oficiais.
+        const itemsComQtd = contractItems.filter(
           (i) =>
             i.productId &&
             i.quantity !== undefined &&
@@ -940,13 +941,19 @@ export default function Contracts() {
             !isNaN(i.quantity) &&
             i.quantity > 0,
         )
+
+        let itemsToSave = itemsComQtd
+        if (!editingContract && itemsComQtd.length === 0 && contractItems.length > 0) {
+          itemsToSave = contractItems.filter((i) => i.productId)
+        }
+
         await contratosService.syncItems(
           contractId,
           itemsToSave.map((it) => ({
             id: it.id,
             produto_id: it.productId,
             preco: it.price || 0,
-            quantidade_contratada: it.quantity,
+            quantidade_contratada: it.quantity && it.quantity > 0 ? it.quantity : undefined,
             nome_contrato: it.nomeContrato,
             apelidos: it.apelidos,
           })),

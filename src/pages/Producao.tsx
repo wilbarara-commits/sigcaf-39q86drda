@@ -12,6 +12,7 @@ import {
   type ChamadaModalidade,
 } from '@/lib/types'
 import { chamadasService } from '@/services/chamadas'
+import { contratosService } from '@/services/contratos'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -286,6 +287,16 @@ export default function Producao() {
             preco: Number(it.preco) || 0,
           })),
         )
+
+        // Sincronização automática do espelho de preço em contrato_itens (tolerante a falha)
+        try {
+          await contratosService.sincronizarEspelhoChamadaContratos(savedChamadaId)
+        } catch (syncErr) {
+          console.warn(
+            'Erro na sincronização automática do espelho de preços nos contratos:',
+            syncErr,
+          )
+        }
       }
 
       setDialogOpen(false)

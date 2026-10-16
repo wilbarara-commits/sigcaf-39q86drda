@@ -55,6 +55,7 @@ import {
   type ContractBatchImportRow,
 } from '@/lib/contractBatchImporter'
 import { contratosService } from '@/services/contratos'
+import { chamadasService } from '@/services/chamadas'
 
 interface ContractBatchImportDialogProps {
   open: boolean
@@ -318,6 +319,11 @@ export function ContractBatchImportDialog({
     const detalhesErros: Array<{ contrato: string; escola: string; motivo: string }> = []
 
     try {
+      // Carrega os itens da chamada selecionada para inicializar contrato_itens dos novos contratos
+      const itensChamadaSelecionada = await chamadasService
+        .getItems(selectedChamada.id)
+        .catch(() => [])
+
       const groupsToSave = parseResult.groups
       const totalGroups = groupsToSave.length
 
@@ -326,6 +332,7 @@ export function ContractBatchImportDialog({
         setCurrentSavingItem(`Processando contrato ${group.codigoContrato}...`)
 
         let contratoId = group.existingContractId
+        let isNovoContrato = false
 
         try {
           if (!group.isExistingContract || !contratoId) {
@@ -341,7 +348,34 @@ export function ContractBatchImportDialog({
               status: 'Ativo',
             })
             contratoId = novoContrato.id
+            isNovoContrato = true
             criados++
+
+            // Inicializa contrato_itens do contrato novo com os itens e preços da chamada selecionada
+            if (itensChamadaSelecionada && itensChamadaSelecionada.length > 0) {
+              try {
+                const itensParaEspelhar = itensChamadaSelecionada
+                  .filter((ci) => ci.produto_id)
+                  .map((ci) => {
+                    const prod = schools.length >= 0 ? undefined : null // no-op
+                    return {
+                      produto_id: ci.produto_id,
+                      preco: Number(ci.preco) || 0,
+                      nome_contrato: ci.aka || ci.produto || undefined,
+                      apelidos: ci.aka || undefined,
+                    }
+                  })
+
+                if (itensParaEspelhar.length > 0) {
+                  await contratosService.syncItems(contratoId, itensParaEspelhar)
+                }
+              } catch (itensErr) {
+                console.warn(
+                  `Aviso ao espelhar itens da chamada no contrato ${group.codigoContrato}:`,
+                  itensErr,
+                )
+              }
+            }
           } else {
             // Contrato EXISTENTE que ganhará novas escolas
             // Atualiza valor total se houver valor informado na planilha e o contrato atual tiver 0

@@ -65,6 +65,7 @@ import {
 } from '@/lib/contractItemsImporter'
 import { DEFAULT_PRODUCT_UNIT } from '@/lib/productCsvImporter'
 import { chamadasService } from '@/services/chamadas'
+import { contratosService } from '@/services/contratos'
 import { produtosService } from '@/services/produtos'
 import { useApp } from '@/context/app-context'
 import { toast } from 'sonner'
@@ -464,6 +465,17 @@ export function ChamadaItemsManager({
             preco: it.preco,
           })),
         )
+
+        // Sincronização automática do espelho de preço em contrato_itens (tolerante a falha)
+        try {
+          await contratosService.sincronizarEspelhoChamadaContratos(chamadaId)
+        } catch (syncErr) {
+          console.warn(
+            'Erro na sincronização automática do espelho de preços nos contratos:',
+            syncErr,
+          )
+        }
+
         await refreshData()
         toast.success(
           `Itens sincronizados com a chamada: ${addedCount} adicionado(s), ${updatedCount} atualizado(s)!`,
@@ -694,6 +706,17 @@ export function ChamadaItemsManager({
             preco: it.preco,
           })),
         )
+
+        // Sincronização automática do espelho de preço em contrato_itens (tolerante a falha)
+        try {
+          await contratosService.sincronizarEspelhoChamadaContratos(chamadaId)
+        } catch (syncErr) {
+          console.warn(
+            'Erro na sincronização automática do espelho de preços nos contratos:',
+            syncErr,
+          )
+        }
+
         await refreshData()
         toast.success(
           `Planilha importada e salva na chamada: ${addedCount} adicionado(s), ${updatedCount} atualizado(s)!`,

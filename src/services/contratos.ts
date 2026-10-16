@@ -348,4 +348,144 @@ export const contratosService = {
   ): Promise<ContratoEscolaRecord | null> {
     return await this.updateEscolaRotaByContratoEscola(contratoId, escolaId, rotaId)
   },
+
+  /**
+   * Sincronização automática do espelho de preço em contrato_itens a partir
+   * da fonte soberana chamada_itens (v0.0.255).
+   *
+   * Regras:
+   * 1. Busca chamada_itens da chamada (filter chamada_id = "...").
+   *    Monta mapa de preço por produto_id e, como fallback, por nome normalizado (trim + lowercase).
+   * 2. Busca contratos com chamada_id igual.
+   * 3. Para cada contrato, lista contrato_itens:
+   *    - Resolve novo preço: 1º produto_id, 2º nome normalizado (nome_contrato ou expand.produto_id.nome).
+   *    - Se o preço mudou (|novo - atual| > 0.0001), atualiza SOMENTE o campo `preco`.
+   *      NUNCA altera `quantidade_contratada`, `nome_contrato` ou `apelidos`.
+   *    - Item da chamada que não existe no contrato: NÃO cria.
+   *    - Item do contrato que não está na chamada: NÃO apaga, permanece como está.
+   * 4. Se algum preço mudou e o contrato possui itens com quantidade contratada > 0,
+   *    recalcula e persiste `contratos.valor_total` = soma(preço final * quantidade contratada).
+   */
+  async sincronizarEspelhoChamadaContratos(chamadaId: string): Promise<{
+    contratosAtualizados: number
+    itensAtualizados: number
+  }> {
+    if (!chamadaId) {
+      return { contratosAtualizados: 0, itensAtualizados: 0 }
+    }
+
+    // 1. Buscar chamada_itens da chamada
+    const chamadaItens = await pb.collection('chamada_itens').getFullList<any>({
+      filter: `chamada_id = "${chamadaId}"`,
+      expand: 'produto_id',
+    })
+
+    if (chamadaItens.length === 0) {
+      return { contratosAtualizados: 0, itensAtualizados: 0 }
+    }
+
+    const precoPorProdutoId = new Map<string, number>()
+    const precoPorNomeNorm = new Map<string, number>()
+
+    for (const ci of chamadaItens) {
+      const preco = Number(ci.preco) || 0
+      if (ci.produto_id) {
+        precoPorProdutoId.set(ci.produto_id, preco)
+      }
+      const rawNome = (ci.produto || ci.expand?.produto_id?.nome || '').trim().toLowerCase()
+      if (rawNome && !precoPorNomeNorm.has(rawNome)) {
+        precoPorNomeNorm.set(rawNome, preco)
+      }
+    }
+
+    // 2. Buscar todos os contratos vinculados a esta chamada
+    const contratos = await pb.collection('contratos').getFullList<ContratoRecord>({
+      filter: `chamada_id = "${chamadaId}"`,
+    })
+
+    let totalContratosAtualizados = 0
+    let totalItensAtualizados = 0
+
+    // 3. Processar cada contrato
+    for (const contrato of contratos) {
+      const contratoItens = await pb.collection('contrato_itens').getFullList<ContratoItemRecord>({
+        filter: `contrato_id = "${contrato.id}"`,
+        expand: 'produto_id',
+      })
+
+      let contratoTeveMudancaPreco = false
+
+      // Guardar lista atualizada para recálculo do valor_total se necessário
+      const itensComPrecoFinal: Array<{ preco: number; qtd?: number | null }> = []
+
+      for (const item of contratoItens) {
+        let novoPreco: number | undefined
+
+        // 1º Casamento por produto_id
+        if (item.produto_id && precoPorProdutoId.has(item.produto_id)) {
+          novoPreco = precoPorProdutoId.get(item.produto_id)
+        }
+
+        // 2º Fallback por nome normalizado
+        if (novoPreco === undefined) {
+          const nomeCandidato = (item.nome_contrato || item.expand?.produto_id?.nome || '')
+            .trim()
+            .toLowerCase()
+          if (nomeCandidato && precoPorNomeNorm.has(nomeCandidato)) {
+            novoPreco = precoPorNomeNorm.get(nomeCandidato)
+          }
+        }
+
+        const precoAtual = Number(item.preco) || 0
+        const precoEfetivo = novoPreco !== undefined ? novoPreco : precoAtual
+
+        itensComPrecoFinal.push({
+          preco: precoEfetivo,
+          qtd: item.quantidade_contratada,
+        })
+
+        if (novoPreco !== undefined && Math.abs(novoPreco - precoAtual) > 0.0001) {
+          // Atualiza SOMENTE o campo preco em contrato_itens
+          await pb.collection('contrato_itens').update(item.id, {
+            preco: novoPreco,
+          })
+          contratoTeveMudancaPreco = true
+          totalItensAtualizados++
+        }
+      }
+
+      // 4. Se algum preço mudou e o contrato tem itens com quantidade contratada > 0,
+      // recalcula e persiste contratos.valor_total
+      if (contratoTeveMudancaPreco) {
+        totalContratosAtualizados++
+
+        const itensComQtd = itensComPrecoFinal.filter(
+          (i) =>
+            i.qtd !== undefined && i.qtd !== null && !isNaN(Number(i.qtd)) && Number(i.qtd) > 0,
+        )
+
+        if (itensComQtd.length > 0) {
+          const novoValorTotal = itensComPrecoFinal.reduce((acc, it) => {
+            const q =
+              it.qtd !== undefined &&
+              it.qtd !== null &&
+              !isNaN(Number(it.qtd)) &&
+              Number(it.qtd) > 0
+                ? Number(it.qtd)
+                : 0
+            return acc + it.preco * q
+          }, 0)
+
+          await pb.collection('contratos').update(contrato.id, {
+            valor_total: novoValorTotal,
+          })
+        }
+      }
+    }
+
+    return {
+      contratosAtualizados: totalContratosAtualizados,
+      itensAtualizados: totalItensAtualizados,
+    }
+  },
 }
