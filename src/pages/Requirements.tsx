@@ -134,6 +134,7 @@ const MODULES: ModuleSpec[] = [
       'Roteamento Estrutural por Escolas: As rotas e o sequenciamento são estruturados sobre as escolas vinculadas ao contrato (contrato_escolas), de forma duradoura entre ciclos. Pedidos herdam a rota automaticamente da respectiva escola.',
       'Cadastro Rápido sem Duplicação: Permite cadastrar uma nova escola diretamente dentro do contrato; o sistema normaliza o nome e reutiliza o registro existente no cadastro mestre caso já haja escola correspondente.',
       'Modalidade de Pedido: individualizado (cada escola faz seu pedido via WhatsApp/formulário online) ou centralizado (pedidos consolidados via importação de planilha Excel da secretaria).',
+      'Tipo de Importação da Planilha de Pedidos (campo tipo_importacao na coleção contratos): Declara como a Secretaria de Educação entrega as planilhas de pedido do contrato. Aplicável exclusivamente à modalidade Centralizada: (1) Única (padrão) — a Secretaria envia um arquivo consolidado com o pedido. Exibe a configuração complementar "Estrutura da planilha" (simples ou com abas) e o cadastro de abas em abas_planilha (ex.: ROTA A, ROTA B, ZONA RURAL), onde cada aba do arquivo é casada com as escolas do contrato na importação Excel (/importacao e /pedidos); (2) Fracionada — a Secretaria envia vários arquivos ao longo do tempo (remessas/semanas), mantendo o cadastro de abas oculto na interface pois cada remessa chega como planilha própria. Onde aparece no sistema: seletor no formulário de criar/editar contrato (visível apenas quando a modalidade é Centralizada, alternando a exibição dos campos de estrutura e abas); badge "Única" / "Fracionada" no cartão e na listagem de contratos; seção "Regra de Importação" na visualização detalhada do contrato; e card informativo na Importação Excel (/pedidos e /importacao) exibindo o tipo configurado e, quando Única com abas, todas as abas mapeadas. Efeito prático: nenhum cálculo financeiro, preço unitário ou dado cadastral é alterado — trata-se estritamente de parametrização de formato de importação e ergonomia de interface.',
       'Relatório de Execução do Contrato: cards globais de Total Contratado, Total Realizado e % Execução, com detalhamento de entregas por escola participante (quantidades realizadas, preços unitários e valores realizados).',
     ],
   },
@@ -172,6 +173,7 @@ const MODULES: ModuleSpec[] = [
       'Matching contra o Cadastro Mestre Global de Escolas: A identificação das colunas é feita contra o diretório global de escolas (e não somente contra os vínculos prévios do contrato).',
       'Fluxo de Pendências Inteligente: Se a escola existe no cadastro mestre mas não está vinculada ao contrato atual, exibe a pendência "Vincular ao contrato" com rota e vínculo pré-preenchidos para confirmação com 1 clique. Se não existe no cadastro mestre, exibe a pendência "Cadastrar escola" (o importador continua sem criar registros automaticamente na surdina).',
       'Regras Estritas de Matching: Mantém regras de tolerância a acentos, maiúsculas, pontuação e apelidos entre parênteses (CEDAL, CEROM, CMEI Várzea), com tratamento comprovado dos casos "EM PAULINO CUSTÓDUIO REZENDE" ≡ "EM PAULINO CUSTÓDIO DE REZENDE" e distinção mandatória "CM LAR DE ISABEL" ≠ "EM LAR DE ISABEL".',
+      'Suporte ao Tipo de Importação do Contrato (tipo_importacao) & Abas Dinâmicas: Respeita a parametrização do contrato selecionado — quando "Única" com abas cadastradas em abas_planilha, o importador processa as abas indicadas (ex.: ROTA A, ROTA B, ROTA C ou nomes customizados) casando-as com as escolas; quando "Única" simples ou "Fracionada", opera em remessa sem filtro de abas pré-definidas. O card informativo de seleção do contrato em /importacao e /pedidos destaca o tipo de importação ativo e a relação de abas mapeadas.',
       'Suporte a 5 abas: ROTA A, ROTA B, ROTA C (a importar), TOTAL e TODAS UNIDADES (a ignorar).',
       'Mapeamento Escola-por-Coluna (transposto): linha 7 (nome das escolas), linhas 10-34 (25 produtos na coluna C e quantidades nas colunas das escolas), linha 35 (totais). Ignora seção FIXOS.',
       'Resolução de Preço Soberano da Chamada (v0.0.254): Ao processar o Excel da secretaria, o importador resolve o preço unitário de cada item buscando primeiramente em chamada_itens da chamada vinculada ao contrato/ciclo selecionado (casando por produto_id ou nome normalizado); o preço de contrato_itens é utilizado apenas como fallback caso o item não esteja na chamada.',
@@ -903,11 +905,93 @@ export function Requirements() {
       {/* 7. Registro de Manutenção e Limpeza de Dados */}
       <SectionTitle>7. Registro de Manutenção & Higienização do Banco de Dados</SectionTitle>
       <div className="space-y-4">
-        {/* Release v0.0.255: Sincronização Automática do Espelho de Preço em contrato_itens */}
+        {/* Release v0.0.256: Documentação do Campo tipo_importacao da Coleção contratos */}
         <div className="rounded-lg border-2 border-primary/40 bg-card p-5 space-y-4 shadow-sm">
           <div className="flex items-center justify-between flex-wrap gap-2">
             <div className="flex items-center gap-2">
               <Badge variant="outline" className="text-primary border-primary/40 font-semibold">
+                Release v0.0.256
+              </Badge>
+              <span className="font-semibold text-foreground">
+                0.0.256: Documentação de Requisitos do Campo tipo_importacao da Coleção contratos
+              </span>
+            </div>
+            <span className="text-xs font-medium text-primary">Versão Vigente (v0.0.256)</span>
+          </div>
+
+          <p className="text-sm text-foreground/90 leading-relaxed">
+            Atualização documental integral do Documento de Requisitos do Sistema (DRS) na página{' '}
+            <code>/requisitos</code> detalhando o campo <code>tipo_importacao</code> da coleção{' '}
+            <code>contratos</code>, sua aplicação estrita à modalidade Centralizada, estrutura de
+            planilha (simples vs. abas), reflexos nos pontos de interface do sistema e garantia de
+            invariância de dados.
+          </p>
+
+          <div className="grid sm:grid-cols-2 gap-4 text-sm">
+            <div className="rounded-md border border-border/60 bg-muted/20 p-3 space-y-1.5">
+              <span className="font-medium text-primary">
+                1. Especificação do Campo tipo_importacao:
+              </span>
+              <ul className="space-y-1 text-xs text-muted-foreground">
+                <li>
+                  • <strong>Definição e Escopo:</strong> Declara como a Secretaria de Educação
+                  entrega as planilhas de pedido do contrato. Aplicável exclusivamente à modalidade
+                  Centralizada.
+                </li>
+                <li>
+                  • <strong>Única (Padrão):</strong> A Secretaria envia um arquivo consolidado com o
+                  pedido. Exibe na interface a configuração complementar &quot;Estrutura da
+                  planilha&quot; (simples ou com abas) e o cadastro de abas em{' '}
+                  <code>abas_planilha</code> (ex.: <em>ROTA A, ROTA B, ZONA RURAL</em>), onde cada
+                  aba do arquivo é casada com as escolas do contrato na importação Excel.
+                </li>
+                <li>
+                  • <strong>Fracionada:</strong> A Secretaria envia vários arquivos ao longo do
+                  tempo (remessas/semanas). O cadastro de abas fica oculto na interface, pois cada
+                  remessa chega como planilha própria.
+                </li>
+                <li>
+                  • <strong>Onde Aparece no Sistema:</strong> Seletor no formulário de criar/editar
+                  contrato (visível só quando a modalidade é Centralizada, mudando dinamicamente os
+                  campos complementares de abas exibidos abaixo); badge &quot;Única&quot; /
+                  &quot;Fracionada&quot; no cartão e linha da listagem de contratos; seção
+                  &quot;Regra de Importação&quot; no diálogo de detalhes do contrato; e card
+                  informativo na Importação Excel (<code>/pedidos</code> e <code>/importacao</code>)
+                  exibindo o tipo configurado e, quando Única com abas, as abas mapeadas.
+                </li>
+              </ul>
+            </div>
+            <div className="rounded-md border border-primary/30 bg-primary/5 p-3 space-y-1.5">
+              <span className="font-medium text-primary">
+                2. Efeito Prático & Preservações Mandatórias:
+              </span>
+              <ul className="space-y-1 text-xs text-foreground/80">
+                <li>
+                  • <strong>Efeito Prático Neutro:</strong> Nenhum cálculo financeiro, preço
+                  unitário, saldo ou dado cadastral é alterado — trata-se puramente de
+                  parametrização de formato de importação e ergonomia visual da interface.
+                </li>
+                <li>
+                  • <strong>Tarefa Estritamente Documental:</strong> Nenhuma alteração em código
+                  funcional ou schema de dados; atualização restrita à documentação em{' '}
+                  <code>/requisitos</code> e incremento de patch da versão.
+                </li>
+                <li>
+                  • <strong>Preservação Rigorosa das 4 Telas de Entregas (Ponto v0.0.243):</strong>{' '}
+                  Zero alterações em <code>/rotas</code>, Dashboard, Portal do Motorista e{' '}
+                  <code>/monitoramento</code> — isolamento por <code>ciclo_id</code> e regras
+                  anti-vazamento 100% preservados.
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        {/* Release v0.0.255: Sincronização Automática do Espelho de Preço em contrato_itens */}
+        <div className="rounded-lg border border-border bg-card p-5 space-y-4">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="text-primary border-primary/30 font-semibold">
                 Release v0.0.255
               </Badge>
               <span className="font-semibold text-foreground">
@@ -915,7 +999,7 @@ export function Requirements() {
                 chamada_itens
               </span>
             </div>
-            <span className="text-xs font-medium text-primary">Versão Vigente (v0.0.255)</span>
+            <span className="text-xs text-muted-foreground">Consolidado (v0.0.255)</span>
           </div>
 
           <p className="text-sm text-foreground/90 leading-relaxed">
