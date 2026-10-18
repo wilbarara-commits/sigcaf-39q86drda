@@ -905,8 +905,100 @@ export function Requirements() {
       {/* 7. Registro de Manutenção e Limpeza de Dados */}
       <SectionTitle>7. Registro de Manutenção & Higienização do Banco de Dados</SectionTitle>
       <div className="space-y-4">
-        {/* Release v0.0.256: Documentação do Campo tipo_importacao da Coleção contratos */}
+        {/* Release v0.0.257: Reorganização do Menu Lateral em Dois Níveis com Grupos Recolhíveis */}
         <div className="rounded-lg border-2 border-primary/40 bg-card p-5 space-y-4 shadow-sm">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="text-primary border-primary/40 font-semibold">
+                Release v0.0.257
+              </Badge>
+              <span className="font-semibold text-foreground">
+                0.0.257: Reorganização do Menu Lateral em Dois Níveis com Grupos Recolhíveis
+              </span>
+            </div>
+            <span className="text-xs font-medium text-primary">Versão Vigente (v0.0.257)</span>
+          </div>
+
+          <p className="text-sm text-foreground/90 leading-relaxed">
+            Reorganização estrutural e ergonômica da barra de navegação lateral (menu desktop e
+            drawer mobile em <code>src/components/Layout.tsx</code>) em{' '}
+            <strong>dois níveis com grupos recolhíveis</strong>, conforme aprovado pelo usuário
+            (&quot;Passa fornecedores para cadastros e aprovo&quot;). A navegação agora organiza os
+            módulos em 5 grupos funcionais expansíveis com setas indicativas, mantendo o Dashboard
+            solto no topo e os itens de perfil/administração/documentação soltos no rodapé.
+          </p>
+
+          <div className="grid sm:grid-cols-2 gap-4 text-sm">
+            <div className="rounded-md border border-border/60 bg-muted/20 p-3 space-y-1.5">
+              <span className="font-medium text-primary">
+                1. Estrutura Exata Aprovada & Comportamento dos Grupos:
+              </span>
+              <ul className="space-y-1 text-xs text-muted-foreground">
+                <li>
+                  • <strong>Itens soltos no topo:</strong> <code>Dashboard</code> (<code>/</code>).
+                </li>
+                <li>
+                  • <strong>Grupo Cadastros:</strong> Fornecedores, Produtos, Escolas, Chamadas,
+                  Contratos.
+                </li>
+                <li>
+                  • <strong>Grupo Coleta:</strong> Pedidos, Importação Excel, Comunicação WhatsApp
+                  (ordem mantida).
+                </li>
+                <li>
+                  • <strong>Grupo Acompanhamento:</strong> Monitoramento, Histórico de Ciclos,
+                  Consolidação (ordem mantida).
+                </li>
+                <li>
+                  • <strong>Grupo Entregas:</strong> Rotas de Entrega, Atestos.
+                </li>
+                <li>
+                  • <strong>Grupo Relatórios:</strong> Relatórios.
+                </li>
+                <li>
+                  • <strong>Itens soltos no rodapé:</strong> Meu Perfil, Usuários, Configurações,
+                  Documento de Requisitos.
+                </li>
+                <li>
+                  • <strong>Abertura Automática & Estado Ativo:</strong> O grupo que contém a tela
+                  ativa abre automaticamente ao carregar ou navegar; o item ativo recebe destaque
+                  visual (<code>bg-primary/10 text-primary</code>).
+                </li>
+                <li>
+                  • <strong>Ocultação Elegante:</strong> Grupos que ficarem sem itens visíveis para
+                  o perfil logado não são renderizados; ícones e rótulos de cada item foram 100%
+                  preservados.
+                </li>
+              </ul>
+            </div>
+            <div className="rounded-md border border-primary/30 bg-primary/5 p-3 space-y-1.5">
+              <span className="font-medium text-primary">
+                2. Integridade do Sistema & Ponto de Atenção v0.0.243:
+              </span>
+              <ul className="space-y-1 text-xs text-foreground/80">
+                <li>
+                  • <strong>Navegação Pura:</strong> Nenhuma tela, rota, serviço, regra de negócio
+                  ou banco de dados foi alterado; a mudança ocorreu estritamente no componente de
+                  navegação lateral.
+                </li>
+                <li>
+                  • <strong>Preservação Rigorosa das 4 Telas de Entregas:</strong> Zero alterações
+                  funcionais em <code>/rotas</code>, Dashboard, Portal do Motorista e{' '}
+                  <code>/monitoramento</code> — isolamento estrito por <code>ciclo_id</code> e
+                  blindagem anti-vazamento 100% preservados.
+                </li>
+                <li>
+                  • <strong>Responsividade Mobile:</strong> No drawer mobile do Sheet, os grupos
+                  operam com a mesma lógica de recolhimento e o fechamento automático da gaveta ao
+                  clicar em qualquer item segue ativo.
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        {/* Release v0.0.256: Documentação do Campo tipo_importacao da Coleção contratos */}
+        <div className="rounded-lg border border-border bg-card p-5 space-y-4">
           <div className="flex items-center justify-between flex-wrap gap-2">
             <div className="flex items-center gap-2">
               <Badge variant="outline" className="text-primary border-primary/40 font-semibold">
@@ -916,7 +1008,7 @@ export function Requirements() {
                 0.0.256: Documentação de Requisitos do Campo tipo_importacao da Coleção contratos
               </span>
             </div>
-            <span className="text-xs font-medium text-primary">Versão Vigente (v0.0.256)</span>
+            <span className="text-xs text-muted-foreground">Consolidado (v0.0.256)</span>
           </div>
 
           <p className="text-sm text-foreground/90 leading-relaxed">

@@ -1,32 +1,21 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom'
 import {
-  LayoutDashboard,
   Sprout,
-  School,
-  Layers,
-  FileText,
-  Map,
-  ShoppingCart,
-  FileCheck,
   Bell,
   Search,
   Menu,
   LogOut,
   ShieldCheck,
   UserCheck,
-  BookOpen,
-  BarChart3,
   KeyRound,
-  Grid,
-  History,
-  Activity,
-  MessageSquare,
-  Upload,
-  User,
-  Users,
-  Settings,
   Crown,
+  ChevronDown,
+  Folder,
+  Inbox,
+  Eye,
+  Truck,
+  FileBarChart,
 } from 'lucide-react'
 import { Sheet, SheetContent, SheetTrigger, SheetTitle } from '@/components/ui/sheet'
 import { Button } from '@/components/ui/button'
@@ -39,6 +28,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
@@ -56,22 +46,74 @@ interface NavItem {
   masterOnly?: boolean
 }
 
-const NAV_ITEMS: NavItem[] = [
-  { name: 'Dashboard', path: '/', emoji: '📊' },
-  { name: 'Fornecedores', path: '/fornecedores', emoji: '🚜' },
-  { name: 'Produtos', path: '/produtos', emoji: '🌱', adminOnly: true },
-  { name: 'Escolas', path: '/escolas', emoji: '🏫', adminOnly: true },
-  { name: 'Chamadas', path: '/chamadas', emoji: '🌾', adminOnly: true },
-  { name: 'Contratos', path: '/contratos', emoji: '📄', adminOnly: true },
-  { name: 'Pedidos', path: '/pedidos', emoji: '📋' },
-  { name: 'Importação Excel', path: '/importacao', emoji: '📥' },
-  { name: 'Comunicação WhatsApp', path: '/comunicacao', emoji: '💬' },
-  { name: 'Monitoramento', path: '/monitoramento', emoji: '📡' },
-  { name: 'Histórico de Ciclos', path: '/historico-ciclos', emoji: '🔄' },
-  { name: 'Consolidação', path: '/consolidacao', emoji: '🧺' },
-  { name: 'Rotas de Entrega', path: '/rotas', emoji: '🛣️' },
-  { name: 'Atestos', path: '/atestos', emoji: '📜' },
-  { name: 'Relatórios', path: '/relatorios', emoji: '📈' },
+interface NavGroup {
+  id: string
+  title: string
+  icon: React.ComponentType<{ className?: string }>
+  items: NavItem[]
+}
+
+// Itens soltos no topo (fora de grupo)
+const TOP_NAV_ITEMS: NavItem[] = [{ name: 'Dashboard', path: '/', emoji: '📊' }]
+
+// Grupos recolhíveis conforme estrutura EXATA aprovada pelo usuário:
+// 1. Cadastros: Fornecedores, Produtos, Escolas, Chamadas, Contratos
+// 2. Coleta: Pedidos, Importação Excel, Comunicação WhatsApp
+// 3. Acompanhamento: Monitoramento, Histórico de Ciclos, Consolidação
+// 4. Entregas: Rotas de Entrega, Atestos
+// 5. Relatórios: Relatórios
+const NAV_GROUPS: NavGroup[] = [
+  {
+    id: 'cadastros',
+    title: 'Cadastros',
+    icon: Folder,
+    items: [
+      { name: 'Fornecedores', path: '/fornecedores', emoji: '🚜' },
+      { name: 'Produtos', path: '/produtos', emoji: '🌱', adminOnly: true },
+      { name: 'Escolas', path: '/escolas', emoji: '🏫', adminOnly: true },
+      { name: 'Chamadas', path: '/chamadas', emoji: '🌾', adminOnly: true },
+      { name: 'Contratos', path: '/contratos', emoji: '📄', adminOnly: true },
+    ],
+  },
+  {
+    id: 'coleta',
+    title: 'Coleta',
+    icon: Inbox,
+    items: [
+      { name: 'Pedidos', path: '/pedidos', emoji: '📋' },
+      { name: 'Importação Excel', path: '/importacao', emoji: '📥' },
+      { name: 'Comunicação WhatsApp', path: '/comunicacao', emoji: '💬' },
+    ],
+  },
+  {
+    id: 'acompanhamento',
+    title: 'Acompanhamento',
+    icon: Eye,
+    items: [
+      { name: 'Monitoramento', path: '/monitoramento', emoji: '📡' },
+      { name: 'Histórico de Ciclos', path: '/historico-ciclos', emoji: '🔄' },
+      { name: 'Consolidação', path: '/consolidacao', emoji: '🧺' },
+    ],
+  },
+  {
+    id: 'entregas',
+    title: 'Entregas',
+    icon: Truck,
+    items: [
+      { name: 'Rotas de Entrega', path: '/rotas', emoji: '🛣️' },
+      { name: 'Atestos', path: '/atestos', emoji: '📜' },
+    ],
+  },
+  {
+    id: 'relatorios',
+    title: 'Relatórios',
+    icon: FileBarChart,
+    items: [{ name: 'Relatórios', path: '/relatorios', emoji: '📈' }],
+  },
+]
+
+// Itens soltos no rodapé (fora de grupo)
+const BOTTOM_NAV_ITEMS: NavItem[] = [
   { name: 'Meu Perfil', path: '/perfil', emoji: '👤' },
   { name: 'Usuários', path: '/usuarios', emoji: '👥', masterOnly: true },
   { name: 'Configurações', path: '/configuracoes', emoji: '⚙️', masterOnly: true },
@@ -87,6 +129,49 @@ export default function Layout() {
   const [mobileOpen, setMobileOpen] = useState(false)
   const [changePasswordOpen, setChangePasswordOpen] = useState(false)
 
+  // Estado dos grupos abertos / fechados
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>(() => {
+    const initial: Record<string, boolean> = {
+      cadastros: false,
+      coleta: false,
+      acompanhamento: false,
+      entregas: false,
+      relatorios: false,
+    }
+    // Abre automaticamente o grupo que contém a rota atual no carregamento
+    const currentPath = window.location.pathname
+    for (const group of NAV_GROUPS) {
+      if (group.items.some((item) => item.path === currentPath)) {
+        initial[group.id] = true
+      }
+    }
+    return initial
+  })
+
+  // Sempre que a rota mudar, abrir automaticamente o grupo que contém a tela ativa
+  useEffect(() => {
+    const currentPath = location.pathname
+    for (const group of NAV_GROUPS) {
+      const containsActive = group.items.some((item) => {
+        if (item.path === '/') return currentPath === '/'
+        return currentPath === item.path || currentPath.startsWith(`${item.path}/`)
+      })
+      if (containsActive) {
+        setOpenGroups((prev) => ({
+          ...prev,
+          [group.id]: true,
+        }))
+      }
+    }
+  }, [location.pathname])
+
+  const toggleGroup = (groupId: string) => {
+    setOpenGroups((prev) => ({
+      ...prev,
+      [groupId]: !prev[groupId],
+    }))
+  }
+
   const coopNomeExibicao = config?.sigla || config?.nome_cooperativa || 'CoopGestão'
   const coopSubtitulo = config?.subtitulo_sistema || 'CooperGestão'
   const temLogoValido = Boolean(logoUrl && !logoError)
@@ -97,16 +182,20 @@ export default function Layout() {
     navigate('/login', { replace: true })
   }
 
-  // Filtrar itens do menu de acordo com o perfil
-  const visibleNavItems = NAV_ITEMS.filter((item) => {
-    if (item.masterOnly && !isMaster) {
-      return false
-    }
-    if (item.adminOnly && !isAdmin && !isMaster) {
-      return false
-    }
+  const isItemVisible = (item: NavItem) => {
+    if (item.masterOnly && !isMaster) return false
+    if (item.adminOnly && !isAdmin && !isMaster) return false
     return true
-  })
+  }
+
+  const visibleTopItems = TOP_NAV_ITEMS.filter(isItemVisible)
+  const visibleBottomItems = BOTTOM_NAV_ITEMS.filter(isItemVisible)
+
+  // Filtra grupos que têm pelo menos 1 item visível para o perfil atual
+  const visibleGroups = NAV_GROUPS.map((group) => ({
+    ...group,
+    visibleItems: group.items.filter(isItemVisible),
+  })).filter((group) => group.visibleItems.length > 0)
 
   const displayName = user?.nome || user?.name || user?.email || 'Usuário'
   const rawPerfil = String(user?.perfil || 'SECRETARIA').toUpperCase()
@@ -122,29 +211,99 @@ export default function Layout() {
       .map((n) => n[0].toUpperCase())
       .join('') || 'U'
 
+  const renderNavLink = (item: NavItem, onClick?: () => void, isChild = false) => {
+    const isActive = location.pathname === item.path
+    return (
+      <Link
+        key={item.path}
+        to={item.path}
+        onClick={onClick}
+        className={cn(
+          'flex items-center gap-3 rounded-lg text-sm font-medium transition-colors',
+          isChild ? 'pl-8 pr-3 py-2 text-[13px]' : 'px-3 py-2.5',
+          isActive
+            ? 'bg-primary/10 text-primary font-semibold shadow-xs'
+            : 'text-muted-foreground hover:bg-muted/70 hover:text-foreground',
+        )}
+      >
+        <span
+          className={cn('leading-none shrink-0', isChild ? 'text-base' : 'text-lg')}
+          role="img"
+          aria-label={item.name}
+        >
+          {item.emoji}
+        </span>
+        <span className="truncate">{item.name}</span>
+      </Link>
+    )
+  }
+
   const NavLinks = ({ onClick }: { onClick?: () => void }) => (
-    <nav className="space-y-1 p-4">
-      {visibleNavItems.map((item) => {
-        const isActive = location.pathname === item.path
+    <nav className="space-y-1.5 p-3 sm:p-4">
+      {/* 1. Itens Soltos no Topo (Dashboard) */}
+      {visibleTopItems.length > 0 && (
+        <div className="space-y-1">
+          {visibleTopItems.map((item) => renderNavLink(item, onClick, false))}
+        </div>
+      )}
+
+      {/* 2. Grupos de 2 Níveis */}
+      {visibleGroups.map((group) => {
+        const isOpen = Boolean(openGroups[group.id])
+        const GroupIcon = group.icon
+        const hasActiveChild = group.visibleItems.some((item) => {
+          if (item.path === '/') return location.pathname === '/'
+          return location.pathname === item.path || location.pathname.startsWith(`${item.path}/`)
+        })
+
         return (
-          <Link
-            key={item.path}
-            to={item.path}
-            onClick={onClick}
-            className={cn(
-              'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
-              isActive
-                ? 'bg-primary/10 text-primary font-semibold'
-                : 'text-muted-foreground hover:bg-muted hover:text-foreground',
-            )}
+          <Collapsible
+            key={group.id}
+            open={isOpen}
+            onOpenChange={() => toggleGroup(group.id)}
+            className="space-y-1 pt-1"
           >
-            <span className="text-lg leading-none shrink-0" role="img" aria-label={item.name}>
-              {item.emoji}
-            </span>
-            <span>{item.name}</span>
-          </Link>
+            <CollapsibleTrigger asChild>
+              <button
+                type="button"
+                className={cn(
+                  'flex w-full items-center justify-between rounded-lg px-3 py-2 text-xs font-semibold uppercase tracking-wider transition-colors',
+                  hasActiveChild
+                    ? 'text-primary bg-primary/5 hover:bg-primary/10'
+                    : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground',
+                )}
+                aria-expanded={isOpen}
+              >
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <GroupIcon
+                    className={cn(
+                      'h-4 w-4 shrink-0',
+                      hasActiveChild ? 'text-primary' : 'text-muted-foreground/70',
+                    )}
+                  />
+                  <span className="truncate">{group.title}</span>
+                </div>
+                <ChevronDown
+                  className={cn(
+                    'h-3.5 w-3.5 shrink-0 transition-transform duration-200 text-muted-foreground/70',
+                    isOpen && 'rotate-180',
+                  )}
+                />
+              </button>
+            </CollapsibleTrigger>
+            <CollapsibleContent className="space-y-0.5 pt-0.5">
+              {group.visibleItems.map((item) => renderNavLink(item, onClick, true))}
+            </CollapsibleContent>
+          </Collapsible>
         )
       })}
+
+      {/* 3. Itens Soltos no Rodapé */}
+      {visibleBottomItems.length > 0 && (
+        <div className="pt-2 border-t border-border/40 space-y-1">
+          {visibleBottomItems.map((item) => renderNavLink(item, onClick, false))}
+        </div>
+      )}
     </nav>
   )
 
