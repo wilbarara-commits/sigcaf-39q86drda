@@ -11,11 +11,6 @@ import {
   KeyRound,
   Crown,
   ChevronDown,
-  Folder,
-  Inbox,
-  Eye,
-  Truck,
-  FileBarChart,
 } from 'lucide-react'
 import { Sheet, SheetContent, SheetTrigger, SheetTitle } from '@/components/ui/sheet'
 import { Button } from '@/components/ui/button'
@@ -49,7 +44,7 @@ interface NavItem {
 interface NavGroup {
   id: string
   title: string
-  icon: React.ComponentType<{ className?: string }>
+  emoji: string
   items: NavItem[]
 }
 
@@ -57,16 +52,16 @@ interface NavGroup {
 const TOP_NAV_ITEMS: NavItem[] = [{ name: 'Dashboard', path: '/', emoji: '📊' }]
 
 // Grupos recolhíveis conforme estrutura EXATA aprovada pelo usuário:
-// 1. Cadastros: Fornecedores, Produtos, Escolas, Chamadas, Contratos
-// 2. Coleta: Pedidos, Importação Excel, Comunicação WhatsApp
-// 3. Acompanhamento: Monitoramento, Histórico de Ciclos, Consolidação
-// 4. Entregas: Rotas de Entrega, Atestos
-// 5. Relatórios: Relatórios
+// 1. Cadastros: Fornecedores, Produtos, Escolas, Chamadas, Contratos (🗂️)
+// 2. Coleta: Pedidos, Importação Excel, Comunicação WhatsApp (📋)
+// 3. Acompanhamento: Monitoramento, Histórico de Ciclos, Consolidação (📡)
+// 4. Entregas: Rotas de Entrega, Atestos (🛣️)
+// 5. Relatórios: Relatórios (📈)
 const NAV_GROUPS: NavGroup[] = [
   {
     id: 'cadastros',
     title: 'Cadastros',
-    icon: Folder,
+    emoji: '🗂️',
     items: [
       { name: 'Fornecedores', path: '/fornecedores', emoji: '🚜' },
       { name: 'Produtos', path: '/produtos', emoji: '🌱', adminOnly: true },
@@ -78,7 +73,7 @@ const NAV_GROUPS: NavGroup[] = [
   {
     id: 'coleta',
     title: 'Coleta',
-    icon: Inbox,
+    emoji: '📋',
     items: [
       { name: 'Pedidos', path: '/pedidos', emoji: '📋' },
       { name: 'Importação Excel', path: '/importacao', emoji: '📥' },
@@ -88,7 +83,7 @@ const NAV_GROUPS: NavGroup[] = [
   {
     id: 'acompanhamento',
     title: 'Acompanhamento',
-    icon: Eye,
+    emoji: '📡',
     items: [
       { name: 'Monitoramento', path: '/monitoramento', emoji: '📡' },
       { name: 'Histórico de Ciclos', path: '/historico-ciclos', emoji: '🔄' },
@@ -98,7 +93,7 @@ const NAV_GROUPS: NavGroup[] = [
   {
     id: 'entregas',
     title: 'Entregas',
-    icon: Truck,
+    emoji: '🛣️',
     items: [
       { name: 'Rotas de Entrega', path: '/rotas', emoji: '🛣️' },
       { name: 'Atestos', path: '/atestos', emoji: '📜' },
@@ -107,7 +102,7 @@ const NAV_GROUPS: NavGroup[] = [
   {
     id: 'relatorios',
     title: 'Relatórios',
-    icon: FileBarChart,
+    emoji: '📈',
     items: [{ name: 'Relatórios', path: '/relatorios', emoji: '📈' }],
   },
 ]
@@ -250,7 +245,6 @@ export default function Layout() {
       {/* 2. Grupos de 2 Níveis */}
       {visibleGroups.map((group) => {
         const isOpen = Boolean(openGroups[group.id])
-        const GroupIcon = group.icon
         const hasActiveChild = group.visibleItems.some((item) => {
           if (item.path === '/') return location.pathname === '/'
           return location.pathname === item.path || location.pathname.startsWith(`${item.path}/`)
@@ -275,12 +269,13 @@ export default function Layout() {
                 aria-expanded={isOpen}
               >
                 <div className="flex items-center gap-2.5 min-w-0">
-                  <GroupIcon
-                    className={cn(
-                      'h-4 w-4 shrink-0',
-                      hasActiveChild ? 'text-primary' : 'text-muted-foreground/70',
-                    )}
-                  />
+                  <span
+                    className="text-base leading-none shrink-0"
+                    role="img"
+                    aria-label={group.title}
+                  >
+                    {group.emoji}
+                  </span>
                   <span className="truncate">{group.title}</span>
                 </div>
                 <ChevronDown

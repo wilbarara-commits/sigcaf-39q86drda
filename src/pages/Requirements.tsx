@@ -905,8 +905,82 @@ export function Requirements() {
       {/* 7. Registro de Manutenção e Limpeza de Dados */}
       <SectionTitle>7. Registro de Manutenção & Higienização do Banco de Dados</SectionTitle>
       <div className="space-y-4">
-        {/* Release v0.0.257: Reorganização do Menu Lateral em Dois Níveis com Grupos Recolhíveis */}
+        {/* Release v0.0.258: Restauração de Ícones com Imagens nos Cabeçalhos e Rodapé do Menu Lateral */}
         <div className="rounded-lg border-2 border-primary/40 bg-card p-5 space-y-4 shadow-sm">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="text-primary border-primary/40 font-semibold">
+                Release v0.0.258
+              </Badge>
+              <span className="font-semibold text-foreground">
+                0.0.258: Restabelecimento dos Ícones Emoji nos Cabeçalhos dos Grupos e Rodapé do
+                Menu Lateral
+              </span>
+            </div>
+            <span className="text-xs font-medium text-primary">Versão Vigente (v0.0.258)</span>
+          </div>
+
+          <p className="text-sm text-foreground/90 leading-relaxed">
+            Restabelecimento dos <strong>ícones visuais com imagens (emojis)</strong> nos cabeçalhos
+            dos 5 grupos recolhíveis e nos itens do rodapé da barra de navegação lateral (menu
+            desktop e gaveta móvel em <code>src/components/Layout.tsx</code>), atendendo à
+            solicitação direta do usuário (&quot;Restabeleça os ícones com imagens para os itens de
+            menu em CADASTROS, COLETA, ACOMPANHAMENTO, ENTREGAS, RELATORIOS, Meu Perfil, Usuários e
+            Configurações&quot;). Os ícones mantêm perfeita harmonia e proporção visual com os itens
+            internos e o Dashboard.
+          </p>
+
+          <div className="grid sm:grid-cols-2 gap-4 text-sm">
+            <div className="rounded-md border border-border/60 bg-muted/20 p-3 space-y-1.5">
+              <span className="font-medium text-primary">
+                1. Mapeamento Visual dos Ícones do Menu:
+              </span>
+              <ul className="space-y-1 text-xs text-muted-foreground">
+                <li>
+                  • <strong>Cabeçalhos de Grupos:</strong> Cadastros (🗂️), Coleta (📋),
+                  Acompanhamento (📡), Entregas (🛣️) e Relatórios (📈).
+                </li>
+                <li>
+                  • <strong>Itens de Rodapé:</strong> Meu Perfil (👤), Usuários (👥), Configurações
+                  (⚙️) e Documento de Requisitos (📚).
+                </li>
+                <li>
+                  • <strong>Topo e Subitens Preservados:</strong> Dashboard (📊) e os itens de
+                  navegação (Fornecedores 🚜, Produtos 🌱, Escolas 🏫, Chamadas 🌾, Contratos 📄,
+                  Pedidos 📋, Importação Excel 📥, Comunicação WhatsApp 💬, Monitoramento 📡,
+                  Histórico de Ciclos 🔄, Consolidação 🧺, Rotas de Entrega 🛣️, Atestos 📜 e
+                  Relatórios 📈) 100% inalterados.
+                </li>
+                <li>
+                  • <strong>Alinhamento & Acessibilidade:</strong> Todos os emojis são renderizados
+                  com <code>role=&quot;img&quot;</code> e <code>aria-label</code> correspondente,
+                  com dimensões consistentes.
+                </li>
+              </ul>
+            </div>
+            <div className="rounded-md border border-primary/30 bg-primary/5 p-3 space-y-1.5">
+              <span className="font-medium text-primary">
+                2. Integridade do Sistema & Ponto de Atenção v0.0.243:
+              </span>
+              <ul className="space-y-1 text-xs text-foreground/80">
+                <li>
+                  • <strong>Preservação Estrutural:</strong> Nenhuma rota, permissão de perfil
+                  (Master, Admin, Secretária), ordem de menus ou lógica de abertura automática foi
+                  alterada.
+                </li>
+                <li>
+                  • <strong>Preservação Rigorosa das 4 Telas de Entregas:</strong> Zero alterações
+                  em <code>/rotas</code>, Dashboard, Portal do Motorista e{' '}
+                  <code>/monitoramento</code> — isolamento por <code>ciclo_id</code> e regras
+                  anti-vazamento 100% mantidos.
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        {/* Release v0.0.257: Reorganização do Menu Lateral em Dois Níveis com Grupos Recolhíveis */}
+        <div className="rounded-lg border border-border bg-card p-5 space-y-4">
           <div className="flex items-center justify-between flex-wrap gap-2">
             <div className="flex items-center gap-2">
               <Badge variant="outline" className="text-primary border-primary/40 font-semibold">
@@ -916,7 +990,7 @@ export function Requirements() {
                 0.0.257: Reorganização do Menu Lateral em Dois Níveis com Grupos Recolhíveis
               </span>
             </div>
-            <span className="text-xs font-medium text-primary">Versão Vigente (v0.0.257)</span>
+            <span className="text-xs text-muted-foreground">Consolidado (v0.0.257)</span>
           </div>
 
           <p className="text-sm text-foreground/90 leading-relaxed">
