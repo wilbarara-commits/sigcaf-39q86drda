@@ -89,6 +89,53 @@ function formatNumber(value: number): string {
   })
 }
 
+/**
+ * Abreviação inteligente de nomes de escolas em português para cabeçalhos verticais compactos.
+ * Preserva nomes próprios e trunca com reticências se ainda exceder o limite razoável.
+ */
+export function abreviarNomeEscola(nome: string, maxLength = 26): string {
+  if (!nome) return ''
+  let s = nome.trim()
+
+  // Substituições de prefixos institucionais comuns
+  const regras: [RegExp, string][] = [
+    [/\bEscola\s+Municipal\s+de\s+Educa[çc][ãa]o\s+Infantil\b/gi, 'EMEI'],
+    [/\bEscola\s+Municipal\s+de\s+Educa[çc][ãa]o\s+B[áa]sica\b/gi, 'EMEB'],
+    [/\bEscola\s+Municipal\s+de\s+Ensino\s+Fundamental\b/gi, 'EMEF'],
+    [/\bEscola\s+Estadual\s+de\s+Ensino\s+Fundamental\b/gi, 'EEEF'],
+    [/\bEscola\s+Estadual\s+de\s+Ensino\s+M[ée]dio\b/gi, 'EEEM'],
+    [/\bCentro\s+Municipal\s+de\s+Educa[çc][ãa]o\s+Infantil\b/gi, 'CMEI'],
+    [/\bCentro\s+de\s+Educa[çc][ãa]o\s+Infantil\b/gi, 'CEI'],
+    [/\bCentro\s+de\s+Educa[çc][ãa]o\b/gi, 'C. Educ.'],
+    [/\bEscola\s+Municipal\b/gi, 'E.M.'],
+    [/\bEscola\s+Estadual\b/gi, 'E.E.'],
+    [/\bCol[ée]gio\s+Estadual\b/gi, 'C.E.'],
+    [/\bCol[ée]gio\s+Municipal\b/gi, 'C.M.'],
+    [/\bCol[ée]gio\b/gi, 'Col.'],
+    [/\bCreche\s+Municipal\b/gi, 'Cr. Mun.'],
+    [/\bCreche\b/gi, 'Cr.'],
+    [/\bInstituto\b/gi, 'Inst.'],
+    [/\bProfessora\b/gi, 'Profª.'],
+    [/\bProfessor\b/gi, 'Prof.'],
+    [/\bDoutora\b/gi, 'Dra.'],
+    [/\bDoutor\b/gi, 'Dr.'],
+    [/\bVereador\b/gi, 'Ver.'],
+    [/\bDeputado\b/gi, 'Dep.'],
+  ]
+
+  for (const [padrao, subst] of regras) {
+    s = s.replace(padrao, subst)
+  }
+
+  // Limpa espaços duplos
+  s = s.replace(/\s+/g, ' ').trim()
+
+  if (s.length > maxLength) {
+    return s.slice(0, maxLength - 1).trim() + '…'
+  }
+  return s
+}
+
 export default function Consolidation() {
   const {
     products,
@@ -464,12 +511,19 @@ export default function Consolidation() {
   }, [produtosExibidos, escolasExibidas, matriz])
 
   // Helper para renderizar célula na interface
-  const renderCellContent = (qtd: number, valor: number, unit?: string, isTotal = false) => {
+  // showUnit=false por padrão nas células de escola da aba Por Produto (unidade já está em Produto)
+  const renderCellContent = (
+    qtd: number,
+    valor: number,
+    unit?: string,
+    isTotal = false,
+    showUnit = false,
+  ) => {
     if (qtd <= 0 && valor <= 0 && !isTotal) {
       return <span className="text-muted-foreground/30 font-mono">-</span>
     }
 
-    const unitStr = unit ? ` ${unit}` : ''
+    const unitStr = showUnit && unit ? ` ${unit}` : ''
 
     if (modoExibicao === 'qtd') {
       return (
@@ -1368,43 +1422,64 @@ export default function Consolidation() {
       {/* Tabela da Matriz */}
       <div className="rounded-lg border bg-card shadow-xs overflow-hidden">
         <div className="overflow-x-auto max-h-[600px]">
-          <Table className="relative w-full border-collapse">
-            <TableHeader className="sticky top-0 bg-slate-50/90 dark:bg-slate-900/90 backdrop-blur z-20 border-b">
+          <Table className="relative w-full border-separate border-spacing-0">
+            <TableHeader className="sticky top-0 z-30">
               {tabAtiva === 'produto' ? (
                 // CABEÇALHO DA ABA POR PRODUTO: Total posicionado à esquerda ao lado de Produto (Unidade e Preço Unit. removidos da tela)
-                <TableRow className="hover:bg-transparent items-end">
-                  <TableHead className="min-w-[180px] max-w-[240px] sticky left-0 bg-slate-50 dark:bg-slate-900 z-30 font-semibold text-foreground border-r shadow-xs align-bottom pb-3">
+                <TableRow className="hover:bg-transparent">
+                  {/* Coluna 1: Produto (Fixa no topo E fixa à esquerda) */}
+                  <TableHead className="min-w-[180px] max-w-[240px] sticky left-0 top-0 z-40 bg-slate-100 dark:bg-slate-900 font-semibold text-foreground border-r border-b shadow-[1px_1px_0_0_rgba(0,0,0,0.08)] align-bottom pb-3">
                     Produto
                   </TableHead>
-                  <TableHead className="text-center font-bold text-primary min-w-[110px] bg-primary/5 border-r align-bottom pb-3">
+                  {/* Coluna 2: Total (Fixa no topo E fixa à esquerda) */}
+                  <TableHead className="text-center font-bold text-primary min-w-[110px] sticky left-[180px] sm:left-[220px] top-0 z-40 bg-primary/10 dark:bg-primary/20 backdrop-blur border-r border-b shadow-[2px_1px_0_0_rgba(0,0,0,0.08)] align-bottom pb-3">
                     Total
                   </TableHead>
+                  {/* Colunas de Destino/Escola: Fixas no topo */}
                   {!somenteColunaTotal &&
                     escolasExibidas.map((sch, idx) => {
                       const paradaNum = escolaOrdemParadaMap.get(sch.id) || idx + 1
                       const isEvenCol = idx % 2 === 1
+                      const nomeAbreviado = abreviarNomeEscola(sch.name)
+                      const tooltipCompleto = `${isModoRotaAtivo ? `Parada #${paradaNum} — ` : ''}${sch.name}${sch.route ? ` (${sch.route})` : ''}`
+
                       return (
                         <TableHead
                           key={sch.id}
-                          className={`text-center w-[46px] min-w-[44px] max-w-[56px] text-xs font-semibold text-foreground p-1 border-r border-border/40 align-bottom ${
-                            isEvenCol ? 'bg-muted/45 dark:bg-muted/25' : 'bg-transparent'
+                          className={`text-center w-[46px] min-w-[44px] max-w-[56px] text-xs font-semibold text-foreground p-1 border-r border-b border-border/40 align-bottom sticky top-0 z-30 backdrop-blur ${
+                            isEvenCol
+                              ? 'bg-muted/90 dark:bg-muted/70'
+                              : 'bg-slate-50/95 dark:bg-slate-900/95'
                           }`}
-                          title={`${isModoRotaAtivo ? `#${paradaNum} - ` : ''}${sch.name}${sch.route ? ` (${sch.route})` : ''}`}
+                          title={tooltipCompleto}
+                          aria-label={tooltipCompleto}
                         >
-                          <div className="h-44 flex flex-col items-center justify-end pb-1.5 gap-1.5">
-                            {isModoRotaAtivo && (
-                              <span className="inline-flex items-center justify-center bg-primary/15 text-primary font-mono text-[9px] font-bold rounded px-1 py-0.5 shrink-0 shadow-2xs">
-                                #{paradaNum}
-                              </span>
-                            )}
+                          <div className="h-48 flex flex-col items-center justify-between pb-1.5 pt-1 gap-1">
+                            {/* Nível 1: Badge #N da parada HORIZONTAL no topo */}
+                            <div className="h-5 flex items-center justify-center shrink-0">
+                              {isModoRotaAtivo ? (
+                                <span
+                                  className="inline-flex items-center justify-center bg-primary text-primary-foreground font-mono text-[9px] font-bold rounded px-1.5 py-0.5 shadow-xs"
+                                  title={`Parada #${paradaNum} na sequência oficial da rota`}
+                                >
+                                  #{paradaNum}
+                                </span>
+                              ) : (
+                                <span className="text-[9px] font-mono text-muted-foreground/60">
+                                  —
+                                </span>
+                              )}
+                            </div>
+
+                            {/* Nível 2: Nome da escola ABREVIADO na VERTICAL */}
                             <div
-                              className="text-[11px] font-medium leading-tight text-foreground/90 whitespace-nowrap max-h-36 overflow-hidden text-ellipsis select-none"
+                              className="text-[11px] font-medium leading-tight text-foreground/90 whitespace-nowrap max-h-40 overflow-hidden text-ellipsis select-none tracking-tight"
                               style={{
                                 writingMode: 'vertical-rl',
                                 transform: 'rotate(180deg)',
                               }}
                             >
-                              {sch.name}
+                              {nomeAbreviado}
                             </div>
                           </div>
                         </TableHead>
@@ -1413,14 +1488,16 @@ export default function Consolidation() {
                 </TableRow>
               ) : (
                 // CABEÇALHO DA ABA POR ESCOLA: Total posicionado à esquerda ao lado de Escola
-                <TableRow className="hover:bg-transparent items-end">
-                  <TableHead className="min-w-[200px] max-w-[260px] sticky left-0 bg-slate-50 dark:bg-slate-900 z-30 font-semibold text-foreground border-r shadow-xs align-bottom pb-3">
+                <TableRow className="hover:bg-transparent">
+                  {/* Coluna 1: Escola (Fixa no topo E fixa à esquerda) */}
+                  <TableHead className="min-w-[200px] max-w-[260px] sticky left-0 top-0 z-40 bg-slate-100 dark:bg-slate-900 font-semibold text-foreground border-r border-b shadow-[1px_1px_0_0_rgba(0,0,0,0.08)] align-bottom pb-3">
                     Escola
                   </TableHead>
-                  <TableHead className="text-center font-bold text-primary min-w-[110px] bg-primary/5 border-r align-bottom pb-3">
+                  {/* Coluna 2: Total (Fixa no topo E fixa à esquerda) */}
+                  <TableHead className="text-center font-bold text-primary min-w-[110px] sticky left-[200px] sm:left-[240px] top-0 z-40 bg-primary/10 dark:bg-primary/20 backdrop-blur border-r border-b shadow-[2px_1px_0_0_rgba(0,0,0,0.08)] align-bottom pb-3">
                     Total
                   </TableHead>
-                  <TableHead className="w-20 text-center font-semibold text-foreground border-r align-bottom pb-3">
+                  <TableHead className="w-20 text-center font-semibold text-foreground border-r border-b sticky top-0 z-30 bg-slate-50/95 dark:bg-slate-900/95 backdrop-blur align-bottom pb-3">
                     Aba
                   </TableHead>
                   {!somenteColunaTotal &&
@@ -1429,17 +1506,19 @@ export default function Consolidation() {
                       return (
                         <TableHead
                           key={prod.id}
-                          className={`text-center w-[46px] min-w-[44px] max-w-[56px] text-xs font-semibold text-foreground p-1 border-r border-border/40 align-bottom ${
-                            isEvenCol ? 'bg-muted/45 dark:bg-muted/25' : 'bg-transparent'
+                          className={`text-center w-[46px] min-w-[44px] max-w-[56px] text-xs font-semibold text-foreground p-1 border-r border-b border-border/40 align-bottom sticky top-0 z-30 backdrop-blur ${
+                            isEvenCol
+                              ? 'bg-muted/90 dark:bg-muted/70'
+                              : 'bg-slate-50/95 dark:bg-slate-900/95'
                           }`}
                           title={`${prod.name} (${prod.unit}) · ${formatBRL(productPriceMap.get(prod.id) || Number(prod.price) || 0)}`}
                         >
-                          <div className="h-44 flex flex-col items-center justify-end pb-1.5 gap-1">
-                            <span className="text-[9px] font-mono text-muted-foreground uppercase shrink-0">
+                          <div className="h-48 flex flex-col items-center justify-between pb-1.5 pt-1 gap-1">
+                            <span className="text-[9px] font-mono text-muted-foreground uppercase shrink-0 font-bold">
                               {prod.unit}
                             </span>
                             <div
-                              className="text-[11px] font-medium leading-tight text-foreground/90 whitespace-nowrap max-h-36 overflow-hidden text-ellipsis select-none"
+                              className="text-[11px] font-medium leading-tight text-foreground/90 whitespace-nowrap max-h-40 overflow-hidden text-ellipsis select-none"
                               style={{
                                 writingMode: 'vertical-rl',
                                 transform: 'rotate(180deg)',
@@ -1497,16 +1576,20 @@ export default function Consolidation() {
 
                     return (
                       <TableRow key={prod.id} className="hover:bg-muted/40 transition-colors">
-                        <TableCell className="font-medium sticky left-0 bg-background z-10 border-r py-2.5">
+                        {/* Coluna 1: Produto (Fixa horizontalmente à esquerda) */}
+                        <TableCell className="font-medium sticky left-0 bg-background z-20 border-r border-b py-2.5 shadow-[1px_0_0_0_rgba(0,0,0,0.06)]">
                           <span className="font-semibold text-xs sm:text-sm">{prod.name}</span>
                           <span className="ml-1.5 text-[10px] font-mono text-muted-foreground">
                             ({prod.unit})
                           </span>
                         </TableCell>
-                        <TableCell className="text-center font-bold font-mono bg-primary/5 text-primary border-r py-2">
-                          {renderCellContent(rowQtd, rowValor, prod.unit, true)}
+
+                        {/* Coluna 2: Total (Fixa horizontalmente à esquerda ao lado de Produto) */}
+                        <TableCell className="text-center font-bold font-mono bg-primary/5 text-primary sticky left-[180px] sm:left-[220px] z-20 border-r border-b py-2 shadow-[2px_0_0_0_rgba(0,0,0,0.06)] backdrop-blur">
+                          {renderCellContent(rowQtd, rowValor, prod.unit, true, false)}
                         </TableCell>
 
+                        {/* Colunas de Destino/Escola: SEM unidade do produto (já exibida em Produto) */}
                         {!somenteColunaTotal &&
                           escolasExibidas.map((sch, idx) => {
                             const cell = matriz.get(prod.id)?.get(sch.id) || { qtd: 0, valor: 0 }
@@ -1524,9 +1607,9 @@ export default function Consolidation() {
                             return (
                               <TableCell
                                 key={sch.id}
-                                className={`text-center text-xs px-1 py-1.5 border-r border-border/30 transition-colors ${activeBg}`}
+                                className={`text-center text-xs px-1 py-1.5 border-r border-b border-border/30 transition-colors ${activeBg}`}
                               >
-                                {renderCellContent(cell.qtd, cell.valor, prod.unit)}
+                                {renderCellContent(cell.qtd, cell.valor, prod.unit, false, false)}
                               </TableCell>
                             )
                           })}
@@ -1563,13 +1646,13 @@ export default function Consolidation() {
 
                   return (
                     <TableRow key={sch.id} className="hover:bg-muted/40 transition-colors">
-                      <TableCell className="font-medium sticky left-0 bg-background z-10 border-r py-2.5">
+                      <TableCell className="font-medium sticky left-0 bg-background z-20 border-r border-b py-2.5 shadow-[1px_0_0_0_rgba(0,0,0,0.06)]">
                         <span className="font-semibold text-xs sm:text-sm">{sch.name}</span>
                       </TableCell>
-                      <TableCell className="text-center font-bold font-mono bg-primary/5 text-primary border-r py-2">
-                        {renderCellContent(rowQtd, rowValor, undefined, true)}
+                      <TableCell className="text-center font-bold font-mono bg-primary/5 text-primary sticky left-[200px] sm:left-[240px] z-20 border-r border-b py-2 shadow-[2px_0_0_0_rgba(0,0,0,0.06)] backdrop-blur">
+                        {renderCellContent(rowQtd, rowValor, undefined, true, false)}
                       </TableCell>
-                      <TableCell className="text-xs text-center border-r py-2">
+                      <TableCell className="text-xs text-center border-r border-b py-2">
                         <span className="text-muted-foreground text-[11px]">
                           {sch.route || '-'}
                         </span>
@@ -1592,9 +1675,9 @@ export default function Consolidation() {
                           return (
                             <TableCell
                               key={prod.id}
-                              className={`text-center text-xs px-1 py-1.5 border-r border-border/30 transition-colors ${activeBg}`}
+                              className={`text-center text-xs px-1 py-1.5 border-r border-b border-border/30 transition-colors ${activeBg}`}
                             >
-                              {renderCellContent(cell.qtd, cell.valor, prod.unit)}
+                              {renderCellContent(cell.qtd, cell.valor, prod.unit, false, false)}
                             </TableCell>
                           )
                         })}
@@ -1606,11 +1689,11 @@ export default function Consolidation() {
               {/* LINHA DE TOTAL GERAL */}
               {tabAtiva === 'produto' && produtosExibidos.length > 0 && (
                 <TableRow className="bg-slate-50 dark:bg-slate-900/80 font-bold border-t-2">
-                  <TableCell className="sticky left-0 bg-slate-50 dark:bg-slate-900 z-10 border-r font-bold">
+                  <TableCell className="sticky left-0 bg-slate-100 dark:bg-slate-900 z-20 border-r border-b font-bold shadow-[1px_0_0_0_rgba(0,0,0,0.06)]">
                     Total Geral
                   </TableCell>
-                  <TableCell className="text-center font-extrabold font-mono bg-primary/10 text-primary border-r py-2.5">
-                    {renderCellContent(totalGeral.qtd, totalGeral.valor, undefined, true)}
+                  <TableCell className="text-center font-extrabold font-mono bg-primary/10 text-primary sticky left-[180px] sm:left-[220px] z-20 border-r border-b py-2.5 shadow-[2px_0_0_0_rgba(0,0,0,0.06)] backdrop-blur">
+                    {renderCellContent(totalGeral.qtd, totalGeral.valor, undefined, true, false)}
                   </TableCell>
 
                   {!somenteColunaTotal &&
@@ -1620,11 +1703,17 @@ export default function Consolidation() {
                       return (
                         <TableCell
                           key={sch.id}
-                          className={`text-center text-xs py-2.5 border-r border-border/30 ${
+                          className={`text-center text-xs py-2.5 border-r border-b border-border/30 ${
                             isEvenCol ? 'bg-muted/30 dark:bg-muted/15' : 'bg-transparent'
                           }`}
                         >
-                          {renderCellContent(totCol.totalQtd, totCol.totalValor, undefined, true)}
+                          {renderCellContent(
+                            totCol.totalQtd,
+                            totCol.totalValor,
+                            undefined,
+                            true,
+                            false,
+                          )}
                         </TableCell>
                       )
                     })}
@@ -1633,13 +1722,13 @@ export default function Consolidation() {
 
               {tabAtiva === 'escola' && escolasExibidas.length > 0 && (
                 <TableRow className="bg-slate-50 dark:bg-slate-900/80 font-bold border-t-2">
-                  <TableCell className="sticky left-0 bg-slate-50 dark:bg-slate-900 z-10 border-r font-bold">
+                  <TableCell className="sticky left-0 bg-slate-100 dark:bg-slate-900 z-20 border-r border-b font-bold shadow-[1px_0_0_0_rgba(0,0,0,0.06)]">
                     Total Geral
                   </TableCell>
-                  <TableCell className="text-center font-extrabold font-mono bg-primary/10 text-primary border-r py-2.5">
-                    {renderCellContent(totalGeral.qtd, totalGeral.valor, undefined, true)}
+                  <TableCell className="text-center font-extrabold font-mono bg-primary/10 text-primary sticky left-[200px] sm:left-[240px] z-20 border-r border-b py-2.5 shadow-[2px_0_0_0_rgba(0,0,0,0.06)] backdrop-blur">
+                    {renderCellContent(totalGeral.qtd, totalGeral.valor, undefined, true, false)}
                   </TableCell>
-                  <TableCell className="text-center border-r">-</TableCell>
+                  <TableCell className="text-center border-r border-b">-</TableCell>
 
                   {!somenteColunaTotal &&
                     produtosExibidos.map((prod, idx) => {
@@ -1651,11 +1740,17 @@ export default function Consolidation() {
                       return (
                         <TableCell
                           key={prod.id}
-                          className={`text-center text-xs py-2.5 border-r border-border/30 ${
+                          className={`text-center text-xs py-2.5 border-r border-b border-border/30 ${
                             isEvenCol ? 'bg-muted/30 dark:bg-muted/15' : 'bg-transparent'
                           }`}
                         >
-                          {renderCellContent(totCol.totalQtd, totCol.totalValor, prod.unit, true)}
+                          {renderCellContent(
+                            totCol.totalQtd,
+                            totCol.totalValor,
+                            prod.unit,
+                            true,
+                            false,
+                          )}
                         </TableCell>
                       )
                     })}

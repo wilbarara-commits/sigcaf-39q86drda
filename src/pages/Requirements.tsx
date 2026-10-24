@@ -190,6 +190,9 @@ const MODULES: ModuleSpec[] = [
       'Abas "Por Produto (Matriz Geral)" e "Por Escola (Resumo)".',
       'Modo de Filtro "Por rota" na aba Por Produto: seletor com opção "Todas as escolas" e "Por rota". Ao ativar "Por rota", abre-se um box (select) dinâmico listando exclusivamente as rotas da chamada selecionada no relatório.',
       'Apresentação e ordenação estrita na sequência oficial das paradas da rota: quando uma rota é selecionada, a matriz exibe somente as escolas pertencentes à rota na ordem exata de suas paradas (paradas_rota.ordem), com badge numerado #N da parada, e não por ordem alfabética.',
+      'Cabeçalho das colunas de escolas em dois níveis (v0.0.265): na aba "Por Produto", o badge #N da parada fica na HORIZONTAL no topo da coluna; abaixo dele, o nome abreviado inteligente da escola na VERTICAL (writing-mode: vertical-rl; transform: rotate(180deg)), com o nome completo no tooltip/title.',
+      'Remoção de unidade duplicada nas colunas de escolas (v0.0.265): a unidade do produto (ex.: kg, un, mc) aparece exclusivamente entre parênteses ao lado do nome do produto na coluna fixa Produto, eliminando repetição visual em células e cabeçalhos de escolas.',
+      'Cabeçalho e colunas fixas com rolagem sticky (v0.0.265): cabeçalho da tabela fixo no topo (position: sticky, top: 0, z-index calibrado) e colunas de Produto e Total fixas à esquerda (position: sticky, left: 0), permitindo rolagem horizontal e vertical independentes sem perda de contexto visual.',
       'Coluna de Total posicionada à esquerda ao lado de Produto (e de Escola na aba recíproca), otimizando a leitura imediata da demanda consolidada antes das colunas parciais.',
       'Filtro de Ocultar Vazios (sem demanda), alternador "Somente coluna de Total" e busca rápida.',
       'Exportação para Planilha Excel (.xlsx), Documento PDF (.pdf) e CSV (.csv) com totalizadores alinhados à esquerda e respeito integral ao filtro por rota e sequência das paradas.',
@@ -908,8 +911,85 @@ export function Requirements() {
       {/* 7. Registro de Manutenção e Limpeza de Dados */}
       <SectionTitle>7. Registro de Manutenção & Higienização do Banco de Dados</SectionTitle>
       <div className="space-y-4">
-        {/* Release v0.0.263: Otimização da Tabela de Consolidação Final com Cabeçalhos Verticais e Zebra por Coluna */}
+        {/* Release v0.0.265: Refinos Ergonômicos da Tabela de Consolidação Final */}
         <div className="rounded-lg border-2 border-primary/40 bg-card p-5 space-y-4 shadow-sm">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="text-primary border-primary/40 font-semibold">
+                Release v0.0.265
+              </Badge>
+              <span className="font-semibold text-foreground">
+                0.0.265: Refinos da Tabela de Consolidação Final (/consolidacao) — Cabeçalhos em
+                Dois Níveis, Desduplicação de Unidades e Cabeçalho Sticky
+              </span>
+            </div>
+            <span className="text-xs font-medium text-primary">Versão Vigente (v0.0.265)</span>
+          </div>
+
+          <p className="text-sm text-foreground/90 leading-relaxed">
+            Implementação dos três refinos de usabilidade solicitados na tabela de Consolidação
+            Final (<code>/consolidacao</code> — <code>src/pages/Consolidation.tsx</code>) na aba
+            &quot;Por Produto&quot;: (1) Cabeçalho das colunas de escolas em dois níveis, com o
+            badge da parada <code>#N</code> em posição horizontal no topo e o nome da instituição
+            abreviado de forma inteligente na vertical com nome completo em tooltip; (2) Eliminação
+            da duplicação de unidade nas células e colunas de escolas, concentrando a unidade
+            exclusivamente na coluna Produto; (3) Imobilização fixa (<em>sticky</em>) de cabeçalhos
+            no topo da tabela e das colunas de Produto e Total à esquerda, garantindo rolagem fluida
+            e confortável em grandes volumes de dados.
+          </p>
+
+          <div className="grid sm:grid-cols-2 gap-4 text-sm">
+            <div className="rounded-md border border-border/60 bg-muted/20 p-3 space-y-1.5">
+              <span className="font-medium text-primary">
+                1. Refinos Implementados na Matriz por Produto:
+              </span>
+              <ul className="space-y-1 text-xs text-muted-foreground">
+                <li>
+                  • <strong>Cabeçalho em Dois Níveis:</strong> O badge <code>#N</code> da parada
+                  (quando no modo Por Rota) repousa na horizontal no topo da coluna. Logo abaixo, o
+                  nome abreviado inteligentemente (ex.: &quot;Escola Municipal&quot; →
+                  &quot;E.M.&quot;, &quot;Creche&quot; → &quot;Cr.&quot;) é rotacionado a 180°
+                  verticalmente, com o nome completo no tooltip.
+                </li>
+                <li>
+                  • <strong>Desduplicação da Unidade:</strong> A unidade do produto é apresentada
+                  exclusivamente na coluna de Produto (ex.: <em>Tomate (kg)</em>). Células e
+                  cabeçalhos de escola foram limpos de qualquer repetição de unidade.
+                </li>
+                <li>
+                  • <strong>Cabeçalho e Colunas Fixas (Sticky):</strong> O cabeçalho permanece fixo
+                  no topo durante a rolagem vertical (<code>sticky top-0 z-30</code>) e as colunas
+                  Produto + Total permanecem travadas à esquerda (<code>sticky left-0</code>),
+                  prevenindo sobreposição e perda de orientação.
+                </li>
+                <li>
+                  • <strong>Exportações Intocadas:</strong> Planilhas Excel (.xlsx), relatórios PDF
+                  e arquivos CSV permanecem completos com todas as colunas e unidades discriminadas.
+                </li>
+              </ul>
+            </div>
+            <div className="rounded-md border border-primary/30 bg-primary/5 p-3 space-y-1.5">
+              <span className="font-medium text-primary">
+                2. Invariância de Regras & Ponto de Atenção v0.0.243:
+              </span>
+              <ul className="space-y-1 text-xs text-foreground/80">
+                <li>
+                  • <strong>Preservação Rigorosa das 4 Telas de Entregas:</strong> Zero alterações
+                  em <code>/rotas</code>, Dashboard, Portal do Motorista e{' '}
+                  <code>/monitoramento</code> — isolamento estrito por <code>ciclo_id</code> e
+                  regras anti-vazamento 100% preservadas.
+                </li>
+                <li>
+                  • <strong>Zebra e Cálculos Mantidos:</strong> A alternância de cor por coluna,
+                  totais de rotas, ordenação de paradas e filtros continuam 100% funcionais.
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        {/* Release v0.0.263: Otimização da Tabela de Consolidação Final com Cabeçalhos Verticais e Zebra por Coluna */}
+        <div className="rounded-lg border border-border bg-card p-5 space-y-4">
           <div className="flex items-center justify-between flex-wrap gap-2">
             <div className="flex items-center gap-2">
               <Badge variant="outline" className="text-primary border-primary/40 font-semibold">
@@ -920,7 +1000,7 @@ export function Requirements() {
                 Verticais, Remoção de Unidade/Preço Unit. na Tela e Zebra por Coluna
               </span>
             </div>
-            <span className="text-xs font-medium text-primary">Versão Vigente (v0.0.263)</span>
+            <span className="text-xs text-muted-foreground">Consolidado (v0.0.263)</span>
           </div>
 
           <p className="text-sm text-foreground/90 leading-relaxed">
