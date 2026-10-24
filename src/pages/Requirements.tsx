@@ -188,9 +188,11 @@ const MODULES: ModuleSpec[] = [
     details: [
       'Matriz dinâmica de quantidades por produto para cada escola no ciclo.',
       'Abas "Por Produto (Matriz Geral)" e "Por Escola (Resumo)".',
+      'Modo de Filtro "Por rota" na aba Por Produto: seletor com opção "Todas as escolas" e "Por rota". Ao ativar "Por rota", abre-se um box (select) dinâmico listando exclusivamente as rotas da chamada selecionada no relatório.',
+      'Apresentação e ordenação estrita na sequência oficial das paradas da rota: quando uma rota é selecionada, a matriz exibe somente as escolas pertencentes à rota na ordem exata de suas paradas (paradas_rota.ordem), com badge numerado #N da parada, e não por ordem alfabética.',
       'Coluna de Total posicionada à esquerda ao lado de Produto (e de Escola na aba recíproca), otimizando a leitura imediata da demanda consolidada antes das colunas parciais.',
       'Filtro de Ocultar Vazios (sem demanda), alternador "Somente coluna de Total" e busca rápida.',
-      'Exportação para Planilha Excel (.xlsx), Documento PDF (.pdf) e CSV (.csv) com totalizadores alinhados à esquerda.',
+      'Exportação para Planilha Excel (.xlsx), Documento PDF (.pdf) e CSV (.csv) com totalizadores alinhados à esquerda e respeito integral ao filtro por rota e sequência das paradas.',
     ],
   },
   {
@@ -906,8 +908,92 @@ export function Requirements() {
       {/* 7. Registro de Manutenção e Limpeza de Dados */}
       <SectionTitle>7. Registro de Manutenção & Higienização do Banco de Dados</SectionTitle>
       <div className="space-y-4">
-        {/* Release v0.0.261: Reposicionamento da Coluna de Total à Esquerda na Consolidação Final */}
+        {/* Release v0.0.262: Modo de Filtro Por Rota no Relatório de Consolidação Final */}
         <div className="rounded-lg border-2 border-primary/40 bg-card p-5 space-y-4 shadow-sm">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="text-primary border-primary/40 font-semibold">
+                Release v0.0.262
+              </Badge>
+              <span className="font-semibold text-foreground">
+                0.0.262: Modo de Filtro &quot;Por rota&quot; na Aba Por Produto do Relatório de
+                Consolidação Final (/consolidacao)
+              </span>
+            </div>
+            <span className="text-xs font-medium text-primary">Versão Vigente (v0.0.262)</span>
+          </div>
+
+          <p className="text-sm text-foreground/90 leading-relaxed">
+            Atendimento integral ao requisito operacional do usuário (&quot;O relatório de
+            consolidação final por produto tem a opção por rota — nesse caso seleciona a rota entre
+            as rotas disponíveis da chamada selecionada e um box de seleção de rotas é ativado;
+            somente as escolas da rota são apresentadas na sequência das paradas da rota&quot;). Na
+            tela de Consolidação Final (<code>/consolidacao</code> —{' '}
+            <code>src/pages/Consolidation.tsx</code>), a aba &quot;Por Produto&quot; agora conta com
+            o seletor <strong>Filtro de Escolas</strong> (<em>Todas as escolas</em> ou{' '}
+            <em>Por rota</em>). Ao ativar <em>Por rota</em>, um box (select) dinâmico é ativado
+            listando exclusivamente as rotas pertencentes à chamada selecionada no relatório. A
+            tabela e as exportações (Excel .xlsx, PDF e CSV) passam a apresentar somente as escolas
+            da rota selecionada dispostas rigorosamente na{' '}
+            <strong>sequência oficial das paradas da rota</strong> (com badge indicativo do número
+            da parada).
+          </p>
+
+          <div className="grid sm:grid-cols-2 gap-4 text-sm">
+            <div className="rounded-md border border-border/60 bg-muted/20 p-3 space-y-1.5">
+              <span className="font-medium text-primary">
+                1. Comportamento do Filtro por Rota & Sequência de Paradas:
+              </span>
+              <ul className="space-y-1 text-xs text-muted-foreground">
+                <li>
+                  • <strong>Seletor de Modo & Box de Rotas:</strong> O usuário escolhe entre
+                  &quot;Todas as escolas&quot; ou &quot;Por rota&quot;. Ao escolher rota, o box de
+                  seleção é ativado com as rotas ativas da chamada selecionada.
+                </li>
+                <li>
+                  • <strong>Ordenação por Paradas:</strong> As colunas de escolas são ordenadas pela
+                  ordem oficial de paradas (<code>paradas_rota.ordem</code>) lidas via{' '}
+                  <code>rotasService.getParadas</code>, e não por ordem alfabética.
+                </li>
+                <li>
+                  • <strong>Badges Indicativos de Parada:</strong> Cada coluna da escola recebe o
+                  badge <code>#N</code> com o número da sua parada na rota.
+                </li>
+                <li>
+                  • <strong>Coluna Total Preservada à Esquerda:</strong> A coluna Total permanece
+                  fixa à esquerda junto de Produto (implementação 0.0.261), recalculando as somas e
+                  valores restritos às escolas da rota ativa.
+                </li>
+                <li>
+                  • <strong>Exportações Sincronizadas (PDF, Excel, CSV):</strong> Todas as
+                  exportações respeitam o escopo da rota selecionada e mantêm as paradas na
+                  sequência correta.
+                </li>
+              </ul>
+            </div>
+            <div className="rounded-md border border-primary/30 bg-primary/5 p-3 space-y-1.5">
+              <span className="font-medium text-primary">
+                2. Invariância de Regras & Ponto de Atenção v0.0.243:
+              </span>
+              <ul className="space-y-1 text-xs text-foreground/80">
+                <li>
+                  • <strong>Preservação Rigorosa das 4 Telas de Entregas:</strong> Zero alterações
+                  em <code>/rotas</code>, Dashboard, Portal do Motorista e{' '}
+                  <code>/monitoramento</code> — isolamento estrito por <code>ciclo_id</code> e
+                  blindagem anti-vazamento 100% preservados.
+                </li>
+                <li>
+                  • <strong>Snapshots e Preços Congelados:</strong> Snapshots de preço em{' '}
+                  <code>pedido_itens</code> e sincronização de preços (0.0.254/0.0.255) permaneceram
+                  100% intocados.
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        {/* Release v0.0.261: Reposicionamento da Coluna de Total à Esquerda na Consolidação Final */}
+        <div className="rounded-lg border border-border bg-card p-5 space-y-4">
           <div className="flex items-center justify-between flex-wrap gap-2">
             <div className="flex items-center gap-2">
               <Badge variant="outline" className="text-primary border-primary/40 font-semibold">
@@ -918,7 +1004,7 @@ export function Requirements() {
                 Consolidação Final (/consolidacao)
               </span>
             </div>
-            <span className="text-xs font-medium text-primary">Versão Vigente (v0.0.261)</span>
+            <span className="text-xs text-muted-foreground">Consolidado (v0.0.261)</span>
           </div>
 
           <p className="text-sm text-foreground/90 leading-relaxed">

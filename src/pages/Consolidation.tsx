@@ -1,5 +1,7 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { useApp } from '@/context/app-context'
+import { rotasService } from '@/services/rotas'
+import type { ParadaRotaRecord, School } from '@/lib/types'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -35,6 +37,7 @@ import {
   FileText,
   FileCode,
   Layers,
+  Route,
 } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import jsPDF from 'jspdf'
@@ -87,14 +90,128 @@ function formatNumber(value: number): string {
 }
 
 export default function Consolidation() {
-  const { products, schools, orders, chamadas, ciclos, activeCiclo, contractItems } = useApp()
+  const {
+    products,
+    schools,
+    orders,
+    chamadas,
+    ciclos,
+    activeCiclo,
+    contractItems,
+    contracts,
+    rotas,
+    paradasRota,
+  } = useApp()
 
   const [selectedCicloId, setSelectedCicloId] = useState<string>(activeCiclo?.id || 'todos')
+  const [selectedChamadaId, setSelectedChamadaId] = useState<string>(
+    activeCiclo?.chamada_id || (chamadas[0]?.id ?? 'todas'),
+  )
   const [tabAtiva, setTabAtiva] = useState<'produto' | 'escola'>('produto')
+  const [filtroEscolaModo, setFiltroEscolaModo] = useState<'todas' | 'rota'>('todas')
+  const [selectedRotaId, setSelectedRotaId] = useState<string>('')
+  const [liveParadas, setLiveParadas] = useState<ParadaRotaRecord[]>([])
   const [somenteColunaTotal, setSomenteColunaTotal] = useState(false)
   const [ocultarVazios, setOcultarVazios] = useState(true)
   const [modoExibicao, setModoExibicao] = useState<ModoExibicao>('ambos')
   const [filtroTexto, setFiltroTexto] = useState('')
+
+  // Resolver chamada efetiva selecionada no relatório
+  const effectiveChamadaId = useMemo(() => {
+    if (selectedChamadaId !== 'todas') return selectedChamadaId
+    if (selectedCicloId !== 'todos') {
+      const c = ciclos.find((ci) => ci.id === selectedCicloId)
+      if (c?.chamada_id) return c.chamada_id
+    }
+    if (activeCiclo?.chamada_id) return activeCiclo.chamada_id
+    return chamadas[0]?.id || ''
+  }, [selectedChamadaId, selectedCicloId, ciclos, activeCiclo, chamadas])
+
+  // Rotas disponíveis SOMENTE da chamada selecionada no relatório
+  const rotasDaChamada = useMemo(() => {
+    if (!effectiveChamadaId) {
+      return rotas.filter((r) => r.ativa !== false)
+    }
+    const contratosDaChamadaIds = new Set(
+      contracts.filter((c) => c.chamada_id === effectiveChamadaId).map((c) => c.id),
+    )
+    return rotas
+      .filter((r) => {
+        if (r.ativa === false) return false
+        if (r.chamada_id && r.chamada_id === effectiveChamadaId) return true
+        if (r.contrato_id && contratosDaChamadaIds.has(r.contrato_id)) return true
+        return false
+      })
+      .sort(
+        (a, b) =>
+          (Number(a.ordem) || 0) - (Number(b.ordem) || 0) ||
+          (a.nome || '').localeCompare(b.nome || ''),
+      )
+  }, [rotas, effectiveChamadaId, contracts])
+
+  // Garantir seleção de rota válida quando o modo "Por rota" estiver ativo
+  useEffect(() => {
+    if (filtroEscolaModo === 'rota') {
+      if (rotasDaChamada.length > 0) {
+        const rotaValida = rotasDaChamada.find((r) => r.id === selectedRotaId)
+        if (!rotaValida) {
+          setSelectedRotaId(rotasDaChamada[0].id)
+        }
+      } else {
+        setSelectedRotaId('')
+      }
+    }
+  }, [filtroEscolaModo, rotasDaChamada, selectedRotaId])
+
+  // Buscar paradas atualizadas em tempo real da rota selecionada
+  useEffect(() => {
+    if (!selectedRotaId || selectedRotaId === '__vazio__') {
+      setLiveParadas([])
+      return
+    }
+    let isMounted = true
+    rotasService
+      .getParadas(selectedRotaId)
+      .then((paradas) => {
+        if (isMounted && paradas && paradas.length > 0) {
+          setLiveParadas(paradas)
+        }
+      })
+      .catch((err) => {
+        console.warn('Erro ao carregar paradas da rota no relatório:', err)
+      })
+    return () => {
+      isMounted = false
+    }
+  }, [selectedRotaId])
+
+  // Paradas ordenadas da rota selecionada (prioriza liveParadas, fallback para paradasRota do contexto)
+  const paradasDaRota = useMemo(() => {
+    if (!selectedRotaId || selectedRotaId === '__vazio__') return []
+    const list =
+      liveParadas.length > 0
+        ? liveParadas
+        : paradasRota.filter(
+            (p) => p.rota_id === selectedRotaId || (p as any).rota_logistica_id === selectedRotaId,
+          )
+    return [...list].sort((a, b) => (Number(a.ordem) || 0) - (Number(b.ordem) || 0))
+  }, [selectedRotaId, liveParadas, paradasRota])
+
+  // Mapa escolaId -> ordem da parada na rota
+  const escolaOrdemParadaMap = useMemo(() => {
+    const map = new Map<string, number>()
+    paradasDaRota.forEach((p, idx) => {
+      map.set(p.escola_id, p.ordem || idx + 1)
+    })
+    return map
+  }, [paradasDaRota])
+
+  const selectedRotaObj = useMemo(() => {
+    return (
+      rotasDaChamada.find((r) => r.id === selectedRotaId) ||
+      rotas.find((r) => r.id === selectedRotaId)
+    )
+  }, [rotasDaChamada, rotas, selectedRotaId])
 
   // Mapa de preços prioritários dos produtos (preço do item do pedido ou do contrato ou do catálogo)
   const productPriceMap = useMemo(() => {
@@ -183,9 +300,30 @@ export default function Consolidation() {
     return res
   }, [schools, products, matriz])
 
-  // Escolas exibidas com filtro de busca e toggle de ocultar vazios
+  // Escolas pertencentes à rota selecionada NA SEQUÊNCIA DAS PARADAS
+  const escolasDaRotaOrdenadas = useMemo(() => {
+    if (tabAtiva !== 'produto' || filtroEscolaModo !== 'rota' || !selectedRotaId) {
+      return null
+    }
+    const result: School[] = []
+    const seen = new Set<string>()
+    for (const p of paradasDaRota) {
+      if (!seen.has(p.escola_id)) {
+        seen.add(p.escola_id)
+        const sch = schools.find((s) => s.id === p.escola_id)
+        if (sch) {
+          result.push(sch)
+        }
+      }
+    }
+    return result
+  }, [tabAtiva, filtroEscolaModo, selectedRotaId, paradasDaRota, schools])
+
+  // Escolas exibidas: quando por rota, segue estritamente a sequência de paradas da rota
   const escolasExibidas = useMemo(() => {
-    return schools.filter((s) => {
+    const baseList = escolasDaRotaOrdenadas !== null ? escolasDaRotaOrdenadas : schools
+
+    return baseList.filter((s) => {
       if (filtroTexto.trim()) {
         const match = s.name.toLowerCase().includes(filtroTexto.toLowerCase())
         if (!match) return false
@@ -194,28 +332,59 @@ export default function Consolidation() {
       const tot = totaisPorEscola[s.id]
       return tot && (tot.totalQtd > 0 || tot.totalValor > 0)
     })
-  }, [schools, totaisPorEscola, ocultarVazios, filtroTexto])
+  }, [escolasDaRotaOrdenadas, schools, totaisPorEscola, ocultarVazios, filtroTexto])
+
+  // Totais de produto restritos às escolas da rota exibida
+  const totaisPorProdutoNaRota = useMemo(() => {
+    const res: Record<string, { totalQtd: number; totalValor: number }> = {}
+    for (const prod of products) {
+      let q = 0
+      let v = 0
+      for (const sch of escolasExibidas) {
+        const cell = matriz.get(prod.id)?.get(sch.id)
+        if (cell) {
+          q += cell.qtd
+          v += cell.valor
+        }
+      }
+      res[prod.id] = { totalQtd: q, totalValor: v }
+    }
+    return res
+  }, [products, escolasExibidas, matriz])
 
   // Produtos exibidos com filtro de busca e toggle de ocultar vazios
   const produtosExibidos = useMemo(() => {
+    const isModoRota =
+      tabAtiva === 'produto' && filtroEscolaModo === 'rota' && Boolean(selectedRotaId)
+
     return products.filter((p) => {
       if (filtroTexto.trim()) {
         const match = p.name.toLowerCase().includes(filtroTexto.toLowerCase())
         if (!match) return false
       }
       if (!ocultarVazios) return true
-      const tot = totaisPorProduto[p.id]
+      const tot = isModoRota ? totaisPorProdutoNaRota[p.id] : totaisPorProduto[p.id]
       return tot && (tot.totalQtd > 0 || tot.totalValor > 0)
     })
-  }, [products, totaisPorProduto, ocultarVazios, filtroTexto])
+  }, [
+    products,
+    totaisPorProduto,
+    totaisPorProdutoNaRota,
+    ocultarVazios,
+    filtroTexto,
+    tabAtiva,
+    filtroEscolaModo,
+    selectedRotaId,
+  ])
 
   // Total Geral da Consolidação (considera os itens exibidos)
   const totalGeral = useMemo(() => {
     let qtd = 0
     let valor = 0
     if (tabAtiva === 'produto') {
+      const isModoRota = filtroEscolaModo === 'rota' && Boolean(selectedRotaId)
       for (const prod of produtosExibidos) {
-        if (somenteColunaTotal) {
+        if (somenteColunaTotal && !isModoRota) {
           const tot = totaisPorProduto[prod.id] || { totalQtd: 0, totalValor: 0 }
           qtd += tot.totalQtd
           valor += tot.totalValor
@@ -249,6 +418,8 @@ export default function Consolidation() {
     return { qtd, valor }
   }, [
     tabAtiva,
+    filtroEscolaModo,
+    selectedRotaId,
     produtosExibidos,
     escolasExibidas,
     matriz,
@@ -350,6 +521,11 @@ export default function Consolidation() {
       ? 'Todos os Ciclos'
       : ciclos.find((c) => c.id === selectedCicloId)?.nome || 'Ciclo Selecionado'
 
+  const chamadaSelecionadaNome =
+    selectedChamadaId === 'todas'
+      ? 'Todas as Chamadas'
+      : chamadas.find((ch) => ch.id === selectedChamadaId)?.chamada || 'Chamada Selecionada'
+
   // ==========================================
   // EXPORTAÇÃO XLSX (Planilha Real)
   // ==========================================
@@ -358,6 +534,12 @@ export default function Consolidation() {
       const wb = XLSX.utils.book_new()
       const dataRows: any[][] = []
 
+      const isModoRota =
+        tabAtiva === 'produto' && filtroEscolaModo === 'rota' && Boolean(selectedRotaObj)
+      const rotaInfo = isModoRota
+        ? `Rota: ${selectedRotaObj?.nome} (Sequência das Paradas)`
+        : 'Escolas: Todas as Escolas'
+
       // Título e Metadados
       dataRows.push(['CONSOLIDAÇÃO FINAL — MATRIZ DE PEDIDOS PARA LOGÍSTICA'])
       dataRows.push([
@@ -365,6 +547,8 @@ export default function Consolidation() {
       ])
       dataRows.push([
         `Ciclo: ${cicloSelecionadoNome}`,
+        `Chamada: ${chamadaSelecionadaNome}`,
+        rotaInfo,
         `Modo: ${modoExibicao === 'qtd' ? 'Quantidade' : modoExibicao === 'valor' ? 'Valor (R$)' : 'Ambos (Qtd + R$)'}`,
         `Data de Emissão: ${new Date().toLocaleDateString('pt-BR')} ${new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`,
       ])
@@ -374,7 +558,12 @@ export default function Consolidation() {
         // Headers: Total à esquerda junto de produto (Produto, Total, Unidade, Preço Unitário)
         const headers = ['Produto', 'Total', 'Unidade', 'Preço Unitário (R$)']
         if (!somenteColunaTotal) {
-          headers.push(...escolasExibidas.map((e) => e.name))
+          headers.push(
+            ...escolasExibidas.map((e, idx) => {
+              const paradaNum = escolaOrdemParadaMap.get(e.id) || idx + 1
+              return isModoRota ? `${paradaNum}ª Parada - ${e.name}` : e.name
+            }),
+          )
         }
         dataRows.push(headers)
 
@@ -394,9 +583,15 @@ export default function Consolidation() {
               schoolCells.push(getCellExportText(cell.qtd, cell.valor, prod.unit))
             }
           } else {
-            const tot = totaisPorProduto[prod.id] || { totalQtd: 0, totalValor: 0 }
-            rowQtd = tot.totalQtd
-            rowValor = tot.totalValor
+            if (isModoRota) {
+              const tot = totaisPorProdutoNaRota[prod.id] || { totalQtd: 0, totalValor: 0 }
+              rowQtd = tot.totalQtd
+              rowValor = tot.totalValor
+            } else {
+              const tot = totaisPorProduto[prod.id] || { totalQtd: 0, totalValor: 0 }
+              rowQtd = tot.totalQtd
+              rowValor = tot.totalValor
+            }
           }
 
           const row: any[] = [
@@ -477,7 +672,8 @@ export default function Consolidation() {
       XLSX.utils.book_append_sheet(wb, ws, 'Consolidação Final')
 
       const dateStr = new Date().toISOString().split('T')[0]
-      const filename = `consolidacao-final-${tabAtiva}-${dateStr}.xlsx`
+      const rotaSlug = isModoRota ? `-${selectedRotaObj?.nome?.replace(/\s+/g, '_')}` : ''
+      const filename = `consolidacao-final-${tabAtiva}${rotaSlug}-${dateStr}.xlsx`
       XLSX.writeFile(wb, filename)
       toast.success('Planilha Excel (.xlsx) exportada com sucesso!')
     } catch (err) {
@@ -492,11 +688,18 @@ export default function Consolidation() {
   const exportarCSV = () => {
     try {
       const rows: string[][] = []
+      const isModoRota =
+        tabAtiva === 'produto' && filtroEscolaModo === 'rota' && Boolean(selectedRotaObj)
 
       if (tabAtiva === 'produto') {
         const headers = ['Produto', 'Total', 'Unidade', 'Preço Unitário (R$)']
         if (!somenteColunaTotal) {
-          headers.push(...escolasExibidas.map((e) => e.name))
+          headers.push(
+            ...escolasExibidas.map((e, idx) => {
+              const paradaNum = escolaOrdemParadaMap.get(e.id) || idx + 1
+              return isModoRota ? `${paradaNum}ª Parada - ${e.name}` : e.name
+            }),
+          )
         }
         rows.push(headers)
 
@@ -515,9 +718,15 @@ export default function Consolidation() {
               schoolCells.push(getCellExportText(cell.qtd, cell.valor, prod.unit))
             }
           } else {
-            const tot = totaisPorProduto[prod.id] || { totalQtd: 0, totalValor: 0 }
-            rowQtd = tot.totalQtd
-            rowValor = tot.totalValor
+            if (isModoRota) {
+              const tot = totaisPorProdutoNaRota[prod.id] || { totalQtd: 0, totalValor: 0 }
+              rowQtd = tot.totalQtd
+              rowValor = tot.totalValor
+            } else {
+              const tot = totaisPorProduto[prod.id] || { totalQtd: 0, totalValor: 0 }
+              rowQtd = tot.totalQtd
+              rowValor = tot.totalValor
+            }
           }
 
           const row: string[] = [
@@ -612,8 +821,9 @@ export default function Consolidation() {
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       const dateStr = new Date().toISOString().split('T')[0]
+      const rotaSlug = isModoRota ? `-${selectedRotaObj?.nome?.replace(/\s+/g, '_')}` : ''
       a.href = url
-      a.download = `consolidacao-final-${tabAtiva}-${dateStr}.csv`
+      a.download = `consolidacao-final-${tabAtiva}${rotaSlug}-${dateStr}.csv`
       document.body.appendChild(a)
       a.click()
       document.body.removeChild(a)
@@ -631,6 +841,9 @@ export default function Consolidation() {
   // ==========================================
   const exportarPDF = () => {
     try {
+      const isModoRota =
+        tabAtiva === 'produto' && filtroEscolaModo === 'rota' && Boolean(selectedRotaObj)
+
       const colsCount =
         tabAtiva === 'produto'
           ? somenteColunaTotal
@@ -661,11 +874,13 @@ export default function Consolidation() {
 
       doc.setFont('helvetica', 'normal')
       doc.setFontSize(8.5)
-      doc.text(
-        `Aba: ${tabAtiva === 'produto' ? 'Por Produto' : 'Por Escola'} • Matriz de pedidos para logística`,
-        14,
-        16,
-      )
+      const subAba =
+        tabAtiva === 'produto'
+          ? isModoRota
+            ? `Por Produto • Rota: ${selectedRotaObj?.nome} (Sequência das Paradas)`
+            : 'Por Produto • Matriz de pedidos para logística'
+          : 'Por Escola • Matriz de pedidos para logística'
+      doc.text(subAba, 14, 16)
 
       const now = new Date()
       const dataEmissao = `Emissão: ${now.toLocaleDateString('pt-BR')} às ${now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`
@@ -686,7 +901,8 @@ export default function Consolidation() {
       doc.setFillColor(241, 245, 249)
       doc.roundedRect(14, currentY, pageWidth - 28, 9, 1.5, 1.5, 'F')
 
-      const filtrosTexto = `Ciclo: ${cicloSelecionadoNome}   |   Modo de exibição: ${modoTexto}   |   Total Geral: ${formatNumber(totalGeral.qtd)} un/kg — ${formatBRL(totalGeral.valor)}`
+      const rotaInfoPdf = isModoRota ? `   |   Rota: ${selectedRotaObj?.nome} (Paradas)` : ''
+      const filtrosTexto = `Ciclo: ${cicloSelecionadoNome}   |   Chamada: ${chamadaSelecionadaNome}${rotaInfoPdf}   |   Modo: ${modoTexto}   |   Total Geral: ${formatNumber(totalGeral.qtd)} un/kg — ${formatBRL(totalGeral.valor)}`
       doc.text(filtrosTexto, 17, currentY + 5.5)
 
       currentY += 13
@@ -699,7 +915,12 @@ export default function Consolidation() {
       if (tabAtiva === 'produto') {
         const headerRow = ['Produto', 'Total', 'Un.', 'Preço']
         if (!somenteColunaTotal) {
-          headerRow.push(...escolasExibidas.map((e) => e.name))
+          headerRow.push(
+            ...escolasExibidas.map((e, idx) => {
+              const paradaNum = escolaOrdemParadaMap.get(e.id) || idx + 1
+              return isModoRota ? `${paradaNum}ª ${e.name}` : e.name
+            }),
+          )
         }
         head = [headerRow]
 
@@ -718,9 +939,15 @@ export default function Consolidation() {
               schoolCells.push(getCellExportText(cell.qtd, cell.valor, prod.unit))
             }
           } else {
-            const tot = totaisPorProduto[prod.id] || { totalQtd: 0, totalValor: 0 }
-            rowQtd = tot.totalQtd
-            rowValor = tot.totalValor
+            if (isModoRota) {
+              const tot = totaisPorProdutoNaRota[prod.id] || { totalQtd: 0, totalValor: 0 }
+              rowQtd = tot.totalQtd
+              rowValor = tot.totalValor
+            } else {
+              const tot = totaisPorProduto[prod.id] || { totalQtd: 0, totalValor: 0 }
+              rowQtd = tot.totalQtd
+              rowValor = tot.totalValor
+            }
           }
 
           const row: string[] = [
@@ -837,7 +1064,8 @@ export default function Consolidation() {
       })
 
       const dateStr = new Date().toISOString().split('T')[0]
-      const filename = `consolidacao-final-${tabAtiva}-${dateStr}.pdf`
+      const rotaSlug = isModoRota ? `-${selectedRotaObj?.nome?.replace(/\s+/g, '_')}` : ''
+      const filename = `consolidacao-final-${tabAtiva}${rotaSlug}-${dateStr}.pdf`
       doc.save(filename)
       toast.success('Documento PDF exportado com sucesso!')
     } catch (err) {
@@ -845,6 +1073,9 @@ export default function Consolidation() {
       toast.error('Falha ao exportar documento PDF.')
     }
   }
+
+  const isModoRotaAtivo =
+    tabAtiva === 'produto' && filtroEscolaModo === 'rota' && Boolean(selectedRotaId)
 
   return (
     <div className="space-y-6">
@@ -859,7 +1090,9 @@ export default function Consolidation() {
       {/* Abas Superiores Por Produto / Por Escola */}
       <Tabs
         value={tabAtiva}
-        onValueChange={(v) => setTabAtiva(v as 'produto' | 'escola')}
+        onValueChange={(v) => {
+          setTabAtiva(v as 'produto' | 'escola')
+        }}
         className="w-full"
       >
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -943,13 +1176,75 @@ export default function Consolidation() {
                   </SelectContent>
                 </Select>
               </div>
+
+              {/* Seletor do Modo Por Rota (aba Por Produto) */}
+              {tabAtiva === 'produto' && (
+                <div className="border-t sm:border-t-0 sm:border-l sm:pl-6 pt-3 sm:pt-0 flex flex-col gap-1.5">
+                  <Label className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5">
+                    <Route className="h-3.5 w-3.5 text-primary" /> Filtro de Escolas:
+                  </Label>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Select
+                      value={filtroEscolaModo}
+                      onValueChange={(v: 'todas' | 'rota') => {
+                        setFiltroEscolaModo(v)
+                        if (v === 'rota' && !selectedRotaId && rotasDaChamada.length > 0) {
+                          setSelectedRotaId(rotasDaChamada[0].id)
+                        }
+                      }}
+                    >
+                      <SelectTrigger className="h-8 w-36 text-xs font-medium">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="todas">Todas as escolas</SelectItem>
+                        <SelectItem value="rota">Por rota</SelectItem>
+                      </SelectContent>
+                    </Select>
+
+                    {filtroEscolaModo === 'rota' && (
+                      <div className="flex items-center gap-1.5 animate-in fade-in duration-150">
+                        <Select value={selectedRotaId} onValueChange={setSelectedRotaId}>
+                          <SelectTrigger className="h-8 min-w-[170px] max-w-[230px] text-xs font-medium border-primary/40">
+                            <SelectValue placeholder="Selecione a rota..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {rotasDaChamada.length === 0 ? (
+                              <SelectItem value="__vazio__" disabled>
+                                Nenhuma rota disponível
+                              </SelectItem>
+                            ) : (
+                              rotasDaChamada.map((r) => (
+                                <SelectItem key={r.id} value={r.id}>
+                                  {r.nome}
+                                </SelectItem>
+                              ))
+                            )}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
 
-            {/* Ações da Direita: Ciclo, Busca e Botão Exportar */}
+            {/* Ações da Direita: Ciclo, Chamada, Busca e Botão Exportar */}
             <div className="flex flex-wrap items-center gap-3">
               <div className="flex items-center gap-2">
                 <Calendar className="h-4 w-4 text-muted-foreground shrink-0" />
-                <Select value={selectedCicloId} onValueChange={setSelectedCicloId}>
+                <Select
+                  value={selectedCicloId}
+                  onValueChange={(val) => {
+                    setSelectedCicloId(val)
+                    if (val !== 'todos') {
+                      const c = ciclos.find((ci) => ci.id === val)
+                      if (c?.chamada_id) {
+                        setSelectedChamadaId(c.chamada_id)
+                      }
+                    }
+                  }}
+                >
                   <SelectTrigger className="h-9 w-40 text-xs">
                     <SelectValue placeholder="Ciclo" />
                   </SelectTrigger>
@@ -964,6 +1259,27 @@ export default function Consolidation() {
                         </SelectItem>
                       )
                     })}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="flex items-center gap-1.5">
+                <Select
+                  value={selectedChamadaId}
+                  onValueChange={(val) => {
+                    setSelectedChamadaId(val)
+                  }}
+                >
+                  <SelectTrigger className="h-9 w-36 text-xs">
+                    <SelectValue placeholder="Chamada" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="todas">Todas as Chamadas</SelectItem>
+                    {chamadas.map((ch) => (
+                      <SelectItem key={ch.id} value={ch.id}>
+                        {ch.chamada}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -996,7 +1312,9 @@ export default function Consolidation() {
                     <div className="flex flex-col">
                       <span className="font-medium text-xs">Planilha Excel (.xlsx)</span>
                       <span className="text-[10px] text-muted-foreground">
-                        Matriz e cruzamento formatado
+                        {isModoRotaAtivo
+                          ? `Matriz da Rota ${selectedRotaObj?.nome || ''}`
+                          : 'Matriz e cruzamento formatado'}
                       </span>
                     </div>
                   </DropdownMenuItem>
@@ -1005,7 +1323,9 @@ export default function Consolidation() {
                     <div className="flex flex-col">
                       <span className="font-medium text-xs">Documento PDF (.pdf)</span>
                       <span className="text-[10px] text-muted-foreground">
-                        Relatório para impressão/logística
+                        {isModoRotaAtivo
+                          ? `Relatório da Rota ${selectedRotaObj?.nome || ''}`
+                          : 'Relatório para impressão/logística'}
                       </span>
                     </div>
                   </DropdownMenuItem>
@@ -1024,6 +1344,24 @@ export default function Consolidation() {
               </DropdownMenu>
             </div>
           </div>
+
+          {/* Banner Informativo quando modo Por Rota estiver ativo */}
+          {isModoRotaAtivo && selectedRotaObj && (
+            <div className="flex items-center justify-between flex-wrap gap-2 bg-primary/5 border border-primary/25 rounded-md px-3.5 py-2 text-xs text-foreground">
+              <div className="flex items-center gap-2">
+                <Route className="h-4 w-4 text-primary shrink-0" />
+                <span>
+                  Modo <strong>Por rota</strong> ativo:{' '}
+                  <span className="text-primary font-semibold">{selectedRotaObj.nome}</span> (
+                  {escolasExibidas.length} escola(s) apresentadas na sequência oficial das paradas
+                  da rota).
+                </span>
+              </div>
+              <span className="text-[11px] text-muted-foreground font-mono">
+                Sequência logística das paradas
+              </span>
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -1048,20 +1386,30 @@ export default function Consolidation() {
                     Preço Unit.
                   </TableHead>
                   {!somenteColunaTotal &&
-                    escolasExibidas.map((sch) => (
-                      <TableHead
-                        key={sch.id}
-                        className="text-center min-w-[130px] max-w-[180px] text-xs font-semibold text-foreground px-3"
-                        title={sch.name}
-                      >
-                        <div className="truncate">{sch.name}</div>
-                        {sch.route && (
-                          <div className="text-[10px] text-muted-foreground font-normal truncate">
-                            {sch.route}
+                    escolasExibidas.map((sch, idx) => {
+                      const paradaNum = escolaOrdemParadaMap.get(sch.id) || idx + 1
+                      return (
+                        <TableHead
+                          key={sch.id}
+                          className="text-center min-w-[130px] max-w-[190px] text-xs font-semibold text-foreground px-3"
+                          title={sch.name}
+                        >
+                          <div className="flex items-center justify-center gap-1.5">
+                            {isModoRotaAtivo && (
+                              <span className="inline-flex items-center justify-center bg-primary/15 text-primary font-mono text-[10px] font-bold rounded px-1.5 py-0.5 shrink-0">
+                                #{paradaNum}
+                              </span>
+                            )}
+                            <span className="truncate">{sch.name}</span>
                           </div>
-                        )}
-                      </TableHead>
-                    ))}
+                          {sch.route && !isModoRotaAtivo && (
+                            <div className="text-[10px] text-muted-foreground font-normal truncate">
+                              {sch.route}
+                            </div>
+                          )}
+                        </TableHead>
+                      )
+                    })}
                 </TableRow>
               ) : (
                 // CABEÇALHO DA ABA POR ESCOLA: Total posicionado à esquerda ao lado de Escola
@@ -1102,7 +1450,9 @@ export default function Consolidation() {
                       colSpan={somenteColunaTotal ? 4 : escolasExibidas.length + 4}
                       className="text-center py-12 text-muted-foreground"
                     >
-                      Nenhum produto com demanda registrado para este filtro.
+                      {isModoRotaAtivo
+                        ? 'Nenhum produto com demanda registrado para esta rota.'
+                        : 'Nenhum produto com demanda registrado para este filtro.'}
                     </TableCell>
                   </TableRow>
                 ) : (
@@ -1119,9 +1469,18 @@ export default function Consolidation() {
                         rowValor += cell.valor
                       }
                     } else {
-                      const tot = totaisPorProduto[prod.id] || { totalQtd: 0, totalValor: 0 }
-                      rowQtd = tot.totalQtd
-                      rowValor = tot.totalValor
+                      if (isModoRotaAtivo) {
+                        const tot = totaisPorProdutoNaRota[prod.id] || {
+                          totalQtd: 0,
+                          totalValor: 0,
+                        }
+                        rowQtd = tot.totalQtd
+                        rowValor = tot.totalValor
+                      } else {
+                        const tot = totaisPorProduto[prod.id] || { totalQtd: 0, totalValor: 0 }
+                        rowQtd = tot.totalQtd
+                        rowValor = tot.totalValor
+                      }
                     }
 
                     return (
