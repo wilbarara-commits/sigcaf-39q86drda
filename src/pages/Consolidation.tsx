@@ -371,28 +371,27 @@ export default function Consolidation() {
       dataRows.push([]) // Linha em branco
 
       if (tabAtiva === 'produto') {
-        // Headers
-        const headers = ['Produto', 'Unidade', 'Preço Unitário (R$)']
+        // Headers: Total à esquerda junto de produto (Produto, Total, Unidade, Preço Unitário)
+        const headers = ['Produto', 'Total', 'Unidade', 'Preço Unitário (R$)']
         if (!somenteColunaTotal) {
           headers.push(...escolasExibidas.map((e) => e.name))
         }
-        headers.push('Total')
         dataRows.push(headers)
 
         // Linhas de dados
         for (const prod of produtosExibidos) {
           const unitPrice = productPriceMap.get(prod.id) || Number(prod.price) || 0
-          const row: any[] = [prod.name, prod.unit, unitPrice]
 
           let rowQtd = 0
           let rowValor = 0
+          const schoolCells: any[] = []
 
           if (!somenteColunaTotal) {
             for (const sch of escolasExibidas) {
               const cell = matriz.get(prod.id)?.get(sch.id) || { qtd: 0, valor: 0 }
               rowQtd += cell.qtd
               rowValor += cell.valor
-              row.push(getCellExportText(cell.qtd, cell.valor, prod.unit))
+              schoolCells.push(getCellExportText(cell.qtd, cell.valor, prod.unit))
             }
           } else {
             const tot = totaisPorProduto[prod.id] || { totalQtd: 0, totalValor: 0 }
@@ -400,40 +399,49 @@ export default function Consolidation() {
             rowValor = tot.totalValor
           }
 
-          row.push(getCellExportText(rowQtd, rowValor, prod.unit, true))
+          const row: any[] = [
+            prod.name,
+            getCellExportText(rowQtd, rowValor, prod.unit, true),
+            prod.unit,
+            unitPrice,
+            ...schoolCells,
+          ]
           dataRows.push(row)
         }
 
         // Linha Total Geral
-        const footer: any[] = ['TOTAL GERAL', '', '']
+        const footer: any[] = [
+          'TOTAL GERAL',
+          getCellExportText(totalGeral.qtd, totalGeral.valor, undefined, true),
+          '',
+          '',
+        ]
         if (!somenteColunaTotal) {
           for (const sch of escolasExibidas) {
             const totCol = totaisColunaPorEscola[sch.id] || { totalQtd: 0, totalValor: 0 }
             footer.push(getCellExportText(totCol.totalQtd, totCol.totalValor, undefined, true))
           }
         }
-        footer.push(getCellExportText(totalGeral.qtd, totalGeral.valor, undefined, true))
         dataRows.push(footer)
       } else {
-        // Aba Por Escola
-        const headers = ['Escola', 'Aba']
+        // Aba Por Escola: Total à esquerda junto de Escola (Escola, Total, Aba)
+        const headers = ['Escola', 'Total', 'Aba']
         if (!somenteColunaTotal) {
           headers.push(...produtosExibidos.map((p) => `${p.name} (${p.unit})`))
         }
-        headers.push('Total')
         dataRows.push(headers)
 
         for (const sch of escolasExibidas) {
-          const row: any[] = [sch.name, sch.route || '-']
           let rowQtd = 0
           let rowValor = 0
+          const prodCells: any[] = []
 
           if (!somenteColunaTotal) {
             for (const prod of produtosExibidos) {
               const cell = matriz.get(prod.id)?.get(sch.id) || { qtd: 0, valor: 0 }
               rowQtd += cell.qtd
               rowValor += cell.valor
-              row.push(getCellExportText(cell.qtd, cell.valor, prod.unit))
+              prodCells.push(getCellExportText(cell.qtd, cell.valor, prod.unit))
             }
           } else {
             const tot = totaisPorEscola[sch.id] || { totalQtd: 0, totalValor: 0 }
@@ -441,19 +449,27 @@ export default function Consolidation() {
             rowValor = tot.totalValor
           }
 
-          row.push(getCellExportText(rowQtd, rowValor, undefined, true))
+          const row: any[] = [
+            sch.name,
+            getCellExportText(rowQtd, rowValor, undefined, true),
+            sch.route || '-',
+            ...prodCells,
+          ]
           dataRows.push(row)
         }
 
         // Linha Total Geral
-        const footer: any[] = ['TOTAL GERAL', '']
+        const footer: any[] = [
+          'TOTAL GERAL',
+          getCellExportText(totalGeral.qtd, totalGeral.valor, undefined, true),
+          '',
+        ]
         if (!somenteColunaTotal) {
           for (const prod of produtosExibidos) {
             const totCol = totaisColunaPorProduto[prod.id] || { totalQtd: 0, totalValor: 0 }
             footer.push(getCellExportText(totCol.totalQtd, totCol.totalValor, prod.unit, true))
           }
         }
-        footer.push(getCellExportText(totalGeral.qtd, totalGeral.valor, undefined, true))
         dataRows.push(footer)
       }
 
@@ -478,26 +494,25 @@ export default function Consolidation() {
       const rows: string[][] = []
 
       if (tabAtiva === 'produto') {
-        const headers = ['Produto', 'Unidade', 'Preço Unitário (R$)']
+        const headers = ['Produto', 'Total', 'Unidade', 'Preço Unitário (R$)']
         if (!somenteColunaTotal) {
           headers.push(...escolasExibidas.map((e) => e.name))
         }
-        headers.push('Total')
         rows.push(headers)
 
         for (const prod of produtosExibidos) {
           const unitPrice = productPriceMap.get(prod.id) || Number(prod.price) || 0
-          const row: string[] = [prod.name, prod.unit, unitPrice.toFixed(2)]
 
           let rowQtd = 0
           let rowValor = 0
+          const schoolCells: string[] = []
 
           if (!somenteColunaTotal) {
             for (const sch of escolasExibidas) {
               const cell = matriz.get(prod.id)?.get(sch.id) || { qtd: 0, valor: 0 }
               rowQtd += cell.qtd
               rowValor += cell.valor
-              row.push(getCellExportText(cell.qtd, cell.valor, prod.unit))
+              schoolCells.push(getCellExportText(cell.qtd, cell.valor, prod.unit))
             }
           } else {
             const tot = totaisPorProduto[prod.id] || { totalQtd: 0, totalValor: 0 }
@@ -505,38 +520,47 @@ export default function Consolidation() {
             rowValor = tot.totalValor
           }
 
-          row.push(getCellExportText(rowQtd, rowValor, prod.unit, true))
+          const row: string[] = [
+            prod.name,
+            getCellExportText(rowQtd, rowValor, prod.unit, true),
+            prod.unit,
+            unitPrice.toFixed(2),
+            ...schoolCells,
+          ]
           rows.push(row)
         }
 
-        const footer: string[] = ['TOTAL GERAL', '', '']
+        const footer: string[] = [
+          'TOTAL GERAL',
+          getCellExportText(totalGeral.qtd, totalGeral.valor, undefined, true),
+          '',
+          '',
+        ]
         if (!somenteColunaTotal) {
           for (const sch of escolasExibidas) {
             const totCol = totaisColunaPorEscola[sch.id] || { totalQtd: 0, totalValor: 0 }
             footer.push(getCellExportText(totCol.totalQtd, totCol.totalValor, undefined, true))
           }
         }
-        footer.push(getCellExportText(totalGeral.qtd, totalGeral.valor, undefined, true))
         rows.push(footer)
       } else {
-        const headers = ['Escola', 'Aba']
+        const headers = ['Escola', 'Total', 'Aba']
         if (!somenteColunaTotal) {
           headers.push(...produtosExibidos.map((p) => `${p.name} (${p.unit})`))
         }
-        headers.push('Total')
         rows.push(headers)
 
         for (const sch of escolasExibidas) {
-          const row: string[] = [sch.name, sch.route || '-']
           let rowQtd = 0
           let rowValor = 0
+          const prodCells: string[] = []
 
           if (!somenteColunaTotal) {
             for (const prod of produtosExibidos) {
               const cell = matriz.get(prod.id)?.get(sch.id) || { qtd: 0, valor: 0 }
               rowQtd += cell.qtd
               rowValor += cell.valor
-              row.push(getCellExportText(cell.qtd, cell.valor, prod.unit))
+              prodCells.push(getCellExportText(cell.qtd, cell.valor, prod.unit))
             }
           } else {
             const tot = totaisPorEscola[sch.id] || { totalQtd: 0, totalValor: 0 }
@@ -544,18 +568,26 @@ export default function Consolidation() {
             rowValor = tot.totalValor
           }
 
-          row.push(getCellExportText(rowQtd, rowValor, undefined, true))
+          const row: string[] = [
+            sch.name,
+            getCellExportText(rowQtd, rowValor, undefined, true),
+            sch.route || '-',
+            ...prodCells,
+          ]
           rows.push(row)
         }
 
-        const footer: string[] = ['TOTAL GERAL', '']
+        const footer: string[] = [
+          'TOTAL GERAL',
+          getCellExportText(totalGeral.qtd, totalGeral.valor, undefined, true),
+          '',
+        ]
         if (!somenteColunaTotal) {
           for (const prod of produtosExibidos) {
             const totCol = totaisColunaPorProduto[prod.id] || { totalQtd: 0, totalValor: 0 }
             footer.push(getCellExportText(totCol.totalQtd, totCol.totalValor, prod.unit, true))
           }
         }
-        footer.push(getCellExportText(totalGeral.qtd, totalGeral.valor, undefined, true))
         rows.push(footer)
       }
 
@@ -665,26 +697,25 @@ export default function Consolidation() {
       let foot: string[][] = []
 
       if (tabAtiva === 'produto') {
-        const headerRow = ['Produto', 'Un.', 'Preço']
+        const headerRow = ['Produto', 'Total', 'Un.', 'Preço']
         if (!somenteColunaTotal) {
           headerRow.push(...escolasExibidas.map((e) => e.name))
         }
-        headerRow.push('Total')
         head = [headerRow]
 
         for (const prod of produtosExibidos) {
           const unitPrice = productPriceMap.get(prod.id) || Number(prod.price) || 0
-          const row: string[] = [prod.name, prod.unit, formatBRL(unitPrice)]
 
           let rowQtd = 0
           let rowValor = 0
+          const schoolCells: string[] = []
 
           if (!somenteColunaTotal) {
             for (const sch of escolasExibidas) {
               const cell = matriz.get(prod.id)?.get(sch.id) || { qtd: 0, valor: 0 }
               rowQtd += cell.qtd
               rowValor += cell.valor
-              row.push(getCellExportText(cell.qtd, cell.valor, prod.unit))
+              schoolCells.push(getCellExportText(cell.qtd, cell.valor, prod.unit))
             }
           } else {
             const tot = totaisPorProduto[prod.id] || { totalQtd: 0, totalValor: 0 }
@@ -692,38 +723,47 @@ export default function Consolidation() {
             rowValor = tot.totalValor
           }
 
-          row.push(getCellExportText(rowQtd, rowValor, prod.unit, true))
+          const row: string[] = [
+            prod.name,
+            getCellExportText(rowQtd, rowValor, prod.unit, true),
+            prod.unit,
+            formatBRL(unitPrice),
+            ...schoolCells,
+          ]
           body.push(row)
         }
 
-        const footerRow: string[] = ['TOTAL GERAL', '', '']
+        const footerRow: string[] = [
+          'TOTAL GERAL',
+          getCellExportText(totalGeral.qtd, totalGeral.valor, undefined, true),
+          '',
+          '',
+        ]
         if (!somenteColunaTotal) {
           for (const sch of escolasExibidas) {
             const totCol = totaisColunaPorEscola[sch.id] || { totalQtd: 0, totalValor: 0 }
             footerRow.push(getCellExportText(totCol.totalQtd, totCol.totalValor, undefined, true))
           }
         }
-        footerRow.push(getCellExportText(totalGeral.qtd, totalGeral.valor, undefined, true))
         foot = [footerRow]
       } else {
-        const headerRow = ['Escola', 'Aba']
+        const headerRow = ['Escola', 'Total', 'Aba']
         if (!somenteColunaTotal) {
           headerRow.push(...produtosExibidos.map((p) => `${p.name} (${p.unit})`))
         }
-        headerRow.push('Total')
         head = [headerRow]
 
         for (const sch of escolasExibidas) {
-          const row: string[] = [sch.name, sch.route || '-']
           let rowQtd = 0
           let rowValor = 0
+          const prodCells: string[] = []
 
           if (!somenteColunaTotal) {
             for (const prod of produtosExibidos) {
               const cell = matriz.get(prod.id)?.get(sch.id) || { qtd: 0, valor: 0 }
               rowQtd += cell.qtd
               rowValor += cell.valor
-              row.push(getCellExportText(cell.qtd, cell.valor, prod.unit))
+              prodCells.push(getCellExportText(cell.qtd, cell.valor, prod.unit))
             }
           } else {
             const tot = totaisPorEscola[sch.id] || { totalQtd: 0, totalValor: 0 }
@@ -731,18 +771,26 @@ export default function Consolidation() {
             rowValor = tot.totalValor
           }
 
-          row.push(getCellExportText(rowQtd, rowValor, undefined, true))
+          const row: string[] = [
+            sch.name,
+            getCellExportText(rowQtd, rowValor, undefined, true),
+            sch.route || '-',
+            ...prodCells,
+          ]
           body.push(row)
         }
 
-        const footerRow: string[] = ['TOTAL GERAL', '']
+        const footerRow: string[] = [
+          'TOTAL GERAL',
+          getCellExportText(totalGeral.qtd, totalGeral.valor, undefined, true),
+          '',
+        ]
         if (!somenteColunaTotal) {
           for (const prod of produtosExibidos) {
             const totCol = totaisColunaPorProduto[prod.id] || { totalQtd: 0, totalValor: 0 }
             footerRow.push(getCellExportText(totCol.totalQtd, totCol.totalValor, prod.unit, true))
           }
         }
-        footerRow.push(getCellExportText(totalGeral.qtd, totalGeral.valor, undefined, true))
         foot = [footerRow]
       }
 
@@ -985,10 +1033,13 @@ export default function Consolidation() {
           <Table className="relative w-full border-collapse">
             <TableHeader className="sticky top-0 bg-slate-50/90 dark:bg-slate-900/90 backdrop-blur z-20 border-b">
               {tabAtiva === 'produto' ? (
-                // CABEÇALHO DA ABA POR PRODUTO
+                // CABEÇALHO DA ABA POR PRODUTO: Total posicionado à esquerda ao lado de Produto
                 <TableRow className="hover:bg-transparent">
                   <TableHead className="min-w-[200px] sticky left-0 bg-slate-50 dark:bg-slate-900 z-30 font-semibold text-foreground border-r shadow-xs">
                     Produto
+                  </TableHead>
+                  <TableHead className="text-center font-bold text-primary min-w-[120px] bg-primary/5 border-r">
+                    Total
                   </TableHead>
                   <TableHead className="w-20 text-center font-semibold text-foreground">
                     Unidade
@@ -1011,15 +1062,15 @@ export default function Consolidation() {
                         )}
                       </TableHead>
                     ))}
-                  <TableHead className="text-center font-bold text-primary min-w-[120px] bg-primary/5 border-l">
-                    Total
-                  </TableHead>
                 </TableRow>
               ) : (
-                // CABEÇALHO DA ABA POR ESCOLA
+                // CABEÇALHO DA ABA POR ESCOLA: Total posicionado à esquerda ao lado de Escola
                 <TableRow className="hover:bg-transparent">
                   <TableHead className="min-w-[220px] sticky left-0 bg-slate-50 dark:bg-slate-900 z-30 font-semibold text-foreground border-r shadow-xs">
                     Escola
+                  </TableHead>
+                  <TableHead className="text-center font-bold text-primary min-w-[120px] bg-primary/5 border-r">
+                    Total
                   </TableHead>
                   <TableHead className="w-28 text-center font-semibold text-foreground border-r">
                     Aba
@@ -1038,9 +1089,6 @@ export default function Consolidation() {
                         </div>
                       </TableHead>
                     ))}
-                  <TableHead className="text-center font-bold text-primary min-w-[120px] bg-primary/5 border-l">
-                    Total
-                  </TableHead>
                 </TableRow>
               )}
             </TableHeader>
@@ -1081,6 +1129,9 @@ export default function Consolidation() {
                         <TableCell className="font-medium sticky left-0 bg-background z-10 border-r py-3">
                           <span className="font-semibold text-sm">{prod.name}</span>
                         </TableCell>
+                        <TableCell className="text-center font-bold font-mono bg-primary/5 text-primary border-r py-2">
+                          {renderCellContent(rowQtd, rowValor, prod.unit, true)}
+                        </TableCell>
                         <TableCell className="text-xs text-center text-muted-foreground">
                           {prod.unit}
                         </TableCell>
@@ -1102,10 +1153,6 @@ export default function Consolidation() {
                               </TableCell>
                             )
                           })}
-
-                        <TableCell className="text-center font-bold font-mono bg-primary/5 text-primary border-l py-2">
-                          {renderCellContent(rowQtd, rowValor, prod.unit, true)}
-                        </TableCell>
                       </TableRow>
                     )
                   })
@@ -1142,6 +1189,9 @@ export default function Consolidation() {
                       <TableCell className="font-medium sticky left-0 bg-background z-10 border-r py-3">
                         <span className="font-semibold text-sm">{sch.name}</span>
                       </TableCell>
+                      <TableCell className="text-center font-bold font-mono bg-primary/5 text-primary border-r py-2">
+                        {renderCellContent(rowQtd, rowValor, undefined, true)}
+                      </TableCell>
                       <TableCell className="text-xs text-center border-r">
                         <span className="text-muted-foreground text-[11px]">
                           {sch.route || '-'}
@@ -1162,10 +1212,6 @@ export default function Consolidation() {
                             </TableCell>
                           )
                         })}
-
-                      <TableCell className="text-center font-bold font-mono bg-primary/5 text-primary border-l py-2">
-                        {renderCellContent(rowQtd, rowValor, undefined, true)}
-                      </TableCell>
                     </TableRow>
                   )
                 })
@@ -1176,6 +1222,9 @@ export default function Consolidation() {
                 <TableRow className="bg-slate-50 dark:bg-slate-900/80 font-bold border-t-2">
                   <TableCell className="sticky left-0 bg-slate-50 dark:bg-slate-900 z-10 border-r font-bold">
                     Total Geral
+                  </TableCell>
+                  <TableCell className="text-center font-extrabold font-mono bg-primary/10 text-primary border-r py-2.5">
+                    {renderCellContent(totalGeral.qtd, totalGeral.valor, undefined, true)}
                   </TableCell>
                   <TableCell className="text-center">-</TableCell>
                   <TableCell className="text-right border-r">-</TableCell>
@@ -1189,10 +1238,6 @@ export default function Consolidation() {
                         </TableCell>
                       )
                     })}
-
-                  <TableCell className="text-center font-extrabold font-mono bg-primary/10 text-primary border-l py-2.5">
-                    {renderCellContent(totalGeral.qtd, totalGeral.valor, undefined, true)}
-                  </TableCell>
                 </TableRow>
               )}
 
@@ -1200,6 +1245,9 @@ export default function Consolidation() {
                 <TableRow className="bg-slate-50 dark:bg-slate-900/80 font-bold border-t-2">
                   <TableCell className="sticky left-0 bg-slate-50 dark:bg-slate-900 z-10 border-r font-bold">
                     Total Geral
+                  </TableCell>
+                  <TableCell className="text-center font-extrabold font-mono bg-primary/10 text-primary border-r py-2.5">
+                    {renderCellContent(totalGeral.qtd, totalGeral.valor, undefined, true)}
                   </TableCell>
                   <TableCell className="text-center border-r">-</TableCell>
 
@@ -1215,10 +1263,6 @@ export default function Consolidation() {
                         </TableCell>
                       )
                     })}
-
-                  <TableCell className="text-center font-extrabold font-mono bg-primary/10 text-primary border-l py-2.5">
-                    {renderCellContent(totalGeral.qtd, totalGeral.valor, undefined, true)}
-                  </TableCell>
                 </TableRow>
               )}
             </TableBody>

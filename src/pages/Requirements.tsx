@@ -188,8 +188,9 @@ const MODULES: ModuleSpec[] = [
     details: [
       'Matriz dinâmica de quantidades por produto para cada escola no ciclo.',
       'Abas "Por Produto (Matriz Geral)" e "Por Escola (Resumo)".',
-      'Filtro de Ocultar Vazios (sem demanda) e busca rápida.',
-      'Exportação para Planilha Excel (.xlsx) via SheetJS com totalizadores.',
+      'Coluna de Total posicionada à esquerda ao lado de Produto (e de Escola na aba recíproca), otimizando a leitura imediata da demanda consolidada antes das colunas parciais.',
+      'Filtro de Ocultar Vazios (sem demanda), alternador "Somente coluna de Total" e busca rápida.',
+      'Exportação para Planilha Excel (.xlsx), Documento PDF (.pdf) e CSV (.csv) com totalizadores alinhados à esquerda.',
     ],
   },
   {
@@ -905,8 +906,84 @@ export function Requirements() {
       {/* 7. Registro de Manutenção e Limpeza de Dados */}
       <SectionTitle>7. Registro de Manutenção & Higienização do Banco de Dados</SectionTitle>
       <div className="space-y-4">
-        {/* Release v0.0.258: Restauração de Ícones com Imagens nos Cabeçalhos e Rodapé do Menu Lateral */}
+        {/* Release v0.0.261: Reposicionamento da Coluna de Total à Esquerda na Consolidação Final */}
         <div className="rounded-lg border-2 border-primary/40 bg-card p-5 space-y-4 shadow-sm">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="text-primary border-primary/40 font-semibold">
+                Release v0.0.261
+              </Badge>
+              <span className="font-semibold text-foreground">
+                0.0.261: Reposicionamento da Coluna de Total à Esquerda Junto de Produto em
+                Consolidação Final (/consolidacao)
+              </span>
+            </div>
+            <span className="text-xs font-medium text-primary">Versão Vigente (v0.0.261)</span>
+          </div>
+
+          <p className="text-sm text-foreground/90 leading-relaxed">
+            Atendimento integral à solicitação operacional do usuário (&quot;a coluna de total vir a
+            esquerda junto de produto&quot;) na tela de Consolidação Final (
+            <code>/consolidacao</code> — <code>src/pages/Consolidation.tsx</code>). A coluna de{' '}
+            <strong>TOTAL</strong> foi movida para as primeiras posições da tabela (esquerda),
+            posicionada imediatamente ao lado da coluna de Produto (e de Escola na aba recíproca),
+            deixando todas as colunas de destinos/escolas, quantidades parciais e valores para a
+            direita. A reorganização foi aplicada com total paridade em toda a apresentação tabular:
+            tabela principal interativa em tela, documento PDF para impressão/logística
+            (jsPDF/autoTable), planilha Excel (.xlsx) e exportação de dados (.csv).
+          </p>
+
+          <div className="grid sm:grid-cols-2 gap-4 text-sm">
+            <div className="rounded-md border border-border/60 bg-muted/20 p-3 space-y-1.5">
+              <span className="font-medium text-primary">
+                1. Reorganização Tabular por Abas e Formatos:
+              </span>
+              <ul className="space-y-1 text-xs text-muted-foreground">
+                <li>
+                  • <strong>Aba Por Produto (Tela & Exportações):</strong> Ordem de colunas ajustada
+                  para <code>Produto</code> → <code>Total</code> → <code>Unidade</code> →{' '}
+                  <code>Preço Unit.</code> → <em>[Escolas exibidas...]</em>.
+                </li>
+                <li>
+                  • <strong>Aba Por Escola (Tela & Exportações):</strong> Ordem de colunas ajustada
+                  para <code>Escola</code> → <code>Total</code> → <code>Aba</code> →{' '}
+                  <em>[Produtos exibidos...]</em>.
+                </li>
+                <li>
+                  • <strong>Linha de Total Geral (Rodapé):</strong> Valor consolidado posicionado na
+                  mesma coluna de Total à esquerda, perfeitamente alinhado verticalmente nas duas
+                  abas.
+                </li>
+                <li>
+                  • <strong>Suporte Completo a Filtros & Toggles:</strong> Funcionamento 100%
+                  preservado com &quot;Somente coluna de Total&quot;, &quot;Ocultar vazios&quot;,
+                  busca textual e modos de exibição (Quantidade, Valor R$ ou Ambos).
+                </li>
+              </ul>
+            </div>
+            <div className="rounded-md border border-primary/30 bg-primary/5 p-3 space-y-1.5">
+              <span className="font-medium text-primary">
+                2. Invariância de Regras & Ponto de Atenção v0.0.243:
+              </span>
+              <ul className="space-y-1 text-xs text-foreground/80">
+                <li>
+                  • <strong>Zero Alteração de Lógica de Negócio:</strong> Nenhum cálculo, fórmula de
+                  agregação, preço ou snapshot histórico de pedidos foi modificado; trata-se
+                  puramente de reposicionamento de coluna de apresentação visual e exportação.
+                </li>
+                <li>
+                  • <strong>Preservação Rigorosa das 4 Telas de Entregas:</strong> Zero alterações
+                  em <code>/rotas</code>, Dashboard, Portal do Motorista e{' '}
+                  <code>/monitoramento</code> — isolamento estrito por <code>ciclo_id</code> e
+                  blindagem anti-vazamento 100% preservados.
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        {/* Release v0.0.258: Restauração de Ícones com Imagens nos Cabeçalhos e Rodapé do Menu Lateral */}
+        <div className="rounded-lg border border-border bg-card p-5 space-y-4">
           <div className="flex items-center justify-between flex-wrap gap-2">
             <div className="flex items-center gap-2">
               <Badge variant="outline" className="text-primary border-primary/40 font-semibold">
@@ -917,7 +994,7 @@ export function Requirements() {
                 Menu Lateral
               </span>
             </div>
-            <span className="text-xs font-medium text-primary">Versão Vigente (v0.0.258)</span>
+            <span className="text-xs text-muted-foreground">Consolidado (v0.0.258)</span>
           </div>
 
           <p className="text-sm text-foreground/90 leading-relaxed">
