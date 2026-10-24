@@ -908,8 +908,94 @@ export function Requirements() {
       {/* 7. Registro de Manutenção e Limpeza de Dados */}
       <SectionTitle>7. Registro de Manutenção & Higienização do Banco de Dados</SectionTitle>
       <div className="space-y-4">
-        {/* Release v0.0.262: Modo de Filtro Por Rota no Relatório de Consolidação Final */}
+        {/* Release v0.0.263: Otimização da Tabela de Consolidação Final com Cabeçalhos Verticais e Zebra por Coluna */}
         <div className="rounded-lg border-2 border-primary/40 bg-card p-5 space-y-4 shadow-sm">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="text-primary border-primary/40 font-semibold">
+                Release v0.0.263
+              </Badge>
+              <span className="font-semibold text-foreground">
+                0.0.263: Otimização da Tabela de Consolidação Final (/consolidacao) com Rótulos
+                Verticais, Remoção de Unidade/Preço Unit. na Tela e Zebra por Coluna
+              </span>
+            </div>
+            <span className="text-xs font-medium text-primary">Versão Vigente (v0.0.263)</span>
+          </div>
+
+          <p className="text-sm text-foreground/90 leading-relaxed">
+            Atendimento integral à solicitação operacional do usuário (&quot;Na tabela de
+            Consolidação final, retirar as colunas de Unidade e Preço Unitario, e colocar os rótulos
+            das colunas na vertical para que as colunas fiquem mais finas. Alternar a cor de fundo
+            das colunas&quot;). Na tela de Consolidação Final (<code>/consolidacao</code> —{' '}
+            <code>src/pages/Consolidation.tsx</code>), nas abas &quot;Por Produto&quot; e &quot;Por
+            Escola&quot;, a apresentação tabular em tela foi otimizada para máxima legibilidade e
+            aproveitamento de largura horizontal: as colunas &quot;Unidade&quot; e &quot;Preço
+            Unit.&quot; foram suprimidas da visualização em tela (mantidas integralmente nos
+            relatórios de exportação PDF, Excel .xlsx e CSV), os cabeçalhos de colunas de
+            destinos/escolas e produtos receberam orientação vertical (com preservação do badge{' '}
+            <code>#N</code> da parada quando em modo rota) permitindo colunas ultrafinas (44–56px),
+            e foi aplicada alternância de cor de fundo por coluna (zebra vertical suave) facilitando
+            o rastreamento ocular linha a linha.
+          </p>
+
+          <div className="grid sm:grid-cols-2 gap-4 text-sm">
+            <div className="rounded-md border border-border/60 bg-muted/20 p-3 space-y-1.5">
+              <span className="font-medium text-primary">
+                1. Ajustes de Apresentação Tabular em Tela:
+              </span>
+              <ul className="space-y-1 text-xs text-muted-foreground">
+                <li>
+                  • <strong>Remoção de Unidade e Preço Unit. na Tela:</strong> As colunas
+                  intermediárias de Unidade e Preço Unitário foram retiradas da tabela visual de
+                  ambas as abas, posicionando as colunas de dados imediatamente após Total.
+                </li>
+                <li>
+                  • <strong>Rótulos de Colunas na Vertical:</strong> Os cabeçalhos de escolas (aba
+                  Por Produto) e de produtos (aba Por Escola) agora utilizam orientação vertical (
+                  <code>writing-mode: vertical-rl; transform: rotate(180deg)</code>), mantendo
+                  visível o badge <code>#N</code> da parada e a unidade em caixa alta no topo.
+                </li>
+                <li>
+                  • <strong>Alternância de Cor por Coluna (Zebra Vertical):</strong> Colunas de
+                  dados pares/ímpares contam com fundos alternados suaves (transparente vs.{' '}
+                  <code>bg-muted/30</code>), inclusive no rodapé de Total Geral, mantendo
+                  Produto/Escola e Total com fundo fixo destacado à esquerda.
+                </li>
+                <li>
+                  • <strong>Exportações 100% Preservadas:</strong> Os relatórios gerados em Excel
+                  (.xlsx), PDF e CSV continuam incluindo todas as colunas originais (inclusive
+                  Unidade e Preço Unitário), sem qualquer perda cadastral ou contábil.
+                </li>
+              </ul>
+            </div>
+            <div className="rounded-md border border-primary/30 bg-primary/5 p-3 space-y-1.5">
+              <span className="font-medium text-primary">
+                2. Invariância de Regras & Ponto de Atenção v0.0.243:
+              </span>
+              <ul className="space-y-1 text-xs text-foreground/80">
+                <li>
+                  • <strong>Preservação Rigorosa das 4 Telas de Entregas:</strong> Zero alterações
+                  em <code>/rotas</code>, Dashboard, Portal do Motorista e{' '}
+                  <code>/monitoramento</code> — isolamento estrito por <code>ciclo_id</code> e
+                  blindagem anti-vazamento 100% preservados.
+                </li>
+                <li>
+                  • <strong>Coluna Total à Esquerda Preservada:</strong> A posição consolidada na
+                  versão 0.0.261 permanece inalterada à esquerda junto de Produto/Escola.
+                </li>
+                <li>
+                  • <strong>Cálculos e Filtros Intocados:</strong> Totais gerais, subtotais, busca,
+                  modos de exibição (quantidade/valor/ambos) e seleção por rota permanecem
+                  estritamente idênticos.
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        {/* Release v0.0.262: Modo de Filtro Por Rota no Relatório de Consolidação Final */}
+        <div className="rounded-lg border border-border bg-card p-5 space-y-4">
           <div className="flex items-center justify-between flex-wrap gap-2">
             <div className="flex items-center gap-2">
               <Badge variant="outline" className="text-primary border-primary/40 font-semibold">
@@ -920,7 +1006,7 @@ export function Requirements() {
                 Consolidação Final (/consolidacao)
               </span>
             </div>
-            <span className="text-xs font-medium text-primary">Versão Vigente (v0.0.262)</span>
+            <span className="text-xs text-muted-foreground">Consolidado (v0.0.262)</span>
           </div>
 
           <p className="text-sm text-foreground/90 leading-relaxed">

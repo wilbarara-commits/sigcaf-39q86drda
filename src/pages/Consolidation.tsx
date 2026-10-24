@@ -1371,72 +1371,86 @@ export default function Consolidation() {
           <Table className="relative w-full border-collapse">
             <TableHeader className="sticky top-0 bg-slate-50/90 dark:bg-slate-900/90 backdrop-blur z-20 border-b">
               {tabAtiva === 'produto' ? (
-                // CABEÇALHO DA ABA POR PRODUTO: Total posicionado à esquerda ao lado de Produto
-                <TableRow className="hover:bg-transparent">
-                  <TableHead className="min-w-[200px] sticky left-0 bg-slate-50 dark:bg-slate-900 z-30 font-semibold text-foreground border-r shadow-xs">
+                // CABEÇALHO DA ABA POR PRODUTO: Total posicionado à esquerda ao lado de Produto (Unidade e Preço Unit. removidos da tela)
+                <TableRow className="hover:bg-transparent items-end">
+                  <TableHead className="min-w-[180px] max-w-[240px] sticky left-0 bg-slate-50 dark:bg-slate-900 z-30 font-semibold text-foreground border-r shadow-xs align-bottom pb-3">
                     Produto
                   </TableHead>
-                  <TableHead className="text-center font-bold text-primary min-w-[120px] bg-primary/5 border-r">
+                  <TableHead className="text-center font-bold text-primary min-w-[110px] bg-primary/5 border-r align-bottom pb-3">
                     Total
-                  </TableHead>
-                  <TableHead className="w-20 text-center font-semibold text-foreground">
-                    Unidade
-                  </TableHead>
-                  <TableHead className="w-28 text-right font-semibold text-foreground border-r">
-                    Preço Unit.
                   </TableHead>
                   {!somenteColunaTotal &&
                     escolasExibidas.map((sch, idx) => {
                       const paradaNum = escolaOrdemParadaMap.get(sch.id) || idx + 1
+                      const isEvenCol = idx % 2 === 1
                       return (
                         <TableHead
                           key={sch.id}
-                          className="text-center min-w-[130px] max-w-[190px] text-xs font-semibold text-foreground px-3"
-                          title={sch.name}
+                          className={`text-center w-[46px] min-w-[44px] max-w-[56px] text-xs font-semibold text-foreground p-1 border-r border-border/40 align-bottom ${
+                            isEvenCol ? 'bg-muted/45 dark:bg-muted/25' : 'bg-transparent'
+                          }`}
+                          title={`${isModoRotaAtivo ? `#${paradaNum} - ` : ''}${sch.name}${sch.route ? ` (${sch.route})` : ''}`}
                         >
-                          <div className="flex items-center justify-center gap-1.5">
+                          <div className="h-44 flex flex-col items-center justify-end pb-1.5 gap-1.5">
                             {isModoRotaAtivo && (
-                              <span className="inline-flex items-center justify-center bg-primary/15 text-primary font-mono text-[10px] font-bold rounded px-1.5 py-0.5 shrink-0">
+                              <span className="inline-flex items-center justify-center bg-primary/15 text-primary font-mono text-[9px] font-bold rounded px-1 py-0.5 shrink-0 shadow-2xs">
                                 #{paradaNum}
                               </span>
                             )}
-                            <span className="truncate">{sch.name}</span>
-                          </div>
-                          {sch.route && !isModoRotaAtivo && (
-                            <div className="text-[10px] text-muted-foreground font-normal truncate">
-                              {sch.route}
+                            <div
+                              className="text-[11px] font-medium leading-tight text-foreground/90 whitespace-nowrap max-h-36 overflow-hidden text-ellipsis select-none"
+                              style={{
+                                writingMode: 'vertical-rl',
+                                transform: 'rotate(180deg)',
+                              }}
+                            >
+                              {sch.name}
                             </div>
-                          )}
+                          </div>
                         </TableHead>
                       )
                     })}
                 </TableRow>
               ) : (
                 // CABEÇALHO DA ABA POR ESCOLA: Total posicionado à esquerda ao lado de Escola
-                <TableRow className="hover:bg-transparent">
-                  <TableHead className="min-w-[220px] sticky left-0 bg-slate-50 dark:bg-slate-900 z-30 font-semibold text-foreground border-r shadow-xs">
+                <TableRow className="hover:bg-transparent items-end">
+                  <TableHead className="min-w-[200px] max-w-[260px] sticky left-0 bg-slate-50 dark:bg-slate-900 z-30 font-semibold text-foreground border-r shadow-xs align-bottom pb-3">
                     Escola
                   </TableHead>
-                  <TableHead className="text-center font-bold text-primary min-w-[120px] bg-primary/5 border-r">
+                  <TableHead className="text-center font-bold text-primary min-w-[110px] bg-primary/5 border-r align-bottom pb-3">
                     Total
                   </TableHead>
-                  <TableHead className="w-28 text-center font-semibold text-foreground border-r">
+                  <TableHead className="w-20 text-center font-semibold text-foreground border-r align-bottom pb-3">
                     Aba
                   </TableHead>
                   {!somenteColunaTotal &&
-                    produtosExibidos.map((prod) => (
-                      <TableHead
-                        key={prod.id}
-                        className="text-center min-w-[130px] max-w-[180px] text-xs font-semibold text-foreground px-3"
-                        title={`${prod.name} (${prod.unit})`}
-                      >
-                        <div className="truncate">{prod.name}</div>
-                        <div className="text-[10px] text-muted-foreground font-normal">
-                          {prod.unit} ·{' '}
-                          {formatBRL(productPriceMap.get(prod.id) || Number(prod.price) || 0)}
-                        </div>
-                      </TableHead>
-                    ))}
+                    produtosExibidos.map((prod, idx) => {
+                      const isEvenCol = idx % 2 === 1
+                      return (
+                        <TableHead
+                          key={prod.id}
+                          className={`text-center w-[46px] min-w-[44px] max-w-[56px] text-xs font-semibold text-foreground p-1 border-r border-border/40 align-bottom ${
+                            isEvenCol ? 'bg-muted/45 dark:bg-muted/25' : 'bg-transparent'
+                          }`}
+                          title={`${prod.name} (${prod.unit}) · ${formatBRL(productPriceMap.get(prod.id) || Number(prod.price) || 0)}`}
+                        >
+                          <div className="h-44 flex flex-col items-center justify-end pb-1.5 gap-1">
+                            <span className="text-[9px] font-mono text-muted-foreground uppercase shrink-0">
+                              {prod.unit}
+                            </span>
+                            <div
+                              className="text-[11px] font-medium leading-tight text-foreground/90 whitespace-nowrap max-h-36 overflow-hidden text-ellipsis select-none"
+                              style={{
+                                writingMode: 'vertical-rl',
+                                transform: 'rotate(180deg)',
+                              }}
+                            >
+                              {prod.name}
+                            </div>
+                          </div>
+                        </TableHead>
+                      )
+                    })}
                 </TableRow>
               )}
             </TableHeader>
@@ -1447,7 +1461,7 @@ export default function Consolidation() {
                 produtosExibidos.length === 0 ? (
                   <TableRow>
                     <TableCell
-                      colSpan={somenteColunaTotal ? 4 : escolasExibidas.length + 4}
+                      colSpan={somenteColunaTotal ? 2 : escolasExibidas.length + 2}
                       className="text-center py-12 text-muted-foreground"
                     >
                       {isModoRotaAtivo
@@ -1457,8 +1471,6 @@ export default function Consolidation() {
                   </TableRow>
                 ) : (
                   produtosExibidos.map((prod) => {
-                    const unitPrice = productPriceMap.get(prod.id) || Number(prod.price) || 0
-
                     let rowQtd = 0
                     let rowValor = 0
 
@@ -1485,28 +1497,34 @@ export default function Consolidation() {
 
                     return (
                       <TableRow key={prod.id} className="hover:bg-muted/40 transition-colors">
-                        <TableCell className="font-medium sticky left-0 bg-background z-10 border-r py-3">
-                          <span className="font-semibold text-sm">{prod.name}</span>
+                        <TableCell className="font-medium sticky left-0 bg-background z-10 border-r py-2.5">
+                          <span className="font-semibold text-xs sm:text-sm">{prod.name}</span>
+                          <span className="ml-1.5 text-[10px] font-mono text-muted-foreground">
+                            ({prod.unit})
+                          </span>
                         </TableCell>
                         <TableCell className="text-center font-bold font-mono bg-primary/5 text-primary border-r py-2">
                           {renderCellContent(rowQtd, rowValor, prod.unit, true)}
                         </TableCell>
-                        <TableCell className="text-xs text-center text-muted-foreground">
-                          {prod.unit}
-                        </TableCell>
-                        <TableCell className="text-xs text-right font-mono border-r">
-                          {formatBRL(unitPrice)}
-                        </TableCell>
 
                         {!somenteColunaTotal &&
-                          escolasExibidas.map((sch) => {
+                          escolasExibidas.map((sch, idx) => {
                             const cell = matriz.get(prod.id)?.get(sch.id) || { qtd: 0, valor: 0 }
+                            const isEvenCol = idx % 2 === 1
+                            const zebraBg = isEvenCol
+                              ? 'bg-muted/30 dark:bg-muted/15'
+                              : 'bg-transparent'
+                            const activeBg =
+                              cell.qtd > 0
+                                ? isEvenCol
+                                  ? 'bg-primary/[0.06] hover:bg-primary/[0.12]'
+                                  : 'bg-primary/[0.04] hover:bg-primary/[0.10]'
+                                : zebraBg
+
                             return (
                               <TableCell
                                 key={sch.id}
-                                className={`text-center text-xs px-2 py-2 ${
-                                  cell.qtd > 0 ? 'bg-primary/[0.03] hover:bg-primary/[0.08]' : ''
-                                }`}
+                                className={`text-center text-xs px-1 py-1.5 border-r border-border/30 transition-colors ${activeBg}`}
                               >
                                 {renderCellContent(cell.qtd, cell.valor, prod.unit)}
                               </TableCell>
@@ -1545,27 +1563,36 @@ export default function Consolidation() {
 
                   return (
                     <TableRow key={sch.id} className="hover:bg-muted/40 transition-colors">
-                      <TableCell className="font-medium sticky left-0 bg-background z-10 border-r py-3">
-                        <span className="font-semibold text-sm">{sch.name}</span>
+                      <TableCell className="font-medium sticky left-0 bg-background z-10 border-r py-2.5">
+                        <span className="font-semibold text-xs sm:text-sm">{sch.name}</span>
                       </TableCell>
                       <TableCell className="text-center font-bold font-mono bg-primary/5 text-primary border-r py-2">
                         {renderCellContent(rowQtd, rowValor, undefined, true)}
                       </TableCell>
-                      <TableCell className="text-xs text-center border-r">
+                      <TableCell className="text-xs text-center border-r py-2">
                         <span className="text-muted-foreground text-[11px]">
                           {sch.route || '-'}
                         </span>
                       </TableCell>
 
                       {!somenteColunaTotal &&
-                        produtosExibidos.map((prod) => {
+                        produtosExibidos.map((prod, idx) => {
                           const cell = matriz.get(prod.id)?.get(sch.id) || { qtd: 0, valor: 0 }
+                          const isEvenCol = idx % 2 === 1
+                          const zebraBg = isEvenCol
+                            ? 'bg-muted/30 dark:bg-muted/15'
+                            : 'bg-transparent'
+                          const activeBg =
+                            cell.qtd > 0
+                              ? isEvenCol
+                                ? 'bg-primary/[0.06] hover:bg-primary/[0.12]'
+                                : 'bg-primary/[0.04] hover:bg-primary/[0.10]'
+                              : zebraBg
+
                           return (
                             <TableCell
                               key={prod.id}
-                              className={`text-center text-xs px-2 py-2 ${
-                                cell.qtd > 0 ? 'bg-primary/[0.03] hover:bg-primary/[0.08]' : ''
-                              }`}
+                              className={`text-center text-xs px-1 py-1.5 border-r border-border/30 transition-colors ${activeBg}`}
                             >
                               {renderCellContent(cell.qtd, cell.valor, prod.unit)}
                             </TableCell>
@@ -1585,14 +1612,18 @@ export default function Consolidation() {
                   <TableCell className="text-center font-extrabold font-mono bg-primary/10 text-primary border-r py-2.5">
                     {renderCellContent(totalGeral.qtd, totalGeral.valor, undefined, true)}
                   </TableCell>
-                  <TableCell className="text-center">-</TableCell>
-                  <TableCell className="text-right border-r">-</TableCell>
 
                   {!somenteColunaTotal &&
-                    escolasExibidas.map((sch) => {
+                    escolasExibidas.map((sch, idx) => {
                       const totCol = totaisColunaPorEscola[sch.id] || { totalQtd: 0, totalValor: 0 }
+                      const isEvenCol = idx % 2 === 1
                       return (
-                        <TableCell key={sch.id} className="text-center text-xs py-2.5">
+                        <TableCell
+                          key={sch.id}
+                          className={`text-center text-xs py-2.5 border-r border-border/30 ${
+                            isEvenCol ? 'bg-muted/30 dark:bg-muted/15' : 'bg-transparent'
+                          }`}
+                        >
                           {renderCellContent(totCol.totalQtd, totCol.totalValor, undefined, true)}
                         </TableCell>
                       )
@@ -1611,13 +1642,19 @@ export default function Consolidation() {
                   <TableCell className="text-center border-r">-</TableCell>
 
                   {!somenteColunaTotal &&
-                    produtosExibidos.map((prod) => {
+                    produtosExibidos.map((prod, idx) => {
                       const totCol = totaisColunaPorProduto[prod.id] || {
                         totalQtd: 0,
                         totalValor: 0,
                       }
+                      const isEvenCol = idx % 2 === 1
                       return (
-                        <TableCell key={prod.id} className="text-center text-xs py-2.5">
+                        <TableCell
+                          key={prod.id}
+                          className={`text-center text-xs py-2.5 border-r border-border/30 ${
+                            isEvenCol ? 'bg-muted/30 dark:bg-muted/15' : 'bg-transparent'
+                          }`}
+                        >
                           {renderCellContent(totCol.totalQtd, totCol.totalValor, prod.unit, true)}
                         </TableCell>
                       )
