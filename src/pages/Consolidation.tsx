@@ -1251,8 +1251,8 @@ export default function Consolidation() {
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="todas">Todas as escolas</SelectItem>
-                        <SelectItem value="rota">Por rota</SelectItem>
+                        <SelectItem value="todas">Por Escola</SelectItem>
+                        <SelectItem value="rota">Por Rota</SelectItem>
                       </SelectContent>
                     </Select>
 
