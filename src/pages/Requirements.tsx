@@ -195,6 +195,7 @@ const MODULES: ModuleSpec[] = [
       'Cabeçalho e colunas fixas com rolagem sticky (v0.0.265): cabeçalho da tabela fixo no topo (position: sticky, top: 0, z-index calibrado) e colunas de Produto e Total fixas à esquerda (position: sticky, left: 0), permitindo rolagem horizontal e vertical independentes sem perda de contexto visual.',
       'Coluna de Total posicionada à esquerda ao lado de Produto (e de Escola na aba recíproca), otimizando a leitura imediata da demanda consolidada antes das colunas parciais.',
       'Filtro de Ocultar Vazios (sem demanda), alternador "Somente coluna de Total" e busca rápida.',
+      'Opção "Totais por rota" na visão Somente Total (v0.0.268): na aba "Por Produto", ao ativar "Somente coluna de Total", fica disponível o controle "Totais por rota". Quando ativado, apresenta abaixo da matriz a discriminação dos totais por rota da chamada selecionada (somando as escolas membros de cada rota na ordem oficial das paradas) com contagem de escolas, valor/quantidade e encerra com o "Total Geral" consolidado. Quando desativado, preserva o comportamento original.',
       'Exportação para Planilha Excel (.xlsx), Documento PDF (.pdf) e CSV (.csv) com totalizadores alinhados à esquerda e respeito integral ao filtro por rota e sequência das paradas.',
     ],
   },
@@ -911,11 +912,94 @@ export function Requirements() {
       {/* 7. Registro de Manutenção e Limpeza de Dados */}
       <SectionTitle>7. Registro de Manutenção & Higienização do Banco de Dados</SectionTitle>
       <div className="space-y-4">
-        {/* Release v0.0.267: Reversão dos Rótulos do Seletor de Recorte na Consolidação Final */}
+        {/* Release v0.0.268: Totais por Rota e Geral no Modo Somente Total em Consolidação Final */}
         <div className="rounded-lg border-2 border-primary/40 bg-card p-5 space-y-4 shadow-sm">
           <div className="flex items-center justify-between flex-wrap gap-2">
             <div className="flex items-center gap-2">
               <Badge variant="outline" className="text-primary border-primary/40 font-semibold">
+                Release v0.0.268
+              </Badge>
+              <span className="font-semibold text-foreground">
+                0.0.268: Totais por Rota e Total Geral na Visão &quot;Somente Total&quot; da
+                Consolidação Final (/consolidacao)
+              </span>
+            </div>
+            <span className="text-xs font-medium text-primary">Versão Vigente (v0.0.268)</span>
+          </div>
+
+          <p className="text-sm text-foreground/90 leading-relaxed">
+            Atendimento à solicitação do usuário (&quot;Na matriz de consolidação final, para a
+            opção de somente coluna de total, ter a opção de apresentar os totais geral e por
+            rota&quot;). Na tela de Consolidação Final (<code>/consolidacao</code> —{' '}
+            <code>src/pages/Consolidation.tsx</code>), na aba &quot;Por Produto&quot;, ao ativar o
+            toggle &quot;Somente coluna de Total&quot;, é disponibilizado o novo controle{' '}
+            <strong>&quot;Totais por rota&quot;</strong>. Quando ativado, apresenta logo abaixo da
+            matriz um card dedicado com a tabela de desmembramento dos totais por rota da chamada
+            selecionada (calculado somando as escolas membros da rota na ordem oficial das paradas),
+            exibindo a quantidade de escolas, subtotal em quantidade/valor conforme o modo de
+            exibição ativo (Quantidade, Valor R$ ou Ambos) e finalizando com a linha consolidada
+            &quot;Total Geral&quot;. Quando desativado, o comportamento anterior permanece
+            rigorosamente idêntico.
+          </p>
+
+          <div className="grid sm:grid-cols-2 gap-4 text-sm">
+            <div className="rounded-md border border-border/60 bg-muted/20 p-3 space-y-1.5">
+              <span className="font-medium text-primary">
+                1. Funcionalidade &quot;Totais por rota&quot;:
+              </span>
+              <ul className="space-y-1 text-xs text-muted-foreground">
+                <li>
+                  • <strong>Controle Dedicado:</strong> Toggle &quot;Totais por rota&quot;
+                  condicionado à ativação de &quot;Somente coluna de Total&quot; na aba Por Produto.
+                </li>
+                <li>
+                  • <strong>Desmembramento por Rota:</strong> Tabela com todas as rotas da chamada
+                  selecionada, contagem de escolas membros e subtotal na ordem das paradas.
+                </li>
+                <li>
+                  • <strong>Respeito ao Modo de Exibição:</strong> Formata subtotais e Total Geral
+                  de forma dinâmica em unidades, R$ ou ambos (conforme o seletor corrente da
+                  matriz).
+                </li>
+                <li>
+                  • <strong>Total Geral no Rodapé:</strong> Linha de Total Geral destacada com a
+                  soma consolidada de todas as rotas da chamada.
+                </li>
+              </ul>
+            </div>
+            <div className="rounded-md border border-primary/30 bg-primary/5 p-3 space-y-1.5">
+              <span className="font-medium text-primary">
+                2. Invariância de Regras & Ponto de Atenção v0.0.243:
+              </span>
+              <ul className="space-y-1 text-xs text-foreground/80">
+                <li>
+                  • <strong>Preservação Rigorosa das 4 Telas de Entregas:</strong> Zero alterações
+                  em <code>/rotas</code>, Dashboard, Portal do Motorista e{' '}
+                  <code>/monitoramento</code> — isolamento estrito por <code>ciclo_id</code> e
+                  regras anti-vazamento 100% preservadas.
+                </li>
+                <li>
+                  • <strong>Rótulos de Recorte Mantidos:</strong> Rótulos do seletor &quot;Todas as
+                  escolas&quot; e &quot;Por Rota&quot; permanecem inalterados.
+                </li>
+                <li>
+                  • <strong>Matriz, Cabeçalhos e Exportações:</strong> Coluna Total à esquerda,
+                  cabeçalhos em dois níveis, rolagem sticky, zebra vertical e exportações (PDF,
+                  Excel, CSV) intactas.
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        {/* Release v0.0.267: Reversão dos Rótulos do Seletor de Recorte na Consolidação Final */}
+        <div className="rounded-lg border border-border bg-card p-5 space-y-4">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              <Badge
+                variant="outline"
+                className="text-muted-foreground border-border font-semibold"
+              >
                 Release v0.0.267
               </Badge>
               <span className="font-semibold text-foreground">
@@ -923,7 +1007,7 @@ export function Requirements() {
                 (/consolidacao) — Restauração de &quot;Todas as escolas&quot; e &quot;Por Rota&quot;
               </span>
             </div>
-            <span className="text-xs font-medium text-primary">Versão Vigente (v0.0.267)</span>
+            <span className="text-xs text-muted-foreground">Consolidado (v0.0.267)</span>
           </div>
 
           <p className="text-sm text-foreground/90 leading-relaxed">

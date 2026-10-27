@@ -159,6 +159,7 @@ export default function Consolidation() {
   const [selectedRotaId, setSelectedRotaId] = useState<string>('')
   const [liveParadas, setLiveParadas] = useState<ParadaRotaRecord[]>([])
   const [somenteColunaTotal, setSomenteColunaTotal] = useState(false)
+  const [totaisPorRotaAtivo, setTotaisPorRotaAtivo] = useState(false)
   const [ocultarVazios, setOcultarVazios] = useState(true)
   const [modoExibicao, setModoExibicao] = useState<ModoExibicao>('ambos')
   const [filtroTexto, setFiltroTexto] = useState('')
@@ -509,6 +510,58 @@ export default function Consolidation() {
     }
     return res
   }, [produtosExibidos, escolasExibidas, matriz])
+
+  // Mapa de todas as paradas por rota para as rotas da chamada
+  // Permite calcular os totais por rota na ordem das paradas de cada rota
+  const rotasComParadas = useMemo(() => {
+    return rotasDaChamada.map((r) => {
+      // Paradas da rota: se for a selecionada e tiver liveParadas, usa liveParadas, senão paradasRota do contexto
+      const rawParadas =
+        r.id === selectedRotaId && liveParadas.length > 0
+          ? liveParadas
+          : paradasRota.filter((p) => p.rota_id === r.id || (p as any).rota_logistica_id === r.id)
+      const sortedParadas = [...rawParadas].sort(
+        (a, b) => (Number(a.ordem) || 0) - (Number(b.ordem) || 0),
+      )
+      // Escolas únicas na ordem das paradas
+      const seen = new Set<string>()
+      const escolaIdsNaOrdem: string[] = []
+      for (const p of sortedParadas) {
+        if (!seen.has(p.escola_id)) {
+          seen.add(p.escola_id)
+          escolaIdsNaOrdem.push(p.escola_id)
+        }
+      }
+      return {
+        rota: r,
+        escolaIds: escolaIdsNaOrdem,
+      }
+    })
+  }, [rotasDaChamada, selectedRotaId, liveParadas, paradasRota])
+
+  // Subtotais por rota e total geral para a tabela de Totais por Rota
+  const totaisPorRotaCalculados = useMemo(() => {
+    return rotasComParadas.map(({ rota, escolaIds }) => {
+      let rotaQtd = 0
+      let rotaValor = 0
+      // Soma os produtos exibidos para as escolas desta rota
+      for (const prod of produtosExibidos) {
+        for (const schId of escolaIds) {
+          const cell = matriz.get(prod.id)?.get(schId)
+          if (cell) {
+            rotaQtd += cell.qtd
+            rotaValor += cell.valor
+          }
+        }
+      }
+      return {
+        rota,
+        qtd: rotaQtd,
+        valor: rotaValor,
+        numEscolas: escolaIds.length,
+      }
+    })
+  }, [rotasComParadas, produtosExibidos, matriz])
 
   // Helper para renderizar célula na interface
   // showUnit=false por padrão nas células de escola da aba Por Produto (unidade já está em Produto)
@@ -1172,7 +1225,12 @@ export default function Consolidation() {
                   <Switch
                     id="somente-coluna-total"
                     checked={somenteColunaTotal}
-                    onCheckedChange={setSomenteColunaTotal}
+                    onCheckedChange={(checked) => {
+                      setSomenteColunaTotal(checked)
+                      if (!checked) {
+                        setTotaisPorRotaAtivo(false)
+                      }
+                    }}
                   />
                   <Label
                     htmlFor="somente-coluna-total"
@@ -1181,6 +1239,24 @@ export default function Consolidation() {
                     Somente coluna de Total
                   </Label>
                 </div>
+
+                {/* Opção "Totais por rota" visível no modo somente coluna de total */}
+                {somenteColunaTotal && tabAtiva === 'produto' && (
+                  <div className="flex items-center space-x-2 pl-3 border-l border-primary/30 animate-in fade-in duration-150">
+                    <Switch
+                      id="totais-por-rota"
+                      checked={totaisPorRotaAtivo}
+                      onCheckedChange={setTotaisPorRotaAtivo}
+                    />
+                    <Label
+                      htmlFor="totais-por-rota"
+                      className="text-xs font-medium text-primary cursor-pointer flex items-center gap-1.5"
+                    >
+                      <Route className="h-3.5 w-3.5" />
+                      Totais por rota
+                    </Label>
+                  </div>
+                )}
 
                 <div className="flex items-center space-x-2">
                   <Switch
@@ -1760,6 +1836,95 @@ export default function Consolidation() {
           </Table>
         </div>
       </div>
+
+      {/* BLOCO DE TOTAIS GERAL E POR ROTA (quando "Somente coluna de Total" e "Totais por rota" estiverem ATIVOS na aba Por Produto) */}
+      {tabAtiva === 'produto' && somenteColunaTotal && totaisPorRotaAtivo && (
+        <Card className="border border-border/80 shadow-xs overflow-hidden animate-in fade-in duration-200">
+          <div className="bg-muted/60 px-4 py-3 border-b flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <Route className="h-4 w-4 text-primary" />
+              <h3 className="font-semibold text-sm tracking-tight text-foreground">
+                Totais por Rota & Total Geral
+              </h3>
+              <span className="text-xs text-muted-foreground font-normal">
+                (Desmembramento dos totais da chamada selecionada)
+              </span>
+            </div>
+            <span className="text-[11px] text-muted-foreground font-mono">
+              {totaisPorRotaCalculados.length} rota(s) na chamada
+            </span>
+          </div>
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-slate-100 dark:bg-slate-900/90 hover:bg-slate-100 dark:hover:bg-slate-900/90">
+                  <TableHead className="min-w-[200px] font-semibold text-foreground">
+                    Rota
+                  </TableHead>
+                  <TableHead className="text-center w-28 font-semibold text-foreground">
+                    Escolas
+                  </TableHead>
+                  <TableHead className="text-right min-w-[140px] font-bold text-primary pr-6">
+                    Total
+                  </TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {totaisPorRotaCalculados.length === 0 ? (
+                  <TableRow>
+                    <TableCell
+                      colSpan={3}
+                      className="text-center py-6 text-muted-foreground text-xs"
+                    >
+                      Nenhuma rota cadastrada para a chamada selecionada.
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  totaisPorRotaCalculados.map(({ rota, qtd, valor, numEscolas }, idx) => {
+                    const isEven = idx % 2 === 1
+                    return (
+                      <TableRow
+                        key={rota.id}
+                        className={`hover:bg-muted/40 transition-colors ${
+                          isEven ? 'bg-muted/20 dark:bg-muted/10' : 'bg-transparent'
+                        }`}
+                      >
+                        <TableCell className="py-2.5 font-medium text-xs sm:text-sm">
+                          <div className="flex items-center gap-2">
+                            <span className="inline-flex items-center justify-center bg-primary/10 text-primary font-mono text-[10px] font-bold rounded px-1.5 py-0.5">
+                              #{idx + 1}
+                            </span>
+                            <span className="font-semibold text-foreground">{rota.nome}</span>
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-center py-2.5 text-xs text-muted-foreground font-mono">
+                          {numEscolas} escola(s)
+                        </TableCell>
+                        <TableCell className="text-right py-2.5 font-mono font-semibold pr-6">
+                          {renderCellContent(qtd, valor, undefined, true, false)}
+                        </TableCell>
+                      </TableRow>
+                    )
+                  })
+                )}
+
+                {/* Linha Total Geral */}
+                <TableRow className="bg-slate-100 dark:bg-slate-900 font-bold border-t-2">
+                  <TableCell className="py-3 font-bold text-foreground">
+                    <span className="text-xs sm:text-sm uppercase tracking-wide">Total Geral</span>
+                  </TableCell>
+                  <TableCell className="text-center py-3 text-xs text-muted-foreground font-mono">
+                    {escolasExibidas.length} escola(s)
+                  </TableCell>
+                  <TableCell className="text-right py-3 font-mono font-extrabold text-primary text-sm sm:text-base pr-6 bg-primary/10 dark:bg-primary/20">
+                    {renderCellContent(totalGeral.qtd, totalGeral.valor, undefined, true, false)}
+                  </TableCell>
+                </TableRow>
+              </TableBody>
+            </Table>
+          </div>
+        </Card>
+      )}
     </div>
   )
 }
