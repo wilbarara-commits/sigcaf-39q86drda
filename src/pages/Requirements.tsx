@@ -188,7 +188,7 @@ const MODULES: ModuleSpec[] = [
     details: [
       'Matriz dinâmica de quantidades por produto para cada escola no ciclo.',
       'Abas "Por Produto (Matriz Geral)" e "Por Escola (Resumo)".',
-      'Modo de Filtro na aba Por Produto ("Por Escola" e "Por Rota", v0.0.266): seletor de recorte com o par de opções "Por Escola" (comportamento padrão, exibindo todas as escolas da chamada selecionada) e "Por Rota". Ao ativar "Por Rota", abre-se um box (select) dinâmico listando exclusivamente as rotas da chamada selecionada no relatório.',
+      'Modo de Filtro na aba Por Produto ("Todas as escolas" e "Por Rota", v0.0.262 / revertido v0.0.267): seletor de recorte com o par de opções "Todas as escolas" (comportamento padrão, exibindo todas as escolas da chamada selecionada) e "Por Rota". Ao ativar "Por Rota", abre-se um box (select) dinâmico listando exclusivamente as rotas da chamada selecionada no relatório.',
       'Apresentação e ordenação estrita na sequência oficial das paradas da rota: quando uma rota é selecionada, a matriz exibe somente as escolas pertencentes à rota na ordem exata de suas paradas (paradas_rota.ordem), com badge numerado #N da parada, e não por ordem alfabética.',
       'Cabeçalho das colunas de escolas em dois níveis (v0.0.265): na aba "Por Produto", o badge #N da parada fica na HORIZONTAL no topo da coluna; abaixo dele, o nome abreviado inteligente da escola na VERTICAL (writing-mode: vertical-rl; transform: rotate(180deg)), com o nome completo no tooltip/title.',
       'Remoção de unidade duplicada nas colunas de escolas (v0.0.265): a unidade do produto (ex.: kg, un, mc) aparece exclusivamente entre parênteses ao lado do nome do produto na coluna fixa Produto, eliminando repetição visual em células e cabeçalhos de escolas.',
@@ -911,56 +911,53 @@ export function Requirements() {
       {/* 7. Registro de Manutenção e Limpeza de Dados */}
       <SectionTitle>7. Registro de Manutenção & Higienização do Banco de Dados</SectionTitle>
       <div className="space-y-4">
-        {/* Release v0.0.266: Padronização dos Rótulos do Seletor de Recorte na Consolidação Final */}
+        {/* Release v0.0.267: Reversão dos Rótulos do Seletor de Recorte na Consolidação Final */}
         <div className="rounded-lg border-2 border-primary/40 bg-card p-5 space-y-4 shadow-sm">
           <div className="flex items-center justify-between flex-wrap gap-2">
             <div className="flex items-center gap-2">
               <Badge variant="outline" className="text-primary border-primary/40 font-semibold">
-                Release v0.0.266
+                Release v0.0.267
               </Badge>
               <span className="font-semibold text-foreground">
-                0.0.266: Padronização do Seletor de Recorte na Consolidação Final (/consolidacao) —
-                Rótulos &quot;Por Escola&quot; e &quot;Por Rota&quot;
+                0.0.267: Reversão dos Rótulos do Seletor de Recorte na Consolidação Final
+                (/consolidacao) — Restauração de &quot;Todas as escolas&quot; e &quot;Por Rota&quot;
               </span>
             </div>
-            <span className="text-xs font-medium text-primary">Versão Vigente (v0.0.266)</span>
+            <span className="text-xs font-medium text-primary">Versão Vigente (v0.0.267)</span>
           </div>
 
           <p className="text-sm text-foreground/90 leading-relaxed">
-            Atendimento direto à solicitação do usuário (&quot;A consolidação Final por produto pode
-            ser por Escola ou por Rota&quot;). Na tela de Consolidação Final (
-            <code>/consolidacao</code> — <code>src/pages/Consolidation.tsx</code>), na aba &quot;Por
-            Produto&quot;, o seletor de recorte de visualização passa a oferecer exatamente as duas
-            opções rotuladas como <strong>&quot;Por Escola&quot;</strong> e{' '}
-            <strong>&quot;Por Rota&quot;</strong>, substituindo o rótulo legado &quot;Todas as
-            escolas&quot; por &quot;Por Escola&quot; com rigorosa preservação do comportamento e
-            semântica originais.
+            Atendimento imediato à solicitação do usuário (&quot;Pode voltar a versão
+            anterior?&quot;), revertendo a alteração introduzida na versão 0.0.266. Na tela de
+            Consolidação Final (<code>/consolidacao</code> —{' '}
+            <code>src/pages/Consolidation.tsx</code>), na aba &quot;Por Produto&quot;, o seletor de
+            recorte de visualização restaura com precisão as opções com o rótulo original{' '}
+            <strong>&quot;Todas as escolas&quot;</strong> e <strong>&quot;Por Rota&quot;</strong>{' '}
+            (em substituição ao rótulo efêmero &quot;Por Escola&quot;). A funcionalidade de filtro
+            &quot;Por Rota&quot; (sequenciamento pelas paradas com badge <code>#N</code>, cabeçalhos
+            verticais em dois níveis, coluna Total à esquerda, zebra por coluna e exportações
+            sincronizadas) permanece 100% intacta e operacional.
           </p>
 
           <div className="grid sm:grid-cols-2 gap-4 text-sm">
             <div className="rounded-md border border-border/60 bg-muted/20 p-3 space-y-1.5">
               <span className="font-medium text-primary">
-                1. Ajuste do Seletor na Aba Por Produto:
+                1. Restauração do Seletor na Aba Por Produto:
               </span>
               <ul className="space-y-1 text-xs text-muted-foreground">
                 <li>
-                  • <strong>&quot;Por Escola&quot;:</strong> Comportamento do modo geral intacto
-                  (todas as escolas da chamada selecionada), mantendo as colunas de todas as
-                  unidades com demanda e totalizadores consolidados.
+                  • <strong>&quot;Todas as escolas&quot;:</strong> Restabelecido o rótulo original
+                  da versão 0.0.265 para exibição geral de todas as escolas da chamada selecionada
+                  com demanda.
                 </li>
                 <li>
-                  • <strong>&quot;Por Rota&quot;:</strong> Comportamento do modo de rota intacto
-                  (seletor dinâmico de rotas ativado, colunas restritas às escolas da rota
-                  selecionada na ordem exata de suas paradas com badge <code>#N</code>).
+                  • <strong>&quot;Por Rota&quot;:</strong> Mantido integralmente com a dinâmica de
+                  seleção de rotas e apresentação estrita na ordem das paradas (<code>#N</code>).
                 </li>
                 <li>
-                  • <strong>Sem Mudança de Cálculos:</strong> Subtotais, Total Geral, coluna Total
-                  fixa à esquerda, zebra de colunas, cabeçalhos verticais em dois níveis e sticky
-                  header preservados 100%.
-                </li>
-                <li>
-                  • <strong>Exportações Intactas:</strong> Geração de Excel (.xlsx), PDF e CSV
-                  mantêm todas as colunas, totais e formatações homologadas.
+                  • <strong>Preservação Integral de Consolidação:</strong> Subtotais, Total Geral,
+                  coluna Total fixa à esquerda, cabeçalhos em dois níveis, rolagem sticky e
+                  exportações (PDF, Excel e CSV) mantêm fidelidade total.
                 </li>
               </ul>
             </div>
@@ -976,13 +973,36 @@ export function Requirements() {
                   regras anti-vazamento 100% preservadas.
                 </li>
                 <li>
-                  • <strong>Sem Efeitos Colaterais:</strong> Apenas o rótulo visual do seletor foi
-                  padronizado para refletir a terminologia solicitada (&quot;Por Escola&quot; /
-                  &quot;Por Rota&quot;).
+                  • <strong>Sem Impacto de Dados:</strong> Nenhuma alteração em tabelas, serviços ou
+                  cálculos — reversão cirúrgica de rótulos visuais.
                 </li>
               </ul>
             </div>
           </div>
+        </div>
+
+        {/* Release v0.0.266: Histórico da Tentativa de Padronização de Rótulos (Revertida em 0.0.267) */}
+        <div className="rounded-lg border border-border bg-card p-5 space-y-4 opacity-80">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              <Badge
+                variant="outline"
+                className="text-muted-foreground border-border font-semibold"
+              >
+                Release v0.0.266
+              </Badge>
+              <span className="font-semibold text-muted-foreground line-through">
+                0.0.266: Padronização do Seletor de Recorte na Consolidação Final (/consolidacao) —
+                Rótulos &quot;Por Escola&quot; e &quot;Por Rota&quot; (Revertido em 0.0.267)
+              </span>
+            </div>
+            <span className="text-xs text-muted-foreground">Revertido em v0.0.267</span>
+          </div>
+
+          <p className="text-sm text-muted-foreground leading-relaxed">
+            Alteração pontual de rótulo para &quot;Por Escola&quot; revertida a pedido do usuário na
+            versão 0.0.267, retornando ao rótulo consolidado &quot;Todas as escolas&quot;.
+          </p>
         </div>
 
         {/* Release v0.0.265: Refinos Ergonômicos da Tabela de Consolidação Final */}
