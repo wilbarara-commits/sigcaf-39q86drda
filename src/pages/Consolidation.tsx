@@ -158,6 +158,7 @@ export default function Consolidation() {
   const [filtroEscolaModo, setFiltroEscolaModo] = useState<'todas' | 'rota'>('todas')
   const [selectedRotaId, setSelectedRotaId] = useState<string>('')
   const [liveParadas, setLiveParadas] = useState<ParadaRotaRecord[]>([])
+  const [todasParadasMap, setTodasParadasMap] = useState<Record<string, ParadaRotaRecord[]>>({})
   const [somenteColunaTotal, setSomenteColunaTotal] = useState(false)
   const [totaisPorRotaAtivo, setTotaisPorRotaAtivo] = useState(false)
   const [ocultarVazios, setOcultarVazios] = useState(true)
@@ -232,6 +233,43 @@ export default function Consolidation() {
       isMounted = false
     }
   }, [selectedRotaId])
+
+  // Buscar paradas de todas as rotas da chamada para alimentar os subtotais por rota com dados reais
+  useEffect(() => {
+    if (rotasDaChamada.length === 0) {
+      setTodasParadasMap({})
+      return
+    }
+    let isMounted = true
+    // Buscar em paralelo as paradas de cada rota da chamada
+    Promise.all(
+      rotasDaChamada.map(async (r) => {
+        // Se o contexto já tiver paradas dessa rota, podemos usar como fallback,
+        // mas buscar via rotasService garante paradas atualizadas e completas
+        try {
+          const paradas = await rotasService.getParadas(r.id)
+          return { rotaId: r.id, paradas: paradas || [] }
+        } catch (err) {
+          console.warn(`Erro ao carregar paradas da rota ${r.id}:`, err)
+          const fallback = paradasRota.filter(
+            (p) => p.rota_id === r.id || (p as any).rota_logistica_id === r.id,
+          )
+          return { rotaId: r.id, paradas: fallback }
+        }
+      }),
+    ).then((results) => {
+      if (!isMounted) return
+      const map: Record<string, ParadaRotaRecord[]> = {}
+      for (const res of results) {
+        map[res.rotaId] = res.paradas
+      }
+      setTodasParadasMap(map)
+    })
+
+    return () => {
+      isMounted = false
+    }
+  }, [rotasDaChamada, paradasRota])
 
   // Paradas ordenadas da rota selecionada (prioriza liveParadas, fallback para paradasRota do contexto)
   const paradasDaRota = useMemo(() => {
