@@ -195,8 +195,8 @@ const MODULES: ModuleSpec[] = [
       'Cabeçalho e colunas fixas com rolagem sticky (v0.0.265): cabeçalho da tabela fixo no topo (position: sticky, top: 0, z-index calibrado) e colunas de Produto e Total fixas à esquerda (position: sticky, left: 0), permitindo rolagem horizontal e vertical independentes sem perda de contexto visual.',
       'Coluna de Total posicionada à esquerda ao lado de Produto (e de Escola na aba recíproca), otimizando a leitura imediata da demanda consolidada antes das colunas parciais.',
       'Filtro de Ocultar Vazios (sem demanda), alternador "Somente coluna de Total" e busca rápida.',
-      'Opção "Totais por rota" na visão Somente Total (v0.0.268): na aba "Por Produto", ao ativar "Somente coluna de Total", fica disponível o controle "Totais por rota". Quando ativado, apresenta abaixo da matriz a discriminação dos totais por rota da chamada selecionada (somando as escolas membros de cada rota na ordem oficial das paradas) com contagem de escolas, valor/quantidade e encerra com o "Total Geral" consolidado. Quando desativado, preserva o comportamento original.',
-      'Exportação para Planilha Excel (.xlsx), Documento PDF (.pdf) e CSV (.csv) com totalizadores alinhados à esquerda e respeito integral ao filtro por rota e sequência das paradas.',
+      'Opção "Totais por rota" na visão Somente Total integrada na Matriz (v0.0.268 / v0.0.269): na aba "Por Produto", ao ativar "Somente coluna de Total" com o toggle "Totais por rota" ativado, os totais por rota são exibidos como COLUNAS na própria matriz principal (após as colunas de escolas, uma coluna de subtotal por rota da chamada com rótulo vertical abreviado e tooltip com nome completo, finalizando com a coluna "Total Geral"). Cada rota soma suas escolas membros na sequência das paradas, respeitando o modo de exibição ativo (Quantidade, Valor R$ ou Ambos) e formatação da coluna Total. As colunas também integram as exportações Excel (.xlsx), PDF e CSV. Quando o toggle estiver desativado, a matriz permanece com seu comportamento original.',
+      'Exportação para Planilha Excel (.xlsx), Documento PDF (.pdf) e CSV (.csv) com totalizadores alinhados à esquerda e respeito integral ao filtro por rota, colunas de rota no modo Totais por rota e sequência das paradas.',
     ],
   },
   {
@@ -912,58 +912,61 @@ export function Requirements() {
       {/* 7. Registro de Manutenção e Limpeza de Dados */}
       <SectionTitle>7. Registro de Manutenção & Higienização do Banco de Dados</SectionTitle>
       <div className="space-y-4">
-        {/* Release v0.0.268: Totais por Rota e Geral no Modo Somente Total em Consolidação Final */}
+        {/* Release v0.0.269: Totais por Rota como Colunas na Própria Matriz e Exportações */}
         <div className="rounded-lg border-2 border-primary/40 bg-card p-5 space-y-4 shadow-sm">
           <div className="flex items-center justify-between flex-wrap gap-2">
             <div className="flex items-center gap-2">
               <Badge variant="outline" className="text-primary border-primary/40 font-semibold">
-                Release v0.0.268
+                Release v0.0.269
               </Badge>
               <span className="font-semibold text-foreground">
-                0.0.268: Totais por Rota e Total Geral na Visão &quot;Somente Total&quot; da
-                Consolidação Final (/consolidacao)
+                0.0.269: Totais por Rota como Colunas na Própria Matriz e Exportações
+                (/consolidacao)
               </span>
             </div>
-            <span className="text-xs font-medium text-primary">Versão Vigente (v0.0.268)</span>
+            <span className="text-xs font-medium text-primary">Versão Vigente (v0.0.269)</span>
           </div>
 
           <p className="text-sm text-foreground/90 leading-relaxed">
-            Atendimento à solicitação do usuário (&quot;Na matriz de consolidação final, para a
-            opção de somente coluna de total, ter a opção de apresentar os totais geral e por
-            rota&quot;). Na tela de Consolidação Final (<code>/consolidacao</code> —{' '}
-            <code>src/pages/Consolidation.tsx</code>), na aba &quot;Por Produto&quot;, ao ativar o
-            toggle &quot;Somente coluna de Total&quot;, é disponibilizado o novo controle{' '}
-            <strong>&quot;Totais por rota&quot;</strong>. Quando ativado, apresenta logo abaixo da
-            matriz um card dedicado com a tabela de desmembramento dos totais por rota da chamada
-            selecionada (calculado somando as escolas membros da rota na ordem oficial das paradas),
-            exibindo a quantidade de escolas, subtotal em quantidade/valor conforme o modo de
-            exibição ativo (Quantidade, Valor R$ ou Ambos) e finalizando com a linha consolidada
-            &quot;Total Geral&quot;. Quando desativado, o comportamento anterior permanece
-            rigorosamente idêntico.
+            Evolução da funcionalidade da 0.0.268 na tela de Consolidação Final (
+            <code>/consolidacao</code> — <code>src/pages/Consolidation.tsx</code>). No modo
+            &quot;Somente coluna de Total&quot; da aba &quot;Por Produto&quot; com o toggle
+            &quot;Totais por rota&quot; ativado: (1) O antigo card abaixo da matriz foi substituído
+            por <strong>COLUNAS na própria matriz</strong>: após a coluna fixa de Total, surgem as
+            colunas de subtotal por rota da chamada selecionada (com rótulo vertical abreviado
+            inteligente e tooltip com nome completo) e, por último, a coluna &quot;Total
+            Geral&quot;. Cada rota totaliza produto a produto somando suas escolas membros na
+            sequência oficial das paradas, respeitando estritamente o modo de exibição ativo
+            (Quantidade, Valor R$ ou Ambos) e a formatação padrão da coluna Total; (2) Inclusão
+            dessas colunas de rota e Total Geral em todas as exportações (Excel .xlsx, PDF timbrado
+            e CSV); (3) Com o toggle desativado, a matriz permanece com seu comportamento original
+            idêntico.
           </p>
 
           <div className="grid sm:grid-cols-2 gap-4 text-sm">
             <div className="rounded-md border border-border/60 bg-muted/20 p-3 space-y-1.5">
               <span className="font-medium text-primary">
-                1. Funcionalidade &quot;Totais por rota&quot;:
+                1. Totais por Rota Integrados à Matriz:
               </span>
               <ul className="space-y-1 text-xs text-muted-foreground">
                 <li>
-                  • <strong>Controle Dedicado:</strong> Toggle &quot;Totais por rota&quot;
-                  condicionado à ativação de &quot;Somente coluna de Total&quot; na aba Por Produto.
+                  • <strong>Colunas na Matriz:</strong> Subtotais de cada rota da chamada dispostos
+                  em colunas próprias na matriz tabular, finalizados pela coluna &quot;Total
+                  Geral&quot;.
                 </li>
                 <li>
-                  • <strong>Desmembramento por Rota:</strong> Tabela com todas as rotas da chamada
-                  selecionada, contagem de escolas membros e subtotal na ordem das paradas.
+                  • <strong>Rótulos Verticais e Tooltip:</strong> Cabeçalhos em dois níveis com
+                  badge da rota e nome abreviado na vertical (<code>writing-mode: vertical-rl</code>
+                  ), com tooltip informativo completo.
                 </li>
                 <li>
-                  • <strong>Respeito ao Modo de Exibição:</strong> Formata subtotais e Total Geral
-                  de forma dinâmica em unidades, R$ ou ambos (conforme o seletor corrente da
-                  matriz).
+                  • <strong>Exportações Atualizadas:</strong> Excel (.xlsx), PDF e CSV no modo
+                  Totais por Rota incluem as colunas de rotas e Total Geral no cabeçalho, corpo e
+                  rodapé.
                 </li>
                 <li>
-                  • <strong>Total Geral no Rodapé:</strong> Linha de Total Geral destacada com a
-                  soma consolidada de todas as rotas da chamada.
+                  • <strong>Alternador Desativado:</strong> Preserva estritamente a matriz
+                  tradicional quando o toggle não estiver marcado.
                 </li>
               </ul>
             </div>
@@ -983,13 +986,40 @@ export function Requirements() {
                   escolas&quot; e &quot;Por Rota&quot; permanecem inalterados.
                 </li>
                 <li>
-                  • <strong>Matriz, Cabeçalhos e Exportações:</strong> Coluna Total à esquerda,
-                  cabeçalhos em dois níveis, rolagem sticky, zebra vertical e exportações (PDF,
-                  Excel, CSV) intactas.
+                  • <strong>Ergonomia Preservada:</strong> Coluna Total à esquerda junto de Produto,
+                  cabeçalhos verticais, rolagem sticky e zebra suave por coluna 100% mantidos.
                 </li>
               </ul>
             </div>
           </div>
+        </div>
+
+        {/* Release v0.0.268: Totais por Rota e Geral no Modo Somente Total em Consolidação Final */}
+        <div className="rounded-lg border border-border bg-card p-5 space-y-4">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              <Badge
+                variant="outline"
+                className="text-muted-foreground border-border font-semibold"
+              >
+                Release v0.0.268
+              </Badge>
+              <span className="font-semibold text-foreground">
+                0.0.268: Totais por Rota e Total Geral na Visão &quot;Somente Total&quot; da
+                Consolidação Final (/consolidacao)
+              </span>
+            </div>
+            <span className="text-xs text-muted-foreground">Consolidado (v0.0.268)</span>
+          </div>
+
+          <p className="text-sm text-foreground/90 leading-relaxed">
+            Atendimento à solicitação do usuário (&quot;Na matriz de consolidação final, para a
+            opção de somente coluna de total, ter a opção de apresentar os totais geral e por
+            rota&quot;). Na tela de Consolidação Final (<code>/consolidacao</code> —{' '}
+            <code>src/pages/Consolidation.tsx</code>), na aba &quot;Por Produto&quot;, ao ativar o
+            toggle &quot;Somente coluna de Total&quot;, é disponibilizado o novo controle{' '}
+            <strong>&quot;Totais por rota&quot;</strong>.
+          </p>
         </div>
 
         {/* Release v0.0.267: Reversão dos Rótulos do Seletor de Recorte na Consolidação Final */}

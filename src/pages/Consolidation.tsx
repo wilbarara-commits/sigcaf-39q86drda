@@ -577,19 +577,38 @@ export default function Consolidation() {
     })
   }, [rotasDaChamada, selectedRotaId, liveParadas, paradasRota])
 
-  // Subtotais por rota e total geral para a tabela de Totais por Rota
+  // Mapa de subtotais por produto por rota: rotaId -> Map<produtoId, { qtd, valor }>
+  const subtotalPorProdutoERota = useMemo(() => {
+    const map = new Map<string, Map<string, { qtd: number; valor: number }>>()
+    for (const { rota, escolaIds } of rotasComParadas) {
+      const prodMap = new Map<string, { qtd: number; valor: number }>()
+      for (const prod of produtosExibidos) {
+        let q = 0
+        let v = 0
+        for (const schId of escolaIds) {
+          const cell = matriz.get(prod.id)?.get(schId)
+          if (cell) {
+            q += cell.qtd
+            v += cell.valor
+          }
+        }
+        prodMap.set(prod.id, { qtd: q, valor: v })
+      }
+      map.set(rota.id, prodMap)
+    }
+    return map
+  }, [rotasComParadas, produtosExibidos, matriz])
+
+  // Subtotais consolidados por rota (soma de todos os produtos para cada rota)
   const totaisPorRotaCalculados = useMemo(() => {
     return rotasComParadas.map(({ rota, escolaIds }) => {
       let rotaQtd = 0
       let rotaValor = 0
-      // Soma os produtos exibidos para as escolas desta rota
-      for (const prod of produtosExibidos) {
-        for (const schId of escolaIds) {
-          const cell = matriz.get(prod.id)?.get(schId)
-          if (cell) {
-            rotaQtd += cell.qtd
-            rotaValor += cell.valor
-          }
+      const prodMap = subtotalPorProdutoERota.get(rota.id)
+      if (prodMap) {
+        for (const cell of prodMap.values()) {
+          rotaQtd += cell.qtd
+          rotaValor += cell.valor
         }
       }
       return {
@@ -599,7 +618,7 @@ export default function Consolidation() {
         numEscolas: escolaIds.length,
       }
     })
-  }, [rotasComParadas, produtosExibidos, matriz])
+  }, [rotasComParadas, subtotalPorProdutoERota])
 
   // Helper para renderizar célula na interface
   // showUnit=false por padrão nas células de escola da aba Por Produto (unidade já está em Produto)
@@ -700,6 +719,8 @@ export default function Consolidation() {
       dataRows.push([]) // Linha em branco
 
       if (tabAtiva === 'produto') {
+        const isTotaisPorRotaModo = somenteColunaTotal && totaisPorRotaAtivo
+
         // Headers: Total à esquerda junto de produto (Produto, Total, Unidade, Preço Unitário)
         const headers = ['Produto', 'Total', 'Unidade', 'Preço Unitário (R$)']
         if (!somenteColunaTotal) {
@@ -709,6 +730,11 @@ export default function Consolidation() {
               return isModoRota ? `${paradaNum}ª Parada - ${e.name}` : e.name
             }),
           )
+        } else if (isTotaisPorRotaModo) {
+          // No modo Somente coluna de Total com Totais por rota ativado:
+          // colunas de subtotais por rota e última coluna Total Geral
+          headers.push(...rotasDaChamada.map((r) => `Rota: ${r.nome}`))
+          headers.push('Total Geral')
         }
         dataRows.push(headers)
 
@@ -737,6 +763,15 @@ export default function Consolidation() {
               rowQtd = tot.totalQtd
               rowValor = tot.totalValor
             }
+
+            if (isTotaisPorRotaModo) {
+              for (const r of rotasDaChamada) {
+                const sub = subtotalPorProdutoERota.get(r.id)?.get(prod.id) || { qtd: 0, valor: 0 }
+                schoolCells.push(getCellExportText(sub.qtd, sub.valor, prod.unit, true))
+              }
+              // Última coluna: Total Geral do produto
+              schoolCells.push(getCellExportText(rowQtd, rowValor, prod.unit, true))
+            }
           }
 
           const row: any[] = [
@@ -761,6 +796,15 @@ export default function Consolidation() {
             const totCol = totaisColunaPorEscola[sch.id] || { totalQtd: 0, totalValor: 0 }
             footer.push(getCellExportText(totCol.totalQtd, totCol.totalValor, undefined, true))
           }
+        } else if (isTotaisPorRotaModo) {
+          for (const r of rotasDaChamada) {
+            const rotaCalc = totaisPorRotaCalculados.find((t) => t.rota.id === r.id)
+            const q = rotaCalc ? rotaCalc.qtd : 0
+            const v = rotaCalc ? rotaCalc.valor : 0
+            footer.push(getCellExportText(q, v, undefined, true))
+          }
+          // Total Geral final
+          footer.push(getCellExportText(totalGeral.qtd, totalGeral.valor, undefined, true))
         }
         dataRows.push(footer)
       } else {
@@ -837,6 +881,8 @@ export default function Consolidation() {
         tabAtiva === 'produto' && filtroEscolaModo === 'rota' && Boolean(selectedRotaObj)
 
       if (tabAtiva === 'produto') {
+        const isTotaisPorRotaModo = somenteColunaTotal && totaisPorRotaAtivo
+
         const headers = ['Produto', 'Total', 'Unidade', 'Preço Unitário (R$)']
         if (!somenteColunaTotal) {
           headers.push(
@@ -845,6 +891,9 @@ export default function Consolidation() {
               return isModoRota ? `${paradaNum}ª Parada - ${e.name}` : e.name
             }),
           )
+        } else if (isTotaisPorRotaModo) {
+          headers.push(...rotasDaChamada.map((r) => `Rota: ${r.nome}`))
+          headers.push('Total Geral')
         }
         rows.push(headers)
 
@@ -872,6 +921,14 @@ export default function Consolidation() {
               rowQtd = tot.totalQtd
               rowValor = tot.totalValor
             }
+
+            if (isTotaisPorRotaModo) {
+              for (const r of rotasDaChamada) {
+                const sub = subtotalPorProdutoERota.get(r.id)?.get(prod.id) || { qtd: 0, valor: 0 }
+                schoolCells.push(getCellExportText(sub.qtd, sub.valor, prod.unit, true))
+              }
+              schoolCells.push(getCellExportText(rowQtd, rowValor, prod.unit, true))
+            }
           }
 
           const row: string[] = [
@@ -895,6 +952,14 @@ export default function Consolidation() {
             const totCol = totaisColunaPorEscola[sch.id] || { totalQtd: 0, totalValor: 0 }
             footer.push(getCellExportText(totCol.totalQtd, totCol.totalValor, undefined, true))
           }
+        } else if (isTotaisPorRotaModo) {
+          for (const r of rotasDaChamada) {
+            const rotaCalc = totaisPorRotaCalculados.find((t) => t.rota.id === r.id)
+            const q = rotaCalc ? rotaCalc.qtd : 0
+            const v = rotaCalc ? rotaCalc.valor : 0
+            footer.push(getCellExportText(q, v, undefined, true))
+          }
+          footer.push(getCellExportText(totalGeral.qtd, totalGeral.valor, undefined, true))
         }
         rows.push(footer)
       } else {
@@ -989,10 +1054,14 @@ export default function Consolidation() {
       const isModoRota =
         tabAtiva === 'produto' && filtroEscolaModo === 'rota' && Boolean(selectedRotaObj)
 
+      const isTotaisPorRotaModo = tabAtiva === 'produto' && somenteColunaTotal && totaisPorRotaAtivo
+
       const colsCount =
         tabAtiva === 'produto'
           ? somenteColunaTotal
-            ? 4
+            ? isTotaisPorRotaModo
+              ? rotasDaChamada.length + 5 // Produto, Total, Un., Preço + rotas + Total Geral
+              : 4
             : escolasExibidas.length + 4
           : somenteColunaTotal
             ? 3
@@ -1066,6 +1135,9 @@ export default function Consolidation() {
               return isModoRota ? `${paradaNum}ª ${e.name}` : e.name
             }),
           )
+        } else if (isTotaisPorRotaModo) {
+          headerRow.push(...rotasDaChamada.map((r) => r.nome))
+          headerRow.push('Total Geral')
         }
         head = [headerRow]
 
@@ -1093,6 +1165,14 @@ export default function Consolidation() {
               rowQtd = tot.totalQtd
               rowValor = tot.totalValor
             }
+
+            if (isTotaisPorRotaModo) {
+              for (const r of rotasDaChamada) {
+                const sub = subtotalPorProdutoERota.get(r.id)?.get(prod.id) || { qtd: 0, valor: 0 }
+                schoolCells.push(getCellExportText(sub.qtd, sub.valor, prod.unit, true))
+              }
+              schoolCells.push(getCellExportText(rowQtd, rowValor, prod.unit, true))
+            }
           }
 
           const row: string[] = [
@@ -1116,6 +1196,14 @@ export default function Consolidation() {
             const totCol = totaisColunaPorEscola[sch.id] || { totalQtd: 0, totalValor: 0 }
             footerRow.push(getCellExportText(totCol.totalQtd, totCol.totalValor, undefined, true))
           }
+        } else if (isTotaisPorRotaModo) {
+          for (const r of rotasDaChamada) {
+            const rotaCalc = totaisPorRotaCalculados.find((t) => t.rota.id === r.id)
+            const q = rotaCalc ? rotaCalc.qtd : 0
+            const v = rotaCalc ? rotaCalc.valor : 0
+            footerRow.push(getCellExportText(q, v, undefined, true))
+          }
+          footerRow.push(getCellExportText(totalGeral.qtd, totalGeral.valor, undefined, true))
         }
         foot = [footerRow]
       } else {
@@ -1599,6 +1687,77 @@ export default function Consolidation() {
                         </TableHead>
                       )
                     })}
+
+                  {/* No modo Somente coluna de Total com Totais por rota ativado: colunas de subtotais por rota + coluna Total Geral */}
+                  {somenteColunaTotal &&
+                    totaisPorRotaAtivo &&
+                    rotasDaChamada.map((r, idx) => {
+                      const isEvenCol = idx % 2 === 1
+                      const nomeAbreviado = abreviarNomeEscola(r.nome)
+                      const tooltipCompleto = `Rota: ${r.nome}`
+
+                      return (
+                        <TableHead
+                          key={r.id}
+                          className={`text-center w-[46px] min-w-[44px] max-w-[56px] text-xs font-semibold text-foreground p-1 border-r border-b border-border/40 align-bottom sticky top-0 z-30 backdrop-blur ${
+                            isEvenCol
+                              ? 'bg-muted/90 dark:bg-muted/70'
+                              : 'bg-slate-50/95 dark:bg-slate-900/95'
+                          }`}
+                          title={tooltipCompleto}
+                          aria-label={tooltipCompleto}
+                        >
+                          <div className="h-48 flex flex-col items-center justify-between pb-1.5 pt-1 gap-1">
+                            {/* Nível 1: Badge #N da rota HORIZONTAL no topo */}
+                            <div className="h-5 flex items-center justify-center shrink-0">
+                              <span
+                                className="inline-flex items-center justify-center bg-primary/20 text-primary font-mono text-[9px] font-bold rounded px-1.5 py-0.5 shadow-xs"
+                                title={`Rota #${idx + 1}`}
+                              >
+                                #{idx + 1}
+                              </span>
+                            </div>
+
+                            {/* Nível 2: Nome da rota na VERTICAL */}
+                            <div
+                              className="text-[11px] font-medium leading-tight text-foreground/90 whitespace-nowrap max-h-40 overflow-hidden text-ellipsis select-none tracking-tight"
+                              style={{
+                                writingMode: 'vertical-rl',
+                                transform: 'rotate(180deg)',
+                              }}
+                            >
+                              {nomeAbreviado}
+                            </div>
+                          </div>
+                        </TableHead>
+                      )
+                    })}
+
+                  {/* Coluna final "Total Geral" no modo Totais por rota */}
+                  {somenteColunaTotal && totaisPorRotaAtivo && (
+                    <TableHead
+                      className="text-center font-bold text-primary w-[56px] min-w-[50px] max-w-[64px] text-xs p-1 border-r border-b border-border/40 align-bottom sticky top-0 z-30 bg-primary/10 dark:bg-primary/20 backdrop-blur"
+                      title="Total Geral Consolidado"
+                      aria-label="Total Geral Consolidado"
+                    >
+                      <div className="h-48 flex flex-col items-center justify-between pb-1.5 pt-1 gap-1">
+                        <div className="h-5 flex items-center justify-center shrink-0">
+                          <span className="inline-flex items-center justify-center bg-primary text-primary-foreground font-mono text-[9px] font-bold rounded px-1.5 py-0.5 shadow-xs">
+                            ∑
+                          </span>
+                        </div>
+                        <div
+                          className="text-[11px] font-bold leading-tight text-primary whitespace-nowrap max-h-40 overflow-hidden text-ellipsis select-none tracking-tight uppercase"
+                          style={{
+                            writingMode: 'vertical-rl',
+                            transform: 'rotate(180deg)',
+                          }}
+                        >
+                          Total Geral
+                        </div>
+                      </div>
+                    </TableHead>
+                  )}
                 </TableRow>
               ) : (
                 // CABEÇALHO DA ABA POR ESCOLA: Total posicionado à esquerda ao lado de Escola
@@ -1654,7 +1813,13 @@ export default function Consolidation() {
                 produtosExibidos.length === 0 ? (
                   <TableRow>
                     <TableCell
-                      colSpan={somenteColunaTotal ? 2 : escolasExibidas.length + 2}
+                      colSpan={
+                        somenteColunaTotal
+                          ? totaisPorRotaAtivo
+                            ? rotasDaChamada.length + 3
+                            : 2
+                          : escolasExibidas.length + 2
+                      }
                       className="text-center py-12 text-muted-foreground"
                     >
                       {isModoRotaAtivo
@@ -1727,6 +1892,42 @@ export default function Consolidation() {
                               </TableCell>
                             )
                           })}
+
+                        {/* Colunas de Subtotal por Rota no modo Somente coluna de Total + Totais por rota */}
+                        {somenteColunaTotal &&
+                          totaisPorRotaAtivo &&
+                          rotasDaChamada.map((r, idx) => {
+                            const sub = subtotalPorProdutoERota.get(r.id)?.get(prod.id) || {
+                              qtd: 0,
+                              valor: 0,
+                            }
+                            const isEvenCol = idx % 2 === 1
+                            const zebraBg = isEvenCol
+                              ? 'bg-muted/30 dark:bg-muted/15'
+                              : 'bg-transparent'
+                            const activeBg =
+                              sub.qtd > 0
+                                ? isEvenCol
+                                  ? 'bg-primary/[0.06] hover:bg-primary/[0.12]'
+                                  : 'bg-primary/[0.04] hover:bg-primary/[0.10]'
+                                : zebraBg
+
+                            return (
+                              <TableCell
+                                key={r.id}
+                                className={`text-center text-xs px-1 py-1.5 border-r border-b border-border/30 transition-colors ${activeBg}`}
+                              >
+                                {renderCellContent(sub.qtd, sub.valor, prod.unit, true, false)}
+                              </TableCell>
+                            )
+                          })}
+
+                        {/* Coluna final Total Geral no modo Somente coluna de Total + Totais por rota */}
+                        {somenteColunaTotal && totaisPorRotaAtivo && (
+                          <TableCell className="text-center font-bold font-mono bg-primary/10 text-primary border-r border-b py-2 backdrop-blur">
+                            {renderCellContent(rowQtd, rowValor, prod.unit, true, false)}
+                          </TableCell>
+                        )}
                       </TableRow>
                     )
                   })
@@ -1831,6 +2032,37 @@ export default function Consolidation() {
                         </TableCell>
                       )
                     })}
+
+                  {/* Colunas de subtotais por rota na linha de Total Geral */}
+                  {somenteColunaTotal &&
+                    totaisPorRotaAtivo &&
+                    rotasDaChamada.map((r, idx) => {
+                      const rotaCalc = totaisPorRotaCalculados.find((t) => t.rota.id === r.id)
+                      const isEvenCol = idx % 2 === 1
+                      return (
+                        <TableCell
+                          key={r.id}
+                          className={`text-center text-xs py-2.5 border-r border-b border-border/30 ${
+                            isEvenCol ? 'bg-muted/30 dark:bg-muted/15' : 'bg-transparent'
+                          }`}
+                        >
+                          {renderCellContent(
+                            rotaCalc ? rotaCalc.qtd : 0,
+                            rotaCalc ? rotaCalc.valor : 0,
+                            undefined,
+                            true,
+                            false,
+                          )}
+                        </TableCell>
+                      )
+                    })}
+
+                  {/* Coluna final Total Geral na linha de Total Geral */}
+                  {somenteColunaTotal && totaisPorRotaAtivo && (
+                    <TableCell className="text-center font-extrabold font-mono bg-primary/15 text-primary border-r border-b py-2.5 backdrop-blur">
+                      {renderCellContent(totalGeral.qtd, totalGeral.valor, undefined, true, false)}
+                    </TableCell>
+                  )}
                 </TableRow>
               )}
 
@@ -1874,95 +2106,6 @@ export default function Consolidation() {
           </Table>
         </div>
       </div>
-
-      {/* BLOCO DE TOTAIS GERAL E POR ROTA (quando "Somente coluna de Total" e "Totais por rota" estiverem ATIVOS na aba Por Produto) */}
-      {tabAtiva === 'produto' && somenteColunaTotal && totaisPorRotaAtivo && (
-        <Card className="border border-border/80 shadow-xs overflow-hidden animate-in fade-in duration-200">
-          <div className="bg-muted/60 px-4 py-3 border-b flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-            <div className="flex items-center gap-2">
-              <Route className="h-4 w-4 text-primary" />
-              <h3 className="font-semibold text-sm tracking-tight text-foreground">
-                Totais por Rota & Total Geral
-              </h3>
-              <span className="text-xs text-muted-foreground font-normal">
-                (Desmembramento dos totais da chamada selecionada)
-              </span>
-            </div>
-            <span className="text-[11px] text-muted-foreground font-mono">
-              {totaisPorRotaCalculados.length} rota(s) na chamada
-            </span>
-          </div>
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow className="bg-slate-100 dark:bg-slate-900/90 hover:bg-slate-100 dark:hover:bg-slate-900/90">
-                  <TableHead className="min-w-[200px] font-semibold text-foreground">
-                    Rota
-                  </TableHead>
-                  <TableHead className="text-center w-28 font-semibold text-foreground">
-                    Escolas
-                  </TableHead>
-                  <TableHead className="text-right min-w-[140px] font-bold text-primary pr-6">
-                    Total
-                  </TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {totaisPorRotaCalculados.length === 0 ? (
-                  <TableRow>
-                    <TableCell
-                      colSpan={3}
-                      className="text-center py-6 text-muted-foreground text-xs"
-                    >
-                      Nenhuma rota cadastrada para a chamada selecionada.
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  totaisPorRotaCalculados.map(({ rota, qtd, valor, numEscolas }, idx) => {
-                    const isEven = idx % 2 === 1
-                    return (
-                      <TableRow
-                        key={rota.id}
-                        className={`hover:bg-muted/40 transition-colors ${
-                          isEven ? 'bg-muted/20 dark:bg-muted/10' : 'bg-transparent'
-                        }`}
-                      >
-                        <TableCell className="py-2.5 font-medium text-xs sm:text-sm">
-                          <div className="flex items-center gap-2">
-                            <span className="inline-flex items-center justify-center bg-primary/10 text-primary font-mono text-[10px] font-bold rounded px-1.5 py-0.5">
-                              #{idx + 1}
-                            </span>
-                            <span className="font-semibold text-foreground">{rota.nome}</span>
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-center py-2.5 text-xs text-muted-foreground font-mono">
-                          {numEscolas} escola(s)
-                        </TableCell>
-                        <TableCell className="text-right py-2.5 font-mono font-semibold pr-6">
-                          {renderCellContent(qtd, valor, undefined, true, false)}
-                        </TableCell>
-                      </TableRow>
-                    )
-                  })
-                )}
-
-                {/* Linha Total Geral */}
-                <TableRow className="bg-slate-100 dark:bg-slate-900 font-bold border-t-2">
-                  <TableCell className="py-3 font-bold text-foreground">
-                    <span className="text-xs sm:text-sm uppercase tracking-wide">Total Geral</span>
-                  </TableCell>
-                  <TableCell className="text-center py-3 text-xs text-muted-foreground font-mono">
-                    {escolasExibidas.length} escola(s)
-                  </TableCell>
-                  <TableCell className="text-right py-3 font-mono font-extrabold text-primary text-sm sm:text-base pr-6 bg-primary/10 dark:bg-primary/20">
-                    {renderCellContent(totalGeral.qtd, totalGeral.valor, undefined, true, false)}
-                  </TableCell>
-                </TableRow>
-              </TableBody>
-            </Table>
-          </div>
-        </Card>
-      )}
     </div>
   )
 }
