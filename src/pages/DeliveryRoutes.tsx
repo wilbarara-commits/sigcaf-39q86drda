@@ -88,6 +88,12 @@ import {
   type ResultadoOtimizacaoRota,
 } from '@/lib/routeOptimization'
 import { RouteOptimizationDialog } from '@/components/RouteOptimizationDialog'
+import { AssistedRoutingDialog } from '@/components/AssistedRoutingDialog'
+import {
+  type EscolaRoteamentoInput,
+  type RotaSugerida,
+  calcularPesoPedidosKg,
+} from '@/lib/assistedRouting'
 import { MotoristasManagerDialog } from '@/components/MotoristasManagerDialog'
 import { DespachoMotoristaModal } from '@/components/DespachoMotoristaModal'
 import { SchoolCoordsReviewDialog } from '@/components/SchoolCoordsReviewDialog'
@@ -99,6 +105,7 @@ import {
   MOTIVOS_LOGISTICOS_CANCELAMENTO,
   type MotivoLogisticoCancelamento,
   type Order,
+  type Product,
   type RotaLogisticaRecord,
   type MotoristaRecord,
   type RotaDespachoRecord,
@@ -137,6 +144,7 @@ export default function DeliveryRoutes() {
     contractSchools,
     orders,
     schools,
+    products,
     ciclos,
     activeCiclo,
     cicloCorrente,
@@ -388,6 +396,9 @@ export default function DeliveryRoutes() {
   const [unmatchedPastedLines, setUnmatchedPastedLines] = useState<string[]>([])
   const [pastedMatchFeedback, setPastedMatchFeedback] = useState<string | null>(null)
   const [batchImportFileModalOpen, setBatchImportFileModalOpen] = useState(false)
+
+  // Estado para Roteamento Assistido (Sugerir Rotas)
+  const [assistedRoutingDialogOpen, setAssistedRoutingDialogOpen] = useState(false)
 
   // Estado para gestão de motoristas e despacho com token/whatsapp
   const [motoristasManagerOpen, setMotoristasManagerOpen] = useState(false)
@@ -1644,6 +1655,171 @@ export default function DeliveryRoutes() {
     setOptimizationDialogOpen(true)
   }
 
+  // Roteamento Assistido: Coletar escolas com pedidos na data de despacho do ciclo corrente
+  const productsMap = useMemo(() => {
+    const map = new Map<string, Product>()
+    products.forEach((p) => map.set(p.id, p))
+    return map
+  }, [products])
+
+  const escolasComDemandaParaRoteamento = useMemo<EscolaRoteamentoInput[]>(() => {
+    if (!currentChamada) return []
+
+    // 1. Filtrar pedidos da chamada e do ciclo selecionado que estão ativos
+    // Consolidação da data: pedidos com data = ciclo.data_despacho (ou ciclo selecionado)
+    const cicloAlvo = selectedCiclo || activeCiclo || cicloCorrente
+    const dataDespachoAlvo = cicloAlvo?.data_despacho
+
+    const pedidosCandidatos = chamadaCicloOrders.filter((o) => {
+      if (o.status === 'Cancelado') return false
+      if (dataDespachoAlvo && o.date) {
+        // Se a data do pedido coincidir com a data de despacho do ciclo, ou pertencer ao ciclo
+        const matchData = o.date === dataDespachoAlvo
+        const matchCiclo = cicloAlvo?.id ? o.cicloId === cicloAlvo.id : true
+        return matchData || matchCiclo
+      }
+      return true
+    })
+
+    // Agrupar pedidos por escola
+    const pedidosPorEscola = new Map<string, Order[]>()
+    for (const ped of pedidosCandidatos) {
+      if (!ped.schoolId) continue
+      const existing = pedidosPorEscola.get(ped.schoolId) || []
+      existing.push(ped)
+      pedidosPorEscola.set(ped.schoolId, existing)
+    }
+
+    const resultado: EscolaRoteamentoInput[] = []
+
+    for (const [escolaId, peds] of pedidosPorEscola.entries()) {
+      const sch = schools.find((s) => s.id === escolaId)
+      if (!sch) continue
+
+      const pesoKg = calcularPesoPedidosKg(peds, productsMap)
+      const coords = extrairCoordenadas(sch.latitude, sch.longitude)
+
+      resultado.push({
+        escola: sch,
+        pedidos: peds,
+        pesoKg,
+        temCoordenadas: Boolean(coords),
+        coords: coords || undefined,
+      })
+    }
+
+    // Ordenar por nome da escola para estabilidade
+    return resultado.sort((a, b) => a.escola.name.localeCompare(b.escola.name))
+  }, [
+    currentChamada,
+    selectedCiclo,
+    activeCiclo,
+    cicloCorrente,
+    chamadaCicloOrders,
+    schools,
+    productsMap,
+  ])
+
+  // Roteamento Assistido: Confirmar criação das rotas sugeridas e salvar snapshots no ciclo
+  const handleConfirmAssistedRouting = async (rotasSugeridas: RotaSugerida[]): Promise<boolean> => {
+    if (!currentChamada) {
+      toast.error('Nenhuma chamada selecionada.')
+      return false
+    }
+
+    const cicloAlvo = selectedCiclo || activeCiclo || cicloCorrente
+    if (!cicloAlvo?.id) {
+      toast.error('Selecione um ciclo para aplicar o roteamento sugerido.')
+      return false
+    }
+
+    if (cicloAlvo.status === 'fechado' || cicloAlvo.status === 'cancelado') {
+      toast.error('Ciclo fechado ou cancelado. Alteração de rotas bloqueada.')
+      return false
+    }
+
+    try {
+      // 1. Criar ou reutilizar rotas logísticas no banco
+      // Para cada rota sugerida: se já existir rota com nome exato, atualiza suas paradas; senão cria nova rota
+      for (let i = 0; i < rotasSugeridas.length; i++) {
+        const rSug = rotasSugeridas[i]
+        const nomeRota = rSug.nome.trim()
+        const paradasOrdenadas = rSug.escolas
+
+        // Verificar se já existe rota com este nome na chamada
+        let rotaLogisticaTarget = rotasLogisticas.find(
+          (r) =>
+            (r.chamada_id === currentChamada.id ||
+              (r.contrato_id && chamadaContratos.some((c) => c.id === r.contrato_id))) &&
+            (r.nome || '').trim().toLowerCase() === nomeRota.toLowerCase(),
+        )
+
+        if (!rotaLogisticaTarget) {
+          // Cria nova rota logística
+          rotaLogisticaTarget = await criarRotaLogistica({
+            chamada_id: currentChamada.id,
+            contrato_id: chamadaContratos[0]?.id,
+            nome: nomeRota,
+            ordem: filteredRotasLogisticas.length + i + 1,
+            ativa: true,
+          })
+        }
+
+        if (!rotaLogisticaTarget) {
+          throw new Error(`Falha ao registrar rota "${nomeRota}".`)
+        }
+
+        const escolaIdsSugeridas = paradasOrdenadas.map((p) => p.escolaId)
+
+        // 2. Sincronizar escolas e paradas da rota no banco (collection paradas_rota e pedidos pendentes)
+        await sincronizarEscolasRotaLogistica(
+          rotaLogisticaTarget.contrato_id || chamadaContratos[0]?.id || '',
+          rotaLogisticaTarget.id,
+          escolaIdsSugeridas,
+          undefined,
+          currentChamada.id,
+        )
+
+        // 3. Salvar snapshot da composição da rota no ciclo via salvarComposicaoCiclo
+        const paradasParaSnapshot = paradasOrdenadas.map((p, idx) => {
+          const contratoOrigem = escolaContratoOrigemMap.get(p.escolaId)
+          return {
+            escola_id: p.escolaId,
+            ordem: idx + 1,
+            escola_nome: p.escolaNome,
+            endereco: p.endereco,
+            contrato: contratoOrigem?.contratoNumero || '',
+          }
+        })
+
+        await retencaoHistoricaService.salvarComposicaoCiclo({
+          rotaId: rotaLogisticaTarget.id,
+          cicloId: cicloAlvo.id,
+          chamadaId: currentChamada.id,
+          rotaNome: nomeRota,
+          paradas: paradasParaSnapshot,
+          observacao: 'Roteamento assistido gerado automaticamente com confirmação',
+        })
+      }
+
+      // Atualizar snapshots locais
+      const snapsMap = await retencaoHistoricaService.getSnapshotsByCiclo(cicloAlvo.id)
+      setCicloSnapshotsMap(snapsMap)
+
+      // Atualizar dados gerais
+      await refreshData()
+
+      toast.success(
+        `${rotasSugeridas.length} rota(s) sugerida(s) criada(s) com sucesso para o ciclo!`,
+      )
+      return true
+    } catch (err: any) {
+      console.error('Erro ao confirmar roteamento assistido:', err)
+      toast.error(err?.message || 'Erro ao criar rotas sugeridas.')
+      return false
+    }
+  }
+
   // Otimização de Rota: Aplicar sugestão aceita pelo usuário
   const handleApplyOptimization = async (
     paradasReordenadas: Array<{ escola_id: string; ordem: number }>,
@@ -1791,14 +1967,25 @@ export default function DeliveryRoutes() {
           </Button>
 
           {selectedChamadaId !== 'todas' && (
-            <Button
-              onClick={handleOpenCreateRoute}
-              size="sm"
-              className="gap-1.5 shrink-0"
-              title="Criar nova rota para esta Chamada"
-            >
-              <Plus className="h-4 w-4" /> Nova Rota
-            </Button>
+            <>
+              <Button
+                onClick={() => setAssistedRoutingDialogOpen(true)}
+                variant="outline"
+                size="sm"
+                className="gap-1.5 shrink-0 border-primary/40 text-primary hover:bg-primary/5 font-semibold"
+                title="Sugerir divisão assistida das entregas do ciclo em rotas equilibradas (distância, peso e duração)"
+              >
+                <Sparkles className="h-4 w-4 text-primary" /> Sugerir rotas
+              </Button>
+              <Button
+                onClick={handleOpenCreateRoute}
+                size="sm"
+                className="gap-1.5 shrink-0"
+                title="Criar nova rota para esta Chamada"
+              >
+                <Plus className="h-4 w-4" /> Nova Rota
+              </Button>
+            </>
           )}
         </div>
       </div>
@@ -4076,6 +4263,27 @@ Ou apenas o nome da escola copiado do Excel/Word`}
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* MODAL: Sugerir Rotas (Roteamento Assistido) */}
+      <AssistedRoutingDialog
+        open={assistedRoutingDialogOpen}
+        onOpenChange={setAssistedRoutingDialogOpen}
+        cicloNome={
+          selectedCiclo?.nome ||
+          (currentChamada ? getCicloAtivo(ciclos, currentChamada.id)?.nome : null) ||
+          activeCiclo?.nome ||
+          'Ciclo Atual'
+        }
+        cicloDataDespacho={selectedCiclo?.data_despacho || activeCiclo?.data_despacho}
+        origemGeo={resolverDepositoCentral(config)}
+        origemNome={config?.deposito_nome || 'Cooperativa Central'}
+        escolasComDemanda={escolasComDemandaParaRoteamento}
+        isCicloBloqueado={Boolean(
+          selectedCiclo &&
+          (selectedCiclo.status === 'fechado' || selectedCiclo.status === 'cancelado'),
+        )}
+        onConfirmarCriacaoRotas={handleConfirmAssistedRouting}
+      />
 
       {/* MODAL: Sugestão de Otimização de Rota por Coordenadas */}
       <RouteOptimizationDialog

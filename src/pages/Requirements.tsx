@@ -912,11 +912,81 @@ export function Requirements() {
       {/* 7. Registro de Manutenção e Limpeza de Dados */}
       <SectionTitle>7. Registro de Manutenção & Higienização do Banco de Dados</SectionTitle>
       <div className="space-y-4">
-        {/* Release v0.0.269: Totais por Rota como Colunas na Própria Matriz e Exportações */}
-        <div className="rounded-lg border-2 border-primary/40 bg-card p-5 space-y-4 shadow-sm">
+        {/* Release v0.0.270: Sugerir Rotas (Roteamento Assistido) na Tela /rotas */}
+        <div className="rounded-lg border border-primary/40 bg-primary/5 p-5 space-y-4">
           <div className="flex items-center justify-between flex-wrap gap-2">
             <div className="flex items-center gap-2">
               <Badge variant="outline" className="text-primary border-primary/40 font-semibold">
+                Release v0.0.270
+              </Badge>
+              <span className="font-semibold text-foreground">
+                0.0.270: Sugerir Rotas (Roteamento Assistido) com Prévia Editável na Tela /rotas
+              </span>
+            </div>
+            <span className="text-xs font-medium text-primary">Versão Vigente (v0.0.270)</span>
+          </div>
+
+          <p className="text-sm text-foreground/90 leading-relaxed">
+            Implementação da funcionalidade de <strong>Roteamento Assistido (&quot;Sugerir rotas&quot;)</strong> na tela de
+            Rotas de Entrega (<code>/rotas</code> — <code>src/pages/DeliveryRoutes.tsx</code> e{' '}
+            <code>src/components/AssistedRoutingDialog.tsx</code>). O sistema sugere a divisão otimizada das entregas
+            do despacho do ciclo corrente em rotas equilibradas por distância viária, peso e duração estimada,
+            sempre como prévia interativa e editável antes de qualquer criação ou persistência no banco de dados.
+          </p>
+
+          <div className="grid sm:grid-cols-2 gap-4 text-sm">
+            <div className="rounded-md border border-border/60 bg-muted/20 p-3 space-y-1.5">
+              <span className="font-medium text-primary">
+                1. Fluxo de Operação e Algoritmo de Cálculo:
+              </span>
+              <ul className="space-y-1 text-xs text-muted-foreground">
+                <li>
+                  • <strong>Coleta e Consolidação da Demanda:</strong> Coleta todas as escolas com pedido na data de despacho do ciclo corrente e suas coordenadas geográficas cadastradas.
+                </li>
+                <li>
+                  • <strong>Escolas Sem Coordenadas:</strong> Ficam fora do cálculo automático de clusters e são listadas na prévia no bloco <em>&quot;Sem coordenadas — incluir manualmente&quot;</em>.
+                </li>
+                <li>
+                  • <strong>Modal de Parâmetros:</strong> Permite configurar nº de rotas (padrão 2), tempo médio por parada (padrão 10 min) e peso alvo por rota (opcional).
+                </li>
+                <li>
+                  • <strong>Cálculo do Peso:</strong> Itens com unidade em kg usam o valor diretamente; produtos em unidade utilizam o peso cadastrado do produto ou o fallback de 1 kg/un.
+                </li>
+                <li>
+                  • <strong>Clusterização Geográfica & Balanceamento:</strong> Agrupa as escolas por proximidade geográfica polar em relação à cooperativa central e equilibra peso e duração.
+                </li>
+                <li>
+                  • <strong>Sequência de Paradas 2-Opt:</strong> Ordenação pelo vizinho mais próximo com refinamento local 2-opt, distância Haversine × 1,3 e duração = (paradas × tempo) + (distância ÷ 40 km/h).
+                </li>
+              </ul>
+            </div>
+            <div className="rounded-md border border-primary/30 bg-primary/5 p-3 space-y-1.5">
+              <span className="font-medium text-primary">
+                2. Prévia Interativa e Persistência Segura:
+              </span>
+              <ul className="space-y-1 text-xs text-foreground/80">
+                <li>
+                  • <strong>Prévia Editável:</strong> Apresenta cada rota com suas escolas na sequência (#N), peso, distância, duração e número de paradas.
+                </li>
+                <li>
+                  • <strong>Mover Escola entre Rotas:</strong> Ferramenta integrada permite mover qualquer escola de uma rota para outra com recálculo instantâneo de todas as métricas.
+                </li>
+                <li>
+                  • <strong>Confirmação e Snapshots:</strong> Ao cancelar, nada é alterado no banco; SOMENTE ao clicar em &quot;Confirmar e Criar Rotas&quot; as rotas são criadas e persistidas via <code>salvarComposicaoCiclo</code> (com snapshot <code>edicao</code> em <code>rota_snapshots</code> e isolamento por <code>ciclo_id</code>).
+                </li>
+                <li>
+                  • <strong>Preservação das 4 Telas de Entregas:</strong> Composição manual mantida 100% intacta, isolamento estrito de ciclo e regras anti-vazamento (v0.0.243) rigorosamente preservadas.
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        {/* Release v0.0.269: Totais por Rota como Colunas na Própria Matriz e Exportações */}
+        <div className="rounded-lg border border-border bg-card p-5 space-y-4">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="text-muted-foreground border-border font-semibold">
                 Release v0.0.269
               </Badge>
               <span className="font-semibold text-foreground">
@@ -924,7 +994,7 @@ export function Requirements() {
                 (/consolidacao)
               </span>
             </div>
-            <span className="text-xs font-medium text-primary">Versão Vigente (v0.0.269)</span>
+            <span className="text-xs text-muted-foreground">Consolidado (v0.0.269)</span>
           </div>
 
           <p className="text-sm text-foreground/90 leading-relaxed">
@@ -993,7 +1063,6 @@ export function Requirements() {
             </div>
           </div>
         </div>
-
         {/* Release v0.0.268: Totais por Rota e Geral no Modo Somente Total em Consolidação Final */}
         <div className="rounded-lg border border-border bg-card p-5 space-y-4">
           <div className="flex items-center justify-between flex-wrap gap-2">
