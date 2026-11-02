@@ -1,7 +1,7 @@
 /**
  * Utilitário para compactação e redimensionamento de fotos no cliente
  * antes de salvar em base64 (offline) e upload para o PocketBase.
- * Redimensiona para max ~1280px mantendo proporção e converte para JPEG qualidade ~0.8.
+ * Redimensiona para max ~1280px mantendo proporção e converte para JPEG qualidade ~0.75-0.8.
  */
 
 export interface ImageCompressionOptions {
@@ -9,26 +9,73 @@ export interface ImageCompressionOptions {
   maxHeight?: number
   quality?: number
   allowUpscale?: boolean
+  /**
+   * Tamanho máximo em bytes abaixo do qual, se a imagem já couber dentro de maxWidth/maxHeight,
+   * ela não precisa ser reprocessada.
+   * Padrão para fotos de entrega: ~300KB (307.200 bytes).
+   */
+  maxBytesToSkipProcessing?: number
 }
 
+export interface CompressedImageResult {
+  dataUrl: string
+  blob: Blob
+  width: number
+  height: number
+  originalSizeBytes: number
+  compressedSizeBytes: number
+  wasCompressed: boolean
+}
+
+/**
+ * Redimensiona e compacta uma imagem no navegador usando Canvas.
+ * Se a imagem já estiver dentro das dimensões máximas e abaixo de maxBytesToSkipProcessing,
+ * ela é mantida sem recompressão desnecessária.
+ */
 export async function compressImage(
   fileOrBlob: File | Blob,
   options?: ImageCompressionOptions,
-): Promise<{ dataUrl: string; blob: Blob; width: number; height: number }> {
+): Promise<CompressedImageResult> {
   const maxWidth = options?.maxWidth ?? 1280
   const maxHeight = options?.maxHeight ?? 1280
-  const quality = options?.quality ?? 0.8
+  const quality = options?.quality ?? 0.75
   const allowUpscale = options?.allowUpscale ?? false
+  const maxBytesToSkip = options?.maxBytesToSkipProcessing ?? 300 * 1024 // 300KB
+
+  const originalSizeBytes = fileOrBlob.size
 
   return new Promise((resolve, reject) => {
     const reader = new FileReader()
     reader.onerror = () => reject(new Error('Erro ao ler arquivo de imagem'))
     reader.onload = () => {
+      const originalDataUrl = reader.result as string
       const img = new Image()
       img.onerror = () => reject(new Error('Erro ao carregar elemento de imagem'))
       img.onload = () => {
-        let width = img.naturalWidth || img.width
-        let height = img.naturalHeight || img.height
+        const origWidth = img.naturalWidth || img.width
+        const origHeight = img.naturalHeight || img.height
+
+        const isDimensionSmall = origWidth <= maxWidth && origHeight <= maxHeight
+        const isSizeSmall = originalSizeBytes > 0 && originalSizeBytes <= maxBytesToSkip
+        const isAlreadyJpeg = fileOrBlob.type === 'image/jpeg' || fileOrBlob.type === 'image/jpg'
+
+        // Se a foto original já está dentro da resolução máxima e o tamanho é leve,
+        // não reprocessa desnecessariamente (critério de aceitação #3)
+        if (isDimensionSmall && isSizeSmall && isAlreadyJpeg) {
+          resolve({
+            dataUrl: originalDataUrl,
+            blob: fileOrBlob,
+            width: origWidth,
+            height: origHeight,
+            originalSizeBytes,
+            compressedSizeBytes: originalSizeBytes,
+            wasCompressed: false,
+          })
+          return
+        }
+
+        let width = origWidth
+        let height = origHeight
 
         if (width > maxWidth || height > maxHeight) {
           const ratio = Math.min(maxWidth / width, maxHeight / height)
@@ -50,6 +97,9 @@ export async function compressImage(
           return
         }
 
+        // Fundo branco caso haja transparência (PNG/WebP) antes de salvar em JPEG
+        ctx.fillStyle = '#FFFFFF'
+        ctx.fillRect(0, 0, width, height)
         ctx.drawImage(img, 0, 0, width, height)
 
         const dataUrl = canvas.toDataURL('image/jpeg', quality)
@@ -59,15 +109,41 @@ export async function compressImage(
               reject(new Error('Falha ao gerar blob comprimido'))
               return
             }
-            resolve({ dataUrl, blob, width, height })
+            resolve({
+              dataUrl,
+              blob,
+              width,
+              height,
+              originalSizeBytes,
+              compressedSizeBytes: blob.size,
+              wasCompressed: true,
+            })
           },
           'image/jpeg',
           quality,
         )
       }
-      img.src = reader.result as string
+      img.src = originalDataUrl
     }
     reader.readAsDataURL(fileOrBlob)
+  })
+}
+
+/**
+ * Comprime a foto de entrega tirada/selecionada pelo motorista:
+ * - Resolução máxima: 1280px no lado maior mantendo proporção
+ * - Formato: image/jpeg com qualidade moderada ~0.75 (ótima nitidez com peso ~80KB-200KB)
+ * - Se a foto já for pequena (<= 1280px e <= 300KB em JPEG), preserva sem reprocessar
+ */
+export async function compressFotoEntregaMotorista(
+  fileOrBlob: File | Blob,
+): Promise<CompressedImageResult> {
+  return compressImage(fileOrBlob, {
+    maxWidth: 1280,
+    maxHeight: 1280,
+    quality: 0.75,
+    allowUpscale: false,
+    maxBytesToSkipProcessing: 300 * 1024,
   })
 }
 
@@ -93,6 +169,7 @@ export async function compressFornecedorFoto(
     maxHeight: 300,
     quality: 0.85,
     allowUpscale: false,
+    maxBytesToSkipProcessing: 0, // fotos de perfil sempre passam pela caixa 300x300
   })
 
   // Constrói objeto File nomeado em JPEG
@@ -132,4 +209,14 @@ export function dataUrlToBlob(dataUrl: string): Blob | null {
     console.warn('Erro ao converter dataUrl para Blob:', e)
     return null
   }
+}
+
+/**
+ * Formata tamanho em bytes para leitura humana (ex: 154 KB, 1.2 MB)
+ */
+export function formatBytes(bytes: number): string {
+  if (bytes <= 0) return '0 B'
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }

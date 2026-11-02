@@ -246,7 +246,7 @@ const MODULES: ModuleSpec[] = [
       '• Horários Automáticos: Registro automático do horário de chegada ao abrir o formulário na escola e do horário de confirmação ao clicar em salvar, prevenindo adulteração manual.',
       '• Identificação do Responsável pelo Recebimento: Campos específicos para "Nome do Responsável" e "CPF do Responsável" (opcional). O campo de CPF conta com máscara automática (000.000.000-00) e validação matemática estrita dos dígitos verificadores; caso informado e incorreto, o sistema bloqueia a submissão exibindo mensagem de erro clara ("CPF inválido"). Quando em branco, o registro é aceito normalmente por ser opcional.',
       '• Assinatura Digital em Canvas: Área de assinatura tátil responsiva para o conferente/responsável da escola assinar com o dedo na tela do celular ou com o mouse.',
-      '• Registro Fotográfico com Compressão no Dispositivo: Captura opcional de foto do material/produtos entregues (via câmera do smartphone ou galeria de fotos). O sistema realiza a compressão inteligente da imagem no próprio dispositivo do motorista antes do armazenamento, economizando franquia de dados móveis e tempo de transmissão.',
+      '• Registro Fotográfico com Compressão Client-Side no Dispositivo (v0.0.271): Captura opcional de foto do material/produtos entregues (via câmera do smartphone ou galeria de fotos). O sistema realiza a compressão inteligente da imagem no próprio dispositivo do motorista (Canvas 2D, resolução máxima de 1280px no lado maior mantendo proporções e JPEG com qualidade ~0.75) antes do armazenamento base64 e upload para o backend. Se a imagem original já for leve (≤ 1280px e ≤ 300KB em JPEG), é enviada diretamente sem reprocessar. Exibe badge com dimensões e peso final e previne falhas/demoras de upload por fotos em alta resolução da câmera.',
       '• Observações do Motorista: Campo de texto livre para anotações de campo (avarias, responsáveis ausentes, ressalvas de recebimento).',
       'Operação e Resiliência 100% OFFLINE: Projetado especificamente para zonas rurais e áreas sem cobertura de internet móvel:',
       '• Fila Local Segura: Na ausência de sinal de internet, os registros de entrega concluídos são salvos em fila local criptografada no armazenamento interno do navegador (localStorage/IndexedDB).',
@@ -927,11 +927,13 @@ export function Requirements() {
           </div>
 
           <p className="text-sm text-foreground/90 leading-relaxed">
-            Implementação da funcionalidade de <strong>Roteamento Assistido (&quot;Sugerir rotas&quot;)</strong> na tela de
-            Rotas de Entrega (<code>/rotas</code> — <code>src/pages/DeliveryRoutes.tsx</code> e{' '}
-            <code>src/components/AssistedRoutingDialog.tsx</code>). O sistema sugere a divisão otimizada das entregas
-            do despacho do ciclo corrente em rotas equilibradas por distância viária, peso e duração estimada,
-            sempre como prévia interativa e editável antes de qualquer criação ou persistência no banco de dados.
+            Implementação da funcionalidade de{' '}
+            <strong>Roteamento Assistido (&quot;Sugerir rotas&quot;)</strong> na tela de Rotas de
+            Entrega (<code>/rotas</code> — <code>src/pages/DeliveryRoutes.tsx</code> e{' '}
+            <code>src/components/AssistedRoutingDialog.tsx</code>). O sistema sugere a divisão
+            otimizada das entregas do despacho do ciclo corrente em rotas equilibradas por distância
+            viária, peso e duração estimada, sempre como prévia interativa e editável antes de
+            qualquer criação ou persistência no banco de dados.
           </p>
 
           <div className="grid sm:grid-cols-2 gap-4 text-sm">
@@ -941,22 +943,33 @@ export function Requirements() {
               </span>
               <ul className="space-y-1 text-xs text-muted-foreground">
                 <li>
-                  • <strong>Coleta e Consolidação da Demanda:</strong> Coleta todas as escolas com pedido na data de despacho do ciclo corrente e suas coordenadas geográficas cadastradas.
+                  • <strong>Coleta e Consolidação da Demanda:</strong> Coleta todas as escolas com
+                  pedido na data de despacho do ciclo corrente e suas coordenadas geográficas
+                  cadastradas.
                 </li>
                 <li>
-                  • <strong>Escolas Sem Coordenadas:</strong> Ficam fora do cálculo automático de clusters e são listadas na prévia no bloco <em>&quot;Sem coordenadas — incluir manualmente&quot;</em>.
+                  • <strong>Escolas Sem Coordenadas:</strong> Ficam fora do cálculo automático de
+                  clusters e são listadas na prévia no bloco{' '}
+                  <em>&quot;Sem coordenadas — incluir manualmente&quot;</em>.
                 </li>
                 <li>
-                  • <strong>Modal de Parâmetros:</strong> Permite configurar nº de rotas (padrão 2), tempo médio por parada (padrão 10 min) e peso alvo por rota (opcional).
+                  • <strong>Modal de Parâmetros:</strong> Permite configurar nº de rotas (padrão 2),
+                  tempo médio por parada (padrão 10 min) e peso alvo por rota (opcional).
                 </li>
                 <li>
-                  • <strong>Cálculo do Peso:</strong> Itens com unidade em kg usam o valor diretamente; produtos em unidade utilizam o peso cadastrado do produto ou o fallback de 1 kg/un.
+                  • <strong>Cálculo do Peso:</strong> Itens com unidade em kg usam o valor
+                  diretamente; produtos em unidade utilizam o peso cadastrado do produto ou o
+                  fallback de 1 kg/un.
                 </li>
                 <li>
-                  • <strong>Clusterização Geográfica & Balanceamento:</strong> Agrupa as escolas por proximidade geográfica polar em relação à cooperativa central e equilibra peso e duração.
+                  • <strong>Clusterização Geográfica & Balanceamento:</strong> Agrupa as escolas por
+                  proximidade geográfica polar em relação à cooperativa central e equilibra peso e
+                  duração.
                 </li>
                 <li>
-                  • <strong>Sequência de Paradas 2-Opt:</strong> Ordenação pelo vizinho mais próximo com refinamento local 2-opt, distância Haversine × 1,3 e duração = (paradas × tempo) + (distância ÷ 40 km/h).
+                  • <strong>Sequência de Paradas 2-Opt:</strong> Ordenação pelo vizinho mais próximo
+                  com refinamento local 2-opt, distância Haversine × 1,3 e duração = (paradas ×
+                  tempo) + (distância ÷ 40 km/h).
                 </li>
               </ul>
             </div>
@@ -966,16 +979,25 @@ export function Requirements() {
               </span>
               <ul className="space-y-1 text-xs text-foreground/80">
                 <li>
-                  • <strong>Prévia Editável:</strong> Apresenta cada rota com suas escolas na sequência (#N), peso, distância, duração e número de paradas.
+                  • <strong>Prévia Editável:</strong> Apresenta cada rota com suas escolas na
+                  sequência (#N), peso, distância, duração e número de paradas.
                 </li>
                 <li>
-                  • <strong>Mover Escola entre Rotas:</strong> Ferramenta integrada permite mover qualquer escola de uma rota para outra com recálculo instantâneo de todas as métricas.
+                  • <strong>Mover Escola entre Rotas:</strong> Ferramenta integrada permite mover
+                  qualquer escola de uma rota para outra com recálculo instantâneo de todas as
+                  métricas.
                 </li>
                 <li>
-                  • <strong>Confirmação e Snapshots:</strong> Ao cancelar, nada é alterado no banco; SOMENTE ao clicar em &quot;Confirmar e Criar Rotas&quot; as rotas são criadas e persistidas via <code>salvarComposicaoCiclo</code> (com snapshot <code>edicao</code> em <code>rota_snapshots</code> e isolamento por <code>ciclo_id</code>).
+                  • <strong>Confirmação e Snapshots:</strong> Ao cancelar, nada é alterado no banco;
+                  SOMENTE ao clicar em &quot;Confirmar e Criar Rotas&quot; as rotas são criadas e
+                  persistidas via <code>salvarComposicaoCiclo</code> (com snapshot{' '}
+                  <code>edicao</code> em <code>rota_snapshots</code> e isolamento por{' '}
+                  <code>ciclo_id</code>).
                 </li>
                 <li>
-                  • <strong>Preservação das 4 Telas de Entregas:</strong> Composição manual mantida 100% intacta, isolamento estrito de ciclo e regras anti-vazamento (v0.0.243) rigorosamente preservadas.
+                  • <strong>Preservação das 4 Telas de Entregas:</strong> Composição manual mantida
+                  100% intacta, isolamento estrito de ciclo e regras anti-vazamento (v0.0.243)
+                  rigorosamente preservadas.
                 </li>
               </ul>
             </div>
@@ -986,7 +1008,10 @@ export function Requirements() {
         <div className="rounded-lg border border-border bg-card p-5 space-y-4">
           <div className="flex items-center justify-between flex-wrap gap-2">
             <div className="flex items-center gap-2">
-              <Badge variant="outline" className="text-muted-foreground border-border font-semibold">
+              <Badge
+                variant="outline"
+                className="text-muted-foreground border-border font-semibold"
+              >
                 Release v0.0.269
               </Badge>
               <span className="font-semibold text-foreground">

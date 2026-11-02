@@ -52,7 +52,11 @@ import {
 import { toast } from '@/hooks/use-toast'
 import { formatarCPF, validarDigitosCPF, limparCPF } from '@/lib/cpfUtils'
 import { MotoristaTrechoMapa } from '@/components/MotoristaTrechoMapa'
-import { compressImage } from '@/lib/imageCompressor'
+import {
+  compressFotoEntregaMotorista,
+  formatBytes,
+  type CompressedImageResult,
+} from '@/lib/imageCompressor'
 import {
   extrairCoordenadas,
   DEPOSITO_CENTRAL,
@@ -96,6 +100,7 @@ export const MotoristaPortal: React.FC = () => {
   const [cpfError, setCpfError] = useState<string | null>(null)
   const [assinaturaDataUrl, setAssinaturaDataUrl] = useState<string | undefined>(undefined)
   const [fotoDataUrl, setFotoDataUrl] = useState<string | undefined>(undefined)
+  const [fotoMeta, setFotoMeta] = useState<CompressedImageResult | null>(null)
   const [isProcessingFoto, setIsProcessingFoto] = useState(false)
   const [observacao, setObservacao] = useState<string>('')
   const [isSavingEntrega, setIsSavingEntrega] = useState(false)
@@ -277,6 +282,7 @@ export const MotoristaPortal: React.FC = () => {
     setCpfError(null)
     setAssinaturaDataUrl(parada.registro?.assinatura || undefined)
     setFotoDataUrl(parada.registro?.foto || undefined)
+    setFotoMeta(null)
     setObservacao(parada.registro?.observacao || '')
   }
 
@@ -305,19 +311,27 @@ export const MotoristaPortal: React.FC = () => {
 
     setIsProcessingFoto(true)
     try {
-      // Compactar no cliente antes de salvar em base64: max ~1280px e JPEG ~0.8
-      const res = await compressImage(file, { maxWidth: 1280, maxHeight: 1280, quality: 0.8 })
+      // Compactar client-side antes do upload: max ~1280px no lado maior e JPEG qualidade ~0.75
+      // Se já for pequena/leve (<= 1280px e <= 300KB), não reprocessa desnecessariamente
+      const res = await compressFotoEntregaMotorista(file)
       setFotoDataUrl(res.dataUrl)
+      setFotoMeta(res)
+
+      const desc = res.wasCompressed
+        ? `Reduzida para ${res.width}×${res.height}px (${formatBytes(res.compressedSizeBytes)}, antes ${formatBytes(res.originalSizeBytes)})`
+        : `Foto leve preservada (${res.width}×${res.height}px, ${formatBytes(res.compressedSizeBytes)})`
+
       toast({
-        title: 'Foto anexada',
-        description: 'Foto compactada e pronta para o comprovante.',
+        title: 'Foto pronta para envio',
+        description: desc,
       })
     } catch (err) {
       console.error('Erro ao processar foto:', err)
       toast({
         variant: 'destructive',
         title: 'Falha na foto',
-        description: 'Não foi possível carregar a imagem. Tente novamente.',
+        description:
+          'Não foi possível compactar a imagem. Tente tirar outra foto ou selecionar outro arquivo.',
       })
     } finally {
       setIsProcessingFoto(false)
@@ -328,6 +342,7 @@ export const MotoristaPortal: React.FC = () => {
 
   const handleRemoverFoto = () => {
     setFotoDataUrl(undefined)
+    setFotoMeta(null)
   }
 
   // Confirmar registro de entrega: grava AUTOMATICAMENTE horário de confirmação
@@ -1182,15 +1197,34 @@ export const MotoristaPortal: React.FC = () => {
               </div>
 
               {fotoDataUrl ? (
-                <div className="relative rounded-lg overflow-hidden border border-slate-200 dark:border-slate-800 bg-slate-950 flex flex-col items-center justify-center">
-                  <img
-                    src={fotoDataUrl}
-                    alt="Foto do Material Entregue"
-                    className="max-h-56 w-auto object-contain rounded-md"
-                  />
-                  <div className="absolute bottom-1 right-1 bg-black/60 text-white text-[10px] px-1.5 py-0.5 rounded">
-                    Compactada (~1280px)
+                <div className="space-y-1.5">
+                  <div className="relative rounded-lg overflow-hidden border border-slate-200 dark:border-slate-800 bg-slate-950 flex flex-col items-center justify-center">
+                    <img
+                      src={fotoDataUrl}
+                      alt="Foto do Material Entregue"
+                      className="max-h-56 w-auto object-contain rounded-md"
+                    />
+                    <div className="absolute bottom-1 right-1 bg-black/75 text-white text-[10px] font-mono px-2 py-0.5 rounded backdrop-blur-xs flex items-center gap-1">
+                      <Check className="h-3 w-3 text-emerald-400" />
+                      {fotoMeta
+                        ? `${fotoMeta.width}×${fotoMeta.height} · ${formatBytes(fotoMeta.compressedSizeBytes)}`
+                        : 'Otimizada (~1280px)'}
+                    </div>
                   </div>
+                  <p className="text-[11px] text-muted-foreground">
+                    {fotoMeta?.wasCompressed ? (
+                      <>
+                        Foto compactada no celular:{' '}
+                        <strong className="text-foreground">
+                          {formatBytes(fotoMeta.compressedSizeBytes)}
+                        </strong>{' '}
+                        (original: {formatBytes(fotoMeta.originalSizeBytes)}). Envio rápido mesmo
+                        com sinal fraco.
+                      </>
+                    ) : (
+                      <>Foto pronta e leve para envio com o comprovante de entrega.</>
+                    )}
+                  </p>
                 </div>
               ) : (
                 <div className="flex flex-col sm:flex-row gap-2">
