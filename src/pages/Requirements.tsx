@@ -912,6 +912,95 @@ export function Requirements() {
       {/* 7. Registro de Manutenção e Limpeza de Dados */}
       <SectionTitle>7. Registro de Manutenção & Higienização do Banco de Dados</SectionTitle>
       <div className="space-y-4">
+        {/* Release v0.0.272: Correção da divergência entre composição viva e exibição em /rotas */}
+        <div className="rounded-lg border border-primary/40 bg-primary/5 p-5 space-y-4">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="text-primary border-primary/40 font-semibold">
+                Release v0.0.272
+              </Badge>
+              <span className="font-semibold text-foreground">
+                0.0.272: Correção — Escola Ausente na Exibição da Rota após Mover Escola (/rotas)
+              </span>
+            </div>
+            <span className="text-xs font-medium text-primary">Versão Vigente (v0.0.272)</span>
+          </div>
+
+          <p className="text-sm text-foreground/90 leading-relaxed">
+            <strong>Ocorrência:</strong> na tela de Rotas de Entrega (<code>/rotas</code>), a
+            composição exibida da ROTA A divergia da composição viva gravada no banco: a escola{' '}
+            <strong>EM AMAURY AMARAL DOS SANTOS</strong> constava no banco como parada #2 de 38
+            (movida da ROTA B em 02/11, junto com CM Profª Rosália e CMEI José Maria Leitão
+            Carneiro, via hook <code>mover_escola_rota.js</code>), mas NÃO aparecia na lista
+            renderizada — a tela mostrava a numeração deslocada (Rosália #1, CMEI José Maria #2,
+            Maria Tereza #3). <strong>Causa raiz:</strong> o snapshot <code>edicao</code> do ciclo (
+            <code>rota_snapshots</code>) foi gravado em momento anterior à movimentação e a tela
+            priorizava o snapshot sobre a composição viva em ciclos abertos, sem reconciliação —
+            escolas movidas após o snapshot ficavam invisíveis na listagem, embora presentes no
+            banco e com pedido já atribuído à rota.
+          </p>
+
+          <div className="grid sm:grid-cols-2 gap-4 text-sm">
+            <div className="rounded-md border border-border/60 bg-muted/20 p-3 space-y-1.5">
+              <span className="font-medium text-primary">
+                1. Correção na Exibição (DeliveryRoutes.tsx):
+              </span>
+              <ul className="space-y-1 text-xs text-muted-foreground">
+                <li>
+                  • <strong>Leitura Tolerante por Campo:</strong> a ordem das paradas passou a ser
+                  sempre o CAMPO <code>ordem</code> gravado (nunca o índice do array do snapshot),
+                  com deduplicação de escolas repetidas.
+                </li>
+                <li>
+                  • <strong>Reconciliação com a Composição Viva:</strong> em ciclos NÃO terminais
+                  (não fechado/cancelado), toda escola presente na composição viva (
+                  <code>paradas_rota</code>) mas ausente do snapshot entra na listagem na posição
+                  registrada na composição viva — nenhuma parada gravada deixa de ser exibida.
+                </li>
+                <li>
+                  • <strong>Isolamento por Ciclo Preservado:</strong> ciclos fechados/cancelados
+                  continuam exibindo ESTRITAMENTE o snapshot histórico, sem qualquer reconciliação
+                  (retenção histórica intocada).
+                </li>
+              </ul>
+            </div>
+            <div className="rounded-md border border-primary/30 bg-primary/5 p-3 space-y-1.5">
+              <span className="font-medium text-primary">
+                2. Correção no Hook (mover_escola_rota.js):
+              </span>
+              <ul className="space-y-1 text-xs text-foreground/80">
+                <li>
+                  • <strong>Preservação Total das Paradas:</strong> a regravação da rota de destino
+                  e de origem agora garante que NENHUMA parada existente seja descartada; numeração
+                  regravada de forma consistente 1..N (apenas a remoção renumera as demais — mover
+                  escola não altera a numeração além da posição da própria escola).
+                </li>
+                <li>
+                  • <strong>Sincronização do Snapshot na Movimentação:</strong> após mover uma
+                  escola, os snapshots <code>edicao</code> de ciclos abertos das rotas de origem e
+                  destino são regravados com a composição viva nova, eliminando a defasagem snapshot
+                  × banco na origem do problema.
+                </li>
+                <li>
+                  • <strong>Guarda Anti-Duplicidade:</strong> paradas remanescentes da mesma escola
+                  na rota de destino são removidas antes da inserção, impedindo duplicidade.
+                </li>
+                <li>
+                  • <strong>Ordenação Estável:</strong> queries de paradas ordenadas por{' '}
+                  <code>ordem,created</code> (desempate determinístico).
+                </li>
+                <li>
+                  • <strong>Preservação Rigorosa:</strong> as 4 telas de entregas (
+                  <code>/rotas</code>, Dashboard, Portal do Motorista, <code>/monitoramento</code>)
+                  com isolamento por <code>ciclo_id</code> e anti-vazamento (v0.0.243), retenção
+                  histórica por ciclo e snapshot de preços permanecem 100% intactos; composição
+                  manual de rotas preservada.
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
         {/* Release v0.0.270: Sugerir Rotas (Roteamento Assistido) na Tela /rotas */}
         <div className="rounded-lg border border-primary/40 bg-primary/5 p-5 space-y-4">
           <div className="flex items-center justify-between flex-wrap gap-2">
@@ -923,7 +1012,9 @@ export function Requirements() {
                 0.0.270: Sugerir Rotas (Roteamento Assistido) com Prévia Editável na Tela /rotas
               </span>
             </div>
-            <span className="text-xs font-medium text-primary">Versão Vigente (v0.0.270)</span>
+            <span className="text-xs font-medium text-muted-foreground">
+              Consolidado (v0.0.270)
+            </span>
           </div>
 
           <p className="text-sm text-foreground/90 leading-relaxed">

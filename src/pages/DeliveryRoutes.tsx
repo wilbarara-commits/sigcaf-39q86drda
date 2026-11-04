@@ -799,58 +799,92 @@ export default function DeliveryRoutes() {
         longitude?: number | string | null
       }> = []
 
+      // Base da ordem: snapshot do ciclo (isolamento por ciclo) ou composição viva (fallback).
+      // Leitura tolerante: ordena sempre pelo CAMPO ordem (nunca por índice do array),
+      // deduplica escolas repetidas e, em ciclos abertos, reconcilia com a composição
+      // viva (paradas_rota): escola presente na composição viva mas ausente do snapshot
+      // (ex.: snapshot gravado antes de uma movimentação) entra na ordem registrada na
+      // composição viva — nenhuma parada gravada deixa de ser exibida.
+      type ParadaBaseItem = {
+        escolaId: string
+        nome: string
+        endereco: string
+        ordem: number
+        contratoNumero?: string
+      }
+      const paradasBase: ParadaBaseItem[] = []
+      const cicloAberto =
+        !!selectedCiclo?.status &&
+        selectedCiclo.status !== 'fechado' &&
+        selectedCiclo.status !== 'cancelado'
+
       if (
         paradasSnapshotParsed &&
         Array.isArray(paradasSnapshotParsed) &&
         paradasSnapshotParsed.length > 0
       ) {
-        // Ordenar paradas conforme o snapshot do ciclo selecionado
-        const sortedSnapshotItems = [...paradasSnapshotParsed].sort(
-          (a, b) => (Number(a.ordem) || 0) - (Number(b.ordem) || 0),
-        )
-
-        sortedSnapshotItems.forEach((sp, idx) => {
-          if (!sp.escola_id) return
+        const idsVistos = new Set<string>()
+        paradasSnapshotParsed.forEach((sp, idx) => {
+          if (!sp.escola_id || idsVistos.has(sp.escola_id)) return
+          idsVistos.add(sp.escola_id)
           const sch = schools.find((s) => s.id === sp.escola_id)
-          const peds = pedidosDaRota.filter(
-            (o) => o.schoolId === sp.escola_id && o.status !== 'Cancelado',
-          )
-          const contratoOrigem = escolaContratoOrigemMap.get(sp.escola_id)
-
-          paradasOrdenadas.push({
+          paradasBase.push({
             escolaId: sp.escola_id,
             nome: sp.escola_nome || sch?.name || 'Escola',
             endereco: sp.endereco || sch?.address || '',
-            alunos: sch?.alunos,
-            ordem: idx + 1,
-            contratoNumero: sp.contrato || contratoOrigem?.contratoNumero,
-            pedidos: peds,
-            latitude: sch?.latitude,
-            longitude: sch?.longitude,
+            ordem: Number(sp.ordem) || idx + 1,
+            contratoNumero: sp.contrato,
           })
         })
+
+        if (cicloAberto) {
+          paradasCadastradas.forEach((p) => {
+            if (!p.escola_id || idsVistos.has(p.escola_id)) return
+            idsVistos.add(p.escola_id)
+            const sch = schools.find((s) => s.id === p.escola_id)
+            paradasBase.push({
+              escolaId: p.escola_id,
+              nome: sch?.name || 'Escola',
+              endereco: sch?.address || '',
+              ordem: p.ordem,
+            })
+          })
+        }
+
+        paradasBase.sort((a, b) => a.ordem - b.ordem)
       } else {
         // Fallback para a ordem default de paradas_rota
-        paradasCadastradas.forEach((p, idx) => {
+        paradasCadastradas.forEach((p) => {
           const sch = schools.find((s) => s.id === p.escola_id)
-          const peds = pedidosDaRota.filter(
-            (o) => o.schoolId === p.escola_id && o.status !== 'Cancelado',
-          )
-          const contratoOrigem = escolaContratoOrigemMap.get(p.escola_id)
-
-          paradasOrdenadas.push({
+          paradasBase.push({
             escolaId: p.escola_id,
             nome: sch?.name || 'Escola',
             endereco: sch?.address || '',
-            alunos: sch?.alunos,
-            ordem: idx + 1,
-            contratoNumero: contratoOrigem?.contratoNumero,
-            pedidos: peds,
-            latitude: sch?.latitude,
-            longitude: sch?.longitude,
+            ordem: p.ordem,
           })
         })
+        paradasBase.sort((a, b) => a.ordem - b.ordem)
       }
+
+      paradasBase.forEach((bp, idx) => {
+        const sch = schools.find((s) => s.id === bp.escolaId)
+        const peds = pedidosDaRota.filter(
+          (o) => o.schoolId === bp.escolaId && o.status !== 'Cancelado',
+        )
+        const contratoOrigem = escolaContratoOrigemMap.get(bp.escolaId)
+
+        paradasOrdenadas.push({
+          escolaId: bp.escolaId,
+          nome: bp.nome,
+          endereco: bp.endereco,
+          alunos: sch?.alunos,
+          ordem: idx + 1,
+          contratoNumero: bp.contratoNumero || contratoOrigem?.contratoNumero,
+          pedidos: peds,
+          latitude: sch?.latitude,
+          longitude: sch?.longitude,
+        })
+      })
 
       // Último despacho realizado desta rota (respeitando estritamente o ciclo selecionado)
       const ultimoDespacho = despachos
