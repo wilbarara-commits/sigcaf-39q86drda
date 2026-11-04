@@ -265,6 +265,8 @@ export default function Schools() {
       codigo_inep: sch.codigo_inep || '',
       dependencia_administrativa: sch.dependencia_administrativa || '',
       cep: sch.cep || '',
+      endereco: sch.address || '',
+      bairro: sch.bairro || '',
       latitude: sch.latitude || '',
       longitude: sch.longitude || '',
     }))
@@ -283,13 +285,21 @@ export default function Schools() {
       'Código INEP',
       'Dependência Administrativa',
       'CEP',
+      'Endereço',
+      'Bairro',
       'Latitude',
       'Longitude',
     ]
 
     const escapeCsvField = (field: string) => {
       const str = String(field ?? '')
-      if (str.includes(';') || str.includes('"') || str.includes('\n') || str.includes('\r')) {
+      if (
+        str.includes(';') ||
+        str.includes(',') ||
+        str.includes('"') ||
+        str.includes('\n') ||
+        str.includes('\r')
+      ) {
         return `"${str.replace(/"/g, '""')}"`
       }
       return str
@@ -300,7 +310,16 @@ export default function Schools() {
 
     for (const r of preparedRows) {
       lines.push(
-        [r.nome, r.codigo_inep, r.dependencia_administrativa, r.cep, r.latitude, r.longitude]
+        [
+          r.nome,
+          r.codigo_inep,
+          r.dependencia_administrativa,
+          r.cep,
+          r.endereco,
+          r.bairro,
+          r.latitude,
+          r.longitude,
+        ]
           .map(escapeCsvField)
           .join(';'),
       )

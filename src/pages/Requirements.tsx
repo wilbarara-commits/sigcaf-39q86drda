@@ -98,6 +98,7 @@ const MODULES: ModuleSpec[] = [
       'Importador Inteligente com Upsert (CSV/XLSX): Importação e reimportação de planilhas de escolas com atualização automática de dados existentes. Escolas já cadastradas exibem comparativo de alterações campo a campo. O usuário conta com seletor de regra de conflito: "Atualizar campos preenchidos no arquivo (manter valores existentes quando o arquivo estiver vazio)" [padrão seguro] vs "Sobrescrever todos os campos com os valores do arquivo". Resumo final detalha separadamente criadas, atualizadas, duplicadas no arquivo e erros.',
       'Princípio de Unicidade & Integridade (R25): A escola é criada UMA VEZ no cadastro mestre e pertence a UM contrato ativo por vez. Prevenção de duplicidade por normalização estrita de nomes e exclusão protegida com verificação prévia de dependências de contratos e pedidos.',
       'Revisão de Coordenadas Sugeridas pelo Motorista (v0.0.231): Diálogo "Revisar Coordenadas" acessível em /escolas e /rotas com badge contador de pendências. Exibe comparativo da coordenada cadastrada atual vs. coordenada sugerida capturada pelo motorista em campo, cálculo de distância em metros/km (Haversine), link direto para abrir no Google Maps, motorista autor e data. Ações: "Aprovar" (atualiza definitivamente latitude e longitude da escola no cadastro mestre) e "Recusar" (mantém histórico com motivo opcional de recusa sem alterar a escola).',
+      'Exportação CSV com Endereço e Bairro (v0.0.273): Alteração exclusiva na geração do arquivo CSV do cadastro mestre de escolas (botão "CSV (.csv)" em /escolas, arquivo `escolas-vinculo.csv`): o CSV passa a incluir as colunas "Endereço" e "Bairro" de cada escola, entre "CEP" e "Latitude", totalizando 8 colunas na ordem Nome da Escola; Código INEP; Dependência Administrativa; CEP; Endereço; Bairro; Latitude; Longitude. Mesmo padrão de formatação preservado: BOM UTF-8, separador ";" e escape de campos que contenham ";" ou vírgulas (ex.: endereços com vírgulas vêm entre aspas). Nada mais muda no módulo: listagem, filtros, formulários e demais ações permanecem intactos, assim como a exportação XLSX.',
     ],
   },
   {
@@ -923,7 +924,10 @@ export function Requirements() {
                 0.0.272: Correção — Escola Ausente na Exibição da Rota após Mover Escola (/rotas)
               </span>
             </div>
-            <span className="text-xs font-medium text-primary">Versão Vigente (v0.0.272)</span>
+            <span className="text-xs font-medium text-muted-foreground">
+              Consolidado (v0.0.272)
+            </span>
+            <span className="text-xs font-medium text-primary">Versão Vigente (v0.0.273)</span>
           </div>
 
           <p className="text-sm text-foreground/90 leading-relaxed">
