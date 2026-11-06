@@ -192,7 +192,7 @@ routerAdd('POST', '/backend/v1/rotas-logisticas/desfazer-entregas', (e) => {
         )
         for (let i = 0; i < revisoes.length; i++) {
           txApp.delete(revisoes[i])
-          revisoesApagados++
+          revisoesApagadas++
         }
       } catch (errRev) {
         console.warn('Aviso ao apagar revisões de coordenadas:', errRev)

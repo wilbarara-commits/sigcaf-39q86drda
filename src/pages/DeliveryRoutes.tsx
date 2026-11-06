@@ -114,6 +114,8 @@ import {
   type RotaSnapshotRecord,
 } from '@/lib/types'
 import { DeliveryDetailsDialog, type DeliveryDetailsData } from '@/components/DeliveryDetailsDialog'
+import { desfazerEntregasRota, type DesfazerEntregasResumo } from '@/services/desfazer-entregas'
+import { Undo2 } from 'lucide-react'
 
 /**
  * Verifica se a fase do contrato no ciclo é elegível para despacho de rota.
@@ -587,6 +589,12 @@ export default function DeliveryRoutes() {
   const [rotaToDeliver, setRotaToDeliver] = useState<RotaLogisticaRecord | null>(null)
   const [observacaoEntregaRota, setObservacaoEntregaRota] = useState('')
   const [isDeliveringWholeRoute, setIsDeliveringWholeRoute] = useState(false)
+
+  // Estado para modal de desfazer entregas da rota (reiniciar para status Pendente)
+  const [desfazerEntregasOpen, setDesfazerEntregasOpen] = useState(false)
+  const [rotaParaDesfazer, setRotaParaDesfazer] = useState<RotaLogisticaRecord | null>(null)
+  const [apagarRevisoesAoDesfazer, setApagarRevisoesAoDesfazer] = useState(true)
+  const [isDesfazendoEntregas, setIsDesfazendoEntregas] = useState(false)
 
   // Estado para cancelamento por "Não entregue" após despacho (motivo logístico fixo)
   const [undeliveredDialogOpen, setUndeliveredDialogOpen] = useState(false)
@@ -1098,6 +1106,53 @@ export default function DeliveryRoutes() {
       setObservacaoEntregaRota('')
     } finally {
       setIsDeliveringWholeRoute(false)
+    }
+  }
+
+  // Desfazer entregas da rota: abrir modal de confirmação
+  const handleOpenDesfazerEntregas = (rota: RotaLogisticaRecord) => {
+    setRotaParaDesfazer(rota)
+    setApagarRevisoesAoDesfazer(true)
+    setDesfazerEntregasOpen(true)
+  }
+
+  // Desfazer entregas da rota: confirmar e executar chamada ao serviço
+  const handleConfirmDesfazerEntregas = async () => {
+    if (!rotaParaDesfazer) return
+    if (!selectedCiclo?.id) {
+      toast.error('Nenhum ciclo selecionado para desfazer as entregas.')
+      return
+    }
+
+    setIsDesfazendoEntregas(true)
+    try {
+      const resp = await desfazerEntregasRota({
+        rota_id: rotaParaDesfazer.id,
+        ciclo_id: selectedCiclo.id,
+        apagar_revisoes_coordenadas: apagarRevisoesAoDesfazer,
+      })
+
+      if (resp && resp.success) {
+        const { resumo } = resp
+        toast.success(
+          `Entregas da rota ${rotaParaDesfazer.nome} desfeitas com sucesso! ${resumo.pedidos_revertidos} pedidos voltaram a Pendente.`,
+        )
+      } else {
+        toast.success(`Operação concluída para a rota ${rotaParaDesfazer.nome}.`)
+      }
+
+      // Fechar modal
+      setDesfazerEntregasOpen(false)
+      setRotaParaDesfazer(null)
+
+      // Recarregar dados das rotas, despachos e entregas
+      await Promise.allSettled([carregarMotoristasEDespachos(), refreshData()])
+    } catch (err: any) {
+      console.error('Erro ao desfazer entregas da rota:', err)
+      const msg = err?.message || 'Falha ao desfazer entregas da rota. Tente novamente.'
+      toast.error(msg)
+    } finally {
+      setIsDesfazendoEntregas(false)
     }
   }
 
@@ -2428,17 +2483,33 @@ export default function DeliveryRoutes() {
 
                         <div className="flex items-center gap-1.5 shrink-0">
                           {isRotaEntregue ? (
-                            /* ESTÁGIO 3 — Rota Entregue / Concluída: informativo estático sem botão de despacho */
-                            <div className="rounded-md border border-emerald-200 dark:border-emerald-800 bg-emerald-50/50 dark:bg-emerald-950/30 p-2.5 flex items-center gap-2">
-                              <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
-                              <div className="text-left">
-                                <p className="text-xs font-semibold text-emerald-900 dark:text-emerald-200">
-                                  Rota Entregue · Concluída
-                                </p>
-                                <p className="text-[10px] text-emerald-700 dark:text-emerald-400">
-                                  Todas as entregas foram confirmadas pela central.
-                                </p>
+                            /* ESTÁGIO 3 — Rota Entregue / Concluída: informativo + botão opcional para desfazer */
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <div className="rounded-md border border-emerald-200 dark:border-emerald-800 bg-emerald-50/50 dark:bg-emerald-950/30 p-2.5 flex items-center gap-2">
+                                <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                                <div className="text-left">
+                                  <p className="text-xs font-semibold text-emerald-900 dark:text-emerald-200">
+                                    Rota Entregue · Concluída
+                                  </p>
+                                  <p className="text-[10px] text-emerald-700 dark:text-emerald-400">
+                                    Todas as entregas foram confirmadas pela central.
+                                  </p>
+                                </div>
                               </div>
+
+                              {/* Ação Operacional: Desfazer Entregas mesmo após conclusão */}
+                              {canEditRoutes && !isCicloTerminal && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-8 text-xs border-rose-300 text-rose-700 hover:bg-rose-50 hover:text-rose-800 dark:border-rose-900 dark:text-rose-300 dark:hover:bg-rose-950/40 gap-1 font-semibold"
+                                  onClick={() => handleOpenDesfazerEntregas(item.rota)}
+                                  title="Desfaz as entregas da rota e volta os pedidos para Pendente"
+                                >
+                                  <Undo2 className="h-3.5 w-3.5 text-rose-600 dark:text-rose-400" />
+                                  <span>Desfazer entregas da rota</span>
+                                </Button>
+                              )}
                             </div>
                           ) : !isDespachadoConfirmado ? (
                             /* ESTÁGIO 1 — NÃO despachado: botão "Despachar Rota" visível APENAS quando a fase permitir despacho (sem botão nem placeholder durante coleta de pedidos) */
@@ -2458,7 +2529,7 @@ export default function DeliveryRoutes() {
                               </Button>
                             ) : null
                           ) : (
-                            /* ESTÁGIO 2 — despachado confirmado: Botão "Reenviar Link Motorista" + Botão "Rota Entregue" */
+                            /* ESTÁGIO 2 — despachado confirmado: Botão "Reenviar Link Motorista" + Botão "Rota Entregue" + Botão "Desfazer Entregas" */
                             <>
                               <Button
                                 size="sm"
@@ -2481,6 +2552,18 @@ export default function DeliveryRoutes() {
                                 title="Confirma o retorno do veículo: marca TODOS os pedidos Em Rota como Entregue"
                               >
                                 <CheckCircle2 className="h-3.5 w-3.5" /> Rota Entregue
+                              </Button>
+
+                              {/* Ação Operacional: Desfazer Entregas da Rota (voltar ao status Pendente) */}
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-8 text-xs border-rose-300 text-rose-700 hover:bg-rose-50 hover:text-rose-800 dark:border-rose-900 dark:text-rose-300 dark:hover:bg-rose-950/40 gap-1 font-semibold"
+                                onClick={() => handleOpenDesfazerEntregas(item.rota)}
+                                title="Desfaz despacho e entregas da rota neste ciclo, voltando os pedidos para Pendente"
+                              >
+                                <Undo2 className="h-3.5 w-3.5 text-rose-600 dark:text-rose-400" />
+                                <span>Desfazer entregas da rota</span>
                               </Button>
                             </>
                           )}
@@ -4097,6 +4180,137 @@ Ou apenas o nome da escola copiado do Excel/Word`}
               }}
             >
               {isDeliveringWholeRoute ? 'Confirmando Entrega...' : 'Confirmar Rota Entregue'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* MODAL: Desfazer entregas da rota (restaurar status Pendente e limpar despacho/registros) */}
+      <AlertDialog
+        open={desfazerEntregasOpen}
+        onOpenChange={(open) => {
+          if (!isDesfazendoEntregas) {
+            setDesfazerEntregasOpen(open)
+            if (!open) setRotaParaDesfazer(null)
+          }
+        }}
+      >
+        <AlertDialogContent className="sm:max-w-[540px]">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2 text-rose-700 dark:text-rose-400">
+              <Undo2 className="h-5 w-5" /> Desfazer Entregas da Rota
+            </AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              {(() => {
+                if (!rotaParaDesfazer) return null
+                const rotaId = rotaParaDesfazer.id
+                const cicloId = selectedCiclo?.id
+                const pedidosDaRota = orders.filter(
+                  (o) =>
+                    o.rotaId === rotaId &&
+                    (!cicloId || o.cicloId === cicloId || (o as any).ciclo_id === cicloId),
+                )
+                const pedidosEmRotaOuEntregues = pedidosDaRota.filter(
+                  (o) => o.status === 'Em Rota' || o.status === 'Entregue',
+                )
+                const entregasRegistrosCount = (registrosEntregasMap[rotaId] || []).length
+                const revisoesCount = pendentesSugestoesCount
+
+                return (
+                  <div className="space-y-3 pt-2 text-foreground/90">
+                    <p className="text-xs leading-relaxed">
+                      Esta ação irá reiniciar completamente o estado de entregas da{' '}
+                      <strong>{rotaParaDesfazer.nome}</strong> no ciclo{' '}
+                      <strong>{selectedCiclo?.nome || 'corrente'}</strong>.
+                    </p>
+
+                    <div className="p-3 rounded-lg bg-rose-50/70 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/60 text-xs space-y-2">
+                      <p className="font-semibold text-rose-900 dark:text-rose-200 flex items-center gap-1.5">
+                        <AlertTriangle className="h-4 w-4 text-rose-600 dark:text-rose-400 shrink-0" />
+                        O que será apagado e revertido:
+                      </p>
+                      <ul className="list-disc pl-5 space-y-1 text-rose-800 dark:text-rose-300 text-[11px]">
+                        <li>
+                          <strong>Registros de entrega:</strong> todos os registros concluídos desta
+                          rota no ciclo ({entregasRegistrosCount} registro(s) encontrado(s) em
+                          tela).
+                        </li>
+                        <li>
+                          <strong>Comprovantes físicos e digitais:</strong> fotos do motorista e
+                          assinaturas digitais anexadas serão removidas do armazenamento.
+                        </li>
+                        <li>
+                          <strong>Despacho ativo da rota:</strong> o despacho será desfeito,
+                          removendo o vínculo com o motorista e invalidando o token de acesso ao
+                          portal.
+                        </li>
+                        <li>
+                          <strong>Status dos pedidos:</strong> todos os pedidos da rota atualmente
+                          em "Em Rota" ou "Entregue" ({pedidosEmRotaOuEntregues.length} pedido(s))
+                          voltarão ao status <strong>"Pendente"</strong>.
+                        </li>
+                        <li>
+                          <strong>Posição da rota:</strong> o marcador de caminhão será resetado
+                          para o início.
+                        </li>
+                      </ul>
+                    </div>
+
+                    <div className="p-2.5 rounded-md bg-muted/40 border text-xs flex items-center justify-between gap-3">
+                      <div className="space-y-0.5">
+                        <Label
+                          htmlFor="chk-apagar-revisoes"
+                          className="font-medium cursor-pointer text-foreground text-xs"
+                        >
+                          Apagar também revisões de coordenadas
+                        </Label>
+                        <p className="text-[10px] text-muted-foreground">
+                          Remove as sugestões de GPS enviadas pelo motorista durante as entregas (
+                          {revisoesCount} sugestão(ões)).
+                        </p>
+                      </div>
+                      <input
+                        type="checkbox"
+                        id="chk-apagar-revisoes"
+                        checked={apagarRevisoesAoDesfazer}
+                        onChange={(e) => setApagarRevisoesAoDesfazer(e.target.checked)}
+                        className="h-4 w-4 rounded border-gray-300 text-rose-600 focus:ring-rose-500 cursor-pointer"
+                      />
+                    </div>
+
+                    <p className="text-[11px] text-muted-foreground italic">
+                      Atenção: o histórico de outros ciclos e de outras rotas permanecerá intacto.
+                    </p>
+                  </div>
+                )
+              })()}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel
+              disabled={isDesfazendoEntregas}
+              onClick={() => {
+                setRotaParaDesfazer(null)
+              }}
+            >
+              Cancelar
+            </AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-rose-600 hover:bg-rose-700 text-white font-semibold"
+              disabled={isDesfazendoEntregas}
+              onClick={(e) => {
+                e.preventDefault()
+                handleConfirmDesfazerEntregas()
+              }}
+            >
+              {isDesfazendoEntregas ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin mr-1.5" />
+                  Desfazendo entregas...
+                </>
+              ) : (
+                'Sim, desfazer entregas'
+              )}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

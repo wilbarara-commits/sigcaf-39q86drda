@@ -223,6 +223,7 @@ const MODULES: ModuleSpec[] = [
       'Visualização Interativa em Mapa da Rota (Leaflet + OpenStreetMap + OSRM): Painel cartográfico integrado exibindo o traçado pelas vias rodoviárias reais via serviço OSRM (Open Source Routing Machine), pinos numerados, marcador do Depósito Central, trecho tracejado de saída, estimativa de quilometragem e tempo, e fallback resiliente em linha reta.',
       'Resolução do Ciclo Ativo da Chamada da Rota no Despacho (v0.0.137): O despacho de rotas e as validações de fase/pedidos pendentes resolvem estritamente o ciclo ativo da CHAMADA À QUAL A ROTA PERTENCE. Pedidos pendentes e fases de contrato são validados contra o ciclo ativo da respectiva chamada.',
       'Entrega por Rota Inteira (Fechamento pela Central): Fechamento "Rota Entregue" pela secretária: acionamento único, sem registro entrega a entrega, toda a rota entregue de uma vez, em nome do usuário logado, no horário do ato, com campo de observação opcional; o encerramento desativa o despacho na hora e todas as telas (Rotas de Entrega, Monitoramento, Dashboard) reagem em tempo real, sem recarregar a página.',
+      'Ação "Desfazer Entregas da Rota" (v0.0.275): Botão operacional em /rotas disponível quando a rota possui despacho ativo ou entregas concluídas em ciclo ativo (não terminal). Permite reiniciar completamente o estado de entregas da rota específica no ciclo corrente sem tocar nas demais rotas nem em ciclos anteriores. Ao ser acionada, abre diálogo modal de confirmação (AlertDialog) que lista de forma explícita todos os itens que serão revertidos e apagados: (1) exclusão dos registros de entrega da rota no ciclo (entrega_registros); (2) exclusão dos comprovantes físicos e digitais (entrega_comprovantes, removendo fotos e assinaturas do storage); (3) reversão do status dos pedidos ("Em Rota" e "Entregue" voltam para "Pendente"); (4) encerramento e limpeza do despacho ativo da rota (rota_despachos ativo desfeito, removendo motorista e token de acesso); (5) opção para apagar também sugestões de coordenadas GPS enviadas em campo (coordenada_sugestoes). A operação é atômica, isolada estritamente por rota_id e ciclo_id, respeitando integralmente o histórico de ciclos fechados.',
       'Bloqueio de Edição em Rotas de Ciclo Fechado/Cancelado ou Rota Entregue (v0.0.230): Rotas pertencentes a ciclos em status terminal (fechado ou cancelado) ou rotas com entregas concluídas (todos os pedidos com status Entregue, sem despacho ativo) ficam estritamente travadas contra edições operacionais. O arrastar-e-soltar (drag-and-drop) das paradas é desabilitado (cursor padrão), os containers não aceitam drop e os botões "Importar Arquivo", "Roteamento", "Sugerir rota otimizada", renomear (ícone lápis), excluir rota e transferir escola são desabilitados ou ocultados. A consulta aos dados, mapa e histórico da rota permanece 100% liberada.',
       'Isolamento da Ordem de Paradas por Ciclo via Retenção Histórica (v0.0.230): A reordenação manual das paradas de uma rota grava um snapshot de composição com versão de evento "edicao" especificamente vinculado ao ciclo selecionado (`salvarComposicaoCiclo`), isolando a ordem entre ciclos diferentes. Alterações efetuadas na sequência de um ciclo ativo não alteram a visualização de ciclos anteriores despachados ou fechados, que continuam exibindo com fidelidade a ordem congelada registrada no momento da respectiva operação.',
       'Isolamento Estrito do Estado da Rota por Ciclo Selecionado & Anti-Vazamento (v0.0.239): O estado da rota (badges "Aguardando Despacho", "Em Rota" e "Rota Entregue", travas de edição e controles operacionais) é calculado e indexado de forma estritamente isolada pelo ciclo selecionado em /rotas e /monitoramento. Todos os novos despachos gravam obrigatoriamente `ciclo_id` na coleção `rota_despachos` e em `despachos`. Registros legados sem `ciclo_id` são correlacionados estritamente pela janela temporal do ciclo (datas de início e fim). Despachos de ciclos anteriores jamais vazam para ciclos subsequentes: caso o ciclo selecionado possua pedidos "Em Rota" e zero entregas confirmadas naquele ciclo, o badge da rota é obrigatoriamente "Em Rota" (âmbar), preservando a trava de edição e a integridade de ciclos concorrentes.',
@@ -913,6 +914,85 @@ export function Requirements() {
       {/* 7. Registro de Manutenção e Limpeza de Dados */}
       <SectionTitle>7. Registro de Manutenção & Higienização do Banco de Dados</SectionTitle>
       <div className="space-y-4">
+        {/* Release v0.0.275: Desfazer Entregas da Rota e Higienização ROTA C (Ciclo 44/2026) */}
+        <div className="rounded-lg border border-primary/40 bg-primary/5 p-5 space-y-4">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="text-primary border-primary/40 font-semibold">
+                Release v0.0.275
+              </Badge>
+              <span className="font-semibold text-foreground">
+                0.0.275: Operação & Recurso — Desfazer Entregas da Rota e Higienização da ROTA C
+                (Ciclo 44/2026)
+              </span>
+            </div>
+            <span className="text-xs font-medium text-muted-foreground">
+              Consolidado (v0.0.275)
+            </span>
+            <span className="text-xs font-medium text-primary">Versão Vigente (v0.0.275)</span>
+          </div>
+
+          <p className="text-sm text-foreground/90 leading-relaxed">
+            <strong>Operação Executada:</strong> a pedido da coordenação operacional, as entregas da{' '}
+            <strong>ROTA C</strong> vinculadas ao ciclo corrente <strong>44/2026</strong> foram
+            completamente desfeitas e higienizadas. Os 20 pedidos que estavam despachados/entregues
+            retornaram com sucesso ao status <code>Pendente</code>, registros de entrega e
+            comprovantes (fotos e assinaturas) foram expurgados do banco e armazenamento, o despacho
+            ativo foi desfeito (sem motorista nem token ativo) e as revisões de coordenadas GPS
+            foram removidas. As rotas A e B e o histórico concluído do ciclo 40/2026 permaneceram
+            100% intactos.
+          </p>
+
+          <div className="grid sm:grid-cols-2 gap-4 text-sm">
+            <div className="rounded-md border border-border/60 bg-muted/20 p-3 space-y-1.5">
+              <span className="font-medium text-primary">
+                1. Recurso na Interface (DeliveryRoutes.tsx):
+              </span>
+              <ul className="space-y-1 text-xs text-muted-foreground">
+                <li>
+                  • <strong>Botão "Desfazer entregas da rota":</strong> exibido nos cards de rotas
+                  com despacho ativo (Estágio 2) ou rota entregue (Estágio 3), condicionado a
+                  permissão operacional (<code>canEditRoutes</code>) e ciclo não-terminal.
+                </li>
+                <li>
+                  • <strong>Diálogo Modal de Confirmação (AlertDialog):</strong> discrimina de forma
+                  transparente todos os itens que serão revertidos: contagem de registros de
+                  entrega, comprovantes e fotos que serão apagados, cancelamento do despacho ativo
+                  com revogação do token do motorista, e contagem exata de pedidos que retornarão ao
+                  status "Pendente".
+                </li>
+                <li>
+                  • <strong>Opção de Limpeza de GPS:</strong> checkbox explícito permitindo expurgar
+                  também sugestões de coordenadas geradas em campo pelo motorista durante a rota.
+                </li>
+              </ul>
+            </div>
+            <div className="rounded-md border border-primary/30 bg-primary/5 p-3 space-y-1.5">
+              <span className="font-medium text-primary">
+                2. Endpoint Transacional e Auditoria no Banco:
+              </span>
+              <ul className="space-y-1 text-xs text-foreground/80">
+                <li>
+                  • <strong>Endpoint Atômico (desfazer_entregas_rota.js):</strong> operação segura
+                  acionável por operadores autorizados, com isolamento estrito por{' '}
+                  <code>rota_id</code> e <code>ciclo_id</code>.
+                </li>
+                <li>
+                  • <strong>Resultado da Validação ROTA C (44/2026):</strong> 20 pedidos revertidos
+                  para <code>Pendente</code>, 0 registros em <code>entrega_registros</code>, 0 em{' '}
+                  <code>entrega_comprovantes</code>, despacho ativo cancelado e 0 pendências em{' '}
+                  <code>coordenada_sugestoes</code>.
+                </li>
+                <li>
+                  • <strong>Isolamento e Anti-vazamento Preservados:</strong> histórico do ciclo
+                  40/2026 intacto e sem contaminação entre rotas no Dashboard, Monitoramento, Rotas
+                  e Portal do Motorista.
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
         {/* Release v0.0.272: Correção da divergência entre composição viva e exibição em /rotas */}
         <div className="rounded-lg border border-primary/40 bg-primary/5 p-5 space-y-4">
           <div className="flex items-center justify-between flex-wrap gap-2">
@@ -927,7 +1007,7 @@ export function Requirements() {
             <span className="text-xs font-medium text-muted-foreground">
               Consolidado (v0.0.272)
             </span>
-            <span className="text-xs font-medium text-primary">Versão Vigente (v0.0.273)</span>
+            <span className="text-xs font-medium text-primary">Versão Consolidada (v0.0.272)</span>
           </div>
 
           <p className="text-sm text-foreground/90 leading-relaxed">
