@@ -2802,7 +2802,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }
       }
 
-      // Salvar paradas em batch no servidor
+      // Salvar paradas em batch no servidor (sincronização TOTAL: paradas fora do
+      // payload são apagadas no backend — inclui o caso de esvaziar a rota)
       const ordemExistenteMap = new Map<string, number>()
       paradasAnteriores.forEach((p) => ordemExistenteMap.set(p.escola_id, p.ordem))
 
@@ -2821,12 +2822,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
         paradasPayloadNormalizadas,
       )
 
-      if (savedParadas && savedParadas.length > 0) {
-        setParadasRota((prev) => [
-          ...prev.filter((p) => p.rota_id !== rotaLogisticaId),
-          ...savedParadas,
-        ])
-      }
+      setParadasRota((prev) => [
+        ...prev.filter((p) => p.rota_id !== rotaLogisticaId),
+        ...savedParadas,
+      ])
 
       // Atualizar pedidos pendentes no banco
       const pedidosPendentesAtribuidos = orders.filter(
@@ -2935,9 +2934,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     try {
       const saved = await rotasLogisticasService.reordenarParadas(rotaLogisticaId, paradas)
-      if (saved && saved.length > 0) {
-        setParadasRota((prev) => [...prev.filter((p) => p.rota_id !== rotaLogisticaId), ...saved])
-      }
+      // saved pode ser vazio (composição zerada): mesmo assim reflita a remoção no estado local
+      setParadasRota((prev) => [...prev.filter((p) => p.rota_id !== rotaLogisticaId), ...saved])
       return true
     } catch (err: any) {
       console.error('Erro ao salvar sequenciamento de paradas:', err)

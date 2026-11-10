@@ -820,7 +820,7 @@ export default function DeliveryRoutes() {
         ordem: number
         contratoNumero?: string
       }
-      const paradasBase: ParadaBaseItem[] = []
+      let paradasBase: ParadaBaseItem[] = []
       const cicloAberto =
         !!selectedCiclo?.status &&
         selectedCiclo.status !== 'fechado' &&
@@ -846,6 +846,15 @@ export default function DeliveryRoutes() {
         })
 
         if (cicloAberto) {
+          // Reconciliação bidirecional em ciclos abertos (0.0.277):
+          // - escola viva ausente do snapshot entra na lista (regra da 0.0.272);
+          // - escola do snapshot que NÃO está mais na composição viva sai da lista
+          //   (ex.: usuário desmarcou escolas em "Atribuir Escolas" e salvou).
+          const idsVivos = new Set(paradasCadastradas.map((p) => p.escola_id))
+          const snapRemovidas = paradasBase.filter((bp) => !idsVivos.has(bp.escolaId))
+          if (snapRemovidas.length > 0) {
+            paradasBase = paradasBase.filter((bp) => idsVivos.has(bp.escolaId))
+          }
           paradasCadastradas.forEach((p) => {
             if (!p.escola_id || idsVistos.has(p.escola_id)) return
             idsVistos.add(p.escola_id)
@@ -1371,6 +1380,15 @@ export default function DeliveryRoutes() {
   // Preenche paradas_rota, atualiza pedidos pendentes automaticamente e sincroniza contrato_escolas
   const handleSaveRouting = async () => {
     if (!selectedRotaForRouting) return
+    // Travas de edição: ciclo fechado/cancelado (ou rota entregue) não permite alterar composição
+    const cicloAlvo = selectedCiclo || activeCiclo || cicloCorrente
+    if (
+      cicloAlvo?.status &&
+      (cicloAlvo.status === 'fechado' || cicloAlvo.status === 'cancelado')
+    ) {
+      toast.error('Este ciclo está fechado/cancelado: a composição de rotas não pode ser alterada.')
+      return
+    }
     setIsSavingAssignment(true)
     try {
       const targetCId = selectedRotaForRouting.contrato_id || chamadaContratos[0]?.id || ''
@@ -1381,6 +1399,36 @@ export default function DeliveryRoutes() {
         undefined,
         selectedRotaForRouting.chamada_id || currentChamada?.id,
       )
+
+      // Regrava o snapshot 'edicao' do ciclo com a composição salva (inclusive vazia),
+      // para que card e histórico exibam a composição real daquele ciclo.
+      if (cicloAlvo?.id) {
+        try {
+          const paradasParaSnapshot = selectedSchoolsToAssign.map((escId, idx) => {
+            const escolaInfo = schools.find((s) => s.id === escId)
+            const contratoOrigem = escolaContratoOrigemMap.get(escId)
+            return {
+              escola_id: escId,
+              ordem: idx + 1,
+              escola_nome: escolaInfo?.name || 'Escola',
+              endereco: escolaInfo?.address || '',
+              contrato: contratoOrigem?.contratoNumero || '',
+            }
+          })
+          await retencaoHistoricaService.salvarComposicaoCiclo({
+            rotaId: selectedRotaForRouting.id,
+            cicloId: cicloAlvo.id,
+            chamadaId: selectedRotaForRouting.chamada_id || currentChamada?.id,
+            rotaNome: selectedRotaForRouting.nome,
+            paradas: paradasParaSnapshot,
+            observacao: 'Composição salva via Atribuir Escolas no ciclo',
+          })
+          const snapsMap = await retencaoHistoricaService.getSnapshotsByCiclo(cicloAlvo.id)
+          setCicloSnapshotsMap(snapsMap)
+        } catch (err) {
+          console.warn('Aviso não-bloqueante ao salvar snapshot de composição no ciclo:', err)
+        }
+      }
 
       setRoutingDialogOpen(false)
       setSelectedRotaForRouting(null)

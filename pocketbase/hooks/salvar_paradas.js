@@ -2,6 +2,12 @@
 // POST /backend/v1/rotas-logisticas/salvar-paradas (compatibilidade)
 // POST /backend/v1/rotas/salvar-paradas
 // Body: { rota_id?: string, rota_logistica_id?: string, paradas: Array<{ escola_id: string, ordem: number }> }
+//
+// SEMÂNTICA DE SINCRONIZAÇÃO TOTAL (v0.0.277): o payload recebido é a composição
+// COMPLETA desejada da rota. Paradas existentes cuja escola NÃO está no payload são
+// APAGADAS (ex.: usuário desmarcou escolas em "Atribuir Escolas" e salvou, inclusive
+// esvaziando a rota por completo). Paradas presentes têm a ordem atualizada (upsert).
+// Paradas de OUTRAS rotas jamais são tocadas.
 
 routerAdd('POST', '/backend/v1/rotas-logisticas/salvar-paradas', (e) => {
   const body = e.requestInfo().body || {}
@@ -17,6 +23,31 @@ routerAdd('POST', '/backend/v1/rotas-logisticas/salvar-paradas', (e) => {
   $app.runInTransaction((txApp) => {
     const paradasCol = txApp.findCollectionByNameOrId('paradas_rota')
 
+    // Conjunto de escola_ids que permanecem na composição desejada
+    const idsPermanecem = {}
+    for (let i = 0; i < paradas.length; i++) {
+      if (paradas[i].escola_id) {
+        idsPermanecem[paradas[i].escola_id] = true
+      }
+    }
+
+    // 1. Apagar paradas da rota cuja escola não está mais na composição (remoção)
+    const existentes = txApp.findRecordsByFilter(
+      'paradas_rota',
+      'rota_id = {:rotaId}',
+      'ordem',
+      0,
+      0,
+      { rotaId: rotaId },
+    )
+    for (let j = 0; j < existentes.length; j++) {
+      const escId = existentes[j].getString('escola_id')
+      if (!idsPermanecem[escId]) {
+        txApp.delete(existentes[j])
+      }
+    }
+
+    // 2. Upsert das paradas desejadas (ordem)
     for (let i = 0; i < paradas.length; i++) {
       const p = paradas[i]
       const escolaId = p.escola_id
@@ -68,6 +99,31 @@ routerAdd('POST', '/backend/v1/rotas/salvar-paradas', (e) => {
   $app.runInTransaction((txApp) => {
     const paradasCol = txApp.findCollectionByNameOrId('paradas_rota')
 
+    // Conjunto de escola_ids que permanecem na composição desejada
+    const idsPermanecem = {}
+    for (let i = 0; i < paradas.length; i++) {
+      if (paradas[i].escola_id) {
+        idsPermanecem[paradas[i].escola_id] = true
+      }
+    }
+
+    // 1. Apagar paradas da rota cuja escola não está mais na composição (remoção)
+    const existentes = txApp.findRecordsByFilter(
+      'paradas_rota',
+      'rota_id = {:rotaId}',
+      'ordem',
+      0,
+      0,
+      { rotaId: rotaId },
+    )
+    for (let j = 0; j < existentes.length; j++) {
+      const escId = existentes[j].getString('escola_id')
+      if (!idsPermanecem[escId]) {
+        txApp.delete(existentes[j])
+      }
+    }
+
+    // 2. Upsert das paradas desejadas (ordem)
     for (let i = 0; i < paradas.length; i++) {
       const p = paradas[i]
       const escolaId = p.escola_id
