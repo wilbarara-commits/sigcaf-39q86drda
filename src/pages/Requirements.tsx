@@ -99,6 +99,7 @@ const MODULES: ModuleSpec[] = [
       'Princípio de Unicidade & Integridade (R25): A escola é criada UMA VEZ no cadastro mestre e pertence a UM contrato ativo por vez. Prevenção de duplicidade por normalização estrita de nomes e exclusão protegida com verificação prévia de dependências de contratos e pedidos.',
       'Revisão de Coordenadas Sugeridas pelo Motorista (v0.0.231): Diálogo "Revisar Coordenadas" acessível em /escolas e /rotas com badge contador de pendências. Exibe comparativo da coordenada cadastrada atual vs. coordenada sugerida capturada pelo motorista em campo, cálculo de distância em metros/km (Haversine), link direto para abrir no Google Maps, motorista autor e data. Ações: "Aprovar" (atualiza definitivamente latitude e longitude da escola no cadastro mestre) e "Recusar" (mantém histórico com motivo opcional de recusa sem alterar a escola).',
       'Exportação CSV com Endereço e Bairro (v0.0.273): Alteração exclusiva na geração do arquivo CSV do cadastro mestre de escolas (botão "CSV (.csv)" em /escolas, arquivo `escolas-vinculo.csv`): o CSV passa a incluir as colunas "Endereço" e "Bairro" de cada escola, entre "CEP" e "Latitude", totalizando 8 colunas na ordem Nome da Escola; Código INEP; Dependência Administrativa; CEP; Endereço; Bairro; Latitude; Longitude. Mesmo padrão de formatação preservado: BOM UTF-8, separador ";" e escape de campos que contenham ";" ou vírgulas (ex.: endereços com vírgulas vêm entre aspas). Nada mais muda no módulo: listagem, filtros, formulários e demais ações permanecem intactos, assim como a exportação XLSX.',
+      'Preenchimento das Coordenadas Vazias com a Coordenada da Cooperativa (v0.0.276): Migration idempotente 0146 que percorre TODAS as escolas do cadastro mestre e preenche latitude e/ou longitude vazias (campo vazio ou ausente) com o valor fixo da cooperativa (-22.260121829949114, -42.73806939190867), preenchendo apenas o campo que estiver vazio. Escolas que já possuíam coordenada não são tocadas em nenhum campo. Efeito operacional: escolas com pedido deixam de ser excluídas da prévia do Sugeridor de Rotas em /rotas com o aviso "Sem coordenadas — incluir manualmente", passando a entrar normalmente no cálculo das sugestões. Formulário, filtros e exportações CSV/XLSX de /escolas permanecem intactos.',
     ],
   },
   {
@@ -914,6 +915,81 @@ export function Requirements() {
       {/* 7. Registro de Manutenção e Limpeza de Dados */}
       <SectionTitle>7. Registro de Manutenção & Higienização do Banco de Dados</SectionTitle>
       <div className="space-y-4">
+        {/* Release v0.0.276: Preenchimento das Coordenadas Vazias das Escolas */}
+        <div className="rounded-lg border border-primary/40 bg-primary/5 p-5 space-y-4">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="text-primary border-primary/40 font-semibold">
+                Release v0.0.276
+              </Badge>
+              <span className="font-semibold text-foreground">
+                0.0.276: Preenchimento das Coordenadas Vazias das Escolas com a Coordenada da
+                Cooperativa
+              </span>
+            </div>
+            <span className="text-xs font-medium text-muted-foreground">
+              Consolidado (v0.0.276)
+            </span>
+            <span className="text-xs font-medium text-primary">Versão Vigente (v0.0.276)</span>
+          </div>
+
+          <p className="text-sm text-foreground/90 leading-relaxed">
+            <strong>Operação Executada:</strong> a pedido da coordenação operacional, todas as
+            escolas do cadastro mestre que estavam sem coordenada (latitude e/ou longitude vazias)
+            foram preenchidas com o valor fixo da cooperativa:{' '}
+            <code className="text-xs font-mono bg-muted px-1 py-0.5 rounded">
+              -22.260121829949114, -42.73806939190867
+            </code>
+            . Com isso, escolas com pedido deixam de aparecer na prévia do Sugeridor de Rotas em
+            /rotas com o aviso <em>"Sem coordenadas — incluir manualmente"</em> e passam a entrar
+            normalmente no cálculo das sugestões.
+          </p>
+
+          <div className="grid sm:grid-cols-2 gap-4 text-sm">
+            <div className="rounded-md border border-border/60 bg-muted/20 p-3 space-y-1.5">
+              <span className="font-medium text-primary">
+                1. Regras da Migração (0146_preencher_coordenadas_vazias_escolas.js):
+              </span>
+              <ul className="space-y-1 text-xs text-muted-foreground">
+                <li>
+                  • <strong>Critério de seleção:</strong> apenas escolas com latitude OU longitude
+                  vazia (campo vazio ou ausente).
+                </li>
+                <li>
+                  • <strong>Preenchimento parcial seguro:</strong> quando só um dos campos está
+                  vazio, somente ele é preenchido — o valor existente do outro campo é preservado.
+                </li>
+                <li>
+                  • <strong>Escolas já geolocalizadas intocadas:</strong> registros com latitude e
+                  longitude preenchidos não são alterados de forma alguma.
+                </li>
+                <li>
+                  • <strong>Idempotente:</strong> reexecutar a migração não altera nada (só atua
+                  sobre campos vazios) e nenhum outro campo (CEP, endereço, nome, etc.) é tocado.
+                </li>
+              </ul>
+            </div>
+            <div className="rounded-md border border-primary/30 bg-primary/5 p-3 space-y-1.5">
+              <span className="font-medium text-primary">2. Validação no Banco:</span>
+              <ul className="space-y-1 text-xs text-foreground/80">
+                <li>
+                  • Após a execução, <strong>nenhuma escola</strong> permaneceu com latitude ou
+                  longitude vazia no cadastro mestre.
+                </li>
+                <li>
+                  • Escolas que já tinham coordenada (ex.: CM ELZA CORRADINNI, CM EDOMIRO, CC
+                  CALEME) mantiveram exatamente os mesmos valores de latitude/longitude.
+                </li>
+                <li>
+                  • <strong>Efeito no roteamento assistido:</strong> a prévia de sugestão de rotas
+                  em /rotas não lista mais escolas com pedido como "Sem coordenadas — incluir
+                  manualmente".
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
         {/* Release v0.0.275: Desfazer Entregas da Rota e Higienização ROTA C (Ciclo 44/2026) */}
         <div className="rounded-lg border border-primary/40 bg-primary/5 p-5 space-y-4">
           <div className="flex items-center justify-between flex-wrap gap-2">
@@ -929,7 +1005,6 @@ export function Requirements() {
             <span className="text-xs font-medium text-muted-foreground">
               Consolidado (v0.0.275)
             </span>
-            <span className="text-xs font-medium text-primary">Versão Vigente (v0.0.275)</span>
           </div>
 
           <p className="text-sm text-foreground/90 leading-relaxed">
