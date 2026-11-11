@@ -1382,10 +1382,7 @@ export default function DeliveryRoutes() {
     if (!selectedRotaForRouting) return
     // Travas de edição: ciclo fechado/cancelado (ou rota entregue) não permite alterar composição
     const cicloAlvo = selectedCiclo || activeCiclo || cicloCorrente
-    if (
-      cicloAlvo?.status &&
-      (cicloAlvo.status === 'fechado' || cicloAlvo.status === 'cancelado')
-    ) {
+    if (cicloAlvo?.status && (cicloAlvo.status === 'fechado' || cicloAlvo.status === 'cancelado')) {
       toast.error('Este ciclo está fechado/cancelado: a composição de rotas não pode ser alterada.')
       return
     }

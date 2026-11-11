@@ -915,6 +915,81 @@ export function Requirements() {
       {/* 7. Registro de Manutenção e Limpeza de Dados */}
       <SectionTitle>7. Registro de Manutenção & Higienização do Banco de Dados</SectionTitle>
       <div className="space-y-4">
+        {/* Release v0.0.278: Reparo da numeração da ROTA A e snapshot órfão da ROTA C (Ciclo 44/2026) */}
+        <div className="rounded-lg border border-primary/40 bg-primary/5 p-5 space-y-4">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="text-primary border-primary/40 font-semibold">
+                Release v0.0.278
+              </Badge>
+              <span className="font-semibold text-foreground">
+                0.0.278: Reparo da Numeração da ROTA A e Limpeza de Snapshot Órfão da ROTA C (Ciclo
+                44/2026)
+              </span>
+            </div>
+            <span className="text-xs font-medium text-muted-foreground">
+              Consolidado (v0.0.278)
+            </span>
+            <span className="text-xs font-medium text-primary">Versão Vigente (v0.0.278)</span>
+          </div>
+
+          <p className="text-sm text-foreground/90 leading-relaxed">
+            <strong>Operação Executada:</strong> reparo da numeração corrompida das paradas vivas da{' '}
+            <strong>ROTA A</strong> no ciclo <strong>44/2026</strong> — a composição em{' '}
+            <code>paradas_rota</code> havia ficado com ordens duplicadas (dois registros na posição
+            1 e dois na 2, incluindo a colisão da EM AMAURY AMARAL DOS SANTOS) e vãos nas posições 6
+            e 9, após movimentações de escolas de 02/11. A migração idempotente 0147 renumerou as 35
+            paradas vivas em sequência limpa 1..35 (preservando a ordem relativa), regravou o
+            snapshot <code>edicao</code> da rota a partir da composição corrigida e apagou o
+            snapshot <code>despacho</code> órfão da <strong>ROTA C</strong> deixado pela operação de
+            desfazer entregas (v0.0.275).
+          </p>
+
+          <div className="grid sm:grid-cols-2 gap-4 text-sm">
+            <div className="rounded-md border border-border/60 bg-muted/20 p-3 space-y-1.5">
+              <span className="font-medium text-primary">
+                1. Correção de Código — Salvamento de Composição (v0.0.278):
+              </span>
+              <ul className="space-y-1 text-xs text-muted-foreground">
+                <li>
+                  • O hook <code>salvar_paradas.js</code> passa a propagar a composição viva gravada
+                  (inclusive a <strong>vazia</strong>) para os snapshots <code>edicao</code> dos
+                  ciclos não terminais, alinhado ao comportamento já existente em{' '}
+                  <code>mover_escola_rota.js</code>.
+                </li>
+                <li>
+                  • <strong>Efeito:</strong> desmarcar TODAS as escolas de uma rota em "Atribuir
+                  Escolas" e salvar agora esvazia a rota de verdade — a reconciliação snapshot ×
+                  composição viva da v0.0.272 não "restaura" mais as escolas removidas a partir do
+                  snapshot desatualizado.
+                </li>
+              </ul>
+            </div>
+            <div className="rounded-md border border-primary/30 bg-primary/5 p-3 space-y-1.5">
+              <span className="font-medium text-primary">2. Validação no Banco:</span>
+              <ul className="space-y-1 text-xs text-foreground/80">
+                <li>
+                  • Composição viva da ROTA A: 35 paradas em sequência 1..35, sem duplicatas nem
+                  vãos; EM AMAURY AMARAL DOS SANTOS presente na posição correta, sem colisão de
+                  ordem.
+                </li>
+                <li>
+                  • Snapshot <code>edicao</code> da ROTA A regravado com as mesmas 35 paradas e
+                  ordens idênticas às da composição viva.
+                </li>
+                <li>
+                  • Snapshot <code>despacho</code> órfão da ROTA C (06/11, 20 pedidos) não existe
+                  mais — resta apenas o snapshot <code>edicao</code> do ciclo.
+                </li>
+                <li>
+                  • Ciclos fechados/entregues intocados e rotas B e C com composição viva
+                  preservada.
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
         {/* Release v0.0.276: Preenchimento das Coordenadas Vazias das Escolas */}
         <div className="rounded-lg border border-primary/40 bg-primary/5 p-5 space-y-4">
           <div className="flex items-center justify-between flex-wrap gap-2">
