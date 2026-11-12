@@ -88,6 +88,7 @@ const NAV_GROUPS: NavGroup[] = [
       { name: 'Monitoramento', path: '/monitoramento', emoji: '📡' },
       { name: 'Histórico de Ciclos', path: '/historico-ciclos', emoji: '🔄' },
       { name: 'Consolidação', path: '/consolidacao', emoji: '🧺' },
+      { name: 'Compras', path: '/consolidacao-simples', emoji: '🛒' },
     ],
   },
   {

@@ -202,6 +202,20 @@ const MODULES: ModuleSpec[] = [
     ],
   },
   {
+    id: '3.7B',
+    title: 'Consolidação para Compras (Versão Simples)',
+    route: '/consolidacao-simples',
+    goal: 'Relatório enxuto de compras por Data de Entrega, reutilizando exatamente a mesma base de dados da Consolidação Final, com a linha TOTAL GERAL como primeira linha do relatório.',
+    details: [
+      'Menu lateral "Compras" (ícone 🛒), rota /consolidacao-simples — versão simples da Consolidação Final para uso nas compras.',
+      'Mesma base de dados da Consolidação Final: mesmos valores consolidados e mesmas unidades (pedidos ativos dos ciclos abertos, pedidos cancelados excluídos, nome do produto + unidade entre parênteses, ex. "AIPIM (kg)").',
+      'Controles exclusivos: seletor primário de Data de Entrega (agregarDatasEntrega sobre pedidos de ciclos abertos, pré-seleção com escolherDataPadrao do módulo src/lib/datasEntrega.ts) e seletor secundário de Chamada, exibido SOMENTE quando a data tem mais de uma chamada com pedidos — recorte data→chamada idêntico ao de /rotas. Sem exportação e sem outros filtros.',
+      'Layout do relatório: a linha TOTAL GERAL é a PRIMEIRA linha da tabela (total por coluna), seguida das linhas de produtos; colunas Produto, Total, uma coluna por rota ativa no recorte (ROTA A, ROTA B, ROTA C…) e TOTAL GERAL.',
+      'Números formatados no padrão brasileiro: vírgula decimal e ponto de milhar (ex. 3.200 / 190,5).',
+      'A Consolidação Final existente (/consolidacao) e /rotas permanecem intactas.',
+    ],
+  },
+  {
     id: '3.8',
     title: 'Roteamento, Despacho Logístico & Gestão de Motoristas',
     route: '/rotas',
@@ -915,6 +929,44 @@ export function Requirements() {
       {/* 7. Registro de Manutenção e Limpeza de Dados */}
       <SectionTitle>7. Registro de Manutenção & Higienização do Banco de Dados</SectionTitle>
       <div className="space-y-4">
+        {/* Release v0.0.285: Consolidação para Compras */}
+        <div className="rounded-lg border border-primary/40 bg-primary/5 p-5 space-y-4">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="text-primary border-primary/40 font-semibold">
+                Release v0.0.285
+              </Badge>
+              <span className="font-semibold text-foreground">
+                0.0.285: Nova tela "Consolidação para Compras" (/consolidacao-simples) — menu
+                "Compras"
+              </span>
+            </div>
+            <span className="text-xs font-medium text-muted-foreground">
+              Consolidado (v0.0.285)
+            </span>
+            <span className="text-xs font-medium text-primary">Versão Vigente (v0.0.285)</span>
+          </div>
+
+          <p className="text-sm text-foreground/90 leading-relaxed">
+            <strong>Funcionalidade:</strong> nova página <code>/consolidacao-simples</code> —
+            "Consolidação para Compras" — versão simples da Consolidação Final para uso nas compras,
+            acessível pelo menu lateral "Compras" (ícone 🛒). Usa EXATAMENTE a mesma base de dados
+            da Consolidação Final (mesmos valores consolidados e mesmas unidades: pedidos ativos dos
+            ciclos abertos, pedidos cancelados excluídos, produto + unidade entre parênteses, ex.
+            "AIPIM (kg)"). Controles exclusivos, no mesmo padrão de /rotas: seletor primário de Data
+            de entrega (agregarDatasEntrega sobre pedidos de ciclos abertos, pré-seleção com
+            escolherDataPadrao) e seletor secundário de Chamada exibido SOMENTE quando a data tem
+            mais de uma chamada com pedidos — recorte data→chamada igual ao de /rotas. Sem botão de
+            exportação e sem outros filtros. Layout da tabela: linha{' '}
+            <strong>TOTAL GERAL na primeira linha</strong> do relatório (total por coluna), seguida
+            das linhas de produtos; colunas Produto, Total, uma coluna por rota ativa no recorte
+            (ROTA A, ROTA B, ROTA C…) e TOTAL GERAL. Números formatados com vírgula decimal e ponto
+            de milhar (ex. 3.200 / 190,5). A Consolidação Final existente e /rotas permanecem
+            intactas, preservando o isolamento por
+            <code>ciclo_id</code> e o anti-vazamento nas 4 telas de entregas.
+          </p>
+        </div>
+
         {/* Release v0.0.284: Operação por data de entrega em /rotas */}
         <div className="rounded-lg border border-primary/40 bg-primary/5 p-5 space-y-4">
           <div className="flex items-center justify-between flex-wrap gap-2">
