@@ -612,7 +612,8 @@ export default function DeliveryRoutes() {
   const [dragOverEscolaId, setDragOverEscolaId] = useState<string | null>(null)
   const [isMovingSchool, setIsMovingSchool] = useState(false)
 
-  // Estado para modal/diálogo mobile de mover escola para outra rota
+  // Estado para modal/diálogo de mover escola de rota/posição
+  // (nova posição na MESMA rota ou posição específica em OUTRA rota)
   const [mobileMoveDialogOpen, setMobileMoveDialogOpen] = useState(false)
   const [schoolToMoveMobile, setSchoolToMoveMobile] = useState<{
     escolaId: string
@@ -621,6 +622,7 @@ export default function DeliveryRoutes() {
     origemRotaNome: string
   } | null>(null)
   const [targetRotaIdMobile, setTargetRotaIdMobile] = useState<string>('')
+  const [targetPosicaoMobile, setTargetPosicaoMobile] = useState<number>(1)
 
   // Estado de modo de visualização por rota: 'lista' | 'mapa' | 'ambos' (mapa persistido por rotaId)
   const [routeViewModeMap, setRouteViewModeMap] = useState<
@@ -1661,30 +1663,110 @@ export default function DeliveryRoutes() {
     escolaNome: string,
     origemRotaId: string,
     origemRotaNome: string,
+    ordemAtual?: number,
   ) => {
     setSchoolToMoveMobile({ escolaId, escolaNome, origemRotaId, origemRotaNome })
-    // Primeira rota diferente da atual
-    const outra = filteredRotasLogisticas.find((r) => r.id !== origemRotaId)
-    setTargetRotaIdMobile(outra?.id || '')
+    // Padrão: MESMA rota na posição atual (o usuário pode trocar para outra rota/posição)
+    setTargetRotaIdMobile(origemRotaId)
+    setTargetPosicaoMobile(ordemAtual && ordemAtual >= 1 ? ordemAtual : 1)
     setMobileMoveDialogOpen(true)
   }
 
+  // Total de posições disponíveis na rota escolhida:
+  // mesma rota 1..total (reordenar); outra rota 1..(total+1) (inserir em qualquer ponto)
+  const paradasDestinoDisponiveis = (rotaId: string): number => {
+    const totalAtual = paradasRota.filter((p) => p.rota_id === rotaId).length
+    const mesmaRota = rotaId === schoolToMoveMobile?.origemRotaId
+    return mesmaRota ? totalAtual : totalAtual + 1
+  }
+
+  const targetPosicaoMaxMobile =
+    schoolToMoveMobile && targetRotaIdMobile ? paradasDestinoDisponiveis(targetRotaIdMobile) : 1
+
+  const mesmaRotaSelecionadaMobile =
+    !!schoolToMoveMobile && targetRotaIdMobile === schoolToMoveMobile.origemRotaId
+
+  const targetPosicaoHintMobile = useMemo(() => {
+    if (!schoolToMoveMobile || !targetRotaIdMobile) return ''
+    const total = paradasDestinoDisponiveis(targetRotaIdMobile)
+    const mesma = targetRotaIdMobile === schoolToMoveMobile.origemRotaId
+    const nome =
+      rotasLogisticas.find((r) => r.id === targetRotaIdMobile)?.nome ||
+      schoolToMoveMobile.origemRotaNome
+    if (mesma) {
+      return `A escola será reposicionada dentro da ${nome} (posições 1..${total}).`
+    }
+    return `A escola entrará na ${nome} na posição escolhida (1..${total}); as demais paradas serão deslocadas mantendo a ordem relativa.`
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [schoolToMoveMobile, targetRotaIdMobile, paradasRota, rotasLogisticas])
+
+  // Rota "entregue" no ciclo também trava a movimentação (consulta liberada)
+  const rotaEntregueIds = useMemo(() => {
+    const ids = new Set<string>()
+    for (const d of despachos) {
+      if (d.status === 'Entregue' && d.rota_id) ids.add(d.rota_id)
+    }
+    return ids
+  }, [despachos])
+
   const handleConfirmMobileMove = async () => {
-    if (!schoolToMoveMobile || !targetRotaIdMobile) return
+    if (!schoolToMoveMobile || !targetRotaIdMobile || !targetPosicaoMobile) return
+    // Travas de edição: ciclo fechado/cancelado/entregue não permite mover escola
+    const cicloAlvo = selectedCiclo || activeCiclo || cicloCorrente
+    if (
+      cicloAlvo?.status &&
+      (cicloAlvo.status === 'fechado' ||
+        cicloAlvo.status === 'cancelado' ||
+        cicloAlvo.status === 'entregue')
+    ) {
+      toast.error(
+        'Este ciclo está fechado/cancelado: não é possível mover escolas de rota/posição.',
+      )
+      return
+    }
+    if (rotaEntregueIds.has(schoolToMoveMobile.origemRotaId)) {
+      toast.error('Esta rota já foi entregue no ciclo: não é possível mover escolas.')
+      return
+    }
+    if (targetPosicaoMobile < 1) {
+      return
+    }
+    // Faixa útil: rota atual 1..total; outra rota 1..(total+1) — fora da faixa volta ao máximo
+    const maxPos = paradasDestinoDisponiveis(targetRotaIdMobile)
+    if (targetPosicaoMobile > maxPos) {
+      toast.error(`Posição inválida: escolha entre 1 e ${maxPos}.`)
+      return
+    }
     setIsMovingSchool(true)
     try {
+      const mesmaRota = targetRotaIdMobile === schoolToMoveMobile.origemRotaId
       const destRota = rotasLogisticas.find((r) => r.id === targetRotaIdMobile)
       const ok = await moverEscolaEntreRotas({
         escolaId: schoolToMoveMobile.escolaId,
         origemRotaId: schoolToMoveMobile.origemRotaId,
         destinoRotaId: targetRotaIdMobile,
+        targetOrdem: targetPosicaoMobile,
       })
       if (ok) {
         toast.success(
-          `"${schoolToMoveMobile.escolaNome}" movida para a ${destRota?.nome || 'nova rota'}!`,
+          mesmaRota
+            ? `"${schoolToMoveMobile.escolaNome}" movida para a posição ${targetPosicaoMobile} na ${destRota?.nome || schoolToMoveMobile.origemRotaNome}!`
+            : `"${schoolToMoveMobile.escolaNome}" movida para ${destRota?.nome || 'nova rota'} na posição ${targetPosicaoMobile}!`,
         )
         setMobileMoveDialogOpen(false)
         setSchoolToMoveMobile(null)
+
+        // O hook regravou os snapshots 'edicao' das rotas afetadas no ciclo aberto:
+        // recarrega o mapa de snapshots para que a tela reflita a nova ordem imediatamente.
+        const cicloAlvoId = (selectedCiclo || activeCiclo || cicloCorrente)?.id
+        if (cicloAlvoId) {
+          try {
+            const snapsMap = await retencaoHistoricaService.getSnapshotsByCiclo(cicloAlvoId)
+            setCicloSnapshotsMap(snapsMap)
+          } catch (errSnap) {
+            console.warn('Aviso não-bloqueante ao recarregar snapshots após mover escola:', errSnap)
+          }
+        }
       }
     } finally {
       setIsMovingSchool(false)
@@ -3466,13 +3548,13 @@ export default function DeliveryRoutes() {
                                         </Badge>
                                       )}
 
-                                      {/* Botão de transferir rota para mobile / facilidade com clique */}
-                                      {podeEditarRota && filteredRotasLogisticas.length > 1 && (
+                                      {/* Botão de mover rota/posição (mobile / facilidade com clique) */}
+                                      {podeEditarRota && (
                                         <Button
                                           variant="ghost"
                                           size="icon"
                                           className="h-6 w-6 text-muted-foreground hover:text-primary shrink-0"
-                                          title="Mover escola para outra rota"
+                                          title="Mover escola de rota/posição"
                                           onClick={(e) => {
                                             e.stopPropagation()
                                             handleOpenMobileMove(
@@ -3480,6 +3562,7 @@ export default function DeliveryRoutes() {
                                               parada.nome,
                                               item.rota.id,
                                               item.rota.nome,
+                                              parada.ordem,
                                             )
                                           }}
                                         >
@@ -4435,7 +4518,7 @@ Ou apenas o nome da escola copiado do Excel/Word`}
         />
       )}
 
-      {/* Modal / Diálogo de Transferência de Escola entre Rotas (Acessível via Mobile / Clique) */}
+      {/* Modal / Diálogo de Mover Escola de Rota/Posição (Acessível via Mobile / Clique) */}
       <Dialog
         open={mobileMoveDialogOpen}
         onOpenChange={(open) => {
@@ -4445,43 +4528,75 @@ Ou apenas o nome da escola copiado do Excel/Word`}
           setMobileMoveDialogOpen(open)
         }}
       >
-        <DialogContent className="sm:max-w-[420px]">
+        <DialogContent className="sm:max-w-[440px]">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <Truck className="h-5 w-5 text-primary" /> Mover Escola de Rota
+              <ArrowUpDown className="h-5 w-5 text-primary" /> Mover Escola de Rota/Posição
             </DialogTitle>
             <DialogDescription>
-              Transfira <strong>{schoolToMoveMobile?.escolaNome}</strong> da{' '}
-              <strong>{schoolToMoveMobile?.origemRotaNome}</strong> para outra rota deste contrato.
+              Mova <strong>{schoolToMoveMobile?.escolaNome}</strong> para uma nova posição na{' '}
+              <strong>{schoolToMoveMobile?.origemRotaNome}</strong> ou para uma posição específica
+              em outra rota.
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-3 py-2 text-xs">
             <div className="space-y-1.5">
               <Label htmlFor="target-route-select" className="font-semibold">
-                Selecione a Rota de Destino <span className="text-destructive">*</span>
+                Rota de Destino <span className="text-destructive">*</span>
               </Label>
               <Select
                 value={targetRotaIdMobile}
-                onValueChange={(val) => setTargetRotaIdMobile(val)}
+                onValueChange={(val) => {
+                  setTargetRotaIdMobile(val)
+                  const totalDestino = paradasDestinoDisponiveis(val)
+                  setTargetPosicaoMobile((prev) => Math.min(Math.max(1, prev), totalDestino + 1))
+                }}
               >
                 <SelectTrigger id="target-route-select">
                   <SelectValue placeholder="Selecione a rota" />
                 </SelectTrigger>
                 <SelectContent>
-                  {filteredRotasLogisticas
-                    .filter((r) => r.id !== schoolToMoveMobile?.origemRotaId)
-                    .map((r) => (
-                      <SelectItem key={r.id} value={r.id}>
-                        {r.nome}
-                      </SelectItem>
-                    ))}
+                  {filteredRotasLogisticas.map((r) => (
+                    <SelectItem key={r.id} value={r.id}>
+                      {r.id === schoolToMoveMobile?.origemRotaId
+                        ? `${r.nome} (rota atual)`
+                        : r.nome}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
               <p className="text-[10px] text-muted-foreground">
-                A escola será posicionada no final da nova rota e os números de parada serão
-                renumerados automaticamente.
+                A mesma rota reordena a escola dentro dela; outra rota transfere a escola para lá.
+                As demais paradas mantêm sua ordem relativa e são deslocadas sem duplicatas nem vãos
+                (numeração final sempre em sequência limpa 1..N).
               </p>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="target-posicao-select" className="font-semibold">
+                Posição (número da parada) <span className="text-destructive">*</span>
+              </Label>
+              <Select
+                value={String(targetPosicaoMobile)}
+                onValueChange={(val) => setTargetPosicaoMobile(Number(val))}
+              >
+                <SelectTrigger id="target-posicao-select">
+                  <SelectValue placeholder="Selecione a posição" />
+                </SelectTrigger>
+                <SelectContent>
+                  {Array.from({ length: Math.max(1, targetPosicaoMaxMobile) }, (_, i) => i + 1).map(
+                    (pos) => (
+                      <SelectItem key={pos} value={String(pos)}>
+                        {pos === targetPosicaoMaxMobile && !mesmaRotaSelecionadaMobile
+                          ? `${pos} (no fim)`
+                          : pos}
+                      </SelectItem>
+                    ),
+                  )}
+                </SelectContent>
+              </Select>
+              <p className="text-[10px] text-muted-foreground">{targetPosicaoHintMobile}</p>
             </div>
           </div>
 
@@ -4499,7 +4614,7 @@ Ou apenas o nome da escola copiado do Excel/Word`}
             </Button>
             <Button
               type="button"
-              disabled={isMovingSchool || !targetRotaIdMobile}
+              disabled={isMovingSchool || !targetRotaIdMobile || !targetPosicaoMobile}
               onClick={handleConfirmMobileMove}
             >
               {isMovingSchool ? (
@@ -4507,7 +4622,7 @@ Ou apenas o nome da escola copiado do Excel/Word`}
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Movendo...
                 </>
               ) : (
-                'Confirmar Mudança de Rota'
+                'Confirmar Mudança'
               )}
             </Button>
           </DialogFooter>

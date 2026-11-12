@@ -915,6 +915,42 @@ export function Requirements() {
       {/* 7. Registro de Manutenção e Limpeza de Dados */}
       <SectionTitle>7. Registro de Manutenção & Higienização do Banco de Dados</SectionTitle>
       <div className="space-y-4">
+        {/* Release v0.0.283: Mover escola de rota/posição em /rotas */}
+        <div className="rounded-lg border border-primary/40 bg-primary/5 p-5 space-y-4">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="text-primary border-primary/40 font-semibold">
+                Release v0.0.283
+              </Badge>
+              <span className="font-semibold text-foreground">
+                0.0.283: "Mover escola de rota" → "Mover escola de rota/posição" em /rotas
+              </span>
+            </div>
+            <span className="text-xs font-medium text-muted-foreground">
+              Consolidado (v0.0.283)
+            </span>
+            <span className="text-xs font-medium text-primary">Versão Vigente (v0.0.283)</span>
+          </div>
+
+          <p className="text-sm text-foreground/90 leading-relaxed">
+            <strong>Funcionalidade:</strong> o diálogo aberto pelo botão de ação da parada (setas ⇅,
+            ex-"mover para outra rota") passa a ser <strong>"Mover escola de rota/posição"</strong>:
+            o destino admite (a) uma <strong>nova posição na MESMA rota</strong> — reposicionar a
+            escola dentro da rota atual — e (b) uma{' '}
+            <strong>posição específica em OUTRA rota</strong> — o usuário escolhe rota destino{' '}
+            <em>e</em> o número da parada onde a escola entra (incluindo "no fim"). As demais
+            paradas mantêm a ordem relativa e são deslocadas sem duplicatas nem vãos (numeração
+            final sempre em sequência limpa 1..N, alinhado ao reparo da v0.0.278). O hook{' '}
+            <code>mover_escola_rota.js</code> opera em transação e regrava os snapshots{' '}
+            <code>edicao</code> das rotas de origem e destino dos ciclos não terminais (regra da
+            v0.0.272/0.0.278). Movimentação restrita a ciclos abertos: ciclos
+            fechados/cancelados/entregues permanecem travados para edição, com consulta liberada.{' '}
+            Catálogo memoizado "Atribuir Escolas" (<code>RoutingSchoolList</code>, v0.0.282),
+            salvamento de composição vazia (v0.0.278), isolamento por <code>ciclo_id</code> e
+            anti-vazamento nas 4 telas de entregas preservados.
+          </p>
+        </div>
+
         {/* Release v0.0.282: Otimização do modal Atribuir Escolas em /rotas */}
         <div className="rounded-lg border border-primary/40 bg-primary/5 p-5 space-y-4">
           <div className="flex items-center justify-between flex-wrap gap-2">
