@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useCallback } from 'react'
+import { useState, useMemo, useEffect, useCallback, useRef } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useApp } from '@/context/app-context'
 import { useAuth } from '@/context/auth-context'
@@ -117,6 +117,8 @@ import {
 import { DeliveryDetailsDialog, type DeliveryDetailsData } from '@/components/DeliveryDetailsDialog'
 import { desfazerEntregasRota, type DesfazerEntregasResumo } from '@/services/desfazer-entregas'
 import { Undo2 } from 'lucide-react'
+import { agregarDatasEntrega, escolherDataPadrao, formatarDataEntrega } from '@/lib/datasEntrega'
+import { CalendarDays } from 'lucide-react'
 
 /**
  * Verifica se a fase do contrato no ciclo é elegível para despacho de rota.
@@ -134,7 +136,7 @@ export function isFaseElegivelParaDespacho(fase?: string): boolean {
   return norm === 'coleta_encerrada' || norm === 'coletado'
 }
 
-// DeliveryRoutes 0.0.202
+// DeliveryRoutes 0.0.284 — operação por Data de Entrega (filtro primário) + Chamada (secundário)
 export default function DeliveryRoutes() {
   const [searchParams, setSearchParams] = useSearchParams()
   const paramChamadaId = searchParams.get('chamadaId')
@@ -202,6 +204,10 @@ export default function DeliveryRoutes() {
 
   const [selectedChamadaId, setSelectedChamadaId] = useState<string>(initialChamadaId)
   const [selectedCicloId, setSelectedCicloId] = useState<string>('')
+  // Operação por Data de Entrega (0.0.284): filtro primário de data + chamada secundária
+  const [dataEntregaSel, setDataEntregaSel] = useState<string>('')
+  const dataSelInicializadaRef = useRef(false)
+  const chamadaSelPorDataRef = useRef<Record<string, string>>({})
 
   // Sincronizar se os query params ou cicloCorrente mudarem
   useEffect(() => {

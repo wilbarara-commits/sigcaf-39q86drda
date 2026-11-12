@@ -915,6 +915,45 @@ export function Requirements() {
       {/* 7. Registro de Manutenção e Limpeza de Dados */}
       <SectionTitle>7. Registro de Manutenção & Higienização do Banco de Dados</SectionTitle>
       <div className="space-y-4">
+        {/* Release v0.0.284: Operação por data de entrega em /rotas */}
+        <div className="rounded-lg border border-primary/40 bg-primary/5 p-5 space-y-4">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="text-primary border-primary/40 font-semibold">
+                Release v0.0.284
+              </Badge>
+              <span className="font-semibold text-foreground">
+                0.0.284: Operação por Data de Entrega em /rotas (filtro primário de data, chamada
+                secundária)
+              </span>
+            </div>
+            <span className="text-xs font-medium text-muted-foreground">
+              Consolidado (v0.0.284)
+            </span>
+            <span className="text-xs font-medium text-primary">Versão Vigente (v0.0.284)</span>
+          </div>
+
+          <p className="text-sm text-foreground/90 leading-relaxed">
+            <strong>Funcionalidade:</strong> a página Rotas de Entrega passa a operar por{' '}
+            <strong>Data de Entrega</strong>: o filtro primário no topo é um seletor de data
+            populado com as datas que realmente têm pedidos nos ciclos abertos do banco (não um
+            calendário fixo), pré-selecionando a data corrente/relevante (data de despacho do ciclo
+            em foco → hoje → primeira data futura → mais recente). Dentro da data, um{' '}
+            <strong>seletor secundário de Chamada</strong> aparece apenas quando a data tem mais de
+            uma chamada com pedidos; com uma só chamada a página opera direto, sem exibir o seletor.
+            Escolas, pedidos, "Sugerir rotas" (roteamento assistido) e o despacho de rota
+            (motorista, token do portal, WhatsApp) atuam sobre esse recorte data→chamada, sem
+            vazamento entre datas. Data sem pedidos exibe estado vazio claro. O ciclo continua
+            existindo por baixo para retenção e histórico (modelo de dados de ciclos inalterado), e
+            todas as regras duráveis permanecem: isolamento por <code>ciclo_id</code> e
+            anti-vazamento nas 4 telas de entregas, snapshots <code>edicao</code>/
+            <code>despacho</code> em <code>rota_snapshots</code> (regras v0.0.272/0.0.278),
+            compactação de numeração 1..N ao mover escolas (<code>mover_escola_rota.js</code>),
+            travas de ciclo fechado/cancelado/entregue e rota entregue, e composição manual de rotas
+            exatamente como está.
+          </p>
+        </div>
+
         {/* Release v0.0.283: Mover escola de rota/posição em /rotas */}
         <div className="rounded-lg border border-primary/40 bg-primary/5 p-5 space-y-4">
           <div className="flex items-center justify-between flex-wrap gap-2">
