@@ -104,6 +104,14 @@ function rec_total(chamadas: ChamadaNaDataEntrega[]): number {
   return chamadas.reduce((acc, c) => acc + c.pedidos, 0)
 }
 
+/**
+ * Nome canônico usado por /rotas (0.0.284): agregação das datas de entrega dos
+ * pedidos dos ciclos abertos. Mesmo comportamento de agruparPedidosPorDataEntrega.
+ */
+export function agregarDatasEntrega(orders: Order[], ciclos: CicloLike[]): DataEntregaAgregada[] {
+  return agruparPedidosPorDataEntrega(orders, ciclos)
+}
+
 /** Data de hoje no formato local 'yyyy-mm-dd' (sem UTC shift) */
 export function dataISOHoje(): string {
   const d = new Date()
