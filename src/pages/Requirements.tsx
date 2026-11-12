@@ -915,6 +915,41 @@ export function Requirements() {
       {/* 7. Registro de Manutenção e Limpeza de Dados */}
       <SectionTitle>7. Registro de Manutenção & Higienização do Banco de Dados</SectionTitle>
       <div className="space-y-4">
+        {/* Release v0.0.282: Otimização do modal Atribuir Escolas em /rotas */}
+        <div className="rounded-lg border border-primary/40 bg-primary/5 p-5 space-y-4">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="text-primary border-primary/40 font-semibold">
+                Release v0.0.282
+              </Badge>
+              <span className="font-semibold text-foreground">
+                0.0.282: Otimização do Modal "Atribuir Escolas" em /rotas (catálogo memoizado)
+              </span>
+            </div>
+            <span className="text-xs font-medium text-muted-foreground">
+              Consolidado (v0.0.282)
+            </span>
+            <span className="text-xs font-medium text-primary">Versão Vigente (v0.0.282)</span>
+          </div>
+
+          <p className="text-sm text-foreground/90 leading-relaxed">
+            <strong>Otimização de Performance:</strong> o catálogo unificado de escolas do modal
+            "Atribuir Escolas" foi extraído para o componente memoizado{' '}
+            <code>RoutingSchoolList</code> (com a linha também memoizada em{' '}
+            <code>RoutingSchoolRow</code>). Marcar/desmarcar uma escola agora re-renderiza apenas a
+            linha alterada, não a página inteira (cards de rota, paradas, mapas e listas de pedidos
+            permanecem parados). A indicação "está em outra rota" deixou de ser uma busca linear por
+            linha a cada render: o mapa escola→rota é pré-calculado uma única vez via{' '}
+            <code>useMemo</code> na página e o callback de marcação é estável (
+            <code>useCallback</code>
+            ). <strong>Sem mudança de comportamento:</strong> mesmos dados exibidos, mesmas ações e
+            mesmo resultado ao salvar — o fluxo tela → hook <code>salvar_paradas</code> → snapshot{' '}
+            <code>edicao</code> permanece como está, incluindo a propagação de composição vazia da
+            v0.0.278 e a reconciliação snapshot × composição viva da v0.0.272. Isolamento por{' '}
+            <code>ciclo_id</code> e anti-vazamento nas 4 telas de entregas preservados.
+          </p>
+        </div>
+
         {/* Release v0.0.278: Reparo da numeração da ROTA A e snapshot órfão da ROTA C (Ciclo 44/2026) */}
         <div className="rounded-lg border border-primary/40 bg-primary/5 p-5 space-y-4">
           <div className="flex items-center justify-between flex-wrap gap-2">

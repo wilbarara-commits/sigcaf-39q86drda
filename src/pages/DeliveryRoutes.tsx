@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useCallback } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useApp } from '@/context/app-context'
 import { useAuth } from '@/context/auth-context'
@@ -88,6 +88,7 @@ import {
   type ResultadoOtimizacaoRota,
 } from '@/lib/routeOptimization'
 import { RouteOptimizationDialog } from '@/components/RouteOptimizationDialog'
+import { RoutingSchoolList } from '@/components/RoutingSchoolList'
 import { AssistedRoutingDialog } from '@/components/AssistedRoutingDialog'
 import {
   type EscolaRoteamentoInput,
@@ -1375,6 +1376,35 @@ export default function DeliveryRoutes() {
       toast.warning('Nenhuma escola encontrada na lista colada. Verifique os nomes.')
     }
   }
+
+  // Pré-cálculo (0.0.282): mapa escola_id → { rotaId, rotaNome } para escolas já
+  // atribuídas a OUTRA rota — evita buscas lineares linha a linha a cada render
+  // do catálogo do modal 'Atribuir Escolas'.
+  const mapaEscolaOutraRota = useMemo(() => {
+    const mapa: Record<string, { rotaId: string; rotaNome: string }> = {}
+    for (const p of paradasRota) {
+      const rotaId = p.rota_id || (p as any).rota_logistica_id
+      if (!rotaId || rotaId === selectedRotaForRouting?.id) continue
+      if (mapa[p.escola_id]) continue
+      mapa[p.escola_id] = {
+        rotaId,
+        rotaNome: rotasLogisticas.find((r) => r.id === rotaId)?.nome || '',
+      }
+    }
+    return mapa
+  }, [paradasRota, rotasLogisticas, selectedRotaForRouting])
+
+  // Alternância de seleção com callback estável — o catálogo memoizado
+  // re-renderiza apenas a linha alterada ao marcar/desmarcar.
+  const toggleEscolaSelecao = useCallback((escolaId: string, marcada: boolean) => {
+    setSelectedSchoolsToAssign((prev) =>
+      marcada
+        ? prev.includes(escolaId)
+          ? prev
+          : [...prev, escolaId]
+        : prev.filter((id) => id !== escolaId),
+    )
+  }, [])
 
   // Roteamento da Chamada: Salvar atribuição de escolas à rota
   // Preenche paradas_rota, atualiza pedidos pendentes automaticamente e sincroniza contrato_escolas
@@ -3977,85 +4007,12 @@ Ou apenas o nome da escola copiado do Excel/Word`}
               </p>
 
               <div className="rounded-lg border divide-y max-h-[300px] overflow-y-auto bg-card">
-                {unifiedChamadaSchools.length > 0 ? (
-                  unifiedChamadaSchools.map((esc) => {
-                    const isChecked = selectedSchoolsToAssign.includes(esc.escolaId)
-                    // Verificar se já está em outra rota
-                    const paradaOutraRota = paradasRota.find(
-                      (p) =>
-                        p.escola_id === esc.escolaId &&
-                        (p.rota_id || (p as any).rota_logistica_id) !== selectedRotaForRouting?.id,
-                    )
-                    const outraRotaId = paradaOutraRota
-                      ? paradaOutraRota.rota_id || (paradaOutraRota as any).rota_logistica_id
-                      : null
-                    const outraRotaObj = outraRotaId
-                      ? rotasLogisticas.find((r) => r.id === outraRotaId)
-                      : null
-
-                    return (
-                      <label
-                        key={esc.escolaId}
-                        className={`flex items-center justify-between p-3 hover:bg-muted/30 cursor-pointer text-xs transition-colors ${
-                          isChecked ? 'bg-primary/5' : ''
-                        }`}
-                      >
-                        <div className="flex items-center gap-3">
-                          <input
-                            type="checkbox"
-                            checked={isChecked}
-                            onChange={(e) => {
-                              if (e.target.checked) {
-                                setSelectedSchoolsToAssign((prev) => [...prev, esc.escolaId])
-                              } else {
-                                setSelectedSchoolsToAssign((prev) =>
-                                  prev.filter((id) => id !== esc.escolaId),
-                                )
-                              }
-                            }}
-                            className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
-                          />
-                          <div>
-                            <div className="flex items-center gap-1.5">
-                              <p className="font-semibold text-foreground text-sm">
-                                {esc.escolaNome || 'Escola'}
-                              </p>
-                              <Badge
-                                variant="outline"
-                                className="text-[9px] px-1 py-0 font-mono text-muted-foreground border-border"
-                                title={`Contrato de origem: ${esc.contratoNumero}`}
-                              >
-                                {esc.contratoNumero}
-                              </Badge>
-                            </div>
-                            <p className="text-[11px] text-muted-foreground">
-                              {esc.escolaEndereco || 'Endereço não informado'}
-                            </p>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2 shrink-0">
-                          {esc.escolaAlunos !== undefined && esc.escolaAlunos !== null && (
-                            <Badge variant="secondary" className="text-[10px] font-mono">
-                              {esc.escolaAlunos} alunos
-                            </Badge>
-                          )}
-                          {outraRotaObj && !isChecked && (
-                            <Badge
-                              variant="outline"
-                              className="text-[10px] text-amber-700 bg-amber-50 border-amber-300"
-                            >
-                              Atualmente na {outraRotaObj.nome}
-                            </Badge>
-                          )}
-                        </div>
-                      </label>
-                    )
-                  })
-                ) : (
-                  <div className="py-6 text-center text-muted-foreground">
-                    Nenhuma escola encontrada para a chamada selecionada.
-                  </div>
-                )}
+                <RoutingSchoolList
+                  escolas={unifiedChamadaSchools}
+                  selecionadas={selectedSchoolsToAssign}
+                  mapaEscolaRota={mapaEscolaOutraRota}
+                  onToggle={toggleEscolaSelecao}
+                />
               </div>
             </div>
           </div>
