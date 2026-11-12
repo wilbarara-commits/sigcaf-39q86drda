@@ -104,6 +104,7 @@ import { rotaDespachosService, entregaRegistrosService } from '@/services/rota-d
 import { retencaoHistoricaService } from '@/services/retencao-historica'
 import {
   MOTIVOS_LOGISTICOS_CANCELAMENTO,
+  type ChamadaRecord,
   type MotivoLogisticoCancelamento,
   type Order,
   type Product,
@@ -118,7 +119,7 @@ import { DeliveryDetailsDialog, type DeliveryDetailsData } from '@/components/De
 import { desfazerEntregasRota, type DesfazerEntregasResumo } from '@/services/desfazer-entregas'
 import { Undo2 } from 'lucide-react'
 import { agregarDatasEntrega, escolherDataPadrao, formatarDataEntrega } from '@/lib/datasEntrega'
-import { CalendarDays } from 'lucide-react'
+import { CalendarDays, CalendarClock } from 'lucide-react'
 
 /**
  * Verifica se a fase do contrato no ciclo é elegível para despacho de rota.
@@ -323,6 +324,96 @@ export default function DeliveryRoutes() {
     if (selectedChamadaId === 'todas') return null
     return chamadas.find((ch) => ch.id === selectedChamadaId) || null
   }, [chamadas, selectedChamadaId])
+
+  // ===== Operação por Data de Entrega (0.0.284) =====
+  // Filtro PRIMÁRIO: datas que possuem pedidos em ciclos abertos (agregarDatasEntrega).
+  // Filtro SECUNDÁRIO: chamada dentro da data (só exibida quando a data tem 2+ chamadas).
+  const datasEntregaAgregadas = useMemo(() => agregarDatasEntrega(orders, ciclos), [orders, ciclos])
+
+  // Data preferida da pré-seleção: data de despacho do ciclo corrente (fallback: ciclo em foco)
+  const dataPreferidaEntrega = useMemo(() => {
+    const cicloRef =
+      (cicloCorrente?.cicloId ? ciclos.find((c) => c.id === cicloCorrente.cicloId) : null) ||
+      selectedCiclo ||
+      null
+    return cicloRef?.data_despacho || undefined
+  }, [cicloCorrente, ciclos, selectedCiclo])
+
+  // Objeto agregado da data de entrega em foco
+  const dataEntregaAtual = useMemo(
+    () => datasEntregaAgregadas.find((d) => d.data === dataEntregaSel) || null,
+    [datasEntregaAgregadas, dataEntregaSel],
+  )
+
+  // Pré-seleção da data padrão (escolherDataPadrao) uma única vez, quando os pedidos chegarem.
+  // Deep links (?chamadaId=/?cicloId=) têm precedência: pré-seleciona a data, mas não altera chamada/ciclo.
+  useEffect(() => {
+    if (dataSelInicializadaRef.current || datasEntregaAgregadas.length === 0) return
+    dataSelInicializadaRef.current = true
+    const dataPadrao = escolherDataPadrao(datasEntregaAgregadas, dataPreferidaEntrega)
+    if (!dataPadrao) return
+    setDataEntregaSel(dataPadrao)
+    if (paramChamadaId || paramCicloId) return
+    const agregada = datasEntregaAgregadas.find((d) => d.data === dataPadrao)
+    const chamadaPreferida =
+      (cicloCorrente?.chamadaId &&
+        agregada?.chamadas.find((c) => c.chamadaId === cicloCorrente.chamadaId)) ||
+      [...(agregada?.chamadas || [])].sort((a, b) => b.pedidos - a.pedidos)[0]
+    if (chamadaPreferida) {
+      chamadaSelPorDataRef.current[dataPadrao] = chamadaPreferida.chamadaId
+      setSelectedChamadaId(chamadaPreferida.chamadaId)
+      if (chamadaPreferida.cicloPrincipalId) setSelectedCicloId(chamadaPreferida.cicloPrincipalId)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [datasEntregaAgregadas, dataPreferidaEntrega, cicloCorrente, paramChamadaId, paramCicloId])
+
+  // Troca do seletor primário de Data de Entrega: aplica o recorte (chamada + ciclo da data)
+  const handleChangeDataEntrega = (data: string) => {
+    if (data === dataEntregaSel) return
+    setDataEntregaSel(data)
+    const agregada = datasEntregaAgregadas.find((d) => d.data === data)
+    const guardada = chamadaSelPorDataRef.current[data]
+    const chamadaPreferida =
+      (guardada && agregada?.chamadas.find((c) => c.chamadaId === guardada)) ||
+      (cicloCorrente?.chamadaId &&
+        agregada?.chamadas.find((c) => c.chamadaId === cicloCorrente.chamadaId)) ||
+      [...(agregada?.chamadas || [])].sort((a, b) => b.pedidos - a.pedidos)[0]
+    if (chamadaPreferida) {
+      chamadaSelPorDataRef.current[data] = chamadaPreferida.chamadaId
+      setSelectedChamadaId(chamadaPreferida.chamadaId)
+      const cicloAlvoId =
+        chamadaPreferida.cicloPrincipalId ||
+        ciclos.find(
+          (c) => c.chamada_id === chamadaPreferida.chamadaId && isCicloNaoTerminal(c.status),
+        )?.id ||
+        ''
+      setSelectedCicloId(cicloAlvoId)
+      setSearchParams(
+        cicloAlvoId
+          ? { chamadaId: chamadaPreferida.chamadaId, cicloId: cicloAlvoId }
+          : { chamadaId: chamadaPreferida.chamadaId },
+      )
+    }
+  }
+
+  // Troca do seletor secundário de Chamada dentro da data (só aparece com 2+ chamadas na data)
+  const handleChangeChamadaNaData = (chamadaId: string) => {
+    if (!dataEntregaSel) return
+    chamadaSelPorDataRef.current[dataEntregaSel] = chamadaId
+    setSelectedChamadaId(chamadaId)
+    const agregada = datasEntregaAgregadas.find((d) => d.data === dataEntregaSel)
+    const cicloAlvoId =
+      agregada?.chamadas.find((c) => c.chamadaId === chamadaId)?.cicloPrincipalId ||
+      ciclos.find((c) => c.chamada_id === chamadaId && isCicloNaoTerminal(c.status))?.id ||
+      ''
+    setSelectedCicloId(cicloAlvoId)
+    setSearchParams(cicloAlvoId ? { chamadaId, cicloId: cicloAlvoId } : { chamadaId })
+  }
+
+  // Seletor secundário de Chamada: visível só quando a data tem mais de uma chamada com pedidos
+  // (ou quando ainda não há data selecionada — operação direta por chamada/ciclo)
+  const mostrarSeletorChamada =
+    !dataEntregaSel || !dataEntregaAtual || dataEntregaAtual.chamadas.length > 1
 
   // Contratos vinculados à chamada selecionada (ou todos se 'todas')
   const chamadaContratos = useMemo(() => {
@@ -742,8 +833,13 @@ export default function DeliveryRoutes() {
     if (selectedCiclo?.id) {
       pool = pool.filter((o) => o.cicloId === selectedCiclo.id)
     }
+    // Recorte por Data de Entrega (0.0.284): com uma data selecionada, escolas, pedidos,
+    // "Sugerir rotas" e despacho operam somente sobre os pedidos daquela data.
+    if (dataEntregaSel) {
+      pool = pool.filter((o) => o.date === dataEntregaSel)
+    }
     return pool
-  }, [orders, currentChamada, unifiedChamadaSchools, selectedCiclo])
+  }, [orders, currentChamada, unifiedChamadaSchools, selectedCiclo, dataEntregaSel])
 
   // Compatibilidade legada com referências de pedidos da chamada
   const chamadaOrders = chamadaCicloOrders
@@ -2105,51 +2201,97 @@ export default function DeliveryRoutes() {
           </p>
         </div>
 
-        {/* Filtro por Chamada + Ciclo e Ações */}
+        {/* Filtro por Data de Entrega (primário) + Chamada (secundária) + Ciclo e Ações */}
         <div className="flex flex-wrap items-center gap-2">
-          <div className="flex items-center gap-2">
-            <Layers className="h-4 w-4 text-primary shrink-0" />
-            <Select
-              value={selectedChamadaId}
-              onValueChange={(val) => {
-                setSelectedChamadaId(val)
-                // Ao trocar a chamada, auto-seleciona o ciclo ativo da nova chamada
-                let novoCicloId = ''
-                if (val !== 'todas') {
-                  const ciclosDaNova = ciclos.filter((c) => c.chamada_id === val)
-                  const ativo = ciclosDaNova.find((c) => isCicloNaoTerminal(c.status))
-                  if (ativo) {
-                    novoCicloId = ativo.id
-                  } else if (ciclosDaNova.length > 0) {
-                    novoCicloId = ciclosDaNova[0].id
-                  }
-                }
-                setSelectedCicloId(novoCicloId)
-                if (val === 'todas') {
-                  setSearchParams({})
-                } else if (novoCicloId) {
-                  setSearchParams({ chamadaId: val, cicloId: novoCicloId })
-                } else {
-                  setSearchParams({ chamadaId: val })
-                }
-              }}
-            >
-              <SelectTrigger className="w-[260px]">
-                <SelectValue placeholder="Selecione a Chamada" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="todas">Todas as Chamadas</SelectItem>
-                {chamadas.map((ch) => {
-                  const cnts = contracts.filter((c) => c.chamada_id === ch.id)
-                  return (
-                    <SelectItem key={ch.id} value={ch.id}>
-                      {ch.chamada} ({ch.programa || 'PNAE'}) • {cnts.length} contrato(s)
+          {/* Seletor PRIMÁRIO: Data de entrega (só datas com pedidos em ciclos abertos) */}
+          {datasEntregaAgregadas.length > 0 && (
+            <div className="flex items-center gap-2">
+              <CalendarClock className="h-4 w-4 text-primary shrink-0" />
+              <Select value={dataEntregaSel} onValueChange={handleChangeDataEntrega}>
+                <SelectTrigger className="w-[230px]" title="Data de entrega dos pedidos">
+                  <SelectValue placeholder="Data de entrega" />
+                </SelectTrigger>
+                <SelectContent>
+                  {datasEntregaAgregadas.map((d) => (
+                    <SelectItem key={d.data} value={d.data}>
+                      {formatarDataEntrega(d.data)} • {d.totalPedidos} pedido(s)
                     </SelectItem>
-                  )
-                })}
-              </SelectContent>
-            </Select>
-          </div>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
+          {/* Seletor SECUNDÁRIO: Chamada dentro da data — oculto quando a data tem uma só chamada */}
+          {mostrarSeletorChamada && (
+            <div className="flex items-center gap-2">
+              <Layers className="h-4 w-4 text-primary shrink-0" />
+              <Select
+                value={selectedChamadaId}
+                onValueChange={(val) => {
+                  // Dentro de uma data: o seletor secundário recorta a chamada e o ciclo dela
+                  if (dataEntregaSel && dataEntregaAtual) {
+                    if (val === 'todas') {
+                      chamadaSelPorDataRef.current[dataEntregaSel] = ''
+                      setSelectedChamadaId('todas')
+                      setSearchParams({})
+                      return
+                    }
+                    handleChangeChamadaNaData(val)
+                    return
+                  }
+                  setSelectedChamadaId(val)
+                  // Ao trocar a chamada, auto-seleciona o ciclo ativo da nova chamada
+                  let novoCicloId = ''
+                  if (val !== 'todas') {
+                    const ciclosDaNova = ciclos.filter((c) => c.chamada_id === val)
+                    const ativo = ciclosDaNova.find((c) => isCicloNaoTerminal(c.status))
+                    if (ativo) {
+                      novoCicloId = ativo.id
+                    } else if (ciclosDaNova.length > 0) {
+                      novoCicloId = ciclosDaNova[0].id
+                    }
+                  }
+                  setSelectedCicloId(novoCicloId)
+                  if (val === 'todas') {
+                    setSearchParams({})
+                  } else if (novoCicloId) {
+                    setSearchParams({ chamadaId: val, cicloId: novoCicloId })
+                  } else {
+                    setSearchParams({ chamadaId: val })
+                  }
+                }}
+              >
+                <SelectTrigger className="w-[260px]">
+                  <SelectValue placeholder="Selecione a Chamada" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todas">
+                    {dataEntregaSel ? 'Todas (na data)' : 'Todas as Chamadas'}
+                  </SelectItem>
+                  {(dataEntregaSel && dataEntregaAtual
+                    ? dataEntregaAtual.chamadas
+                        .map((c) => ({
+                          id: c.chamadaId,
+                          obj: chamadas.find((ch) => ch.id === c.chamadaId),
+                        }))
+                        .filter((c) => c.obj)
+                    : chamadas.map((ch) => ({ id: ch.id, obj: ch }))
+                  ).map(({ id, obj }) => {
+                    const ch = obj as ChamadaRecord
+                    const cnts = contracts.filter((c) => c.chamada_id === ch.id)
+                    const pedidosNaData = dataEntregaAtual?.chamadas.find((c) => c.chamadaId === id)
+                    return (
+                      <SelectItem key={id} value={id}>
+                        {ch.chamada} ({ch.programa || 'PNAE'}) • {cnts.length} contrato(s)
+                        {pedidosNaData ? ` • ${pedidosNaData.pedidos} pedido(s)` : ''}
+                      </SelectItem>
+                    )
+                  })}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
 
           {/* Seletor de Ciclo sincronizado com a chamada escolhida */}
           <div className="flex items-center gap-2">
@@ -2241,6 +2383,26 @@ export default function DeliveryRoutes() {
           )}
         </div>
       </div>
+
+      {/* Estado vazio: a data selecionada não tem pedidos (0.0.284) */}
+      {dataEntregaSel && !dataEntregaAtual && (
+        <Card className="border-dashed border-2 border-amber-500/40 bg-amber-500/5">
+          <CardContent className="py-12 text-center text-muted-foreground space-y-4">
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-amber-500/10 text-amber-600">
+              <CalendarClock className="h-7 w-7" />
+            </div>
+            <div className="max-w-md mx-auto space-y-1.5">
+              <h3 className="text-lg font-bold text-foreground">
+                Nenhum pedido para {formatarDataEntrega(dataEntregaSel)}
+              </h3>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                Esta data de entrega não possui pedidos em ciclos abertos. Selecione outra data no
+                seletor acima para ver as escolas, os pedidos e as rotas daquele dia.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Painel de Escolas da Chamada sem Rota Atribuída */}
       {selectedChamadaId !== 'todas' && escolasSemRota.length > 0 && (
