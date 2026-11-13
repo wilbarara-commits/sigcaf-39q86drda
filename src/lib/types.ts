@@ -691,6 +691,41 @@ export interface EntregaComprovanteRecord {
 export type FornecedorVinculo = 'COOPERADO' | 'EXTERNO'
 export type FornecedorSexo = 'MASCULINO' | 'FEMININO' | 'OUTRO'
 
+// Vínculo fornecedor ↔ produto (cartão "Comprar" da Consolidação para Compras)
+export interface FornecedorProdutoRecord {
+  id: string
+  fornecedor_id: string
+  produto_id: string
+  expand?: {
+    fornecedor_id?: FornecedorRecord
+    produto_id?: ProdutoRecord
+  }
+  created?: string
+  updated?: string
+}
+
+// Linha gravada da distribuição de compra de um produto por fornecedor (ciclo)
+export interface CompraDistribuicaoRecord {
+  id: string
+  ciclo_id: string
+  data_entrega?: string
+  fornecedor_id: string
+  produto_id: string
+  quantidade: number
+  unidade?: string
+  modo: 'igual' | 'percentual'
+  percentual?: number
+  criado_por?: string
+  chamada_id?: string
+  expand?: {
+    fornecedor_id?: FornecedorRecord
+    produto_id?: ProdutoRecord
+    ciclo_id?: CicloRecord
+  }
+  created?: string
+  updated?: string
+}
+
 export interface FornecedorRecord {
   id: string
   nome: string

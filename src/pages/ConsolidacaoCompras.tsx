@@ -1,5 +1,9 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useApp } from '@/context/app-context'
+import { CartaoComprarDialog } from '@/components/CartaoComprarDialog'
+import PedidosCompraSection from '@/components/PedidosCompraSection'
+import { compraDistribuicaoService } from '@/services/compraDistribuicao'
+import type { CompraDistribuicaoRecord } from '@/lib/types'
 import {
   Select,
   SelectContent,
@@ -17,6 +21,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Button } from '@/components/ui/button'
 import { agregarDatasEntrega, escolherDataPadrao, formatarDataEntrega } from '@/lib/datasEntrega'
 
 /**
@@ -212,6 +217,49 @@ export default function ConsolidacaoCompras() {
 
   const carregando = !dataEntregaSel && datasEntregaAgregadas.length > 0
 
+  // ---------------------------------------------------------------------------
+  // Distribuição gravada (cartão "Comprar") + pedidos de compra por fornecedor
+  // ---------------------------------------------------------------------------
+  const [distribuicao, setDistribuicao] = useState<CompraDistribuicaoRecord[]>([])
+  const [distribuicaoCarregada, setDistribuicaoCarregada] = useState(false)
+  const [cartaoAberto, setCartaoAberto] = useState(false)
+  const [produtoCartao, setProdutoCartao] = useState<LinhaProduto | null>(null)
+
+  const recarregarDistribuicao = useCallback(async () => {
+    if (!activeCiclo?.id) {
+      setDistribuicao([])
+      setDistribuicaoCarregada(true)
+      return
+    }
+    try {
+      const recs = await compraDistribuicaoService.listByCiclo(activeCiclo.id)
+      setDistribuicao(recs)
+    } catch {
+      setDistribuicao([])
+    } finally {
+      setDistribuicaoCarregada(true)
+    }
+  }, [activeCiclo?.id])
+
+  useEffect(() => {
+    recarregarDistribuicao()
+  }, [recarregarDistribuicao])
+
+  const abrirCartao = (linha: LinhaProduto) => {
+    setProdutoCartao(linha)
+    setCartaoAberto(true)
+  }
+
+  // Recorte atual (data de entrega + chamada): as linhas gravadas carregam
+  // data_entrega + chamada_id, então filtramos por esses campos.
+  const distribuicaoRecorte = useMemo(() => {
+    return distribuicao.filter((d) => {
+      if (dataEntregaSel && (d.data_entrega || '') !== dataEntregaSel) return false
+      if (chamadaSel && (d.chamada_id || '') !== chamadaSel) return false
+      return true
+    })
+  }, [distribuicao, dataEntregaSel, chamadaSel])
+
   return (
     <div className="space-y-6">
       {/* Cabeçalho */}
@@ -288,6 +336,7 @@ export default function ConsolidacaoCompras() {
                       {(r.nome || 'Rota').toUpperCase()}
                     </TableHead>
                   ))}
+                  <TableHead className="text-right w-24">Comprar</TableHead>
                   <TableHead className="text-right">TOTAL GERAL</TableHead>
                 </TableRow>
               </TableHeader>
@@ -303,6 +352,7 @@ export default function ConsolidacaoCompras() {
                       {formatQty(totalGeral.porRota[r.id] || 0)}
                     </TableCell>
                   ))}
+                  <TableCell />
                   <TableCell className="text-right font-mono font-bold">
                     {formatQty(totalGeral.total)}
                   </TableCell>
@@ -314,6 +364,16 @@ export default function ConsolidacaoCompras() {
                       {l.unidade ? ` (${l.unidade})` : ''}
                     </TableCell>
                     <TableCell className="text-right font-mono">{formatQty(l.total)}</TableCell>
+                    <TableCell className="w-24 text-right">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => abrirCartao(l)}
+                        aria-label={`Comprar ${l.nome}`}
+                      >
+                        Comprar
+                      </Button>
+                    </TableCell>
                     {rotasDoRecorte.map((r) => {
                       const qtd = l.porRota[r.id] || 0
                       return (
@@ -339,6 +399,30 @@ export default function ConsolidacaoCompras() {
         Mesma base de dados da Consolidação Final. Pedidos cancelados e ciclos fechados/cancelados
         não entram no total.
       </p>
+
+      {/* Pedidos de compra por fornecedor (linhas gravadas do recorte atual) */}
+      <PedidosCompraSection
+        distribuicao={distribuicaoRecorte}
+        chamadaNome={chamadaNome}
+        dataEntrega={dataEntregaSel}
+        carregada={distribuicaoCarregada}
+      />
+
+      {/* Cartão "Comprar" — distribuição por fornecedor */}
+      {produtoCartao && (
+        <CartaoComprarDialog
+          open={cartaoAberto}
+          onOpenChange={setCartaoAberto}
+          produtoId={produtoCartao.produtoId}
+          produtoNome={produtoCartao.nome}
+          unidade={produtoCartao.unidade}
+          quantidadeTotal={produtoCartao.total}
+          cicloId={activeCiclo?.id || ''}
+          dataEntrega={dataEntregaSel}
+          chamadaId={chamadaSel}
+          onDistribuicaoGravada={recarregarDistribuicao}
+        />
+      )}
     </div>
   )
 }

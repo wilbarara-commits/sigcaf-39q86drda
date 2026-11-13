@@ -929,6 +929,45 @@ export function Requirements() {
       {/* 7. Registro de Manutenção e Limpeza de Dados */}
       <SectionTitle>7. Registro de Manutenção & Higienização do Banco de Dados</SectionTitle>
       <div className="space-y-4">
+        {/* Release v0.0.286: Gravação da distribuição e pedidos de compra por fornecedor */}
+        <div className="rounded-lg border border-primary/40 bg-primary/5 p-5 space-y-4">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="text-primary border-primary/40 font-semibold">
+                Release v0.0.286
+              </Badge>
+              <span className="font-semibold text-foreground">
+                0.0.286: Gravação da distribuição (cartão "Comprar") e pedidos de compra por
+                fornecedor em /consolidacao-simples
+              </span>
+            </div>
+            <span className="text-xs font-medium text-muted-foreground">
+              Consolidado (v0.0.286)
+            </span>
+            <span className="text-xs font-medium text-primary">Versão Vigente (v0.0.286)</span>
+          </div>
+
+          <p className="text-sm text-foreground/90 leading-relaxed">
+            <strong>Funcionalidade:</strong> o cartão "Comprar" da Consolidação para Compras passa a{' '}
+            <strong>gravar a distribuição</strong> por fornecedor e a tela passa a exibir os{' '}
+            <strong>pedidos de compra resultantes</strong>. Nova coleção{' '}
+            <code>compra_distribuicao</code> (ciclo_id, data_entrega, chamada_id, fornecedor_id →
+            fornecedores, produto_id → products, quantidade, unidade, modo igual/percentual,
+            percentual, criado_por; índice único ciclo+fornecedor+produto) e nova coleção{' '}
+            <code>fornecedores_produto</code> (vínculo fornecedor↔produto, com busca e exclusão no
+            próprio cartão). Ao confirmar a distribuição (igual ou por percentuais, até 125%), uma
+            linha é gravada por fornecedor participante com a quantidade resultante; reabrir o
+            cartão de um produto já distribuído carrega as linhas salvas (checkbox e percentuais
+            preenchidos), permitindo ajustar e regravar (substituição completa das linhas do
+            ciclo+produto). Excluir completamente a distribuição de um produto apaga as linhas
+            salvas. Abaixo da tabela, seção colapsável "Pedidos de compra por fornecedor": agrupa as
+            linhas gravadas do recorte atual (data de entrega + chamada) em um cartão por fornecedor
+            com nome, vínculo COOPERADO/EXTERNO, produtos (quantidade e unidade) e total de itens —
+            estado vazio claro quando nenhum fornecedor tem itens. Isolamento por
+            <code>ciclo_id</code> preservado; sem exportação; números pt-BR.
+          </p>
+        </div>
+
         {/* Release v0.0.285: Consolidação para Compras */}
         <div className="rounded-lg border border-primary/40 bg-primary/5 p-5 space-y-4">
           <div className="flex items-center justify-between flex-wrap gap-2">
