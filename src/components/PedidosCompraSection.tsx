@@ -7,7 +7,11 @@ import { Check, ChevronDown, Copy, MessageCircle } from 'lucide-react'
 import type { CompraDistribuicaoRecord } from '@/lib/types'
 import { useApp } from '@/context/app-context'
 import { formatarDataEntrega } from '@/lib/datasEntrega'
-import { buildPedidoCompraWhatsAppMessage, normalizeWhatsAppPhone } from '@/lib/whatsapp'
+import {
+  safeOpenWhatsApp,
+  buildPedidoCompraWhatsAppMessage,
+  normalizeWhatsAppPhone,
+} from '@/lib/whatsapp'
 import { cn } from '@/lib/utils'
 
 /**
@@ -93,11 +97,10 @@ export default function PedidosCompraSection({
     )
   }, [distribuicao, fornecedores, products])
 
-  const abrirWhatsApp = (fornecedorId: string) => {
+  const abrirWhatsApp = async (fornecedorId: string) => {
     const grupo = grupos.find((g) => g.fornecedorId === fornecedorId)
     if (!grupo) return
-    const telefone = normalizeWhatsAppPhone(grupo.whatsapp)
-    if (!telefone) return
+    if (!normalizeWhatsAppPhone(grupo.whatsapp)) return
     const mensagem = buildPedidoCompraWhatsAppMessage({
       fornecedorNome: grupo.fornecedorNome,
       vinculo: grupo.vinculo,
@@ -109,7 +112,13 @@ export default function PedidosCompraSection({
         unidade: it.unidade,
       })),
     })
-    window.open(`https://wa.me/${telefone}?text=${encodeURIComponent(mensagem)}`, '_blank')
+    // safeOpenWhatsApp: abre wa.me em nova aba e, em preview, copia o link com
+    // aviso (mesmo comportamento dos demais fluxos de WhatsApp do sistema).
+    await safeOpenWhatsApp({
+      phone: grupo.whatsapp,
+      text: mensagem,
+      recipientName: grupo.fornecedorNome,
+    })
   }
 
   const copiarMensagem = async (fornecedorId: string) => {
