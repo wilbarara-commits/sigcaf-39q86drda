@@ -41,7 +41,12 @@ export default function PedidosCompraSection({
         fornecedorId: string
         fornecedorNome: string
         vinculo: string
-        itens: Array<{ produto: string; quantidade: number; unidade: string }>
+        itens: Array<{
+          produtoId: string
+          produto: string
+          quantidade: number
+          unidade: string
+        }>
       }
     >()
     for (const d of distribuicao) {
