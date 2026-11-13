@@ -178,6 +178,62 @@ export function buildComprovanteProtocoloTexto({
   return linhas.join('\n')
 }
 
+/**
+ * Item de produto do pedido de compra (Consolidação para Compras).
+ */
+export interface PedidoCompraItemMessage {
+  nome: string
+  quantidade: number
+  unidade?: string
+}
+
+export interface PedidoCompraWhatsAppOptions {
+  fornecedorNome: string
+  vinculo?: string
+  dataEntrega?: string
+  chamadaNome?: string
+  itens: PedidoCompraItemMessage[]
+}
+
+/**
+ * Monta a mensagem textual do pedido de compra para envio ao fornecedor via
+ * WhatsApp (seção "Pedidos de compra por fornecedor" da Consolidação para
+ * Compras): cabeçalho, fornecedor/vínculo, data de entrega e chamada do
+ * recorte e a lista de produtos com quantidade formatada pt-BR e unidade.
+ */
+export function buildPedidoCompraWhatsAppMessage({
+  fornecedorNome,
+  vinculo,
+  dataEntrega,
+  chamadaNome,
+  itens,
+}: PedidoCompraWhatsAppOptions): string {
+  const linhas: string[] = []
+  linhas.push('*Pedido de Compra — SIGCAF*')
+  linhas.push(`Fornecedor: ${fornecedorNome}${vinculo ? ` (${vinculo})` : ''}`)
+  if (dataEntrega) linhas.push(`Data de entrega: ${formatarDataParaMensagem(dataEntrega)}`)
+  if (chamadaNome) linhas.push(`Chamada: ${chamadaNome}`)
+  linhas.push('')
+  if (itens.length > 0) {
+    for (const it of itens) {
+      const qtdFmt = (Number(it.quantidade) || 0).toLocaleString('pt-BR', {
+        maximumFractionDigits: 2,
+      })
+      linhas.push(`• ${it.nome}: ${qtdFmt}${it.unidade ? ` ${it.unidade}` : ''}`)
+    }
+  } else {
+    linhas.push('• Nenhum item listado')
+  }
+  return linhas.join('\n')
+}
+
+function formatarDataParaMensagem(dataISO: string): string {
+  const soData = (dataISO || '').slice(0, 10)
+  const partes = soData.split('-')
+  if (partes.length === 3) return `${partes[2]}/${partes[1]}/${partes[0]}`
+  return dataISO
+}
+
 export interface SafeOpenWhatsAppOptions {
   phone?: string
   text: string

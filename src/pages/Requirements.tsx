@@ -929,6 +929,42 @@ export function Requirements() {
       {/* 7. Registro de Manutenção e Limpeza de Dados */}
       <SectionTitle>7. Registro de Manutenção & Higienização do Banco de Dados</SectionTitle>
       <div className="space-y-4">
+        {/* Release v0.0.291: WhatsApp nos pedidos de compra por fornecedor */}
+        <div className="rounded-lg border border-primary/40 bg-primary/5 p-5 space-y-4">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="text-primary border-primary/40 font-semibold">
+                Release v0.0.291
+              </Badge>
+              <span className="font-semibold text-foreground">
+                0.0.291: Emissão do pedido de compra por fornecedor via WhatsApp na Consolidação
+                para Compras
+              </span>
+            </div>
+            <span className="text-xs font-medium text-muted-foreground">
+              Consolidado (v0.0.291)
+            </span>
+            <span className="text-xs font-medium text-primary">Versão Vigente (v0.0.291)</span>
+          </div>
+
+          <p className="text-sm text-foreground/90 leading-relaxed">
+            <strong>Funcionalidade:</strong> cada cartão de fornecedor da seção "Pedidos de compra
+            por fornecedor" ganhou dois botões. <strong>WhatsApp</strong> monta a mensagem do pedido
+            — cabeçalho "Pedido de Compra — SIGCAF", nome do fornecedor com vínculo
+            (COOPERADO/EXTERNO), data de entrega e chamada do recorte atual e a lista de produtos
+            com quantidade formatada pt-BR e unidade — e abre{' '}
+            <code>https://wa.me/&lt;numero&gt;?text=...</code> em nova aba com o campo{' '}
+            <code>whatsapp</code> do cadastro de Fornecedores. <strong>Copiar mensagem</strong>{' '}
+            copia exatamente o mesmo texto para a área de transferência, com feedback breve
+            ("Copiado!"). O número é normalizado (só dígitos; prefixo 55 quando não há código de
+            país). Fornecedor sem telefone cadastrado: botão WhatsApp desabilitado com aviso. O
+            estado de enviado não é persistido (o WhatsApp não confirma retorno) — nenhum campo novo
+            no banco. Sem mudanças na tabela, nos filtros (Data de entrega e Chamada), na
+            distribuição, na Consolidação Final ou em /rotas. Isolamento por <code>ciclo_id</code>{' '}
+            preservado.
+          </p>
+        </div>
+
         {/* Release v0.0.290: Coluna Total Comprado em /consolidacao-simples */}
         <div className="rounded-lg border border-primary/40 bg-primary/5 p-5 space-y-4">
           <div className="flex items-center justify-between flex-wrap gap-2">
@@ -943,7 +979,6 @@ export function Requirements() {
             <span className="text-xs font-medium text-muted-foreground">
               Consolidado (v0.0.290)
             </span>
-            <span className="text-xs font-medium text-primary">Versão Vigente (v0.0.290)</span>
           </div>
 
           <p className="text-sm text-foreground/90 leading-relaxed">
