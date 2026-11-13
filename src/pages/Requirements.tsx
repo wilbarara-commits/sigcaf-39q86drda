@@ -929,6 +929,40 @@ export function Requirements() {
       {/* 7. Registro de Manutenção e Limpeza de Dados */}
       <SectionTitle>7. Registro de Manutenção & Higienização do Banco de Dados</SectionTitle>
       <div className="space-y-4">
+        {/* Release v0.0.290: Coluna Total Comprado em /consolidacao-simples */}
+        <div className="rounded-lg border border-primary/40 bg-primary/5 p-5 space-y-4">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="text-primary border-primary/40 font-semibold">
+                Release v0.0.290
+              </Badge>
+              <span className="font-semibold text-foreground">
+                0.0.290: Coluna "Total Comprado" à esquerda de "Total" na Consolidação para Compras
+              </span>
+            </div>
+            <span className="text-xs font-medium text-muted-foreground">
+              Consolidado (v0.0.290)
+            </span>
+            <span className="text-xs font-medium text-primary">Versão Vigente (v0.0.290)</span>
+          </div>
+
+          <p className="text-sm text-foreground/90 leading-relaxed">
+            <strong>Funcionalidade:</strong> a tabela da Consolidação para Compras ganhou a coluna{' '}
+            <strong>Total Comprado</strong>, imediatamente à esquerda da coluna "Total". Por linha
+            de produto, ela mostra a quantidade <strong>já distribuída (comprada)</strong> no
+            recorte atual — a soma das linhas gravadas na coleção <code>compra_distribuicao</code>{' '}
+            para aquele produto no mesmo recorte do botão "Comprar" (ciclo do estado + data de
+            entrega + chamada selecionadas). Sem linhas gravadas, exibe "–". A linha{' '}
+            <strong>TOTAL GERAL</strong> (primeira linha) passou a somar também essa coluna. Os
+            valores reutilizam as linhas já carregadas pela seção "Pedidos de compra por fornecedor"
+            (recarregarDistribuicao), então o Total Comprado atualiza na hora ao gravar ou excluir
+            distribuição no cartão "Comprar", sem reload. A coluna Total e as colunas por rota
+            continuam somando os pedidos (não as distribuições). Nenhuma mudança em filtros, cartão
+            "Comprar", pedidos de compra por fornecedor, Consolidação Final ou /rotas. Isolamento
+            por <code>ciclo_id</code> preservado.
+          </p>
+        </div>
+
         {/* Release v0.0.289: Estado visual do botão Comprar em /consolidacao-simples */}
         <div className="rounded-lg border border-primary/40 bg-primary/5 p-5 space-y-4">
           <div className="flex items-center justify-between flex-wrap gap-2">

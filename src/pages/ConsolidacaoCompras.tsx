@@ -274,6 +274,25 @@ export default function ConsolidacaoCompras() {
     return set
   }, [distribuicaoRecorte])
 
+  // Total COMPRADO por produto no recorte: soma das quantidades das linhas de
+  // distribuição gravadas (mesmo recorte do estado do botão Comprar).
+  const totalCompradoPorProduto = useMemo(() => {
+    const map = new Map<string, number>()
+    for (const d of distribuicaoRecorte) {
+      if (!d.produto_id) continue
+      const qtd = Number(d.quantidade) || 0
+      map.set(d.produto_id, (map.get(d.produto_id) || 0) + qtd)
+    }
+    return map
+  }, [distribuicaoRecorte])
+
+  // Somatório da coluna Total Comprado (linha TOTAL GERAL)
+  const totalGeralComprado = useMemo(() => {
+    let soma = 0
+    for (const l of linhas) soma += totalCompradoPorProduto.get(l.produtoId) || 0
+    return soma
+  }, [linhas, totalCompradoPorProduto])
+
   return (
     <div className="space-y-6">
       {/* Cabeçalho */}
@@ -344,6 +363,7 @@ export default function ConsolidacaoCompras() {
               <TableHeader>
                 <TableRow className="bg-muted/50 hover:bg-muted/50">
                   <TableHead className="min-w-[220px]">Produto</TableHead>
+                  <TableHead className="text-right whitespace-nowrap">Total Comprado</TableHead>
                   <TableHead className="text-right">Total</TableHead>
                   {rotasDoRecorte.map((r) => (
                     <TableHead key={r.id} className="text-right whitespace-nowrap">
@@ -357,6 +377,9 @@ export default function ConsolidacaoCompras() {
                 {/* Linha TOTAL GERAL — primeira linha do relatório */}
                 <TableRow className="bg-primary/10 font-bold hover:bg-primary/10">
                   <TableCell className="font-bold">TOTAL GERAL</TableCell>
+                  <TableCell className="text-right font-mono font-bold">
+                    {formatQty(totalGeralComprado)}
+                  </TableCell>
                   <TableCell className="text-right font-mono font-bold">
                     {formatQty(totalGeral.total)}
                   </TableCell>
@@ -373,6 +396,13 @@ export default function ConsolidacaoCompras() {
                       <TableCell className="font-medium whitespace-nowrap">
                         {l.nome}
                         {l.unidade ? ` (${l.unidade})` : ''}
+                      </TableCell>
+                      <TableCell className="text-right font-mono">
+                        {(totalCompradoPorProduto.get(l.produtoId) || 0) > 0 ? (
+                          formatQty(totalCompradoPorProduto.get(l.produtoId) || 0)
+                        ) : (
+                          <span className="text-muted-foreground/40">–</span>
+                        )}
                       </TableCell>
                       <TableCell className="text-right font-mono">{formatQty(l.total)}</TableCell>
                       {rotasDoRecorte.map((r) => {
