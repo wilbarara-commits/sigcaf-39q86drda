@@ -929,6 +929,41 @@ export function Requirements() {
       {/* 7. Registro de Manutenção e Limpeza de Dados */}
       <SectionTitle>7. Registro de Manutenção & Higienização do Banco de Dados</SectionTitle>
       <div className="space-y-4">
+        {/* Release v0.0.289: Estado visual do botão Comprar em /consolidacao-simples */}
+        <div className="rounded-lg border border-primary/40 bg-primary/5 p-5 space-y-4">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="text-primary border-primary/40 font-semibold">
+                Release v0.0.289
+              </Badge>
+              <span className="font-semibold text-foreground">
+                0.0.289: Botão "Comprar" em laranja (pendente) / verde (comprado) na Consolidação
+                para Compras
+              </span>
+            </div>
+            <span className="text-xs font-medium text-muted-foreground">
+              Consolidado (v0.0.289)
+            </span>
+            <span className="text-xs font-medium text-primary">Versão Vigente (v0.0.289)</span>
+          </div>
+
+          <p className="text-sm text-foreground/90 leading-relaxed">
+            <strong>Funcionalidade:</strong> na tabela da Consolidação para Compras, o botão da
+            coluna "Comprar" ganhou estado visual por produto: fica{' '}
+            <strong className="text-amber-600">laranja</strong> quando a compra do produto está
+            pendente e <strong className="text-green-600">verde</strong> quando a compra está
+            completa — ou seja, quando já existem linhas de distribuição gravadas na coleção{' '}
+            <code>compra_distribuicao</code> para aquele produto no recorte atual (ciclo do estado +
+            data de entrega + chamada selecionadas). O rótulo muda de "Comprar" para "Comprado" no
+            estado verde, mantendo o botão como ação de abrir o cartão. A verificação reutiliza as
+            linhas já carregadas pela seção "Pedidos de compra por fornecedor"
+            (recarregarDistribuicao), que também é recarregada ao gravar ou excluir distribuição no
+            cartão — o botão atualiza na hora, sem reload manual. Nenhuma mudança em filtros,
+            gravação de distribuição, pedidos de compra por fornecedor, Consolidação Final ou
+            /rotas.
+          </p>
+        </div>
+
         {/* Release v0.0.288: Remoção da coluna TOTAL GERAL à direita em /consolidacao-simples */}
         <div className="rounded-lg border border-primary/40 bg-primary/5 p-5 space-y-4">
           <div className="flex items-center justify-between flex-wrap gap-2">
@@ -944,7 +979,6 @@ export function Requirements() {
             <span className="text-xs font-medium text-muted-foreground">
               Consolidado (v0.0.288)
             </span>
-            <span className="text-xs font-medium text-primary">Versão Vigente (v0.0.288)</span>
           </div>
 
           <p className="text-sm text-foreground/90 leading-relaxed">
@@ -974,7 +1008,6 @@ export function Requirements() {
             <span className="text-xs font-medium text-muted-foreground">
               Consolidado (v0.0.287)
             </span>
-            <span className="text-xs font-medium text-primary">Versão Vigente (v0.0.287)</span>
           </div>
 
           <p className="text-sm text-foreground/90 leading-relaxed">
@@ -1007,7 +1040,6 @@ export function Requirements() {
             <span className="text-xs font-medium text-muted-foreground">
               Consolidado (v0.0.286)
             </span>
-            <span className="text-xs font-medium text-primary">Versão Vigente (v0.0.286)</span>
           </div>
 
           <p className="text-sm text-foreground/90 leading-relaxed">
@@ -1046,7 +1078,6 @@ export function Requirements() {
             <span className="text-xs font-medium text-muted-foreground">
               Consolidado (v0.0.285)
             </span>
-            <span className="text-xs font-medium text-primary">Versão Vigente (v0.0.285)</span>
           </div>
 
           <p className="text-sm text-foreground/90 leading-relaxed">
@@ -1084,7 +1115,6 @@ export function Requirements() {
             <span className="text-xs font-medium text-muted-foreground">
               Consolidado (v0.0.284)
             </span>
-            <span className="text-xs font-medium text-primary">Versão Vigente (v0.0.284)</span>
           </div>
 
           <p className="text-sm text-foreground/90 leading-relaxed">
@@ -1125,7 +1155,6 @@ export function Requirements() {
             <span className="text-xs font-medium text-muted-foreground">
               Consolidado (v0.0.283)
             </span>
-            <span className="text-xs font-medium text-primary">Versão Vigente (v0.0.283)</span>
           </div>
 
           <p className="text-sm text-foreground/90 leading-relaxed">
@@ -1161,7 +1190,6 @@ export function Requirements() {
             <span className="text-xs font-medium text-muted-foreground">
               Consolidado (v0.0.282)
             </span>
-            <span className="text-xs font-medium text-primary">Versão Vigente (v0.0.282)</span>
           </div>
 
           <p className="text-sm text-foreground/90 leading-relaxed">
@@ -1197,7 +1225,6 @@ export function Requirements() {
             <span className="text-xs font-medium text-muted-foreground">
               Consolidado (v0.0.278)
             </span>
-            <span className="text-xs font-medium text-primary">Versão Vigente (v0.0.278)</span>
           </div>
 
           <p className="text-sm text-foreground/90 leading-relaxed">
@@ -1272,7 +1299,6 @@ export function Requirements() {
             <span className="text-xs font-medium text-muted-foreground">
               Consolidado (v0.0.276)
             </span>
-            <span className="text-xs font-medium text-primary">Versão Vigente (v0.0.276)</span>
           </div>
 
           <p className="text-sm text-foreground/90 leading-relaxed">

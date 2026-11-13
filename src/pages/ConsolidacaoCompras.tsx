@@ -22,6 +22,7 @@ import {
 } from '@/components/ui/table'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
+import { cn } from '@/lib/utils'
 import { agregarDatasEntrega, escolherDataPadrao, formatarDataEntrega } from '@/lib/datasEntrega'
 
 /**
@@ -263,6 +264,16 @@ export default function ConsolidacaoCompras() {
     })
   }, [distribuicao, dataEntregaSel, chamadaSel])
 
+  // Produtos com compra COMPLETA no recorte: já têm linhas de distribuição
+  // gravadas (ciclo + data de entrega + chamada atuais) → botão verde.
+  const produtosComDistribuicao = useMemo(() => {
+    const set = new Set<string>()
+    for (const d of distribuicaoRecorte) {
+      if (d.produto_id) set.add(d.produto_id)
+    }
+    return set
+  }, [distribuicaoRecorte])
+
   return (
     <div className="space-y-6">
       {/* Cabeçalho */}
@@ -355,37 +366,45 @@ export default function ConsolidacaoCompras() {
                     </TableCell>
                   ))}
                 </TableRow>
-                {linhas.map((l) => (
-                  <TableRow key={l.produtoId}>
-                    <TableCell className="font-medium whitespace-nowrap">
-                      {l.nome}
-                      {l.unidade ? ` (${l.unidade})` : ''}
-                    </TableCell>
-                    <TableCell className="text-right font-mono">{formatQty(l.total)}</TableCell>
-                    {rotasDoRecorte.map((r) => {
-                      const qtd = l.porRota[r.id] || 0
-                      return (
-                        <TableCell key={r.id} className="text-right font-mono">
-                          {qtd > 0 ? (
-                            formatQty(qtd)
-                          ) : (
-                            <span className="text-muted-foreground/40">–</span>
+                {linhas.map((l) => {
+                  const compraCompleta = produtosComDistribuicao.has(l.produtoId)
+                  return (
+                    <TableRow key={l.produtoId}>
+                      <TableCell className="font-medium whitespace-nowrap">
+                        {l.nome}
+                        {l.unidade ? ` (${l.unidade})` : ''}
+                      </TableCell>
+                      <TableCell className="text-right font-mono">{formatQty(l.total)}</TableCell>
+                      {rotasDoRecorte.map((r) => {
+                        const qtd = l.porRota[r.id] || 0
+                        return (
+                          <TableCell key={r.id} className="text-right font-mono">
+                            {qtd > 0 ? (
+                              formatQty(qtd)
+                            ) : (
+                              <span className="text-muted-foreground/40">–</span>
+                            )}
+                          </TableCell>
+                        )
+                      })}
+                      <TableCell className="w-24 text-right">
+                        <Button
+                          size="sm"
+                          onClick={() => abrirCartao(l)}
+                          aria-label={compraCompleta ? `Comprado ${l.nome}` : `Comprar ${l.nome}`}
+                          className={cn(
+                            'w-24',
+                            compraCompleta
+                              ? 'bg-green-600 hover:bg-green-700 text-white'
+                              : 'bg-amber-600 hover:bg-amber-700 text-white',
                           )}
-                        </TableCell>
-                      )
-                    })}
-                    <TableCell className="w-24 text-right">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => abrirCartao(l)}
-                        aria-label={`Comprar ${l.nome}`}
-                      >
-                        Comprar
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
+                        >
+                          {compraCompleta ? 'Comprado' : 'Comprar'}
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  )
+                })}
               </TableBody>
             </Table>
           </CardContent>
