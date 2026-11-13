@@ -929,6 +929,35 @@ export function Requirements() {
       {/* 7. Registro de Manutenção e Limpeza de Dados */}
       <SectionTitle>7. Registro de Manutenção & Higienização do Banco de Dados</SectionTitle>
       <div className="space-y-4">
+        {/* Release v0.0.292: item Compras reordenado no menu lateral */}
+        <div className="rounded-lg border border-primary/40 bg-primary/5 p-5 space-y-4">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="text-primary border-primary/40 font-semibold">
+                Release v0.0.292
+              </Badge>
+              <span className="font-semibold text-foreground">
+                0.0.292: Item "Compras" posicionado imediatamente acima de "Consolidação" no menu
+                lateral
+              </span>
+            </div>
+            <span className="text-xs font-medium text-muted-foreground">
+              Consolidado (v0.0.292)
+            </span>
+            <span className="text-xs font-medium text-primary">Versão Vigente (v0.0.292)</span>
+          </div>
+
+          <p className="text-sm text-foreground/90 leading-relaxed">
+            <strong>Ajuste de navegação:</strong> no grupo "Acompanhamento" do menu lateral, o item{' '}
+            <strong>Compras</strong> (rota <code>/consolidacao-simples</code>, ícone 🛒) passou a
+            aparecer <strong>imediatamente acima</strong> do item "Consolidação" (Consolidação
+            Final). Apenas reordenação de menu: nenhuma rota, tela, rótulo ou ícone de qualquer item
+            foi alterado, e nenhum item foi removido ou duplicado. O grupo continua com
+            Monitoramento, Histórico de Ciclos, Compras e Consolidação, nessa ordem. Sem mudanças no
+            banco de dados.
+          </p>
+        </div>
+
         {/* Release v0.0.291: WhatsApp nos pedidos de compra por fornecedor */}
         <div className="rounded-lg border border-primary/40 bg-primary/5 p-5 space-y-4">
           <div className="flex items-center justify-between flex-wrap gap-2">

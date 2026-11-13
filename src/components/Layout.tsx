@@ -54,7 +54,7 @@ const TOP_NAV_ITEMS: NavItem[] = [{ name: 'Dashboard', path: '/', emoji: '📊' 
 // Grupos recolhíveis conforme estrutura EXATA aprovada pelo usuário:
 // 1. Cadastros: Fornecedores, Produtos, Escolas, Chamadas, Contratos (🗂️)
 // 2. Coleta: Pedidos, Importação Excel, Comunicação WhatsApp (📋)
-// 3. Acompanhamento: Monitoramento, Histórico de Ciclos, Consolidação (📡)
+// 3. Acompanhamento: Monitoramento, Histórico de Ciclos, Compras, Consolidação (📡)
 // 4. Entregas: Rotas de Entrega, Atestos (🛣️)
 // 5. Relatórios: Relatórios (📈)
 const NAV_GROUPS: NavGroup[] = [
@@ -87,8 +87,8 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { name: 'Monitoramento', path: '/monitoramento', emoji: '📡' },
       { name: 'Histórico de Ciclos', path: '/historico-ciclos', emoji: '🔄' },
-      { name: 'Consolidação', path: '/consolidacao', emoji: '🧺' },
       { name: 'Compras', path: '/consolidacao-simples', emoji: '🛒' },
+      { name: 'Consolidação', path: '/consolidacao', emoji: '🧺' },
     ],
   },
   {
