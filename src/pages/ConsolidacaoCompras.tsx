@@ -340,7 +340,6 @@ export default function ConsolidacaoCompras() {
                     </TableHead>
                   ))}
                   <TableHead className="text-right w-24">Comprar</TableHead>
-                  <TableHead className="text-right">TOTAL GERAL</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -355,10 +354,6 @@ export default function ConsolidacaoCompras() {
                       {formatQty(totalGeral.porRota[r.id] || 0)}
                     </TableCell>
                   ))}
-                  <TableCell />
-                  <TableCell className="text-right font-mono font-bold">
-                    {formatQty(totalGeral.total)}
-                  </TableCell>
                 </TableRow>
                 {linhas.map((l) => (
                   <TableRow key={l.produtoId}>
@@ -367,16 +362,6 @@ export default function ConsolidacaoCompras() {
                       {l.unidade ? ` (${l.unidade})` : ''}
                     </TableCell>
                     <TableCell className="text-right font-mono">{formatQty(l.total)}</TableCell>
-                    <TableCell className="w-24 text-right">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => abrirCartao(l)}
-                        aria-label={`Comprar ${l.nome}`}
-                      >
-                        Comprar
-                      </Button>
-                    </TableCell>
                     {rotasDoRecorte.map((r) => {
                       const qtd = l.porRota[r.id] || 0
                       return (
@@ -389,7 +374,16 @@ export default function ConsolidacaoCompras() {
                         </TableCell>
                       )
                     })}
-                    <TableCell className="text-right font-mono">{formatQty(l.total)}</TableCell>
+                    <TableCell className="w-24 text-right">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => abrirCartao(l)}
+                        aria-label={`Comprar ${l.nome}`}
+                      >
+                        Comprar
+                      </Button>
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>

@@ -929,6 +929,36 @@ export function Requirements() {
       {/* 7. Registro de Manutenção e Limpeza de Dados */}
       <SectionTitle>7. Registro de Manutenção & Higienização do Banco de Dados</SectionTitle>
       <div className="space-y-4">
+        {/* Release v0.0.288: Remoção da coluna TOTAL GERAL à direita em /consolidacao-simples */}
+        <div className="rounded-lg border border-primary/40 bg-primary/5 p-5 space-y-4">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="text-primary border-primary/40 font-semibold">
+                Release v0.0.288
+              </Badge>
+              <span className="font-semibold text-foreground">
+                0.0.288: Remoção da coluna TOTAL GERAL (à direita) da tabela em
+                /consolidacao-simples
+              </span>
+            </div>
+            <span className="text-xs font-medium text-muted-foreground">
+              Consolidado (v0.0.288)
+            </span>
+            <span className="text-xs font-medium text-primary">Versão Vigente (v0.0.288)</span>
+          </div>
+
+          <p className="text-sm text-foreground/90 leading-relaxed">
+            <strong>Ajuste:</strong> na tabela da Consolidação para Compras, a coluna{' '}
+            <strong>TOTAL GERAL à direita</strong> (a última coluna, que repetia o total de cada
+            produto e o total geral) foi removida — cabeçalho e células de TODAS as linhas. As
+            colunas agora terminam na última rota do recorte, seguida da coluna "Comprar". A linha{' '}
+            <strong>TOTAL GERAL permanece como primeira linha</strong> do relatório, com o total das
+            colunas restantes (Total e cada rota). Nenhuma outra mudança: filtros de Data de entrega
+            e Chamada, cartão "Comprar", distribuição gravada e pedidos de compra por fornecedor
+            permanecem como em 0.0.287. Isolamento por <code>ciclo_id</code> preservado.
+          </p>
+        </div>
+
         {/* Release v0.0.287: Correção da seção Pedidos de compra por fornecedor */}
         <div className="rounded-lg border border-primary/40 bg-primary/5 p-5 space-y-4">
           <div className="flex items-center justify-between flex-wrap gap-2">
