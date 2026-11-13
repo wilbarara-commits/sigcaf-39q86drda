@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useApp } from '@/context/app-context'
 import { CartaoComprarDialog } from '@/components/CartaoComprarDialog'
 import PedidosCompraSection from '@/components/PedidosCompraSection'
-import { compraDistribuicaoService } from '@/services/compraDistribuicao'
+import { compraDistribuicaoService, normalizarDataISO } from '@/services/compraDistribuicao'
 import type { CompraDistribuicaoRecord } from '@/lib/types'
 import {
   Select,
@@ -251,10 +251,13 @@ export default function ConsolidacaoCompras() {
   }
 
   // Recorte atual (data de entrega + chamada): as linhas gravadas carregam
-  // data_entrega + chamada_id, então filtramos por esses campos.
+  // data_entrega + chamada_id, então filtramos por esses campos. A data é
+  // normalizada dos DOIS lados (slice 0-10): Order.date e data_entrega chegam
+  // do PocketBase como "yyyy-mm-dd HH:mm:ss.mmmZ" e casa apenas o dia.
   const distribuicaoRecorte = useMemo(() => {
     return distribuicao.filter((d) => {
-      if (dataEntregaSel && (d.data_entrega || '') !== dataEntregaSel) return false
+      if (dataEntregaSel && (d.data_entrega || '') !== normalizarDataISO(dataEntregaSel))
+        return false
       if (chamadaSel && (d.chamada_id || '') !== chamadaSel) return false
       return true
     })

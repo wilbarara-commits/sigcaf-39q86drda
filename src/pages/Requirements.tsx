@@ -929,6 +929,39 @@ export function Requirements() {
       {/* 7. Registro de Manutenção e Limpeza de Dados */}
       <SectionTitle>7. Registro de Manutenção & Higienização do Banco de Dados</SectionTitle>
       <div className="space-y-4">
+        {/* Release v0.0.287: Correção da seção Pedidos de compra por fornecedor */}
+        <div className="rounded-lg border border-primary/40 bg-primary/5 p-5 space-y-4">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="text-primary border-primary/40 font-semibold">
+                Release v0.0.287
+              </Badge>
+              <span className="font-semibold text-foreground">
+                0.0.287: Correção — seção "Pedidos de compra por fornecedor" agora exibe os cartões
+                dos fornecedores em /consolidacao-simples
+              </span>
+            </div>
+            <span className="text-xs font-medium text-muted-foreground">
+              Consolidado (v0.0.287)
+            </span>
+            <span className="text-xs font-medium text-primary">Versão Vigente (v0.0.287)</span>
+          </div>
+
+          <p className="text-sm text-foreground/90 leading-relaxed">
+            <strong>Correção:</strong> a seção colapsável "Pedidos de compra por fornecedor" da
+            Consolidação para Compras não exibia os cartões dos fornecedores. Causa: o filtro do
+            recorte comparava <code>d.data_entrega</code> (normalizada para "yyyy-mm-dd" na leitura)
+            com <code>dataEntregaSel</code>, que chega do <code>Order.date</code> cru do PocketBase
+            como "yyyy-mm-dd HH:mm:ss.mmmZ" — a comparação nunca casava e o recorte ficava sempre
+            vazio (estado vazio aparente mesmo com distribuições gravadas). Correção: a data é
+            normalizada dos DOIS lados na comparação (<code>normalizarDataISO</code> em ambos), o
+            service grava <code>data_entrega</code> já normalizada para "yyyy-mm-dd" na criação e a
+            seção abre por padrão para dar visibilidade imediata aos pedidos resultantes. Refresco
+            automático da seção após gravar/excluir distribuição no cartão "Comprar" mantido
+            (recarregarDistribuicao), isolamento por <code>ciclo_id</code> preservado.
+          </p>
+        </div>
+
         {/* Release v0.0.286: Gravação da distribuição e pedidos de compra por fornecedor */}
         <div className="rounded-lg border border-primary/40 bg-primary/5 p-5 space-y-4">
           <div className="flex items-center justify-between flex-wrap gap-2">

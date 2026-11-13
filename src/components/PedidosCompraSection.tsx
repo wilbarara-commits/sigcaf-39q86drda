@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
@@ -33,6 +33,7 @@ export default function PedidosCompraSection({
   carregada,
 }: PedidosCompraSectionProps) {
   const { fornecedores, products } = useApp()
+  const [aberta, setAberta] = useState(true)
 
   const grupos = useMemo(() => {
     const porFornecedor = new Map<
@@ -86,12 +87,13 @@ export default function PedidosCompraSection({
   }, [distribuicao, fornecedores, products])
 
   return (
-    <Collapsible defaultOpen>
+    <Collapsible open={aberta} onOpenChange={setAberta}>
       <Card>
         <CardHeader className="pb-2">
           <CollapsibleTrigger asChild>
             <button
               type="button"
+              aria-expanded={aberta}
               className="flex w-full items-center justify-between gap-2 text-left"
             >
               <div>
@@ -104,7 +106,12 @@ export default function PedidosCompraSection({
                   {chamadaNome ? ` · ${chamadaNome}` : ''}.
                 </p>
               </div>
-              <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform" />
+              <ChevronDown
+                className={cn(
+                  'h-4 w-4 text-muted-foreground transition-transform duration-200',
+                  aberta && 'rotate-180',
+                )}
+              />
             </button>
           </CollapsibleTrigger>
         </CardHeader>

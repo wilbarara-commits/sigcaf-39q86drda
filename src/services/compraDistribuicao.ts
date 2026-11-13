@@ -132,7 +132,9 @@ export const compraDistribuicaoService = {
     for (const linha of linhas) {
       const criado = await pb.collection('compra_distribuicao').create({
         ciclo_id: cicloId,
-        data_entrega: dataEntrega || undefined,
+        // Normaliza para 'yyyy-mm-dd': dataEntrega vem do Order.date cru
+        // ("yyyy-mm-dd HH:mm:ss.mmmZ") e o recorte compara só o dia.
+        data_entrega: dataEntrega ? normalizarDataISO(dataEntrega) : undefined,
         chamada_id: chamadaId || undefined,
         fornecedor_id: linha.fornecedorId,
         produto_id: produtoId,
