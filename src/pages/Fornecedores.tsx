@@ -357,19 +357,21 @@ export default function Fornecedores() {
     setIsSubmitting(true)
     try {
       if (editingFornecedor) {
+        // Na edição, campos vazios viajam como '' para que a limpeza seja persistida
+        // (undefined é ignorado pelo service e o valor antigo permaneceria).
         await fornecedoresService.update(editingFornecedor.id, {
           nome: trimmedNome,
           vinculo,
-          sexo: sexo || undefined,
-          data_nascimento: dataNascimento || undefined,
+          sexo: sexo || '',
+          data_nascimento: dataNascimento || '',
           identidade: docLimpo ? formatarDocumentoIdentidade(docLimpo) : '',
-          data_validade_caf: dataValidadeCaf || undefined,
-          endereco: endereco.trim() || undefined,
-          bairro: bairro.trim() || undefined,
-          cep: cep.trim() ? formatarCEP(cep) : undefined,
+          data_validade_caf: dataValidadeCaf || '',
+          endereco: endereco.trim(),
+          bairro: bairro.trim(),
+          cep: cep.trim() ? formatarCEP(cep) : '',
           latitude: parsedLat,
           longitude: parsedLng,
-          whatsapp: whatsapp.trim() ? formatarWhatsApp(whatsapp) : undefined,
+          whatsapp: whatsapp.trim() ? formatarWhatsApp(whatsapp) : '',
           fotoFile,
           removerFoto,
         })
