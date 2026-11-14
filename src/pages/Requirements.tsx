@@ -929,6 +929,40 @@ export function Requirements() {
       {/* 7. Registro de Manutenção e Limpeza de Dados */}
       <SectionTitle>7. Registro de Manutenção & Higienização do Banco de Dados</SectionTitle>
       <div className="space-y-4">
+        {/* Release v0.0.294: data de entrega de pedidos importados = data_despacho do ciclo */}
+        <div className="rounded-lg border border-primary/40 bg-primary/5 p-5 space-y-4">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="text-primary border-primary/40 font-semibold">
+                Release v0.0.294
+              </Badge>
+              <span className="font-semibold text-foreground">
+                0.0.294: Data de entrega correta para pedidos importados (data_despacho do ciclo)
+              </span>
+            </div>
+            <span className="text-xs font-medium text-muted-foreground">
+              Consolidado (v0.0.294)
+            </span>
+            <span className="text-xs font-medium text-primary">Versão Vigente (v0.0.294)</span>
+          </div>
+
+          <p className="text-sm text-foreground/90 leading-relaxed">
+            <strong>Correção de dados:</strong> pedidos importados em lote (criar_pedidos_batch)
+            recebiam <code>data_prevista</code> = momento da importação (fallback{' '}
+            <code>new Date()</code> do hook), em vez da data de entrega do ciclo — /rotas e
+            /consolidação-simples agrupavam os pedidos na data errada nos seletores de data. Três
+            frentes: (1) no hook, o fallback passa a ser a <code>data_despacho</code> do ciclo do
+            pedido (meio-dia UTC, mesmo formato dos pedidos manuais); (2) migration 0149 idempotente
+            recarimba pedidos existentes cujo <code>data_prevista</code> coincide com o instante de
+            criação (diferença &lt; 1h) com a <code>data_despacho</code> do ciclo — pedidos com data
+            de entrega explícita e legítima não são tocados; (3) as telas que agrupam por data (
+            <code>agregarDatasEntrega</code>) refletem a correção pelos dados, sem lógica nova.
+            Isolamento por <code>ciclo_id</code> e anti-vazamento nas 4 telas (/rotas, Dashboard,
+            Portal do Motorista, /monitoramento) preservados. Validado: Ciclo 46/2026 em 17/11/2026
+            e Ciclo 44/2026 permanece em 03/11/2026.
+          </p>
+        </div>
+
         {/* Release v0.0.293: desfazer entrega de rota limpa o estado "Rota Entregue" */}
         <div className="rounded-lg border border-primary/40 bg-primary/5 p-5 space-y-4">
           <div className="flex items-center justify-between flex-wrap gap-2">

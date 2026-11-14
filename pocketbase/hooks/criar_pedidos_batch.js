@@ -2,6 +2,12 @@
 // POST /backend/v1/pedidos/batch-create
 // Body: { pedidos: Array<{ numero, escola_id, ciclo_id, origem, rota_id, validacao, data_prevista, status, itens: [...] }> }
 
+// Fallback de data_prevista: quando o import não traz data de entrega, o pedido
+// herda a data_despacho do ciclo (meio-dia UTC, mesmo formato dos pedidos manuais)
+// — nunca o momento da importação, que agrupava os pedidos na data errada nos
+// seletores de data de /rotas e /consolidacao-simples. A lógica vive DENTRO do
+// callback (JSVM do PocketBase não enxerga declarações de top-level em callbacks).
+
 routerAdd('POST', '/backend/v1/pedidos/batch-create', (e) => {
   const body = e.requestInfo().body || {}
   const pedidosInput = body.pedidos || []
@@ -11,6 +17,27 @@ routerAdd('POST', '/backend/v1/pedidos/batch-create', (e) => {
   }
 
   const createdOrders = []
+
+  // Cache de ciclos já buscados (um lote de import costuma repetir o mesmo ciclo)
+  const ciclosCache = {}
+  const resolverDataPrevista = function (cicloId, dataInformada) {
+    if (dataInformada) return dataInformada
+    if (cicloId && ciclosCache[cicloId] !== undefined) {
+      return ciclosCache[cicloId]
+    }
+    let resolvida = new Date().toISOString()
+    if (cicloId) {
+      try {
+        const ciclo = $app.findRecordById('ciclos', cicloId)
+        const dataDespacho = ciclo.getString('data_despacho')
+        if (dataDespacho) resolvida = dataDespacho
+      } catch (_) {
+        // ciclo inexistente: mantém o fallback legado (momento atual)
+      }
+    }
+    ciclosCache[cicloId || '_'] = resolvida
+    return resolvida
+  }
 
   $app.runInTransaction((txApp) => {
     const pedidosCol = txApp.findCollectionByNameOrId('pedidos')
@@ -41,7 +68,7 @@ routerAdd('POST', '/backend/v1/pedidos/batch-create', (e) => {
       const rotaId = pData.rota_id || pData.rota_logistica_id
       if (rotaId) pRecord.set('rota_id', rotaId)
       if (pData.validacao) pRecord.set('validacao', pData.validacao)
-      pRecord.set('data_prevista', pData.data_prevista || new Date().toISOString())
+      pRecord.set('data_prevista', resolverDataPrevista(txApp, pData.ciclo_id, pData.data_prevista))
       pRecord.set('status', pData.status || 'Pendente')
 
       txApp.save(pRecord)
