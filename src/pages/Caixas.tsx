@@ -540,7 +540,7 @@ export default function Caixas() {
                       </span>
                     ))}
                   </div>
-                  <div className="overflow-x-auto">
+                  <div className="overflow-x-auto print:space-y-compact">
                     <Table>
                       <TableHeader>
                         <TableRow className="bg-muted/50 hover:bg-muted/50">
@@ -563,9 +563,8 @@ export default function Caixas() {
                               <TableCell
                                 key={col.escolaId}
                                 className={cn(
-                                  'text-center font-mono text-xs',
-                                  (l.porEscola[col.escolaId] || 0) === 0 &&
-                                    'text-muted-foreground/40',
+                                  'caixas-qty text-center font-mono text-xs',
+                                  (l.porEscola[col.escolaId] || 0) === 0 && 'caixas-qty-muted',
                                 )}
                               >
                                 {formatQty(l.porEscola[col.escolaId] || 0)}
@@ -610,7 +609,7 @@ export default function Caixas() {
                   {chamadaInfo || '—'} · Data: {formatarDataEntrega(dataEntregaSel)}
                 </div>
               </div>
-              <div className="overflow-x-auto">
+              <div className="overflow-x-auto print:space-y-compact">
                 <Table>
                   <TableHeader>
                     <TableRow className="bg-muted/50 hover:bg-muted/50">

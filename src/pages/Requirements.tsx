@@ -929,6 +929,41 @@ export function Requirements() {
       {/* 7. Registro de Manutenção e Limpeza de Dados */}
       <SectionTitle>7. Registro de Manutenção & Higienização do Banco de Dados</SectionTitle>
       <div className="space-y-4">
+        {/* Release v0.0.299: PDF de /caixas mais compacto com quantidades maiores */}
+        <div className="rounded-lg border border-primary/40 bg-primary/5 p-5 space-y-4">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="text-primary border-primary/40 font-semibold">
+                Release v0.0.299
+              </Badge>
+              <span className="font-semibold text-foreground">
+                0.0.299: Caixas — PDF da folha de conferência mais compacto e com quantidades
+                maiores
+              </span>
+            </div>
+            <span className="text-xs font-medium text-muted-foreground">
+              Consolidado (v0.0.299)
+            </span>
+            <span className="text-xs font-medium text-primary">Versão Vigente (v0.0.299)</span>
+          </div>
+
+          <p className="text-sm text-foreground/90 leading-relaxed">
+            <strong>Ajuste de impressão na tela Caixas (/caixas), por pedido do usuário:</strong> a
+            folha de conferência impressa ficou mais compacta verticalmente — padding vertical das
+            células da tabela reduzido a ~1px, line-height apertado (1.15) e espaçamento vertical
+            entre os blocos da página (cabeçalho, legenda, tabela e rodapé) zerado só na impressão,
+            via <code>.print:space-y-compact</code> em <code>main.css</code>. Em compensação, os{' '}
+            <strong>números de quantidade por escola</strong> passam a sair ampliados (
+            <strong>10.5pt, negrito</strong> — classe <code>caixas-qty</code>) para leitura fácil na
+            montagem das caixas; rótulos e cabeçalhos continuam no tamanho normal. Resultado: uma
+            rota com 17 escolas cabe em <strong>uma única página</strong> impressa (A4 paisagem,
+            margem 8mm), sem transbordar. Nada muda na tela em modo normal (visual idêntico) nem na
+            lógica: dados, filtros, corte de 17 escolas por página, numeração contínua, linha TOTAL
+            por página e seção final de totais por produto por rota + PESO TOTAL intocados;
+            Consolidação Final, Compras e /rotas não afetadas.
+          </p>
+        </div>
+
         {/* Release v0.0.298: rótulos "N. Escola" corrigidos — campo name, não nome */}
         <div className="rounded-lg border border-primary/40 bg-primary/5 p-5 space-y-4">
           <div className="flex items-center justify-between flex-wrap gap-2">
