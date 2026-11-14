@@ -160,41 +160,49 @@
     width: 100% !important;
     table-layout: fixed;
   }
-  /* Tabelas da folha (rota e totais finais): primeira coluna encolhe ao
-     conteúdo e as colunas de escola/rota dividem igualmente o RESTO da
-     largura da página A4 paisagem — sem compressão. */
+  /* Tabelas da folha (rota e totais finais):
+     Primeira coluna (nome do produto na folha de rota e nos totais finais)
+     recebe largura explícita (~22% a 25%) suficiente para nomes longos e compostos
+     (ex. "AIPIM/MACAXEIRA", "BATATA DOCE", "LARANJA PERA (KG)") sem quebra nem reticências.
+     As colunas de quantidade (escolas na folha de rota / rotas nos totais) ficam proporcionais
+     e mais estreitas (~4.5% cada em 17 escolas), cedendo esse espaço ao produto. */
   #caixas-print-root .caixas-folha table td:first-child,
   #caixas-print-root .caixas-folha table th:first-child {
-    width: 1% !important;
+    width: 23% !important;
     white-space: nowrap !important;
+    overflow: hidden;
+    text-overflow: clip;
   }
-  #caixas-print-root .caixas-folha table th:not(:first-child) {
+  #caixas-print-root .caixas-folha table th:not(:first-child),
+  #caixas-print-root .caixas-folha table td:not(:first-child) {
     width: auto !important;
   }
   #caixas-print-root .print\:break-after-page {
     break-after: page;
   }
 
-  /* 0.0.300 — EQUILÍBRIO na impressão (revisão do usuário: a versão anterior
-     apertou demais — vertical ~1px e colunas de escola comprimidas).
-     Vertical: padding e line-height INTERMEDIÁRIOS (não o mínimo absoluto) e
-     um respiro pequeno entre os blocos da página. Horizontal: padding lateral
-     real nas células e as colunas de escola (tabelas .caixas-folha) dividindo
-     igualmente toda a largura da página A4 paisagem. Quantidades seguem em
-     negrito 10.5pt (classe caixas-qty). Tela em modo normal não muda. */
+  /* 0.0.301 — ESPAÇO PARA O PRODUTO + COLUNAS DE QUANTIDADE MAIS ESTREITAS:
+     Largura da primeira coluna garantida em 23% (produto com nome completo, sem quebra).
+     Colunas numéricas de quantidade estreitadas de forma proporcional, com padding
+     lateral compacto (2px) para acomodar os números em 10.5pt sem empurrar a tabela.
+     Vertical preservado da 0.0.300/301: padding vertical 3px, line-height 1.3 e
+     respiro 4px entre blocos para manter a folha de 17 escolas em 1 página impressa. */
   #caixas-print-root table td,
   #caixas-print-root table th {
     padding-top: 3px !important;
     padding-bottom: 3px !important;
+    padding-left: 2px !important;
+    padding-right: 2px !important;
+    line-height: 1.3 !important;
+  }
+  /* Primeira coluna pode ter respiro lateral de 4px para leitura do nome */
+  #caixas-print-root table td:first-child,
+  #caixas-print-root table th:first-child {
     padding-left: 4px !important;
     padding-right: 4px !important;
-    line-height: 1.3 !important;
   }
   #caixas-print-root .print\:space-y-compact > * + * {
     margin-top: 4px !important;
-  }
-  #caixas-print-root .caixas-folha table thead th:not(:first-child) {
-    width: auto !important;
   }
   #caixas-print-root .caixas-qty {
     font-size: 10.5pt !important;

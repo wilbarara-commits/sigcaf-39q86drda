@@ -929,6 +929,45 @@ export function Requirements() {
       {/* 7. Registro de Manutenção e Limpeza de Dados */}
       <SectionTitle>7. Registro de Manutenção & Higienização do Banco de Dados</SectionTitle>
       <div className="space-y-4">
+        {/* Release v0.0.301: largura para o produto e colunas de quantidade mais estreitas no PDF de /caixas */}
+        <div className="rounded-lg border border-primary/40 bg-primary/5 p-5 space-y-4">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="text-primary border-primary/40 font-semibold">
+                Release v0.0.301
+              </Badge>
+              <span className="font-semibold text-foreground">
+                0.0.301: Caixas — PDF com largura suficiente para nomes de produto e colunas de
+                quantidade estreitadas
+              </span>
+            </div>
+            <span className="text-xs font-medium text-muted-foreground">
+              Consolidado (v0.0.301)
+            </span>
+            <span className="text-xs font-medium text-primary">Versão Vigente (v0.0.301)</span>
+          </div>
+
+          <p className="text-sm text-foreground/90 leading-relaxed">
+            <strong>
+              Ajuste de largura de colunas na impressão da tela Caixas (/caixas), por pedido do
+              usuário:
+            </strong>{' '}
+            o usuário esclareceu que a coluna do produto necessita de espaço suficiente para nomes
+            completos e compostos (ex.: <em>AIPIM/MACAXEIRA</em>, <em>BATATA DOCE</em>,{' '}
+            <em>LARANJA PERA</em>), enquanto as colunas numéricas de quantidade (escolas na folha de
+            rota e rotas nos totais) devem ficar proporcionais e mais estreitas para ceder esse
+            espaço. Ajustes exclusivamente no bloco <code>@media print</code> de{' '}
+            <code>src/main.css</code>: (1) primeira coluna (produto / total) com largura explícita
+            (~23%) e <code>white-space: nowrap</code> sem corte de nomes; (2) colunas de quantidade
+            proporcionalmente mais estreitas com padding lateral compacto (2px); (3) equilíbrio
+            vertical preservado (padding vertical 3px, line-height 1.3, respiro 4px entre blocos),
+            garantindo que a folha de 17 escolas continue cabendo perfeitamente em 1 página impressa
+            A4 paisagem; (4) quantidades mantidas em 10.5pt negrito (<code>caixas-qty</code>).
+            Visualização fora da impressão, totais por rota e demais telas do sistema completamente
+            intocadas.
+          </p>
+        </div>
+
         {/* Release v0.0.300: equilíbrio vertical/horizontal no PDF de /caixas */}
         <div className="rounded-lg border border-primary/40 bg-primary/5 p-5 space-y-4">
           <div className="flex items-center justify-between flex-wrap gap-2">
@@ -944,7 +983,9 @@ export function Requirements() {
             <span className="text-xs font-medium text-muted-foreground">
               Consolidado (v0.0.300)
             </span>
-            <span className="text-xs font-medium text-primary">Versão Vigente (v0.0.300)</span>
+            <span className="text-xs font-medium text-muted-foreground">
+              Versão Vigente (v0.0.300)
+            </span>
           </div>
 
           <p className="text-sm text-foreground/90 leading-relaxed">
