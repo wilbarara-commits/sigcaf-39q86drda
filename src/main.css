@@ -125,3 +125,42 @@
     color: black !important;
   }
 }
+
+/* Impressão oficial isolada da folha de conferência de Caixas (/caixas):
+   A4 paisagem, só a folha visível — sem sidebar, header, filtros ou botões.
+   As quebras de página seguem o corte da tela: 1 página por bloco de até
+   20 escolas da mesma rota (classe utilitária print:break-after-page). */
+@media print {
+  @page {
+    size: A4 landscape;
+    margin: 8mm;
+  }
+  body * {
+    visibility: hidden;
+  }
+  #caixas-print-root,
+  #caixas-print-root * {
+    visibility: visible;
+  }
+  #caixas-print-root {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    box-shadow: none !important;
+    background: white !important;
+    color: black !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  #caixas-print-root table {
+    width: 100% !important;
+    table-layout: fixed;
+  }
+  #caixas-print-root .print\:break-after-page {
+    break-after: page;
+  }
+}

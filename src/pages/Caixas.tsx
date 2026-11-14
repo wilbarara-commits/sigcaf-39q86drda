@@ -17,6 +17,8 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Button } from '@/components/ui/button'
+import { Printer } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { agregarDatasEntrega, escolherDataPadrao, formatarDataEntrega } from '@/lib/datasEntrega'
 import { formatQuantityOneDecimal } from '@/lib/decimalUtils'
@@ -25,9 +27,10 @@ import { formatQuantityOneDecimal } from '@/lib/decimalUtils'
  * Caixas (/caixas) — folha de conferência por rota para montagem de caixas.
  *
  * Segue o modelo PDF do usuário: por rota, coluna TOTAL à esquerda, escolas
- * numeradas (N_tipo NOME), produtos nas linhas, linha TOTAL no pé da página;
+ * numeradas ("N. NOME"), produtos nas linhas, linha TOTAL no pé da página;
  * rota com mais de 20 escolas divide em 2+ páginas com numeração contínua;
  * última seção traz totais por produto por rota + PESO TOTAL por rota.
+ * "Imprimir PDF" imprime exatamente o mesmo layout da tela em A4 paisagem.
  *
  * Mesma base da Consolidação Final / Compras: pedidos ativos → itens →
  * produtos, unidade do catálogo, escola → rota via paradas_rota, no recorte
@@ -54,22 +57,6 @@ function formatDataCurta(dataISO: string): string {
   const d = new Date(`${dataISO}T12:00:00`)
   if (Number.isNaN(d.getTime())) return dataISO
   return d.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' }).replace('.', '')
-}
-
-/** Sigla do tipo de escola para o rótulo "N_tipo NOME" (CM, EM, CC, CMEI, APAE, CE…). */
-function siglaTipoEscola(escola: unknown): string {
-  const rec = escola as { tipo?: string; nome?: string; dependencia_administrativa?: string }
-  const tipo = String(rec?.tipo || '').trim()
-  const nome = String(rec?.nome || '').toUpperCase()
-  const dep = String(rec?.dependencia_administrativa || '').trim()
-
-  if (nome.includes('APAE')) return 'APAE'
-  if (tipo === 'CMEI') return 'CMEI'
-  if (tipo === 'CRECHE') return 'CC'
-  if (tipo === 'INTEGRAL') return 'CM'
-  if (dep === 'Estadual' || tipo === 'Médio' || tipo === 'Técnico') return 'CE'
-  if (tipo === 'FUNDAMENTAL') return 'EM'
-  return 'EM'
 }
 
 interface EscolaColuna {
@@ -305,7 +292,7 @@ export default function Caixas() {
           const col: EscolaColuna = {
             escolaId,
             numero,
-            rotulo: `${numero}_${siglaTipoEscola(rec)} ${nome}`,
+            rotulo: `${numero}. ${nome}`,
             nome,
           }
           numero += 1
@@ -403,8 +390,14 @@ export default function Caixas() {
 
   const carregando = !dataEntregaSel && datasEntregaAgregadas.length > 0
 
+  /** PDF da folha de conferência: mesma árvore DOM da tela em A4 paisagem
+   * (CSS @media print dedicado em main.css). window.print é síncrono. */
+  const handleImprimirPdf = () => {
+    window.print()
+  }
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 print:bg-white" id="caixas-print-root">
       {/* Cabeçalho */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
@@ -413,7 +406,7 @@ export default function Caixas() {
             Folha de conferência por rota para montagem das caixas.
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2 print:hidden">
           <Select value={dataEntregaSel} onValueChange={handleChangeDataEntrega}>
             <SelectTrigger className="w-[220px]" aria-label="Data de entrega">
               <SelectValue placeholder="Data de entrega" />
@@ -459,6 +452,11 @@ export default function Caixas() {
               ))}
             </SelectContent>
           </Select>
+
+          <Button type="button" onClick={handleImprimirPdf} className="print:hidden">
+            <Printer className="h-4 w-4" />
+            Imprimir PDF
+          </Button>
         </div>
       </div>
 
@@ -485,7 +483,10 @@ export default function Caixas() {
           {/* Folhas por rota (páginas de até 20 escolas) */}
           {folhas.map((folha) =>
             folha.paginas.map((pagina, idx) => (
-              <Card key={`${folha.rotaId}-${idx}`} className="overflow-hidden">
+              <Card
+                key={`${folha.rotaId}-${idx}`}
+                className="overflow-hidden print:shadow-none print:border-border print:break-after-page"
+              >
                 <CardContent className="p-0">
                   <div className="px-4 py-3 border-b bg-muted/40 flex flex-wrap items-baseline justify-between gap-2">
                     <h2 className="font-bold uppercase">{folha.nome}</h2>
@@ -562,7 +563,7 @@ export default function Caixas() {
           )}
 
           {/* Seção final: totais por produto por rota + PESO TOTAL */}
-          <Card className="overflow-hidden">
+          <Card className="overflow-hidden print:break-after-page">
             <CardContent className="p-0">
               <div className="px-4 py-3 border-b bg-muted/40">
                 <h2 className="font-bold">Totais por produto</h2>
@@ -617,7 +618,7 @@ export default function Caixas() {
             </CardContent>
           </Card>
 
-          <p className="text-xs text-muted-foreground">
+          <p className="text-xs text-muted-foreground print:hidden">
             Mesma base de dados da Consolidação Final. Pedidos cancelados e ciclos
             fechados/cancelados não entram. Tela de consulta — sem edição.
           </p>
