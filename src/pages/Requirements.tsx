@@ -929,6 +929,45 @@ export function Requirements() {
       {/* 7. Registro de Manutenção e Limpeza de Dados */}
       <SectionTitle>7. Registro de Manutenção & Higienização do Banco de Dados</SectionTitle>
       <div className="space-y-4">
+        {/* Release v0.0.302: zebra vertical de colunas (tons alternados) no PDF de /caixas */}
+        <div className="rounded-lg border border-primary/40 bg-primary/5 p-5 space-y-4">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="text-primary border-primary/40 font-semibold">
+                Release v0.0.302
+              </Badge>
+              <span className="font-semibold text-foreground">
+                0.0.302: Caixas — zebra vertical de colunas (tons alternados) no PDF da folha de
+                conferência
+              </span>
+            </div>
+            <span className="text-xs font-medium text-muted-foreground">
+              Consolidado (v0.0.302)
+            </span>
+            <span className="text-xs font-medium text-primary">Versão Vigente (v0.0.302)</span>
+          </div>
+
+          <p className="text-sm text-foreground/90 leading-relaxed">
+            <strong>
+              Coloração alternada de colunas no PDF da tela Caixas (/caixas), por pedido do usuário:
+            </strong>{' '}
+            para que cada coluna vertical da folha se distinga da vizinha na leitura impressa, as
+            colunas passam a alternar tons em zebra vertical: colunas de posição ímpar (a coluna do
+            produto/TOTAL e, alternando entre elas, as colunas de escola e de rota) recebem fundo
+            cinza bem claro (<code>#f3f4f6</code>), as pares ficam sem fundo. A faixa é contínua de
+            topo a pé da coluna — vale para cabeçalho (<code>th</code>), corpo (<code>td</code>) e
+            linha TOTAL do pé — e aparece tanto nas páginas por rota quanto na seção final de totais
+            por produto. Implementada exclusivamente no bloco <code>@media print</code> de{' '}
+            <code>src/main.css</code> (seletores <code>nth-child(odd)</code> sobre{' '}
+            <code>.caixas-folha</code>, com <code>print-color-adjust: exact</code> para o fundo sair
+            no papel), tom discreto que não prejudica a leitura em P&amp;B. Nenhuma mudança de
+            estrutura, dados, larguras, paddings ou corte de 17 escolas por página — a folha de 17
+            escolas segue cabendo em 1 página A4 paisagem. A visualização da tela /caixas fora da
+            impressão permanece sem qualquer coloração, e Consolidação Final, Compras e /rotas não
+            são afetadas.
+          </p>
+        </div>
+
         {/* Release v0.0.301: largura para o produto e colunas de quantidade mais estreitas no PDF de /caixas */}
         <div className="rounded-lg border border-primary/40 bg-primary/5 p-5 space-y-4">
           <div className="flex items-center justify-between flex-wrap gap-2">

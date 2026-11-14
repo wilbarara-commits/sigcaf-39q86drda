@@ -212,4 +212,18 @@
   #caixas-print-root .caixas-qty-muted {
     color: #9ca3af !important;
   }
+
+  /* 0.0.302 — ZEBRA VERTICAL (colunas alternadas) SOMENTE na impressão:
+     colunas de posição ímpar (1ª = produto/TOTAL, depois alternando entre as
+     colunas de escola / de rota) recebem fundo cinza bem claro (#f3f4f6);
+     as pares ficam transparentes. A faixa é contínua de topo a pé da coluna:
+     vale para cabeçalho (th), corpo (td) e linha TOTAL do pé. Não altera
+     larguras, paddings nem quebras — a folha de 17 escolas segue em 1 página.
+     Tela /caixas fora da impressão permanece sem qualquer coloração. */
+  #caixas-print-root .caixas-folha table th:nth-child(odd),
+  #caixas-print-root .caixas-folha table td:nth-child(odd) {
+    background-color: #f3f4f6 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
 }
