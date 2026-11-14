@@ -929,6 +929,47 @@ export function Requirements() {
       {/* 7. Registro de Manutenção e Limpeza de Dados */}
       <SectionTitle>7. Registro de Manutenção & Higienização do Banco de Dados</SectionTitle>
       <div className="space-y-4">
+        {/* Release v0.0.295: nova tela /caixas — folha de conferência por rota */}
+        <div className="rounded-lg border border-primary/40 bg-primary/5 p-5 space-y-4">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="text-primary border-primary/40 font-semibold">
+                Release v0.0.295
+              </Badge>
+              <span className="font-semibold text-foreground">
+                0.0.295: Nova tela "Caixas" (/caixas) — folha de conferência por rota para montagem
+                de caixas
+              </span>
+            </div>
+            <span className="text-xs font-medium text-muted-foreground">
+              Consolidado (v0.0.295)
+            </span>
+            <span className="text-xs font-medium text-primary">Versão Vigente (v0.0.295)</span>
+          </div>
+
+          <p className="text-sm text-foreground/90 leading-relaxed">
+            <strong>Nova tela (tarefa pendente antiga do usuário):</strong> menu lateral ganha o
+            item <strong>Caixas</strong> (rota <code>/caixas</code>, ícone 📦) imediatamente depois
+            de Compras, no grupo Acompanhamento. A tela reproduz o modelo PDF do usuário (folha de
+            conferência por rota para montagem de caixas): filtros primários de Data de entrega e
+            secundário de Chamada (mesmo padrão de /rotas e /consolidacao-simples —
+            <code>agregarDatasEntrega</code> / <code>escolherDataPadrao</code>, seletor de chamada
+            só com 2+ chamadas na data), além de seleção da Rota (A, B, C… ou todas). O cabeçalho da
+            folha indica a <strong>CHAMADA</strong> (ex.: "Chamada 44/2025 — Municipal"), a data de
+            entrega e a rota. Base de dados: mesma da Consolidação Final/Compras (pedidos ativos →
+            itens → produtos, unidade do catálogo, escola → rota via <code>paradas_rota</code>, no
+            recorte data+chamada, isolamento por <code>ciclo_id</code> / anti-vazamento). Layout por
+            rota: coluna TOTAL à esquerda, colunas numeradas por escola com o rótulo "N_tipo NOME"
+            (tipo derivado do cadastro: CM, EM, CC, CMEI, APAE, CE), linha por produto com a
+            quantidade por escola e a unidade no rótulo, linha TOTAL no pé com o somatório da
+            página. Paginação: até 20 escolas por página; rota com mais escolas divide em 2+ páginas
+            com numeração contínua e linha TOTAL própria por página. Seção final: totais por produto
+            em cada rota e total geral + linha PESO TOTAL por rota. Números pt-BR: inteiros sem
+            casas decimais (3) e decimais com vírgula (99,5). Tela de consulta: sem edição, sem
+            exportação. Consolidação Final, /consolidacao-simples e /rotas intocadas.
+          </p>
+        </div>
+
         {/* Release v0.0.294: data de entrega de pedidos importados = data_despacho do ciclo */}
         <div className="rounded-lg border border-primary/40 bg-primary/5 p-5 space-y-4">
           <div className="flex items-center justify-between flex-wrap gap-2">

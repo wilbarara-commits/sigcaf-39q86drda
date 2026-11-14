@@ -22,6 +22,7 @@ import Reports from './pages/Reports'
 import Requirements from './pages/Requirements'
 import Consolidation from './pages/Consolidation'
 import ConsolidacaoCompras from './pages/ConsolidacaoCompras'
+import Caixas from './pages/Caixas'
 import CycleHistory from './pages/CycleHistory'
 import Monitoring from './pages/Monitoring'
 import WhatsappCommunication from './pages/WhatsappCommunication'
@@ -64,6 +65,7 @@ const App = () => (
               <Route path="/rotas" element={<DeliveryRoutes />} />
               <Route path="/consolidacao" element={<Consolidation />} />
               <Route path="/consolidacao-simples" element={<ConsolidacaoCompras />} />
+              <Route path="/caixas" element={<Caixas />} />
               <Route path="/historico-ciclos" element={<CycleHistory />} />
               <Route path="/monitoramento" element={<Monitoring />} />
               <Route path="/comunicacao" element={<WhatsappCommunication />} />
