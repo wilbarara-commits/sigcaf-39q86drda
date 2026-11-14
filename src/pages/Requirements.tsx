@@ -929,6 +929,36 @@ export function Requirements() {
       {/* 7. Registro de Manutenção e Limpeza de Dados */}
       <SectionTitle>7. Registro de Manutenção & Higienização do Banco de Dados</SectionTitle>
       <div className="space-y-4">
+        {/* Release v0.0.293: desfazer entrega de rota limpa o estado "Rota Entregue" */}
+        <div className="rounded-lg border border-primary/40 bg-primary/5 p-5 space-y-4">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="text-primary border-primary/40 font-semibold">
+                Release v0.0.293
+              </Badge>
+              <span className="font-semibold text-foreground">
+                0.0.293: Desfazer entrega da rota limpa o estado "Rota Entregue" em /rotas
+              </span>
+            </div>
+            <span className="text-xs font-medium text-muted-foreground">
+              Consolidado (v0.0.293)
+            </span>
+            <span className="text-xs font-medium text-primary">Versão Vigente (v0.0.293)</span>
+          </div>
+
+          <p className="text-sm text-foreground/90 leading-relaxed">
+            <strong>Correção:</strong> ao desfazer a entrega de uma rota em /rotas, o card
+            continuava exibindo "Rota Entregue" e a rota seguia travada para edição. A causa era que
+            o desfazer revertia apenas pedidos "Em Rota": os pedidos já "Entregue" permaneciam
+            entregues, e o despacho legado "Entregue" do ciclo não era removido — a tela deriva
+            "Rota Entregue" desses dados. Agora o desfazer volta para "Pendente" os pedidos
+            "Entregue" e "Em Rota" da rota no ciclo, remove também os despachos legados "Entregue"
+            do ciclo e limpa o despacho ativo na tela imediatamente. Entregas de outras rotas e de
+            outros ciclos não são tocadas (isolamento por <code>ciclo_id</code>). Dashboard, Portal
+            do Motorista e /monitoramento deixam de contar entregas da rota desfeita no ciclo.
+          </p>
+        </div>
+
         {/* Release v0.0.292: item Compras reordenado no menu lateral */}
         <div className="rounded-lg border border-primary/40 bg-primary/5 p-5 space-y-4">
           <div className="flex items-center justify-between flex-wrap gap-2">
@@ -944,7 +974,6 @@ export function Requirements() {
             <span className="text-xs font-medium text-muted-foreground">
               Consolidado (v0.0.292)
             </span>
-            <span className="text-xs font-medium text-primary">Versão Vigente (v0.0.292)</span>
           </div>
 
           <p className="text-sm text-foreground/90 leading-relaxed">

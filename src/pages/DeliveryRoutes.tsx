@@ -1259,6 +1259,14 @@ export default function DeliveryRoutes() {
       setDesfazerEntregasOpen(false)
       setRotaParaDesfazer(null)
 
+      // Limpar localmente o despacho/estado "entregue" da rota desfeita (atualização imediata do card)
+      const rotaDesfeitaId = rotaParaDesfazer.id
+      setDespachosAtivosMap((prev) => {
+        const next = { ...prev }
+        delete next[rotaDesfeitaId]
+        return next
+      })
+
       // Recarregar dados das rotas, despachos e entregas
       await Promise.allSettled([carregarMotoristasEDespachos(), refreshData()])
     } catch (err: any) {

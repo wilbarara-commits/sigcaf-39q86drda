@@ -5,10 +5,10 @@
 //
 // Executa em transação única:
 // 1. Desativa e REMOVE registros em rota_despachos (despacho ativo + token do portal)
-// 2. Remove registros em despachos (legado) da rota+cycle que estejam "Em Rota"
+// 2. Remove registros em despachos (legado) da rota+cycle que estejam "Em Rota" ou "Entregue"
 // 3. APAGA todos os entrega_registros (horário, responsável, assinatura, fotos)
 // 4. APAGA todos os entrega_comprovantes (recibos permanentes + arquivos de foto/assinatura)
-// 5. Volta os pedidos "Em Rota" para "Pendente" (mantendo rota_id)
+// 5. Volta os pedidos "Em Rota" e "Entregue" para "Pendente" (mantendo rota_id)
 // 6. Limpa posição do caminhão na rota (caminhao_posicao_atual / caminhao_escola_id)
 // 7. (Opcional) Apaga revisões de coordenadas (coordenada_sugestoes) pendentes da rota no ciclo
 //
@@ -66,7 +66,7 @@ routerAdd('POST', '/backend/v1/rotas-logisticas/desfazer-entregas', (e) => {
     // ---------- 2. despachos (legado) da rota+cycle "Em Rota" ----------
     const despachosLegado = txApp.findRecordsByFilter(
       'despachos',
-      'rota_id = {:rId} && ciclo_id = {:cId} && status = "Em Rota"',
+      'rota_id = {:rId} && ciclo_id = {:cId} && (status = "Em Rota" || status = "Entregue")',
       '-created',
       0,
       0,
@@ -121,10 +121,12 @@ routerAdd('POST', '/backend/v1/rotas-logisticas/desfazer-entregas', (e) => {
       txApp.delete(comp)
     }
 
-    // ---------- 5. Pedidos "Em Rota" -> "Pendente" (mantêm rota_id) ----------
+    // ---------- 5. Pedidos "Em Rota" ou "Entregue" -> "Pendente" (mantêm rota_id) ----------
+    // "Entregue" também precisa voltar: senão a rota continua com "Rota Entregue" na tela
+    // (a tela deriva o estado dos pedidos do ciclo) e segue travada para edição.
     const pedidos = txApp.findRecordsByFilter(
       'pedidos',
-      'rota_id = {:rId} && ciclo_id = {:cId} && status = "Em Rota"',
+      'rota_id = {:rId} && ciclo_id = {:cId} && (status = "Em Rota" || status = "Entregue")',
       '-created',
       0,
       0,
@@ -151,7 +153,7 @@ routerAdd('POST', '/backend/v1/rotas-logisticas/desfazer-entregas', (e) => {
         if (!escolaId) continue
         const pedEsc = txApp.findRecordsByFilter(
           'pedidos',
-          'escola_id = {:eId} && ciclo_id = {:cId} && status = "Em Rota" && (rota_id = "" || rota_id = nil)',
+          'escola_id = {:eId} && ciclo_id = {:cId} && (status = "Em Rota" || status = "Entregue") && (rota_id = "" || rota_id = nil)',
           '-created',
           0,
           0,
