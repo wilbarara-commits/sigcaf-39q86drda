@@ -929,6 +929,43 @@ export function Requirements() {
       {/* 7. Registro de Manutenção e Limpeza de Dados */}
       <SectionTitle>7. Registro de Manutenção & Higienização do Banco de Dados</SectionTitle>
       <div className="space-y-4">
+        {/* Release v0.0.297: cabeçalhos sem "Escola" + paginação de 17 escolas */}
+        <div className="rounded-lg border border-primary/40 bg-primary/5 p-5 space-y-4">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="text-primary border-primary/40 font-semibold">
+                Release v0.0.297
+              </Badge>
+              <span className="font-semibold text-foreground">
+                0.0.297: Caixas — cabeçalhos sem a palavra "Escola" e paginação de 17 escolas por
+                página
+              </span>
+            </div>
+            <span className="text-xs font-medium text-muted-foreground">
+              Consolidado (v0.0.297)
+            </span>
+            <span className="text-xs font-medium text-primary">Versão Vigente (v0.0.297)</span>
+          </div>
+
+          <p className="text-sm text-foreground/90 leading-relaxed">
+            <strong>Ajustes na tela Caixas (/caixas), por pedido do usuário:</strong> (1) o rótulo
+            das colunas de escola remove a palavra genérica <em>Escola</em>/<em>ESCOLA</em> (e
+            variações de prefixo tipo "E.M. Escola", "Escola Municipal"): a legenda e os cabeçalhos
+            passam a exibir apenas o nome próprio com o número —
+            <code>&quot;1. Profª Rosalia&quot;</code>, <code>&quot;2. Amaury Amaral&quot;</code> (
+            <code>&quot;17. PROFª ROSÁLIA&quot;</code>). O número da escola é mantido (decisão
+            reafirmada) e nomes próprios em que "Escola" faz parte do nome específico (ex.{' '}
+            <em>Escola de Música</em>) não são afetados; o mesmo rótulo vale para a legenda, os
+            cabeçalhos da tabela e o PDF impresso (mesma árvore DOM). (2) Paginação muda o corte de{' '}
+            <strong>20 para 17 escolas por página</strong> — na tela e no PDF impresso (mesmo
+            chunk), com numeração contínua entre páginas e linha TOTAL no pé de cada página
+            preservados. Nada mais muda: produtos, quantidades, seção final de totais por produto
+            por rota + total geral + PESO TOTAL, filtros e botão Imprimir PDF. Consolidação Final
+            (/consolidacao-final), Compras (/consolidacao-simples) e /rotas intocadas; isolamento
+            por <code>ciclo_id</code> e anti-vazamento preservados.
+          </p>
+        </div>
+
         {/* Release v0.0.296: cabeçalho "N. Nome" + exportação PDF da folha de Caixas */}
         <div className="rounded-lg border border-primary/40 bg-primary/5 p-5 space-y-4">
           <div className="flex items-center justify-between flex-wrap gap-2">
@@ -953,17 +990,17 @@ export function Requirements() {
             <code>&quot;N. Nome da escola&quot;</code> (ex.: "1. Antonio Custodio") — o número da
             escola é mantido e o prefixo de tipo concatenado ao nome sai do rótulo ("17_EM PROFª
             ROSÁLIA" → "17. PROFª ROSÁLIA"; prefixos "CC Escola" / "CM Escola" removidos). Tabela em
-            si inalterada: produtos, quantidades, linha TOTAL, totais e a paginação de 20 escolas
-            por página continuam iguais. (2) Nova exportação em PDF: botão{' '}
-            <strong>Imprimir PDF</strong> (único botão da tela, ao lado dos filtros) gera a folha
-            com o mesmo layout da tela em <strong>A4 paisagem</strong> — páginas por rota com até 20
-            escolas cada, linha TOTAL no pé de cada página, numeração contínua entre páginas e a
-            seção final de totais por produto por rota + total geral + PESO TOTAL por rota.
-            Implementado via <code>window.print</code> com CSS de impressão dedicado que isola a
-            folha (sem sidebar, header, filtros ou botões) e respeita as mesmas quebras de página do
-            recorte de 20 escolas da tela. Consolidação Final, /consolidacao-simples e /rotas
-            intocadas; isolamento por <code>ciclo_id</code> e anti-vazamento nas 4 telas de entregas
-            preservados.
+            si inalterada: produtos, quantidades, linha TOTAL, totais e a paginação (então de 20
+            escolas por página; 17 desde a 0.0.297) continuam iguais. (2) Nova exportação em PDF:
+            botão <strong>Imprimir PDF</strong> (único botão da tela, ao lado dos filtros) gera a
+            folha com o mesmo layout da tela em <strong>A4 paisagem</strong> — páginas por rota com
+            até 17 escolas cada (20 na época; 17 desde a 0.0.297), linha TOTAL no pé de cada página,
+            numeração contínua entre páginas e a seção final de totais por produto por rota + total
+            geral + PESO TOTAL por rota. Implementado via <code>window.print</code> com CSS de
+            impressão dedicado que isola a folha (sem sidebar, header, filtros ou botões) e respeita
+            as mesmas quebras de página do recorte de escolas da tela (20 na época; 17 desde a
+            0.0.297). Consolidação Final, /consolidacao-simples e /rotas intocadas; isolamento por{' '}
+            <code>ciclo_id</code> e anti-vazamento nas 4 telas de entregas preservados.
           </p>
         </div>
 
@@ -999,12 +1036,13 @@ export function Requirements() {
             rota: coluna TOTAL à esquerda, colunas numeradas por escola com o rótulo "N_tipo NOME"
             (tipo derivado do cadastro: CM, EM, CC, CMEI, APAE, CE), linha por produto com a
             quantidade por escola e a unidade no rótulo, linha TOTAL no pé com o somatório da
-            página. Paginação: até 20 escolas por página; rota com mais escolas divide em 2+ páginas
-            com numeração contínua e linha TOTAL própria por página. Seção final: totais por produto
-            em cada rota e total geral + linha PESO TOTAL por rota. Números pt-BR: inteiros sem
-            casas decimais (3) e decimais com vírgula (99,5). Tela de consulta: sem edição.
-            Consolidação Final, /consolidacao-simples e /rotas intocadas. Ajustes da 0.0.296: rótulo
-            de escola "N. Nome" e exportação Imprimir PDF (A4 paisagem).
+            página. Paginação: até 17 escolas por página (ajuste da 0.0.297; antes 20); rota com
+            mais escolas divide em 2+ páginas com numeração contínua e linha TOTAL própria por
+            página. Seção final: totais por produto em cada rota e total geral + linha PESO TOTAL
+            por rota. Números pt-BR: inteiros sem casas decimais (3) e decimais com vírgula (99,5).
+            Tela de consulta: sem edição. Consolidação Final, /consolidacao-simples e /rotas
+            intocadas. Ajustes da 0.0.296: rótulo de escola "N. Nome" e exportação Imprimir PDF (A4
+            paisagem).
           </p>
         </div>
 

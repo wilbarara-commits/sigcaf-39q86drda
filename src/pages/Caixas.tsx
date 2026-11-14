@@ -27,9 +27,10 @@ import { formatQuantityOneDecimal } from '@/lib/decimalUtils'
  * Caixas (/caixas) — folha de conferência por rota para montagem de caixas.
  *
  * Segue o modelo PDF do usuário: por rota, coluna TOTAL à esquerda, escolas
- * numeradas ("N. NOME"), produtos nas linhas, linha TOTAL no pé da página;
- * rota com mais de 20 escolas divide em 2+ páginas com numeração contínua;
- * última seção traz totais por produto por rota + PESO TOTAL por rota.
+ * numeradas ("N. NOME" — sem a palavra genérica "Escola"), produtos nas
+ * linhas, linha TOTAL no pé da página; rota com mais de 17 escolas divide em
+ * 2+ páginas com numeração contínua; última seção traz totais por produto por
+ * rota + PESO TOTAL por rota.
  * "Imprimir PDF" imprime exatamente o mesmo layout da tela em A4 paisagem.
  *
  * Mesma base da Consolidação Final / Compras: pedidos ativos → itens →
@@ -38,7 +39,37 @@ import { formatQuantityOneDecimal } from '@/lib/decimalUtils'
  * Tela de consulta: sem edição, sem exportação.
  */
 
-const ESCOLAS_POR_PAGINA = 20
+const ESCOLAS_POR_PAGINA = 17
+
+/** Siglas/palavras de tipo removíveis no INÍCIO do nome (após tirar "Escola"). */
+const PREFIXO_TIPO_INICIO =
+  /^(?:E\.?\s?M\.?|CMEI|CEI|CEM|APAE|CM|CC|CE|Municipal|Estadual|de|da|do)\b[\s.,;:-]*/i
+
+/**
+ * Remove a palavra genérica "Escola" do nome para o rótulo "N. Nome"
+ * (ex.: "Escola Profª Rosalia" → "Profª Rosalia"; "Escola Municipal Amaury
+ * Amaral" → "Amaury Amaral"). Preserva nomes próprios em que "Escola" faz
+ * parte do nome específico, como "Escola de Música" (seguida de "de").
+ */
+export function limparNomeEscola(nome: string): string {
+  const original = String(nome || '').trim()
+  if (!original) return original
+  // Tira a palavra "Escola"/"ESCOLA" (word-boundary), exceto quando seguida
+  // de "de" ("Escola de Música", "Escola de Educação" — nome próprio).
+  let s = original.replace(/\bescolas?\b(?!\s+d['’aeiou]\b)/gi, ' ')
+  // Remove prefixos de tipo e preposições que ficarem soltos no início.
+  for (let i = 0; i < 6; i++) {
+    const next = s.replace(PREFIXO_TIPO_INICIO, '')
+    if (next === s) break
+    s = next
+  }
+  s = s
+    .replace(/\s{2,}/g, ' ')
+    .replace(/^[\s.,;:\-–]+/, '')
+    .trim()
+  // Segurança: nunca devolve rótulo vazio.
+  return s || original
+}
 
 function isCicloNaoTerminal(status?: string): boolean {
   const norm = (status || '').trim().toLowerCase()
@@ -211,7 +242,7 @@ export default function Caixas() {
   }, [schools])
 
   // Folha por rota: escolas da rota (paradas_rota, ordem de visita), páginas de
-  // até 20 escolas com numeração contínua, produtos nas linhas do recorte.
+  // até 17 escolas com numeração contínua, produtos nas linhas do recorte.
   const folhas = useMemo<RotaFolha[]>(() => {
     const rotasIds = new Set(rotasDoRecorte.map((r) => r.id))
 
@@ -289,10 +320,11 @@ export default function Caixas() {
         const colunas: EscolaColuna[] = lote.map((escolaId) => {
           const rec = escolaPorId.get(escolaId) as { nome?: string } | undefined
           const nome = String(rec?.nome || 'Escola')
+          const nomeLimpo = limparNomeEscola(nome)
           const col: EscolaColuna = {
             escolaId,
             numero,
-            rotulo: `${numero}. ${nome}`,
+            rotulo: `${numero}. ${nomeLimpo}`,
             nome,
           }
           numero += 1
@@ -480,7 +512,7 @@ export default function Caixas() {
         </Card>
       ) : (
         <>
-          {/* Folhas por rota (páginas de até 20 escolas) */}
+          {/* Folhas por rota (páginas de até 17 escolas) */}
           {folhas.map((folha) =>
             folha.paginas.map((pagina, idx) => (
               <Card
