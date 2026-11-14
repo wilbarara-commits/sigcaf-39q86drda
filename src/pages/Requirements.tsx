@@ -929,6 +929,42 @@ export function Requirements() {
       {/* 7. Registro de Manutenção e Limpeza de Dados */}
       <SectionTitle>7. Registro de Manutenção & Higienização do Banco de Dados</SectionTitle>
       <div className="space-y-4">
+        {/* Release v0.0.298: rótulos "N. Escola" corrigidos — campo name, não nome */}
+        <div className="rounded-lg border border-primary/40 bg-primary/5 p-5 space-y-4">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="text-primary border-primary/40 font-semibold">
+                Release v0.0.298
+              </Badge>
+              <span className="font-semibold text-foreground">
+                0.0.298: Correção — todos os cabeçalhos de escola em /caixas saíam "N. Escola" sem o
+                nome real
+              </span>
+            </div>
+            <span className="text-xs font-medium text-muted-foreground">
+              Consolidado (v0.0.298)
+            </span>
+            <span className="text-xs font-medium text-primary">Versão Vigente (v0.0.298)</span>
+          </div>
+
+          <p className="text-sm text-foreground/90 leading-relaxed">
+            <strong>Bug na tela Caixas (/caixas), reportado pelo usuário:</strong> após a 0.0.297,
+            TODOS os cabeçalhos das colunas de escola saíam como <code>&quot;1. Escola&quot;</code>,{' '}
+            <code>&quot;2. Escola&quot;</code>… <code>&quot;17. Escola&quot;</code> — o número
+            aparecia, mas o nome real nunca. Causa: o componente lia o nome da escola do campo{' '}
+            <code>nome</code>, mas o contexto fornece os registros de escola com o campo{' '}
+            <code>name</code> — com o nome sempre indefinido, cada rótulo caía no fallback{' '}
+            <em>Escola</em> antes do limpador. Correção: leitura do nome de escola via{' '}
+            <code>name</code> (com fallback <code>nome</code>) na montagem dos rótulos{' '}
+            <code>&quot;N. Nome&quot;</code> e na ordenação por nome dentro da rota — tela e PDF
+            impresso (mesma árvore DOM) corrigidos juntos. Exemplos esperados:{' '}
+            <code>&quot;1. Profª Rosalia&quot;</code>, <code>&quot;2. Amaury Amaral&quot;</code>;
+            nomes próprios com "Escola" no meio (ex. <em>Escola de Música</em>) continuam
+            preservados. Nada mais muda: produtos, quantidades, totais, paginação de 17 escolas por
+            página e botão Imprimir PDF; Consolidação Final, Compras e /rotas intocadas.
+          </p>
+        </div>
+
         {/* Release v0.0.297: cabeçalhos sem "Escola" + paginação de 17 escolas */}
         <div className="rounded-lg border border-primary/40 bg-primary/5 p-5 space-y-4">
           <div className="flex items-center justify-between flex-wrap gap-2">

@@ -71,6 +71,13 @@ export function limparNomeEscola(nome: string): string {
   return s || original
 }
 
+/** Nome bruto da escola: o contexto fornece registros School com campo `name`
+ * (não `nome` — era a causa dos rótulos "N. Escola" com fallback vazio). */
+function nomeBrutoEscola(rec: unknown): string {
+  const r = rec as { name?: string; nome?: string } | undefined
+  return String(r?.name || r?.nome || '').trim()
+}
+
 function isCicloNaoTerminal(status?: string): boolean {
   const norm = (status || '').trim().toLowerCase()
   return norm !== 'fechado' && norm !== 'cancelado'
@@ -256,8 +263,8 @@ export default function Caixas() {
       escolasDaRota.sort(
         (a, b) =>
           (ordemParadaPorEscola.get(a) || 0) - (ordemParadaPorEscola.get(b) || 0) ||
-          String((escolaPorId.get(a) as { nome?: string })?.nome || '').localeCompare(
-            String((escolaPorId.get(b) as { nome?: string })?.nome || ''),
+          nomeBrutoEscola(escolaPorId.get(a)).localeCompare(
+            nomeBrutoEscola(escolaPorId.get(b)),
             'pt-BR',
           ),
       )
@@ -318,8 +325,8 @@ export default function Caixas() {
       const paginas: PaginaFolha[] = chunk(escolasIds, ESCOLAS_POR_PAGINA).map((lote) => {
         const numeroInicial = numero
         const colunas: EscolaColuna[] = lote.map((escolaId) => {
-          const rec = escolaPorId.get(escolaId) as { nome?: string } | undefined
-          const nome = String(rec?.nome || 'Escola')
+          const rec = escolaPorId.get(escolaId)
+          const nome = nomeBrutoEscola(rec) || 'Escola'
           const nomeLimpo = limparNomeEscola(nome)
           const col: EscolaColuna = {
             escolaId,
