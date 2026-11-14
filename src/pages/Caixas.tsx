@@ -524,7 +524,7 @@ export default function Caixas() {
             folha.paginas.map((pagina, idx) => (
               <Card
                 key={`${folha.rotaId}-${idx}`}
-                className="overflow-hidden print:shadow-none print:border-border print:break-after-page"
+                className="caixas-folha overflow-hidden print:shadow-none print:border-border print:break-after-page"
               >
                 <CardContent className="p-0">
                   <div className="px-4 py-3 border-b bg-muted/40 flex flex-wrap items-baseline justify-between gap-2">
@@ -546,7 +546,7 @@ export default function Caixas() {
                         <TableRow className="bg-muted/50 hover:bg-muted/50">
                           <TableHead className="text-right w-20">Total</TableHead>
                           {pagina.escolas.map((col) => (
-                            <TableHead key={col.escolaId} className="text-center w-14">
+                            <TableHead key={col.escolaId} className="text-center">
                               {col.numero}
                             </TableHead>
                           ))}
@@ -601,7 +601,7 @@ export default function Caixas() {
           )}
 
           {/* Seção final: totais por produto por rota + PESO TOTAL */}
-          <Card className="overflow-hidden print:break-after-page">
+          <Card className="caixas-folha overflow-hidden print:break-after-page">
             <CardContent className="p-0">
               <div className="px-4 py-3 border-b bg-muted/40">
                 <h2 className="font-bold">Totais por produto</h2>

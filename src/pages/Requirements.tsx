@@ -929,6 +929,46 @@ export function Requirements() {
       {/* 7. Registro de Manutenção e Limpeza de Dados */}
       <SectionTitle>7. Registro de Manutenção & Higienização do Banco de Dados</SectionTitle>
       <div className="space-y-4">
+        {/* Release v0.0.300: equilíbrio vertical/horizontal no PDF de /caixas */}
+        <div className="rounded-lg border border-primary/40 bg-primary/5 p-5 space-y-4">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="text-primary border-primary/40 font-semibold">
+                Release v0.0.300
+              </Badge>
+              <span className="font-semibold text-foreground">
+                0.0.300: Caixas — equilíbrio no PDF da folha de conferência (vertical moderado,
+                colunas de escola largas)
+              </span>
+            </div>
+            <span className="text-xs font-medium text-muted-foreground">
+              Consolidado (v0.0.300)
+            </span>
+            <span className="text-xs font-medium text-primary">Versão Vigente (v0.0.300)</span>
+          </div>
+
+          <p className="text-sm text-foreground/90 leading-relaxed">
+            <strong>
+              Ajuste de equilíbrio na impressão da tela Caixas (/caixas), por pedido do usuário:
+            </strong>{' '}
+            o aperto da versão anterior foi longe demais — espaçamento vertical muito reduzido e
+            colunas de escola comprimidas. Reequilíbrio em dois eixos, sempre só no CSS de impressão
+            (<code>@media print</code> em <code>main.css</code> + classes da folha em{' '}
+            <code>Caixas.tsx</code>): (1) <strong>vertical moderado</strong> — padding vertical das
+            células volta a 3px (antes ~1px), line-height 1.3 (antes 1.15) e um respiro de 4px entre
+            os blocos da página (antes 0); (2) <strong>horizontal restaurado</strong> — padding
+            lateral real nas células (4px, antes 2px na regra
+            <code>px-compact</code>, hoje não usada) e as colunas de escola da folha (
+            <code>.caixas-folha</code>) dividindo igualmente toda a largura útil da página A4
+            paisagem: a coluna TOTAL fica estreita (encolhe ao conteúdo) e as 17 colunas de escola
+            recebem o resto, sem compressão; o número da escola no cabeçalho sobe para{' '}
+            <code>text-sm</code>. Mantido: quantidades em negrito 10.5pt (<code>caixas-qty</code>),
+            corte de 17 escolas por página, numeração contínua, linha TOTAL por página e seção final
+            de totais por produto por rota + PESO TOTAL intocadas. Tela em modo normal (fora de
+            impressão) sem qualquer mudança; Consolidação Final, Compras e /rotas não afetadas.
+          </p>
+        </div>
+
         {/* Release v0.0.299: PDF de /caixas mais compacto com quantidades maiores */}
         <div className="rounded-lg border border-primary/40 bg-primary/5 p-5 space-y-4">
           <div className="flex items-center justify-between flex-wrap gap-2">
@@ -944,7 +984,9 @@ export function Requirements() {
             <span className="text-xs font-medium text-muted-foreground">
               Consolidado (v0.0.299)
             </span>
-            <span className="text-xs font-medium text-primary">Versão Vigente (v0.0.299)</span>
+            <span className="text-xs font-medium text-muted-foreground">
+              Versão Vigente (v0.0.299)
+            </span>
           </div>
 
           <p className="text-sm text-foreground/90 leading-relaxed">
