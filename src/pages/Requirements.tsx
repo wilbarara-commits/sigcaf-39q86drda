@@ -929,6 +929,48 @@ export function Requirements() {
       {/* 7. Registro de Manutenção e Limpeza de Dados */}
       <SectionTitle>7. Registro de Manutenção & Higienização do Banco de Dados</SectionTitle>
       <div className="space-y-4">
+        {/* Release v0.0.313: cartão Comprar — Total Comprado = soma dos kg distribuídos */}
+        <div className="rounded-lg border border-primary/40 bg-primary/5 p-5 space-y-4">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="text-primary border-primary/40 font-semibold">
+                Release v0.0.313
+              </Badge>
+              <span className="font-semibold text-foreground">
+                0.0.313: Compras — cartão Comprar: Total Comprado = soma dos kg distribuídos e %
+                Comprado = Total Comprado ÷ Total Pedido
+              </span>
+            </div>
+            <span className="text-xs font-medium text-muted-foreground">
+              Consolidado (v0.0.313)
+            </span>
+            <span className="text-xs font-medium text-primary">Versão Vigente (v0.0.313)</span>
+          </div>
+
+          <p className="text-sm text-foreground/90 leading-relaxed">
+            <strong>
+              Correção do cartão "Comprar" da Consolidação para Compras (/consolidacao-simples), por
+              relato do usuário (ex.: OVOS CAIPIRA — Total Pedido 4 Kg, 3 fornecedores com 42/42/41%
+              e kg 2/2/2 exibiam Total Comprado 5 Kg e % Comprado 125%):
+            </strong>{' '}
+            o <strong>Total Comprado</strong> do topo era calculado como o percentual máximo
+            aplicado ao total pedido (125% de 4 = 5) em vez de somar as quantidades efetivamente
+            distribuídas. Agora o <strong>Total Comprado é a SOMA dos kg das linhas</strong> — a
+            mesma função de cálculo/arredondamento de kg inteiros de cada fornecedor (ex.: 2+2+2 = 6
+            Kg) — e o <strong>% Comprado é Total Comprado ÷ Total Pedido × 100</strong> (ex.: 6 ÷ 4
+            = 150%), ambos atualizados <strong>em tempo real</strong> a cada edição de percentual,
+            marcação/ desmarcação de checkbox, inclusão pelo dropdown, lixeira ou "Distribuir
+            igualmente". O "% Comprado" deixa de espelhar a soma dos percentuais e passa a refletir
+            o Total Comprado corrigido; acima do máximo continua apenas com o aviso amarelo (não
+            trava). Preservados: percentuais inteiros no Distribuir igualmente (42/42/41 fechando o
+            máximo), kg inteiros pt-BR, edição da compra gravada salvando por cima (upsert em{' '}
+            <code>compra_distribuicao</code>), botão Cancelar, dropdown alfabético de fornecedores,
+            checkbox e lixeira, <code>compra_config</code> com máximo editável (padrão 125%), Total
+            Pedido no topo, botão laranja/verde "Comprado" e isolamento por <code>ciclo_id</code>.
+            Consolidação Final (/consolidacao), /rotas e Separação (/caixas) não são afetadas.
+          </p>
+        </div>
+
         {/* Release v0.0.311: cartão Comprar — inteiros, edição da compra gravada, botão Cancelar */}
         <div className="rounded-lg border border-primary/40 bg-primary/5 p-5 space-y-4">
           <div className="flex items-center justify-between flex-wrap gap-2">

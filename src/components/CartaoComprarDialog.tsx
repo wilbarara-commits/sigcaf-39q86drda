@@ -40,7 +40,9 @@ import { cn } from '@/lib/utils'
  * ciclo+produto (coleção compra_config). "Distribuir igualmente" divide o
  * MÁXIMO entre os selecionados em percentuais INTEIROS (o último recebe a
  * sobra, a soma fecha exatamente no máximo); quantidades são arredondadas para
- * KG INTEIROS. Percentuais acima do máximo NÃO travam o cartão: a soma maior
+ * KG INTEIROS. "Total Comprado" é a SOMA dos kg das linhas (não o máximo
+ * aplicado ao pedido) e "% Comprado" = Total Comprado ÷ Total Pedido × 100,
+ * ambos em tempo real. Percentuais acima do máximo NÃO travam o cartão: a soma maior
  * que o máximo mostra aviso e o cartão permite salvar (o % Comprado fica
  * amarelo). A compra JÁ GRAVADA abre carregada (fornecedores marcados,
  * percentuais e kg atuais) e SALVA POR CIMA das linhas existentes
@@ -91,6 +93,13 @@ function dividirInteiro(total: number, n: number): number[] {
   const base = Math.floor(total / n)
   const resto = total - base * n
   return Array.from({ length: n }, (_, i) => base + (i < resto ? 1 : 0))
+}
+
+/** KG INTEIROS: arredonda para o inteiro mais próximo (mesma conta das linhas). */
+function calcularQuantidadeKg(percentualStr: string | undefined, quantidadeTotal: number): number {
+  const p = parsePercent(percentualStr || '')
+  if (p === null || p <= 0 || quantidadeTotal <= 0) return 0
+  return Math.round((p / 100) * quantidadeTotal)
 }
 
 export function CartaoComprarDialog({
@@ -222,24 +231,25 @@ export function CartaoComprarDialog({
     return Math.round(total * 100) / 100
   }, [selecionados, percentuais])
 
-  // Total Comprado e % Comprado em TEMPO REAL: derivam dos percentuais atuais
-  // da tela (não das linhas gravadas)
-  const totalCompradoAtual = useMemo(
-    () => Math.round((totalPercentual / 100) * quantidadeTotal),
-    [totalPercentual, quantidadeTotal],
+  // Total Comprado e % Comprado em TEMPO REAL: o Total Comprado é a SOMA dos kg
+  // efetivamente distribuídos aos fornecedores selecionados (mesma função de
+  // cálculo das linhas — kg inteiros), NÃO o máximo aplicado ao total pedido.
+  // O % Comprado é Total Comprado ÷ Total Pedido × 100.
+  const calcularQuantidade = useCallback(
+    (fornecedorId: string): number =>
+      calcularQuantidadeKg(percentuais[fornecedorId], quantidadeTotal),
+    [percentuais, quantidadeTotal],
   )
-  const pctCompradoAtual = totalPercentual
+
+  const totalCompradoAtual = useMemo(
+    () => [...selecionados].reduce((soma, id) => soma + calcularQuantidade(id), 0),
+    [selecionados, calcularQuantidade],
+  )
+  const pctCompradoAtual = quantidadeTotal > 0 ? (totalCompradoAtual / quantidadeTotal) * 100 : 0
 
   // Soma acima do máximo = AVISO (não bloqueia): salvar continua permitido.
   const acimaDoMaximo = totalPercentual > maxPercentual
   const semPercentuais = selecionados.size === 0 || totalPercentual <= 0
-
-  const calcularQuantidade = (fornecedorId: string): number => {
-    const p = parsePercent(percentuais[fornecedorId] || '')
-    if (p === null || p <= 0 || quantidadeTotal <= 0) return 0
-    // KG INTEIROS: arredonda para o inteiro mais próximo
-    return Math.round((p / 100) * quantidadeTotal)
-  }
 
   const aplicarDistribuicaoIgual = () => {
     const n = selecionados.size
