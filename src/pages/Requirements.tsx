@@ -929,6 +929,54 @@ export function Requirements() {
       {/* 7. Registro de Manutenção e Limpeza de Dados */}
       <SectionTitle>7. Registro de Manutenção & Higienização do Banco de Dados</SectionTitle>
       <div className="space-y-4">
+        {/* Release v0.0.311: cartão Comprar — inteiros, edição da compra gravada, botão Cancelar */}
+        <div className="rounded-lg border border-primary/40 bg-primary/5 p-5 space-y-4">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="text-primary border-primary/40 font-semibold">
+                Release v0.0.311
+              </Badge>
+              <span className="font-semibold text-foreground">
+                0.0.311: Compras — cartão Comprar com percentuais/kg inteiros, edição da compra já
+                gravada e botão Cancelar
+              </span>
+            </div>
+            <span className="text-xs font-medium text-muted-foreground">
+              Consolidado (v0.0.311)
+            </span>
+            <span className="text-xs font-medium text-primary">Versão Vigente (v0.0.311)</span>
+          </div>
+
+          <p className="text-sm text-foreground/90 leading-relaxed">
+            <strong>
+              Ajustes no cartão "Comprar" da Consolidação para Compras (/consolidacao-simples), por
+              pedido do usuário, em três blocos:
+            </strong>{' '}
+            (A) o botão <code>Distribuir igualmente</code> passa a gerar{' '}
+            <strong>percentuais inteiros</strong> que fecham exatamente no máximo definido (máx.
+            125% com 3 fornecedores → 42/42/41 — o último recebe a sobra), as quantidades por
+            fornecedor são <strong>kg inteiros</strong> exibidos pt-BR sem casas decimais (995, não
+            995,00), e a soma dos percentuais <strong>acima do máximo NÃO trava</strong> o
+            salvamento: o cartão mostra aviso amarelo ("acima do máximo — pode salvar") e o "%
+            Comprado" do topo fica amarelo acima de 100%; a distribuição igual nunca fica presa por
+            arredondamento. (B) <strong>Edição da compra já gravada</strong>: produto com linhas em{' '}
+            <code>compra_distribuicao</code> abre o cartão com os fornecedores marcados, percentuais
+            e kg atuais; alterar, marcar/desmarcar ou redistribuir e confirmar{' '}
+            <strong>salva por cima</strong> — o service <code>salvarDistribuicao</code> passou a
+            atualizar as linhas existentes (índice único ciclo+produto+fornecedor), criar as novas e
+            apagar as que sobraram, <strong>sem duplicar registros</strong>. (C){' '}
+            <strong>Botão Cancelar</strong> ao lado de Confirmar: descarta as alterações da sessão e
+            recarrega do banco a distribuição gravada do ciclo (ou o estado vazio), sem gravar nada.
+            Preservados: gravação por ciclo (<code>compra_distribuicao</code>), Total Pedido/Total
+            Comprado/% Comprado em tempo real, dropdown alfabético com vínculo persistente (
+            <code>fornecedores_produto</code>), checkbox de participação, lixeira, botão
+            laranja/verde "Comprado", pedidos de compra por fornecedor, coluna Total Comprado,
+            filtros Data de entrega + Chamada e números pt-BR. Consolidação Final (/consolidacao),
+            /rotas e Separação (/caixas) não são afetadas; isolamento por <code>ciclo_id</code> e
+            anti-vazamento nas 4 telas de entregas intactos.
+          </p>
+        </div>
+
         {/* Release v0.0.304: renomeação de "Caixas" para "Separação" (rótulos) */}
         <div className="rounded-lg border border-primary/40 bg-primary/5 p-5 space-y-4">
           <div className="flex items-center justify-between flex-wrap gap-2">

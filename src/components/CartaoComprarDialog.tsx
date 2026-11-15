@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Trash2 } from 'lucide-react'
 import {
   Dialog,
@@ -38,9 +38,14 @@ import { cn } from '@/lib/utils'
  * coleção fornecedores_produto — incluídos via dropdown e removidos pela
  * lixeira). O percentual máximo (padrão 125%) é editável e persistido por
  * ciclo+produto (coleção compra_config). "Distribuir igualmente" divide o
- * MÁXIMO entre os selecionados; percentuais ficam editáveis nos dois modos e
- * Total Comprado / % Comprado atualizam em tempo real. GRAVA a distribuição
- * por ciclo (coleção compra_distribuicao, uma linha por fornecedor).
+ * MÁXIMO entre os selecionados em percentuais INTEIROS (o último recebe a
+ * sobra, a soma fecha exatamente no máximo); quantidades são arredondadas para
+ * KG INTEIROS. Percentuais acima do máximo NÃO travam o cartão: a soma maior
+ * que o máximo mostra aviso e o cartão permite salvar (o % Comprado fica
+ * amarelo). A compra JÁ GRAVADA abre carregada (fornecedores marcados,
+ * percentuais e kg atuais) e SALVA POR CIMA das linhas existentes
+ * (coleção compra_distribuicao, atualização em vez de duplicação), com botão
+ * "Cancelar" que descarta as alterações da sessão e recarrega do banco.
  */
 
 type ModoDistribuicao = 'igual' | 'percentual'
@@ -71,8 +76,21 @@ function parsePercent(raw: string): number | null {
   return Math.round(v * 100) / 100
 }
 
+/** Quantidades em KG INTEIROS (pt-BR, sem casas decimais). */
 function formatQty(value: number): string {
-  return (value || 0).toLocaleString('pt-BR', { maximumFractionDigits: 2 })
+  return (value || 0).toLocaleString('pt-BR', { maximumFractionDigits: 0 })
+}
+
+/**
+ * Divide `total` em `n` parcelas INTEIRAS que somam exatamente `total`
+ * (distribuição do resto uma a uma, das últimas para as primeiras).
+ * Ex.: 125 em 3 → 42/42/41 (a ordem de exibição é por fornecedor).
+ */
+function dividirInteiro(total: number, n: number): number[] {
+  if (n <= 0) return []
+  const base = Math.floor(total / n)
+  const resto = total - base * n
+  return Array.from({ length: n }, (_, i) => base + (i < resto ? 1 : 0))
 }
 
 export function CartaoComprarDialog({
@@ -101,56 +119,63 @@ export function CartaoComprarDialog({
   const [dropdownSel, setDropdownSel] = useState('')
   const [carregando, setCarregando] = useState(false)
   const [salvando, setSalvando] = useState(false)
+  const [recarregando, setRecarregando] = useState(false)
   const carregouRef = useRef(false)
 
+  const carregar = useCallback(async () => {
+    if (!produtoId || !cicloId) return
+    let vivo = true
+    setCarregando(true)
+    try {
+      const [vinculosCarregados, dists, maxSalvo] = await Promise.all([
+        fornecedoresProdutoService.listByProduto(produtoId),
+        compraDistribuicaoService.listByCicloProduto(cicloId, produtoId),
+        compraConfigService.getPercentualMaximo(cicloId, produtoId),
+      ])
+      if (!vivo) return
+      const idsVinculados = new Set(vinculosCarregados.map((v) => v.fornecedor_id))
+      const idsComLinhas = new Set(dists.map((d) => d.fornecedor_id))
+      const todos = new Set([...idsVinculados, ...idsComLinhas])
+      setSalvos(dists)
+      setVinculos(vinculosCarregados)
+      setSelecionados(todos)
+      setMaxPercentual(maxSalvo)
+      setMaxInput(formatPercent(maxSalvo))
+      // Percentuais salvos (gravados em ambos os modos); quem não tem valor
+      // recebe a divisão igual INTEIRA do máximo.
+      const percs: Record<string, string> = {}
+      for (const d of dists) {
+        if (typeof d.percentual === 'number' && d.percentual > 0) {
+          percs[d.fornecedor_id] = formatPercent(d.percentual)
+        }
+      }
+      const idsSemPerc = [...todos].filter((id) => !percs[id])
+      const partes = dividirInteiro(Math.round(maxSalvo), todos.size)
+      idsSemPerc.forEach((id, i) => {
+        percs[id] = todos.size > 0 ? String(partes[i]) : ''
+      })
+      setPercentuais(percs)
+      const modos = new Set(dists.map((d) => d.modo))
+      setModo(modos.has('percentual') && modos.size === 1 ? 'percentual' : 'igual')
+    } catch {
+      if (vivo) toast({ title: 'Erro ao carregar distribuição salva', variant: 'destructive' })
+    } finally {
+      if (vivo) setCarregando(false)
+    }
+    return () => {
+      vivo = false
+    }
+  }, [produtoId, cicloId, toast])
+
   // Carga do cartão: vínculos fornecedor↔produto + linhas salvas + percentual
-  // máximo salvo (por ciclo+produto, padrão 125%)
+  // máximo salvo (por ciclo+produto, padrão 125%). Abre com a COMPRA JÁ GRAVADA
+  // carregada (fornecedores marcados, percentuais e kg atuais).
   useEffect(() => {
     if (!open || !produtoId || !cicloId) return
     if (carregouRef.current) return
     carregouRef.current = true
-    let vivo = true
-    setCarregando(true)
-    Promise.all([
-      fornecedoresProdutoService.listByProduto(produtoId),
-      compraDistribuicaoService.listByCicloProduto(cicloId, produtoId),
-      compraConfigService.getPercentualMaximo(cicloId, produtoId),
-    ])
-      .then(([vinculosCarregados, dists, maxSalvo]) => {
-        if (!vivo) return
-        const idsVinculados = new Set(vinculosCarregados.map((v) => v.fornecedor_id))
-        const idsComLinhas = new Set(dists.map((d) => d.fornecedor_id))
-        const todos = new Set([...idsVinculados, ...idsComLinhas])
-        setSalvos(dists)
-        setVinculos(vinculosCarregados)
-        setSelecionados(todos)
-        setMaxPercentual(maxSalvo)
-        setMaxInput(formatPercent(maxSalvo))
-        // Percentuais salvos (gravados em ambos os modos); quem não tem valor
-        // recebe a divisão igual do máximo.
-        const percs: Record<string, string> = {}
-        for (const d of dists) {
-          if (typeof d.percentual === 'number' && d.percentual > 0) {
-            percs[d.fornecedor_id] = formatPercent(d.percentual)
-          }
-        }
-        const idsSemPerc = [...todos].filter((id) => !percs[id])
-        const partesIguais = formatPercent(Math.round((maxSalvo / todos.size) * 100) / 100)
-        for (const id of idsSemPerc) percs[id] = todos.size > 0 ? partesIguais : ''
-        setPercentuais(percs)
-        const modos = new Set(dists.map((d) => d.modo))
-        setModo(modos.has('percentual') && modos.size === 1 ? 'percentual' : 'igual')
-      })
-      .catch(() => {
-        if (vivo) toast({ title: 'Erro ao carregar distribuição salva', variant: 'destructive' })
-      })
-      .finally(() => {
-        if (vivo) setCarregando(false)
-      })
-    return () => {
-      vivo = false
-    }
-  }, [open, produtoId, cicloId, toast])
+    carregar()
+  }, [open, produtoId, cicloId, carregar])
 
   // Reset ao fechar
   useEffect(() => {
@@ -200,25 +225,31 @@ export function CartaoComprarDialog({
   // Total Comprado e % Comprado em TEMPO REAL: derivam dos percentuais atuais
   // da tela (não das linhas gravadas)
   const totalCompradoAtual = useMemo(
-    () => Math.round((totalPercentual / 100) * quantidadeTotal * 100) / 100,
+    () => Math.round((totalPercentual / 100) * quantidadeTotal),
     [totalPercentual, quantidadeTotal],
   )
   const pctCompradoAtual = totalPercentual
 
-  const percentualInvalido = totalPercentual <= 0 || totalPercentual > maxPercentual
+  // Soma acima do máximo = AVISO (não bloqueia): salvar continua permitido.
+  const acimaDoMaximo = totalPercentual > maxPercentual
+  const semPercentuais = selecionados.size === 0 || totalPercentual <= 0
 
   const calcularQuantidade = (fornecedorId: string): number => {
     const p = parsePercent(percentuais[fornecedorId] || '')
     if (p === null || p <= 0 || quantidadeTotal <= 0) return 0
-    return Math.round((p / 100) * quantidadeTotal * 100) / 100
+    // KG INTEIROS: arredonda para o inteiro mais próximo
+    return Math.round((p / 100) * quantidadeTotal)
   }
 
   const aplicarDistribuicaoIgual = () => {
     const n = selecionados.size
     if (n === 0) return
-    const parte = formatPercent(Math.round((maxPercentual / n) * 100) / 100)
+    // Percentuais INTEIROS que fecham exatamente no máximo: 125 em 3 → 42/42/41
+    const partes = dividirInteiro(Math.round(maxPercentual), n)
     const next: Record<string, string> = {}
-    for (const id of selecionados) next[id] = parte
+    ;[...selecionados].forEach((id, i) => {
+      next[id] = String(partes[i])
+    })
     setPercentuais(next)
   }
 
@@ -258,13 +289,13 @@ export function CartaoComprarDialog({
         { id: `local-${fornecedorId}`, fornecedor_id: fornecedorId, produto_id: produtoId },
       ])
     }
-    // Entra na compra marcado; percentual: divisão igual do máximo quando a
-    // lista ainda não tem percentuais, senão 0 para edição manual
+    // Entra na compra marcado; percentual: divisão igual INTEIRA do máximo
+    // quando a lista ainda não tem percentuais, senão 0 para edição manual
     const jaTemPerc = [...selecionados].some((id) => parsePercent(percentuais[id] || '') !== null)
     setSelecionados((prev) => new Set(prev).add(fornecedorId))
     setPercentuais((prev) => ({
       ...prev,
-      [fornecedorId]: jaTemPerc ? '' : formatPercent(Math.round(maxPercentual * 100) / 100),
+      [fornecedorId]: jaTemPerc ? '' : String(Math.round(maxPercentual)),
     }))
     if (nome) toast({ title: `${nome} incluído na lista do produto` })
   }
@@ -325,10 +356,10 @@ export function CartaoComprarDialog({
 
   const gravar = async () => {
     if (selecionados.size === 0) return
-    if (percentualInvalido) {
+    if (semPercentuais) {
       toast({
         title: 'Percentuais inválidos',
-        description: `A soma dos percentuais deve ficar entre 0% e ${formatPercent(maxPercentual)}%.`,
+        description: 'Marque pelo menos um fornecedor com percentual maior que zero.',
         variant: 'destructive',
       })
       return
@@ -347,6 +378,7 @@ export function CartaoComprarDialog({
           percentual: parsePercent(percentuais[fornecedorId] || '') ?? 0,
           modo,
         }))
+      // SALVA POR CIMA: atualiza as linhas já gravadas (não duplica registros)
       const gravadas = await compraDistribuicaoService.salvarDistribuicao({
         cicloId,
         dataEntrega,
@@ -364,6 +396,43 @@ export function CartaoComprarDialog({
       toast({ title: 'Erro ao gravar a distribuição', variant: 'destructive' })
     } finally {
       setSalvando(false)
+    }
+  }
+
+  // BLOCO C — Cancelar: descarta as alterações da sessão e recarrega do banco
+  // a distribuição gravada do ciclo (ou o estado vazio), sem gravar nada.
+  const cancelar = async () => {
+    if (recarregando) return
+    setRecarregando(true)
+    try {
+      const dists = await compraDistribuicaoService.listByCicloProduto(cicloId, produtoId)
+      setSalvos(dists)
+      if (dists.length === 0) {
+        setSelecionados(new Set())
+        setPercentuais({})
+        setModo('igual')
+      } else {
+        setSelecionados(new Set(dists.map((d) => d.fornecedor_id)))
+        const percs: Record<string, string> = {}
+        for (const d of dists) {
+          if (typeof d.percentual === 'number' && d.percentual > 0) {
+            percs[d.fornecedor_id] = formatPercent(d.percentual)
+          }
+        }
+        for (const id of dists.map((d) => d.fornecedor_id)) {
+          if (!percs[id]) percs[id] = '0'
+        }
+        setPercentuais(percs)
+        const modos = new Set(dists.map((d) => d.modo))
+        setModo(modos.has('percentual') && modos.size === 1 ? 'percentual' : 'igual')
+      }
+      onDistribuicaoGravada()
+      onOpenChange(false)
+    } catch {
+      toast({ title: 'Erro ao recarregar a distribuição gravada', variant: 'destructive' })
+      onOpenChange(false)
+    } finally {
+      setRecarregando(false)
     }
   }
 
@@ -398,14 +467,14 @@ export function CartaoComprarDialog({
                 <span
                   className={cn(
                     'font-mono font-semibold',
-                    pctCompradoAtual > maxPercentual
-                      ? 'text-destructive'
+                    acimaDoMaximo
+                      ? 'text-amber-600'
                       : pctCompradoAtual > 0
                         ? 'text-emerald-700'
                         : 'text-muted-foreground',
                   )}
                 >
-                  {formatPercent(pctCompradoAtual)}%
+                  {formatPercent(pctCompradoAtual)}%{acimaDoMaximo && ' ⚠'}
                 </span>
               </span>
             </div>
@@ -552,11 +621,17 @@ export function CartaoComprarDialog({
             <div
               className={cn(
                 'text-xs font-medium',
-                percentualInvalido ? 'text-destructive' : 'text-muted-foreground',
+                acimaDoMaximo
+                  ? 'text-amber-600'
+                  : semPercentuais
+                    ? 'text-destructive'
+                    : 'text-muted-foreground',
               )}
             >
               Soma dos percentuais: {formatPercent(totalPercentual)}%{' '}
-              {percentualInvalido && `(máx. ${formatPercent(maxPercentual)}%)`}
+              {acimaDoMaximo && (
+                <span>(acima do máximo de {formatPercent(maxPercentual)}% — pode salvar)</span>
+              )}
             </div>
           </>
         )}
@@ -574,8 +649,16 @@ export function CartaoComprarDialog({
           )}
           <Button
             type="button"
+            variant="outline"
+            onClick={cancelar}
+            disabled={salvando || recarregando}
+          >
+            {recarregando ? 'Cancelando…' : 'Cancelar'}
+          </Button>
+          <Button
+            type="button"
             onClick={gravar}
-            disabled={salvando || selecionados.size === 0 || percentualInvalido}
+            disabled={salvando || selecionados.size === 0 || semPercentuais}
           >
             {salvando ? 'Gravando…' : 'Confirmar'}
           </Button>

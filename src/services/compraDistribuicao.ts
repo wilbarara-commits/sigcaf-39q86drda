@@ -200,8 +200,10 @@ export const compraDistribuicaoService = {
   },
 
   /**
-   * Regrava a distribuição do produto no ciclo: apaga as linhas existentes
-   * (ciclo+produto) e grava uma linha por fornecedor participante.
+   * SALVA POR CIMA da distribuição do produto no ciclo: atualiza as linhas
+   * existentes (ciclo+produto+fornecedor — índice único do banco), cria as
+   * novas e apaga as que sobraram (fornecedor desmarcado). Não duplica
+   * registros quando a compra já gravada é editada e salva de novo.
    * `linhas` vazio = distribuição removida por completo → apaga tudo.
    */
   async salvarDistribuicao(input: SalvarDistribuicaoInput): Promise<CompraDistribuicaoRecord[]> {
@@ -211,25 +213,23 @@ export const compraDistribuicaoService = {
       throw new Error('Ciclo e produto são obrigatórios para gravar a distribuição.')
     }
 
-    // 1) Replace: apaga as linhas atuais do ciclo+produto
+    // 1) Linhas atuais do ciclo+produto, indexadas por fornecedor
     const atuais = await pb.collection('compra_distribuicao').getFullList({
       filter: `ciclo_id = "${cicloId}" && produto_id = "${produtoId}"`,
     })
-    for (const rec of atuais) {
-      await pb.collection('compra_distribuicao').delete(rec.id)
-    }
+    const porFornecedor = new Map(atuais.map((rec) => [rec.fornecedor_id, rec]))
 
-    // 2) Grava uma linha por fornecedor participante
+    const dataEntregaNormalizada = dataEntrega ? normalizarDataISO(dataEntrega) : undefined
+
+    // 2) Upsert: atualiza a linha existente do fornecedor ou cria uma nova
     const gravadas: CompraDistribuicaoRecord[] = []
+    const idsSalvos = new Set<string>()
     for (const linha of linhas) {
-      const criado = await pb.collection('compra_distribuicao').create({
-        ciclo_id: cicloId,
+      const data: Record<string, unknown> = {
         // Normaliza para 'yyyy-mm-dd': dataEntrega vem do Order.date cru
         // ("yyyy-mm-dd HH:mm:ss.mmmZ") e o recorte compara só o dia.
-        data_entrega: dataEntrega ? normalizarDataISO(dataEntrega) : undefined,
+        data_entrega: dataEntregaNormalizada,
         chamada_id: chamadaId || undefined,
-        fornecedor_id: linha.fornecedorId,
-        produto_id: produtoId,
         quantidade: Number(linha.quantidade) || 0,
         unidade: unidade || undefined,
         modo: linha.modo,
@@ -238,8 +238,25 @@ export const compraDistribuicaoService = {
             ? linha.percentual
             : undefined,
         criado_por: criadoPor || undefined,
-      })
-      gravadas.push(normalizeCompraDistribuicao(criado))
+      }
+      const existente = porFornecedor.get(linha.fornecedorId)
+      const registro = existente
+        ? await pb.collection('compra_distribuicao').update(existente.id, data)
+        : await pb.collection('compra_distribuicao').create({
+            ...data,
+            ciclo_id: cicloId,
+            fornecedor_id: linha.fornecedorId,
+            produto_id: produtoId,
+          })
+      idsSalvos.add(linha.fornecedorId)
+      gravadas.push(normalizeCompraDistribuicao(registro))
+    }
+
+    // 3) Apaga linhas de fornecedores que saíram da distribuição
+    for (const rec of atuais) {
+      if (!idsSalvos.has(rec.fornecedor_id)) {
+        await pb.collection('compra_distribuicao').delete(rec.id)
+      }
     }
 
     return gravadas
