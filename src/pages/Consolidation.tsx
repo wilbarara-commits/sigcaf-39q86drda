@@ -176,6 +176,15 @@ export default function Consolidation() {
     return chamadas[0]?.id || ''
   }, [selectedChamadaId, selectedCicloId, ciclos, activeCiclo, chamadas])
 
+  // Mapa cicloId -> chamada_id: atribui a chamada de cada pedido (anti-vazamento entre chamadas)
+  const cicloChamadaMap = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const c of ciclos) {
+      if (c.chamada_id) map.set(c.id, c.chamada_id)
+    }
+    return map
+  }, [ciclos])
+
   // Rotas disponíveis SOMENTE da chamada selecionada no relatório
   const rotasDaChamada = useMemo(() => {
     if (!effectiveChamadaId) {
@@ -315,14 +324,23 @@ export default function Consolidation() {
     return map
   }, [products, contractItems])
 
-  // Filtrar pedidos pelo ciclo selecionado e não cancelados
+  // Filtrar pedidos pelo ciclo selecionado, pela chamada selecionada e não cancelados.
+  // A chamada do pedido é derivada do ciclo (ou do campo chamadaId quando presente):
+  // pedidos sem ciclo conhecido não podem ser atribuídos a uma chamada e ficam de fora
+  // quando um filtro de chamada específico está ativo.
+  const chamadaFiltroAtiva = selectedChamadaId !== 'todas' ? selectedChamadaId : ''
   const filteredOrders = useMemo(() => {
     return orders.filter((o) => {
       if (o.status === 'Cancelado') return false
       if (selectedCicloId !== 'todos' && o.cicloId && o.cicloId !== selectedCicloId) return false
+      if (chamadaFiltroAtiva) {
+        const chamadaDoPedido =
+          o.chamadaId || (o.cicloId ? cicloChamadaMap.get(o.cicloId) : undefined)
+        if (chamadaDoPedido !== chamadaFiltroAtiva) return false
+      }
       return true
     })
-  }, [orders, selectedCicloId])
+  }, [orders, selectedCicloId, chamadaFiltroAtiva, cicloChamadaMap])
 
   // Matriz de dados agregada: Map<produtoId, Map<schoolId, CellData>>
   const matriz = useMemo(() => {

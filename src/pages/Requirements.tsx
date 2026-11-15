@@ -1014,6 +1014,47 @@ export function Requirements() {
           </p>
         </div>
 
+        {/* Release v0.0.306: filtro de chamada aplicado à matriz da Consolidação Final */}
+        <div className="rounded-lg border border-primary/40 bg-primary/5 p-5 space-y-4">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="text-primary border-primary/40 font-semibold">
+                Release v0.0.306
+              </Badge>
+              <span className="font-semibold text-foreground">
+                0.0.306: Consolidação Final — filtro de Chamada aplicado à matriz (Por Produto e Por
+                Escola)
+              </span>
+            </div>
+            <span className="text-xs font-medium text-muted-foreground">
+              Consolidado (v0.0.306)
+            </span>
+            <span className="text-xs font-medium text-primary">Versão Vigente (v0.0.306)</span>
+          </div>
+
+          <p className="text-sm text-foreground/90 leading-relaxed">
+            <strong>Correção de filtro de chamada na Consolidação Final (/consolidacao):</strong> ao
+            selecionar uma chamada específica no seletor (ex.: <code>EXTRA</code>), a matriz passa a
+            exibir SOMENTE os pedidos dessa chamada — antes, o filtro de chamada restringia apenas
+            as rotas listadas no modo "Por rota", e a matriz somava pedidos de TODAS as chamadas
+            (ex.: ALHO PORO com 331 da chamada 01/2025 aparecendo com o filtro EXTRA ativo). A
+            chamada de cada pedido é derivada do <code>ciclo_id</code> do pedido (mapa
+            ciclo→chamada; cada ciclo pertence a uma única chamada), preenchida também no campo{' '}
+            <code>chamadaId</code> do pedido em memória (carregamento inicial e eventos realtime).
+            Pedidos sem ciclo conhecido (órfãos) não são atribuídos a nenhuma chamada e ficam de
+            fora da matriz quando um filtro de chamada específico está ativo — aparecem apenas em
+            "Todas as Chamadas". "Todos os Ciclos" + "Todas as Chamadas" mantém o comportamento
+            anterior (todos os pedidos não cancelados). Selecionar um ciclo no seletor continua
+            sincronizando o seletor de chamada. Visualizações Por Produto/Por Escola, filtro "Filtro
+            de Escolas" (Todas as escolas/Por rota), toggle "Somente coluna de Total", "Ocultar
+            linhas/colunas vazias", "Mostrar valores", Modo de Exibição (Quantidade/Valor/ Ambos),
+            Exportar (Excel/PDF), busca de texto e números pt-BR permanecem inalterados. Isolamento
+            por <code>ciclo_id</code> e anti-vazamento nas 4 telas de entregas (/rotas, Dashboard,
+            Portal do Motorista, /monitoramento) não são afetados; o cartão Comprar de /
+            consolidacao-simples, Compras e Separação (/caixas) ficam intocados.
+          </p>
+        </div>
+
         {/* Release v0.0.305: revisão do cartão Comprar da /consolidacao-simples */}
         <div className="rounded-lg border border-primary/40 bg-primary/5 p-5 space-y-4">
           <div className="flex items-center justify-between flex-wrap gap-2">

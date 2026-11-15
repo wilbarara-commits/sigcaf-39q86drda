@@ -363,6 +363,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
       setCiclos(ciclosEnriquecidos)
 
+      // Mapa cicloId -> chamada_id: atribui a chamada de cada pedido (anti-vazamento entre chamadas)
+      const cicloChamadaIdMap = new Map<string, string>()
+      for (const c of ciclosEnriquecidos) {
+        if (c.chamada_id) cicloChamadaIdMap.set(c.id, c.chamada_id)
+      }
+
       // Ciclo ATIVO = o mais recente ciclo com status não-terminal (máx. 1)
       const ordenadosCiclos = [...ciclosEnriquecidos].sort((a, b) => {
         const tA = new Date(a.created || a.data_inicio).getTime()
@@ -476,6 +482,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           schoolName,
           schoolAlunos: schoolObj?.alunos,
           cicloId: ped.ciclo_id,
+          chamadaId: ped.ciclo_id ? cicloChamadaIdMap.get(ped.ciclo_id) : undefined,
           origem: ped.origem || 'manual',
           rotaId: ped.rota_id,
           rotaNome,
@@ -784,6 +791,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
             schoolId: rec.escola_id || existing.schoolId,
             schoolName: schoolName || existing.schoolName,
             cicloId: rec.ciclo_id || existing.cicloId,
+            chamadaId: rec.ciclo_id
+              ? ciclos.find((ci) => ci.id === rec.ciclo_id)?.chamada_id || existing.chamadaId
+              : existing.chamadaId,
             origem: rec.origem || existing.origem,
             rotaId: rec.rota_id || existing.rotaId,
             rotaNome: rotaNome || existing.rotaNome,
@@ -813,6 +823,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
           schoolName,
           schoolAlunos: schoolObj?.alunos,
           cicloId: rec.ciclo_id,
+          chamadaId: rec.ciclo_id
+            ? ciclos.find((ci) => ci.id === rec.ciclo_id)?.chamada_id
+            : undefined,
           origem: rec.origem || 'manual',
           rotaId: rec.rota_id,
           rotaNome,
