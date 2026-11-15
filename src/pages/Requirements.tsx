@@ -1014,6 +1014,46 @@ export function Requirements() {
           </p>
         </div>
 
+        {/* Release v0.0.310: PDF Por Produto em modo por quantidades sem unidades/valores/totais, páginas de 17 escolas */}
+        <div className="rounded-lg border border-primary/40 bg-primary/5 p-5 space-y-4">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="text-primary border-primary/40 font-semibold">
+                Release v0.0.310
+              </Badge>
+              <span className="font-semibold text-foreground">
+                0.0.310: Consolidação Final — PDF Por Produto (por quantidades) sem unidades,
+                valores e totais; páginas de 17 escolas
+              </span>
+            </div>
+            <span className="text-xs font-medium text-muted-foreground">
+              Consolidado (v0.0.310)
+            </span>
+            <span className="text-xs font-medium text-primary">Versão Vigente (v0.0.310)</span>
+          </div>
+
+          <p className="text-sm text-foreground/90 leading-relaxed">
+            <strong>
+              Novo formato do relatório PDF "Por Produto" da Consolidação Final (/consolidacao)
+              exclusivamente no Modo de Exibição "Quantidade", por pedido do usuário:
+            </strong>{' '}
+            os rótulos dos produtos <strong>não exibem mais unidades</strong> (kg, L, un), células
+            de quantidade <strong>zero</strong> aparecem com o "0" em{' '}
+            <strong>tom mais fraco</strong> (cinza claro) para marcar visualmente a coluna, e{' '}
+            <strong>não aparecem valores monetários</strong> (Preço em R$) nem{' '}
+            <strong>totais</strong> — a coluna "Total" do produto, a linha "TOTAL GERAL" e o Total
+            Geral do cabeçalho de filtros foram removidos desse modo. As escolas são divididas em{' '}
+            <strong>páginas de até 17 colunas</strong> com <strong>numeração contínua</strong> entre
+            os blocos ("1. Nome" … "18. Nome" na página seguinte), mesmo conceito da folha de
+            Separação (/caixas), que permanece inalterada. Preservados: os demais modos do PDF Por
+            Produto (Valor, Ambos) e o modo "Somente coluna de Total" (+ Totais por rota), o PDF da
+            aba Por Escola, a matriz na tela, a exportação XLSX/CSV, os filtros de Data de Entrega e
+            de Chamada, os números pt-BR (vírgula decimal), /consolidacao-simples, /rotas, Separação
+            (/caixas) e o Dashboard — isolamento por <code>ciclo_id</code> e anti-vazamento nas 4
+            telas de entregas intactos.
+          </p>
+        </div>
+
         {/* Release v0.0.307: filtro de Data de Entrega substitui o seletor de ciclo na Consolidação Final */}
         <div className="rounded-lg border border-primary/40 bg-primary/5 p-5 space-y-4">
           <div className="flex items-center justify-between flex-wrap gap-2">
@@ -1028,7 +1068,6 @@ export function Requirements() {
             <span className="text-xs font-medium text-muted-foreground">
               Consolidado (v0.0.307)
             </span>
-            <span className="text-xs font-medium text-primary">Versão Vigente (v0.0.307)</span>
           </div>
 
           <p className="text-sm text-foreground/90 leading-relaxed">

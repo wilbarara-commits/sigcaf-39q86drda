@@ -757,6 +757,17 @@ export default function Consolidation() {
     )
   }
 
+  // Escolas por página no PDF "Por Produto" em modo por quantidades (0.0.310):
+  // mesmo conceito da folha de Separação (/caixas), com numeração contínua
+  // quando houver mais de um bloco. Regra específica deste relatório.
+  const ESCOLAS_POR_PAGINA_PDF_QTD = 17
+
+  function chunkEscolas<T>(arr: T[], size: number): T[][] {
+    const out: T[][] = []
+    for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size))
+    return out
+  }
+
   // Helper de texto de célula para XLSX/CSV/PDF
   const getCellExportText = (
     qtd: number,
@@ -1150,6 +1161,11 @@ export default function Consolidation() {
 
       const isTotaisPorRotaModo = tabAtiva === 'produto' && somenteColunaTotal && totaisPorRotaAtivo
 
+      // Modo "por quantidades" do PDF Por Produto (0.0.310): sem unidades nos
+      // rótulos, sem Preço, sem coluna TOTAL e sem linha TOTAL GERAL; zero mais
+      // fraco; páginas de até 17 escolas com numeração contínua (modelo Separação).
+      const isPdfQtdModo = tabAtiva === 'produto' && modoExibicao === 'qtd'
+
       const colsCount =
         tabAtiva === 'produto'
           ? somenteColunaTotal
@@ -1210,7 +1226,8 @@ export default function Consolidation() {
       doc.roundedRect(14, currentY, pageWidth - 28, 9, 1.5, 1.5, 'F')
 
       const rotaInfoPdf = isModoRota ? `   |   Rota: ${selectedRotaObj?.nome} (Paradas)` : ''
-      const filtrosTexto = `Data de Entrega: ${dataEntregaLabel}   |   Chamada: ${chamadaSelecionadaNome}${rotaInfoPdf}   |   Modo: ${modoTexto}   |   Total Geral: ${formatNumber(totalGeral.qtd)} un/kg — ${formatBRL(totalGeral.valor)}`
+      const filtroQtdModo = `   |   Total Geral: ${formatNumber(totalGeral.qtd)} un/kg — ${formatBRL(totalGeral.valor)}`
+      const filtrosTexto = `Data de Entrega: ${dataEntregaLabel}   |   Chamada: ${chamadaSelecionadaNome}${rotaInfoPdf}   |   Modo: ${modoTexto}${!isPdfQtdModo ? filtroQtdModo : ''}`
       doc.text(filtrosTexto, 17, currentY + 5.5)
 
       currentY += 13
@@ -1219,6 +1236,105 @@ export default function Consolidation() {
       let head: string[][] = []
       let body: string[][] = []
       let foot: string[][] = []
+
+      if (tabAtiva === 'produto' && isPdfQtdModo) {
+        // 0.0.310 — PDF Por Produto em modo por QUANTIDADES: rótulo do produto
+        // SEM unidade, SEM Preço, SEM coluna TOTAL e SEM linha TOTAL GERAL;
+        // escolas divididas em páginas de até 17 com numeração contínua.
+        const blocos = chunkEscolas(escolasExibidas, ESCOLAS_POR_PAGINA_PDF_QTD)
+
+        blocos.forEach((lote, blocoIdx) => {
+          if (blocoIdx > 0) doc.addPage()
+
+          const headerRow = ['Produto']
+          headerRow.push(
+            ...lote.map((e, idx) => {
+              const numeroContinuo = blocoIdx * ESCOLAS_POR_PAGINA_PDF_QTD + idx + 1
+              const paradaNum = escolaOrdemParadaMap.get(e.id) || numeroContinuo
+              const nomeCurto = abreviarNomeEscola(e.name)
+              return isModoRota ? `${paradaNum}ª ${nomeCurto}` : `${numeroContinuo}. ${nomeCurto}`
+            }),
+          )
+          head = [headerRow]
+
+          const blocoBody: string[][] = []
+          for (const prod of produtosExibidos) {
+            const schoolCells: string[] = []
+            for (const sch of lote) {
+              const cell = matriz.get(prod.id)?.get(sch.id) || { qtd: 0, valor: 0 }
+              // Sem unidade no texto da célula; zero permanece "0" (tom fraco
+              // via didParseCell) em vez do "-" dos demais modos
+              schoolCells.push(formatNumber(cell.qtd))
+            }
+            blocoBody.push([prod.name, ...schoolCells])
+          }
+          body = blocoBody
+
+          // Sem foot (TOTAL GERAL) neste modo; zero fraco via didParseCell
+          foot = []
+
+          runAutoTable(doc, {
+            startY: currentY,
+            head,
+            body,
+            foot,
+            theme: 'grid',
+            // Largura fixa: as 17 colunas de escola dividem a área útil da página
+            tableWidth: pageWidth - 28,
+            styles: {
+              font: 'helvetica',
+              fontSize: 6,
+              cellPadding: 2,
+              lineColor: [226, 232, 240],
+              lineWidth: 0.1,
+              textColor: [30, 41, 59],
+              halign: 'center',
+              overflow: 'linebreak',
+            },
+            headStyles: {
+              fillColor: [31, 77, 28],
+              textColor: [255, 255, 255],
+              fontStyle: 'bold',
+              halign: 'center',
+            },
+            columnStyles: {
+              0: { halign: 'left', fontStyle: 'bold', cellWidth: 32 },
+            },
+            alternateRowStyles: {
+              fillColor: [248, 250, 252],
+            },
+            margin: { left: 14, right: 14, bottom: 16 },
+            didParseCell: (data: any) => {
+              const { section, column, cell } = data
+              if (section !== 'body' || column === 0 || !cell) return
+              const txt = String(cell.raw ?? '').trim()
+              if (txt === '0') {
+                cell.styles.textColor = [201, 209, 219] // zero em tom fraco — coluna marcada
+              }
+            },
+            didDrawPage: (data: any) => {
+              const str = `Página ${data.pageNumber} • Escolas ${blocoIdx * ESCOLAS_POR_PAGINA_PDF_QTD + 1}–${blocoIdx * ESCOLAS_POR_PAGINA_PDF_QTD + lote.length}`
+              doc.setFont('helvetica', 'normal')
+              doc.setFontSize(8)
+              doc.setTextColor(148, 163, 184)
+              doc.text(
+                'Gestão Cooperativa Agrícola • Logística de Distribuição',
+                14,
+                pageHeight - 7,
+              )
+              doc.text(str, pageWidth - 14, pageHeight - 7, { align: 'right' })
+            },
+          })
+        })
+
+        // Pós-processamento concluído para este modo
+        const dateStr = new Date().toISOString().split('T')[0]
+        const rotaSlug = isModoRota ? `-${selectedRotaObj?.nome?.replace(/\s+/g, '_')}` : ''
+        const filename = `consolidacao-final-${tabAtiva}${rotaSlug}-${dateStr}.pdf`
+        doc.save(filename)
+        toast.success('Documento PDF exportado com sucesso!')
+        return
+      }
 
       if (tabAtiva === 'produto') {
         const headerRow = ['Produto', 'Total', 'Un.', 'Preço']
