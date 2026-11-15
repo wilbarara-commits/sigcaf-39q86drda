@@ -154,19 +154,19 @@ export function CartaoComprarDialog({
       setSelecionados(todos)
       setMaxPercentual(maxSalvo)
       setMaxInput(formatPercent(maxSalvo))
-      // Percentuais salvos (gravados em ambos os modos); quem não tem valor
-      // recebe a divisão igual INTEIRA do máximo.
+      // Percentuais salvos (gravados SEMPRE desde 0.0.315, em qualquer modo).
+      // Linha sem percentual gravado (versões antigas): deriva o percentual da
+      // QUANTIDADE gravada — round(qtd/total×100) — para o kg recalculado bater
+      // exatamente com a linha gravada. Antes re-inventava com dividirInteiro do
+      // máximo na ordem do Set, o que desalinha percentual ↔ quantidade gravada.
       const percs: Record<string, string> = {}
       for (const d of dists) {
         if (typeof d.percentual === 'number' && d.percentual > 0) {
           percs[d.fornecedor_id] = formatPercent(d.percentual)
+        } else if (quantidadeTotal > 0 && d.quantidade > 0) {
+          percs[d.fornecedor_id] = String(Math.round((d.quantidade / quantidadeTotal) * 100))
         }
       }
-      const idsSemPerc = [...todos].filter((id) => !percs[id])
-      const partes = dividirInteiro(Math.round(maxSalvo), todos.size)
-      idsSemPerc.forEach((id, i) => {
-        percs[id] = todos.size > 0 ? String(partes[i]) : ''
-      })
       setPercentuais(percs)
       const modos = new Set(dists.map((d) => d.modo))
       setModo(modos.has('percentual') && modos.size === 1 ? 'percentual' : 'igual')
@@ -178,7 +178,7 @@ export function CartaoComprarDialog({
     return () => {
       vivo = false
     }
-  }, [produtoId, cicloId, toast])
+  }, [produtoId, cicloId, quantidadeTotal, toast])
 
   // Carga do cartão: vínculos fornecedor↔produto + linhas salvas + percentual
   // máximo salvo (por ciclo+produto, padrão 125%). Abre com a COMPRA JÁ GRAVADA
@@ -394,6 +394,8 @@ export function CartaoComprarDialog({
         .map((fornecedorId) => ({
           fornecedorId,
           quantidade: calcularQuantidade(fornecedorId),
+          // 0.0.315: percentual gravado SEMPRE (não só no modo 'percentual') —
+          // é a fonte do kg ao reabrir e mantém cartão e seção alinhados.
           percentual: parsePercent(percentuais[fornecedorId] || '') ?? 0,
           modo,
         }))
@@ -432,14 +434,17 @@ export function CartaoComprarDialog({
         setModo('igual')
       } else {
         setSelecionados(new Set(dists.map((d) => d.fornecedor_id)))
+        // Mesma regra do carregar: percentual gravado; sem percentual (linha
+        // legada), deriva da QUANTIDADE gravada para o kg bater com a linha.
         const percs: Record<string, string> = {}
         for (const d of dists) {
           if (typeof d.percentual === 'number' && d.percentual > 0) {
             percs[d.fornecedor_id] = formatPercent(d.percentual)
+          } else if (quantidadeTotal > 0 && d.quantidade > 0) {
+            percs[d.fornecedor_id] = String(Math.round((d.quantidade / quantidadeTotal) * 100))
+          } else {
+            percs[d.fornecedor_id] = '0'
           }
-        }
-        for (const id of dists.map((d) => d.fornecedor_id)) {
-          if (!percs[id]) percs[id] = '0'
         }
         setPercentuais(percs)
         const modos = new Set(dists.map((d) => d.modo))

@@ -929,6 +929,54 @@ export function Requirements() {
       {/* 7. Registro de Manutenção e Limpeza de Dados */}
       <SectionTitle>7. Registro de Manutenção & Higienização do Banco de Dados</SectionTitle>
       <div className="space-y-4">
+        {/* Release v0.0.315: cartão Comprar — percentuais gravados em qualquer modo */}
+        <div className="rounded-lg border border-primary/40 bg-primary/5 p-5 space-y-4">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="text-primary border-primary/40 font-semibold">
+                Release v0.0.315
+              </Badge>
+              <span className="font-semibold text-foreground">
+                0.0.315: Compras — correção da inversão de quantidades entre o cartão Comprar e os
+                pedidos de compra por fornecedor
+              </span>
+            </div>
+            <span className="text-xs font-medium text-muted-foreground">
+              Consolidado (v0.0.315)
+            </span>
+            <span className="text-xs font-medium text-primary">Versão Vigente (v0.0.315)</span>
+          </div>
+
+          <p className="text-sm text-foreground/90 leading-relaxed">
+            <strong>
+              Correção por relato do usuário ("a compra e os pedidos não batem quanto às
+              quantidades"; ex.: OVOS CAIPIRA — Total Pedido 4 Kg, cartão mostrava Elaine 2 Kg e
+              João 3 Kg e a seção exibia Elaine 3 Kg e João 2 Kg — cada fornecedor com o kg do
+              outro):
+            </strong>{' '}
+            a seção "Pedidos de compra por fornecedor" lia fielmente a quantidade GRAVADA em{' '}
+            <code>compra_distribuicao</code>; quem divergia era o cartão "Comprar" ao reabrir a
+            compra. Como o percentual só era gravado no modo "Por percentual" (no modo "Distribuir
+            igualmente" ia vazio para o banco), ao reabrir o cartão{' '}
+            <strong>re-inventava os percentuais</strong> dividindo o máximo (125%) em partes iguais
+            na ordem de inserção do <code>Set</code> — ordem instável entre sessões, atribuindo a
+            cada fornecedor um percentual (e o kg derivado dele) que não correspondia à linha
+            gravada. Correções: (1) o <code>salvarDistribuicao</code> grava o{' '}
+            <strong>percentual SEMPRE, em qualquer modo</strong> — ele é a fonte do kg ao reabrir e
+            mantém cartão e seção na mesma linha; (2) ao carregar (e no Cancelar), linha legada sem
+            percentual gravado <strong>deriva o percentual da QUANTIDADE gravada</strong> —
+            round(qtd ÷ Total Pedido × 100) — garantindo que o kg recalculado bata exatamente com a
+            linha gravada (ex.: Elaine 2 Kg → 50%, João 3 Kg → 75%; ao regravar a distribuição, os
+            percentuais ficam persistidos). Preservados: edição da distribuição (botão verde
+            "Editar" com lápis, badge âmbar, "Salvar alterações"), Cancelar, upsert sem duplicar,
+            percentuais inteiros no Distribuir igualmente (42/42/41), kg inteiros pt-BR, aviso
+            amarelo acima do máximo sem travar, Total Comprado = soma dos kg com % Comprado em tempo
+            real (0.0.312), dropdown alfabético, checkbox e lixeira, <code>compra_config</code> com
+            máximo editável, gravação por <code>ciclo_id</code> e recorte data de entrega + chamada.
+            Consolidação Final (/consolidacao), /rotas e Separação (/caixas) não são afetadas.
+          </p>
+        </div>
+
         {/* Release v0.0.314: cartão Comprar — caminho de edição da distribuição gravada */}
         <div className="rounded-lg border border-primary/40 bg-primary/5 p-5 space-y-4">
           <div className="flex items-center justify-between flex-wrap gap-2">

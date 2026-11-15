@@ -233,10 +233,11 @@ export const compraDistribuicaoService = {
         quantidade: Number(linha.quantidade) || 0,
         unidade: unidade || undefined,
         modo: linha.modo,
-        percentual:
-          linha.modo === 'percentual' && typeof linha.percentual === 'number'
-            ? linha.percentual
-            : undefined,
+        // Percentual SEMPRE gravado, em qualquer modo: é a fonte do kg exibido
+        // ao reabrir o cartão e mantém cartão e "Pedidos de compra por
+        // fornecedor" alinhados com a mesma linha gravada (antes, no modo
+        // "igual" ia undefined e o cartão re-inventava os percentuais).
+        percentual: typeof linha.percentual === 'number' ? linha.percentual : undefined,
         criado_por: criadoPor || undefined,
       }
       const existente = porFornecedor.get(linha.fornecedorId)
