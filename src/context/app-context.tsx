@@ -46,6 +46,11 @@ import { toast } from 'sonner'
 import useRealtime from '@/hooks/use-realtime'
 import { validateOrder } from '@/lib/orderValidation'
 import { derivarStatusCiclo, getCicloAtivo } from '@/lib/cicloUtils'
+import { diaISODe } from '@/lib/datasEntrega'
+
+/** Data (yyyy-mm-dd, sem hora) do pedido: data_prevista; fallback created (PB devolve "2026-11-15 02:04:05.573Z" com ESPAÇO) */
+const dataDiaPedido = (ped: { data_prevista?: string; created?: string }): string =>
+  diaISODe(ped.data_prevista) || diaISODe(ped.created) || diaISODe(new Date().toISOString())
 
 export interface CreateOrderData {
   schoolId: string
@@ -477,10 +482,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           rotaLogisticaId: effectiveRotaLogisticaId,
           rotaLogisticaNome,
           validacao: rawValidacao,
-          date:
-            ped.data_prevista ||
-            ped.created?.split('T')[0] ||
-            new Date().toISOString().split('T')[0],
+          date: dataDiaPedido(ped),
           status: ped.status,
           entregue_em: ped.entregue_em,
           entregue_por: ped.entregue_por,
@@ -787,7 +789,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
             rotaNome: rotaNome || existing.rotaNome,
             rotaLogisticaId: effectiveRotaLogisticaId || existing.rotaLogisticaId,
             rotaLogisticaNome: rotaLogisticaNome || existing.rotaLogisticaNome,
-            date: rec.data_prevista || existing.date,
+            date: dataDiaPedido(rec) || existing.date,
             status: rec.status || existing.status,
             entregue_em: rec.entregue_em ?? existing.entregue_em,
             entregue_por: rec.entregue_por ?? existing.entregue_por,
@@ -820,10 +822,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
             status: 'validado',
             motivo: 'Registrado',
           },
-          date:
-            rec.data_prevista ||
-            rec.created?.split('T')[0] ||
-            new Date().toISOString().split('T')[0],
+          date: dataDiaPedido(rec),
           status: rec.status || 'Pendente',
           entregue_em: rec.entregue_em,
           entregue_por: rec.entregue_por,
@@ -1534,7 +1533,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       rotaLogisticaId: rotaLogisticaIdFinal,
       rotaLogisticaNome,
       validacao: validationResult,
-      date: datePrevista.split(' ')[0],
+      date: diaISODe(datePrevista),
       status: 'Pendente',
       total: Math.round(total * 100) / 100,
       items: formattedItens.map((it) => ({
@@ -3474,7 +3473,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         o.id === orderId
           ? {
               ...o,
-              date: orderDate || o.date,
+              date: orderDate ? diaISODe(orderDate) : o.date,
               items: newItems,
               total: Math.round(newTotal * 100) / 100,
             }

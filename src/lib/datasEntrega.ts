@@ -32,6 +32,19 @@ interface CicloLike {
   data_despacho?: string
 }
 
+/**
+ * Normaliza uma data/timestamp qualquer para o DIA ISO 'yyyy-mm-dd'.
+ * Tolerante aos dois formatos que o PocketBase devolve:
+ *   - "2026-11-15T02:04:05.573Z"  (ISO com "T")
+ *   - "2026-11-15 02:04:05.573Z"  (com ESPAÇO — formato nativo do PocketBase)
+ * Garante que um timestamp com hora nunca vire uma "data" própria no
+ * agrupamento do seletor de /rotas (bug dos "4 × 15/11/2026 • 1 pedido(s)").
+ */
+export function diaISODe(valor?: string): string {
+  const m = /^(\d{4}-\d{2}-\d{2})/.exec(String(valor || '').replace(' ', 'T'))
+  return m ? m[1] : ''
+}
+
 function isCicloAberto(status?: string): boolean {
   const norm = (status || '').trim().toLowerCase()
   // Ciclos terminais (fechado/cancelado) não geram datas operacionais:
@@ -44,6 +57,9 @@ function isCicloAberto(status?: string): boolean {
  * Cada chamada da data aponta para o ciclo principal (preferência: ciclo cuja
  * data_despacho coincide com a data; senão o de maior volume de pedidos).
  * As datas voltam em ordem crescente.
+ * Todas as datas são NORMALIZADAS para dia ISO (diaISODe) antes de agrupar:
+ * um data_prevista/created com hora ("2026-11-15 12:00:00.000Z") nunca cria
+ * um grupo distinto nem deixa de casar com data_despacho/dataISOHoje().
  */
 export function agruparPedidosPorDataEntrega(
   orders: Order[],
@@ -63,10 +79,13 @@ export function agruparPedidosPorDataEntrega(
     const ciclo = ciclosAbertos.get(o.cicloId)
     if (!ciclo) continue
 
-    let chamadasMap = porData.get(o.date)
+    const dia = diaISODe(o.date)
+    if (!dia) continue
+
+    let chamadasMap = porData.get(dia)
     if (!chamadasMap) {
       chamadasMap = new Map()
-      porData.set(o.date, chamadasMap)
+      porData.set(dia, chamadasMap)
     }
 
     const chamadaId = ciclo.chamada_id || 'sem-chamada'
@@ -85,7 +104,7 @@ export function agruparPedidosPorDataEntrega(
     for (const [chamadaId, rec] of chamadasMap.entries()) {
       const ids = Array.from(rec.ciclos.keys())
       const cicloPrincipalId =
-        ids.find((id) => ciclosAbertos.get(id)?.data_despacho === data) ||
+        ids.find((id) => diaISODe(ciclosAbertos.get(id)?.data_despacho) === data) ||
         ids.reduce(
           (melhor, id) => ((rec.ciclos.get(id) || 0) > (rec.ciclos.get(melhor) || 0) ? id : melhor),
           ids[0] || '',

@@ -929,6 +929,54 @@ export function Requirements() {
       {/* 7. Registro de Manutenção e Limpeza de Dados */}
       <SectionTitle>7. Registro de Manutenção & Higienização do Banco de Dados</SectionTitle>
       <div className="space-y-4">
+        {/* Release v0.0.303: correção das datas duplicadas no seletor de /rotas */}
+        <div className="rounded-lg border border-primary/40 bg-primary/5 p-5 space-y-4">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="text-primary border-primary/40 font-semibold">
+                Release v0.0.303
+              </Badge>
+              <span className="font-semibold text-foreground">
+                0.0.303: Rotas — correção das datas duplicadas no seletor de Data de Entrega ("N ×
+                15/11/2026 • 1 pedido(s)")
+              </span>
+            </div>
+            <span className="text-xs font-medium text-muted-foreground">
+              Consolidado (v0.0.303)
+            </span>
+            <span className="text-xs font-medium text-primary">Versão Vigente (v0.0.303)</span>
+          </div>
+
+          <p className="text-sm text-foreground/90 leading-relaxed">
+            <strong>
+              Correção completa do bug do seletor de Data de Entrega em /rotas, por pedido do
+              usuário:
+            </strong>{' '}
+            o seletor exibia uma entrada "15/11/2026 • 1 pedido(s)" para CADA pedido de uma chamada
+            extra (4 grupos de 1 pedido) em vez de um único grupo. Diagnóstico: esses pedidos
+            gravaram <code>data_prevista</code> vazia e o frontend derivava a data do campo{' '}
+            <code>created</code> com <code>split('T')[0]</code> — mas o PocketBase devolve o
+            timestamp com ESPAÇO (<code>"2026-11-15 02:04:05.573Z"</code>), o recorte não acontecia
+            e cada timestamp distinto virava uma "data" própria. Correção em três frentes: (1){' '}
+            <strong>Migration 0150</strong> (aplicada no banco, idempotente) recartimbou
+            retroativamente os pedidos com <code>data_prevista</code> vazia usando a{' '}
+            <code>data_despacho</code> do ciclo do pedido; (2) <strong>Frontend normalizado</strong>
+            : nova função <code>diaISODe()</code> em <code>src/lib/datasEntrega.ts</code> recorta o
+            dia ISO 'yyyy-mm-dd' tanto do formato com "T" quanto com espaço, aplicada em todo
+            mapeamento de pedido no <code>app-context</code> (criação, atualização realtime e
+            edição) e no agregador <code>agregarDatasEntrega</code> — que agora normaliza também a{' '}
+            <code>data_despacho</code> do ciclo antes de comparar, garantindo que um timestamp com
+            hora nunca vire uma data própria nem cause comparação desigual com{' '}
+            <code>dataISOHoje()</code>; (3) <strong>Backend endurecido</strong>: novo hook{' '}
+            <code>pedidos_data_prevista_fallback</code> (onRecordCreate de pedidos) grava{' '}
+            <code>data_prevista</code> = <code>data_despacho</code> do ciclo sempre que a criação
+            (via WhatsApp, manual, excel, formulário ou API) chegar sem data — mesma regra da
+            migration. Isolamento por ciclo_id e anti-vazamento nas 4 telas (/rotas, Dashboard,
+            Portal do Motorista, /monitoramento) preservados; Compras, /caixas e Consolidação Final
+            não são afetadas.
+          </p>
+        </div>
+
         {/* Release v0.0.302: zebra vertical de colunas (tons alternados) no PDF de /caixas */}
         <div className="rounded-lg border border-primary/40 bg-primary/5 p-5 space-y-4">
           <div className="flex items-center justify-between flex-wrap gap-2">
