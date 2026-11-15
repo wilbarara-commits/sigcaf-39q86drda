@@ -929,6 +929,43 @@ export function Requirements() {
       {/* 7. Registro de Manutenção e Limpeza de Dados */}
       <SectionTitle>7. Registro de Manutenção & Higienização do Banco de Dados</SectionTitle>
       <div className="space-y-4">
+        {/* Release v0.0.304: renomeação de "Caixas" para "Separação" (rótulos) */}
+        <div className="rounded-lg border border-primary/40 bg-primary/5 p-5 space-y-4">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="text-primary border-primary/40 font-semibold">
+                Release v0.0.304
+              </Badge>
+              <span className="font-semibold text-foreground">
+                0.0.304: Separação — tela /caixas renomeada para "Separação" (menu, título e PDF)
+              </span>
+            </div>
+            <span className="text-xs font-medium text-muted-foreground">
+              Consolidado (v0.0.304)
+            </span>
+            <span className="text-xs font-medium text-primary">Versão Vigente (v0.0.304)</span>
+          </div>
+
+          <p className="text-sm text-foreground/90 leading-relaxed">
+            <strong>
+              Renomeação de rótulos da tela /caixas de "Caixas" para "Separação", por pedido do
+              usuário:
+            </strong>{' '}
+            o termo "Caixas" deixou de descrever a etapa e passou a dizer "Separação" nos três
+            rótulos visíveis: (1) item do menu lateral (imediatamente depois de Compras) exibe
+            "Separação", mantendo o ícone 📦 e a mesma rota <code>/caixas</code>; (2) o cabeçalho
+            (título) da tela mostra "Separação" com a mesma descrição de folha de conferência por
+            rota para montagem das caixas; (3) a folha impressa via botão "Imprimir PDF" leva o
+            título "Separação — Folha de Conferência por Rota" no lugar de "Caixas — Folha de
+            Conferência por Rota". Nada além dos rótulos foi alterado: componente{' '}
+            <code>Caixas.tsx</code>, rota <code>/caixas</code>, filtros de Data de Entrega/Chamada/
+            Rota, cabeçalho com chamada/data/rota, cabeçalhos "N. Nome da escola", corte de 17
+            escolas por página, zebra vertical de colunas (0.0.302), compactação de impressão
+            (0.0.300/301) e seção de totais por rota permanecem exatamente como estavam.
+            Consolidação Final, Compras e /rotas não são afetadas.
+          </p>
+        </div>
+
         {/* Release v0.0.303: correção das datas duplicadas no seletor de /rotas */}
         <div className="rounded-lg border border-primary/40 bg-primary/5 p-5 space-y-4">
           <div className="flex items-center justify-between flex-wrap gap-2">

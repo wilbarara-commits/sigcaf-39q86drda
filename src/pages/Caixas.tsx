@@ -430,7 +430,8 @@ export default function Caixas() {
   const carregando = !dataEntregaSel && datasEntregaAgregadas.length > 0
 
   /** PDF da folha de conferência: mesma árvore DOM da tela em A4 paisagem
-   * (CSS @media print dedicado em main.css). window.print é síncrono. */
+   * (CSS @media print dedicado em main.css). window.print é síncrono.
+   * O h1 do cabeçalho (abaixo) é o título do documento impresso — renomeação 0.0.304. */
   const handleImprimirPdf = () => {
     window.print()
   }
@@ -440,7 +441,7 @@ export default function Caixas() {
       {/* Cabeçalho */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Caixas</h1>
+          <h1 className="text-2xl font-bold tracking-tight">Separação</h1>
           <p className="text-muted-foreground text-sm">
             Folha de conferência por rota para montagem das caixas.
           </p>
