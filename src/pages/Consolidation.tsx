@@ -1,6 +1,12 @@
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
 import { useApp } from '@/context/app-context'
 import { rotasService } from '@/services/rotas'
+import {
+  agregarDatasEntrega,
+  escolherDataPadrao,
+  formatarDataEntrega,
+  diaISODe,
+} from '@/lib/datasEntrega'
 import type { ParadaRotaRecord, School } from '@/lib/types'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -150,10 +156,11 @@ export default function Consolidation() {
     paradasRota,
   } = useApp()
 
-  const [selectedCicloId, setSelectedCicloId] = useState<string>(activeCiclo?.id || 'todos')
+  const [dataEntregaSel, setDataEntregaSel] = useState<string>('')
   const [selectedChamadaId, setSelectedChamadaId] = useState<string>(
     activeCiclo?.chamada_id || (chamadas[0]?.id ?? 'todas'),
   )
+  const dataInicializadaRef = useRef(false)
   const [tabAtiva, setTabAtiva] = useState<'produto' | 'escola'>('produto')
   const [filtroEscolaModo, setFiltroEscolaModo] = useState<'todas' | 'rota'>('todas')
   const [selectedRotaId, setSelectedRotaId] = useState<string>('')
@@ -165,16 +172,42 @@ export default function Consolidation() {
   const [modoExibicao, setModoExibicao] = useState<ModoExibicao>('ambos')
   const [filtroTexto, setFiltroTexto] = useState('')
 
+  // Filtro PRIMÁRIO: datas de entrega com pedidos em ciclos abertos
+  // (mesmo padrão de /rotas e /consolidacao-simples — agregarDatasEntrega)
+  const datasEntregaAgregadas = useMemo(() => agregarDatasEntrega(orders, ciclos), [orders, ciclos])
+
+  // Pré-seleção da data padrão (escolherDataPadrao): data de despacho do ciclo ativo, depois hoje/próxima
+  useEffect(() => {
+    if (dataInicializadaRef.current || datasEntregaAgregadas.length === 0) return
+    dataInicializadaRef.current = true
+    const dataPadrao = escolherDataPadrao(datasEntregaAgregadas, activeCiclo?.data_despacho)
+    if (dataPadrao) setDataEntregaSel(dataPadrao)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [datasEntregaAgregadas])
+
+  // Troca do seletor primário de Data de Entrega: mantém a chamada se ela opera na data;
+  // senão cai para a chamada do ciclo corrente e, por último, "Todas as Chamadas"
+  const handleChangeDataEntrega = (data: string) => {
+    if (data === dataEntregaSel) return
+    setDataEntregaSel(data)
+    const agregada = datasEntregaAgregadas.find((d) => d.data === data)
+    const chamadaNaData =
+      selectedChamadaId !== 'todas' &&
+      Boolean(agregada?.chamadas.some((c) => c.chamadaId === selectedChamadaId))
+    if (chamadaNaData) return
+    const preferida =
+      (activeCiclo?.chamada_id &&
+        agregada?.chamadas.find((c) => c.chamadaId === activeCiclo.chamada_id)) ||
+      [...(agregada?.chamadas || [])].sort((a, b) => b.pedidos - a.pedidos)[0]
+    setSelectedChamadaId(preferida ? preferida.chamadaId : 'todas')
+  }
+
   // Resolver chamada efetiva selecionada no relatório
   const effectiveChamadaId = useMemo(() => {
     if (selectedChamadaId !== 'todas') return selectedChamadaId
-    if (selectedCicloId !== 'todos') {
-      const c = ciclos.find((ci) => ci.id === selectedCicloId)
-      if (c?.chamada_id) return c.chamada_id
-    }
     if (activeCiclo?.chamada_id) return activeCiclo.chamada_id
     return chamadas[0]?.id || ''
-  }, [selectedChamadaId, selectedCicloId, ciclos, activeCiclo, chamadas])
+  }, [selectedChamadaId, activeCiclo, chamadas])
 
   // Mapa cicloId -> chamada_id: atribui a chamada de cada pedido (anti-vazamento entre chamadas)
   const cicloChamadaMap = useMemo(() => {
@@ -183,6 +216,17 @@ export default function Consolidation() {
       if (c.chamada_id) map.set(c.id, c.chamada_id)
     }
     return map
+  }, [ciclos])
+
+  // Ciclos abertos (não terminais) — anti-vazamento: ciclos fechados/cancelados
+  // não entram no recorte por data de entrega
+  const ciclosAbertosIds = useMemo(() => {
+    const set = new Set<string>()
+    for (const c of ciclos) {
+      const norm = (c.status || '').trim().toLowerCase()
+      if (norm !== 'fechado' && norm !== 'cancelado') set.add(c.id)
+    }
+    return set
   }, [ciclos])
 
   // Rotas disponíveis SOMENTE da chamada selecionada no relatório
@@ -324,15 +368,50 @@ export default function Consolidation() {
     return map
   }, [products, contractItems])
 
-  // Filtrar pedidos pelo ciclo selecionado, pela chamada selecionada e não cancelados.
+  // Filtrar pedidos pela DATA DE ENTREGA selecionada, pela chamada selecionada e não cancelados.
+  // A data identifica o ciclo correspondente (anti-vazamento por ciclo_id): só entram pedidos
+  // de ciclos abertos cuja data de entrega (order.date, normalizada) é a selecionada. Se mais
+  // de um ciclo aberto da MESMA chamada tiver pedidos na data, vale o ciclo corrente (quando
+  // presente) ou o de maior volume — nunca misturar ciclos de uma mesma chamada na data.
   // A chamada do pedido é derivada do ciclo (ou do campo chamadaId quando presente):
   // pedidos sem ciclo conhecido não podem ser atribuídos a uma chamada e ficam de fora
   // quando um filtro de chamada específico está ativo.
   const chamadaFiltroAtiva = selectedChamadaId !== 'todas' ? selectedChamadaId : ''
+  const ciclosValidosNaData = useMemo(() => {
+    if (!dataEntregaSel) return null
+    const porChamada = new Map<string, Map<string, number>>() // chamadaId -> cicloId -> pedidos
+    for (const o of orders) {
+      if (o.status === 'Cancelado' || !o.date || !o.cicloId) continue
+      if (!ciclosAbertosIds.has(o.cicloId)) continue
+      if (diaISODe(o.date) !== dataEntregaSel) continue
+      const chId = o.chamadaId || cicloChamadaMap.get(o.cicloId) || 'sem-chamada'
+      let m = porChamada.get(chId)
+      if (!m) {
+        m = new Map()
+        porChamada.set(chId, m)
+      }
+      m.set(o.cicloId, (m.get(o.cicloId) || 0) + 1)
+    }
+    const validos = new Set<string>()
+    for (const m of porChamada.values()) {
+      if (m.size === 1) {
+        validos.add(m.keys().next().value as string)
+        continue
+      }
+      const corrente =
+        (activeCiclo?.id && m.has(activeCiclo.id) ? activeCiclo.id : '') ||
+        [...m.entries()].sort((a, b) => b[1] - a[1])[0][0]
+      validos.add(corrente)
+    }
+    return validos
+  }, [dataEntregaSel, orders, ciclosAbertosIds, cicloChamadaMap, activeCiclo])
+
   const filteredOrders = useMemo(() => {
     return orders.filter((o) => {
       if (o.status === 'Cancelado') return false
-      if (selectedCicloId !== 'todos' && o.cicloId && o.cicloId !== selectedCicloId) return false
+      if (ciclosValidosNaData) {
+        if (!o.cicloId || !ciclosValidosNaData.has(o.cicloId)) return false
+      }
       if (chamadaFiltroAtiva) {
         const chamadaDoPedido =
           o.chamadaId || (o.cicloId ? cicloChamadaMap.get(o.cicloId) : undefined)
@@ -340,7 +419,7 @@ export default function Consolidation() {
       }
       return true
     })
-  }, [orders, selectedCicloId, chamadaFiltroAtiva, cicloChamadaMap])
+  }, [orders, ciclosValidosNaData, chamadaFiltroAtiva, cicloChamadaMap])
 
   // Matriz de dados agregada: Map<produtoId, Map<schoolId, CellData>>
   const matriz = useMemo(() => {
@@ -698,10 +777,7 @@ export default function Consolidation() {
     return `${formatNumber(qtd)}${unitStr} · ${formatBRL(valor)}`
   }
 
-  const cicloSelecionadoNome =
-    selectedCicloId === 'todos'
-      ? 'Todos os Ciclos'
-      : ciclos.find((c) => c.id === selectedCicloId)?.nome || 'Ciclo Selecionado'
+  const dataEntregaLabel = dataEntregaSel ? formatarDataEntrega(dataEntregaSel) : 'Todas as Datas'
 
   const chamadaSelecionadaNome =
     selectedChamadaId === 'todas'
@@ -728,7 +804,7 @@ export default function Consolidation() {
         `Aba: ${tabAtiva === 'produto' ? 'Por Produto (Produto × Escola)' : 'Por Escola (Escola × Produto)'}`,
       ])
       dataRows.push([
-        `Ciclo: ${cicloSelecionadoNome}`,
+        `Data de Entrega: ${dataEntregaLabel}`,
         `Chamada: ${chamadaSelecionadaNome}`,
         rotaInfo,
         `Modo: ${modoExibicao === 'qtd' ? 'Quantidade' : modoExibicao === 'valor' ? 'Valor (R$)' : 'Ambos (Qtd + R$)'}`,
@@ -1134,7 +1210,7 @@ export default function Consolidation() {
       doc.roundedRect(14, currentY, pageWidth - 28, 9, 1.5, 1.5, 'F')
 
       const rotaInfoPdf = isModoRota ? `   |   Rota: ${selectedRotaObj?.nome} (Paradas)` : ''
-      const filtrosTexto = `Ciclo: ${cicloSelecionadoNome}   |   Chamada: ${chamadaSelecionadaNome}${rotaInfoPdf}   |   Modo: ${modoTexto}   |   Total Geral: ${formatNumber(totalGeral.qtd)} un/kg — ${formatBRL(totalGeral.valor)}`
+      const filtrosTexto = `Data de Entrega: ${dataEntregaLabel}   |   Chamada: ${chamadaSelecionadaNome}${rotaInfoPdf}   |   Modo: ${modoTexto}   |   Total Geral: ${formatNumber(totalGeral.qtd)} un/kg — ${formatBRL(totalGeral.valor)}`
       doc.text(filtrosTexto, 17, currentY + 5.5)
 
       currentY += 13
@@ -1507,32 +1583,23 @@ export default function Consolidation() {
             <div className="flex flex-wrap items-center gap-3">
               <div className="flex items-center gap-2">
                 <Calendar className="h-4 w-4 text-muted-foreground shrink-0" />
-                <Select
-                  value={selectedCicloId}
-                  onValueChange={(val) => {
-                    setSelectedCicloId(val)
-                    if (val !== 'todos') {
-                      const c = ciclos.find((ci) => ci.id === val)
-                      if (c?.chamada_id) {
-                        setSelectedChamadaId(c.chamada_id)
-                      }
-                    }
-                  }}
-                >
-                  <SelectTrigger className="h-9 w-40 text-xs">
-                    <SelectValue placeholder="Ciclo" />
+                <Select value={dataEntregaSel} onValueChange={handleChangeDataEntrega}>
+                  <SelectTrigger className="h-9 w-44 text-xs" aria-label="Data de entrega">
+                    <SelectValue placeholder="Data de entrega" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="todos">Todos os Ciclos</SelectItem>
-                    {ciclos.map((c) => {
-                      const ch =
-                        c.expand?.chamada_id || chamadas.find((item) => item.id === c.chamada_id)
-                      return (
-                        <SelectItem key={c.id} value={c.id}>
-                          {c.nome} {ch ? `[${ch.chamada}]` : ''}
+                    {datasEntregaAgregadas.length === 0 ? (
+                      <SelectItem value="__sem_datas__" disabled>
+                        Nenhuma data com pedidos
+                      </SelectItem>
+                    ) : (
+                      datasEntregaAgregadas.map((d) => (
+                        <SelectItem key={d.data} value={d.data}>
+                          {formatarDataEntrega(d.data)} ({d.totalPedidos}{' '}
+                          {d.totalPedidos === 1 ? 'pedido' : 'pedidos'})
                         </SelectItem>
-                      )
-                    })}
+                      ))
+                    )}
                   </SelectContent>
                 </Select>
               </div>

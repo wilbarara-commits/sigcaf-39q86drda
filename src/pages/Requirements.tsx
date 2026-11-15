@@ -1014,6 +1014,52 @@ export function Requirements() {
           </p>
         </div>
 
+        {/* Release v0.0.307: filtro de Data de Entrega substitui o seletor de ciclo na Consolidação Final */}
+        <div className="rounded-lg border border-primary/40 bg-primary/5 p-5 space-y-4">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="text-primary border-primary/40 font-semibold">
+                Release v0.0.307
+              </Badge>
+              <span className="font-semibold text-foreground">
+                0.0.307: Consolidação Final — seletor de Data de Entrega no lugar do filtro de ciclo
+              </span>
+            </div>
+            <span className="text-xs font-medium text-muted-foreground">
+              Consolidado (v0.0.307)
+            </span>
+            <span className="text-xs font-medium text-primary">Versão Vigente (v0.0.307)</span>
+          </div>
+
+          <p className="text-sm text-foreground/90 leading-relaxed">
+            <strong>
+              Substituição do seletor de ciclo pelo seletor de Data de Entrega na Consolidação Final
+              (/consolidacao), por pedido do usuário:
+            </strong>{' '}
+            o filtro PRIMÁRIO da tela passou a ser a <strong>Data de entrega</strong> — mesmo padrão
+            de /rotas e /consolidacao-simples, usando as funções <code>agregarDatasEntrega</code> /{' '}
+            <code>escolherDataPadrao</code> de <code>src/lib/datasEntrega.ts</code> e pré-seleção da
+            data do ciclo corrente ( <code>data_despacho</code>). Cada opção mostra{' '}
+            <code>dd/mm/aaaa (N pedido(s))</code>; a data de entrega de cada pedido vem de{' '}
+            <code>order.date</code> (<code>data_prevista</code>), herdando a{' '}
+            <code>data_despacho</code> do ciclo quando vazia (hook server-side da 0.0.303).
+            <strong>Anti-vazamento por ciclo_id:</strong> com uma data selecionada, só entram
+            pedidos de ciclos ABERTOS (fechados/cancelados ficam de fora) daquele recorte — se mais
+            de um ciclo aberto da mesma chamada tiver pedidos na data, vale o ciclo corrente (quando
+            presente) ou o de maior volume, nunca misturando ciclos. O filtro de chamada (Todas /
+            específica) permanece como secundário e refina o recorte dentro da data; trocar a data
+            mantém a chamada quando ela opera naquela data, senão cai para a chamada do ciclo
+            corrente e, por último, "Todas as Chamadas". "Todas as Datas" (sem data escolhida)
+            mantém o comportamento anterior da matriz. Restam intactos: visualizações Por
+            Produto/Por Escola, Filtro de Escolas (Todas/Por rota), toggle "Somente coluna de Total"
+            (+ Totais por rota), "Ocultar linhas/colunas vazias", "Mostrar valores", Modo de
+            Exibição (Quantidade/Valor/Ambos), Exportar (Excel/PDF), busca de texto, números pt-BR e
+            coluna Total. /consolidacao-simples, /rotas, Separação (/caixas), Compras, Dashboard,
+            Portal do Motorista e /monitoramento não são afetados; isolamento por{' '}
+            <code>ciclo_id</code> e anti-vazamento nas 4 telas de entregas preservados.
+          </p>
+        </div>
+
         {/* Release v0.0.306: filtro de chamada aplicado à matriz da Consolidação Final */}
         <div className="rounded-lg border border-primary/40 bg-primary/5 p-5 space-y-4">
           <div className="flex items-center justify-between flex-wrap gap-2">
