@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
-import { Check, ChevronDown, Copy, MessageCircle } from 'lucide-react'
+import { Check, ChevronDown, Copy, MessageCircle, Pencil } from 'lucide-react'
 import type { CompraDistribuicaoRecord } from '@/lib/types'
 import { useApp } from '@/context/app-context'
 import { formatarDataEntrega } from '@/lib/datasEntrega'
@@ -20,7 +20,9 @@ import { cn } from '@/lib/utils'
  * compra_distribuicao) do recorte atual (data de entrega + chamada) por
  * fornecedor: um cartão por fornecedor com os produtos e o total de itens.
  * Cada cartão tem botão "WhatsApp" (abre wa.me com a mensagem do pedido) e
- * "Copiar mensagem" (mesma mensagem na área de transferência).
+ * "Copiar mensagem" (mesma mensagem na área de transferência). Cada produto tem
+ * um lápis que abre o cartão "Comprar" do produto com a distribuição gravada
+ * carregada — o caminho de edição da compra já feita.
  */
 
 interface PedidosCompraSectionProps {
@@ -28,6 +30,7 @@ interface PedidosCompraSectionProps {
   chamadaNome: string
   dataEntrega: string
   carregada: boolean
+  onEditarProduto?: (produtoId: string) => void
 }
 
 function formatQty(value: number): string {
@@ -39,6 +42,7 @@ export default function PedidosCompraSection({
   chamadaNome,
   dataEntrega,
   carregada,
+  onEditarProduto,
 }: PedidosCompraSectionProps) {
   const { fornecedores, products } = useApp()
   const [aberta, setAberta] = useState(true)
@@ -210,7 +214,20 @@ export default function PedidosCompraSection({
                       <CardContent className="pt-0 space-y-1">
                         {g.itens.map((it, i) => (
                           <div key={i} className="flex items-center justify-between gap-2 text-sm">
-                            <span className="truncate">{it.produto}</span>
+                            <span className="flex min-w-0 items-center gap-1.5">
+                              <span className="truncate">{it.produto}</span>
+                              {onEditarProduto && (
+                                <button
+                                  type="button"
+                                  onClick={() => onEditarProduto(it.produtoId)}
+                                  aria-label={`Editar distribuição de ${it.produto}`}
+                                  title="Editar distribuição deste produto"
+                                  className="shrink-0 rounded p-0.5 text-muted-foreground transition-colors hover:text-primary"
+                                >
+                                  <Pencil className="h-3.5 w-3.5" />
+                                </button>
+                              )}
+                            </span>
                             <span className="font-mono whitespace-nowrap">
                               {formatQty(it.quantidade)} {it.unidade}
                             </span>

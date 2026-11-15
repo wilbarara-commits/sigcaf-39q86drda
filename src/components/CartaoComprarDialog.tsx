@@ -48,6 +48,10 @@ import { cn } from '@/lib/utils'
  * percentuais e kg atuais) e SALVA POR CIMA das linhas existentes
  * (coleção compra_distribuicao, atualização em vez de duplicação), com botão
  * "Cancelar" que descarta as alterações da sessão e recarrega do banco.
+ * Quando a distribuição já está gravada (produto "Comprado"), o cartão abre
+ * em MODO EDIÇÃO: título "Editar compra", badge "Editando distribuição
+ * gravada" no topo e botão "Salvar alterações" — o caminho visível para
+ * reabrir e alterar percentuais/fornecedores de uma compra já feita.
  */
 
 type ModoDistribuicao = 'igual' | 'percentual'
@@ -251,6 +255,11 @@ export function CartaoComprarDialog({
   const acimaDoMaximo = totalPercentual > maxPercentual
   const semPercentuais = selecionados.size === 0 || totalPercentual <= 0
 
+  // MODO EDIÇÃO: há distribuição já gravada para este ciclo+produto (o produto
+  // aparece "Comprado" na tabela). O cartão abre carregado e salva por cima —
+  // o rótulo/badge deixam o caminho de edição explícito na tela.
+  const modoEdicao = salvos.length > 0
+
   const aplicarDistribuicaoIgual = () => {
     const n = selecionados.size
     if (n === 0) return
@@ -450,7 +459,17 @@ export function CartaoComprarDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-xl max-h-[90vh] flex flex-col">
         <DialogHeader>
-          <DialogTitle>Comprar — {produtoNome}</DialogTitle>
+          <div className="flex items-center gap-2">
+            <DialogTitle>
+              {modoEdicao ? 'Editar compra — ' : 'Comprar — '}
+              {produtoNome}
+            </DialogTitle>
+            {modoEdicao && (
+              <Badge className="bg-amber-100 text-amber-700 border border-amber-300 hover:bg-amber-100">
+                Editando distribuição gravada
+              </Badge>
+            )}
+          </div>
           <DialogDescription asChild>
             <div className="flex flex-wrap items-center gap-x-5 gap-y-1 text-sm">
               <span>
@@ -670,7 +689,7 @@ export function CartaoComprarDialog({
             onClick={gravar}
             disabled={salvando || selecionados.size === 0 || semPercentuais}
           >
-            {salvando ? 'Gravando…' : 'Confirmar'}
+            {salvando ? 'Gravando…' : modoEdicao ? 'Salvar alterações' : 'Confirmar'}
           </Button>
         </DialogFooter>
       </DialogContent>

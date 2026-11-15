@@ -22,6 +22,7 @@ import {
 } from '@/components/ui/table'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
+import { Pencil } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { agregarDatasEntrega, escolherDataPadrao, formatarDataEntrega } from '@/lib/datasEntrega'
 
@@ -251,6 +252,15 @@ export default function ConsolidacaoCompras() {
     setCartaoAberto(true)
   }
 
+  // Caminho de edição a partir dos cartões de "Pedidos de compra por
+  // fornecedor": reabre o cartão Comprar do produto com a distribuição
+  // gravada carregada (mesmo diálogo do botão verde da tabela).
+  const abrirCartaoPorProdutoId = (produtoId: string) => {
+    const linha = linhas.find((l) => l.produtoId === produtoId)
+    if (!linha) return
+    abrirCartao(linha)
+  }
+
   // Recorte atual (data de entrega + chamada): as linhas gravadas carregam
   // data_entrega + chamada_id, então filtramos por esses campos. A data é
   // normalizada dos DOIS lados (slice 0-10): Order.date e data_entrega chegam
@@ -421,15 +431,31 @@ export default function ConsolidacaoCompras() {
                         <Button
                           size="sm"
                           onClick={() => abrirCartao(l)}
-                          aria-label={compraCompleta ? `Comprado ${l.nome}` : `Comprar ${l.nome}`}
+                          aria-label={
+                            compraCompleta
+                              ? `Editar distribuição gravada de ${l.nome}`
+                              : `Comprar ${l.nome}`
+                          }
+                          title={
+                            compraCompleta
+                              ? 'Distribuição já gravada — clique para EDITAR (percentuais, fornecedores, selecionados)'
+                              : 'Distribuir entre os fornecedores'
+                          }
                           className={cn(
-                            'w-24',
+                            'w-24 px-1.5',
                             compraCompleta
                               ? 'bg-green-600 hover:bg-green-700 text-white'
                               : 'bg-amber-600 hover:bg-amber-700 text-white',
                           )}
                         >
-                          {compraCompleta ? 'Comprado' : 'Comprar'}
+                          {compraCompleta ? (
+                            <>
+                              <Pencil className="mr-1 h-3.5 w-3.5 shrink-0" />
+                              Editar
+                            </>
+                          ) : (
+                            'Comprar'
+                          )}
                         </Button>
                       </TableCell>
                     </TableRow>
@@ -452,6 +478,7 @@ export default function ConsolidacaoCompras() {
         chamadaNome={chamadaNome}
         dataEntrega={dataEntregaSel}
         carregada={distribuicaoCarregada}
+        onEditarProduto={abrirCartaoPorProdutoId}
       />
 
       {/* Cartão "Comprar" — distribuição por fornecedor */}

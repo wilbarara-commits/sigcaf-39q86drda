@@ -929,6 +929,51 @@ export function Requirements() {
       {/* 7. Registro de Manutenção e Limpeza de Dados */}
       <SectionTitle>7. Registro de Manutenção & Higienização do Banco de Dados</SectionTitle>
       <div className="space-y-4">
+        {/* Release v0.0.314: cartão Comprar — caminho de edição da distribuição gravada */}
+        <div className="rounded-lg border border-primary/40 bg-primary/5 p-5 space-y-4">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="text-primary border-primary/40 font-semibold">
+                Release v0.0.314
+              </Badge>
+              <span className="font-semibold text-foreground">
+                0.0.314: Compras — opção de EDITAR a distribuição já gravada (cartão Comprar)
+              </span>
+            </div>
+            <span className="text-xs font-medium text-muted-foreground">
+              Consolidado (v0.0.314)
+            </span>
+            <span className="text-xs font-medium text-primary">Versão Vigente (v0.0.314)</span>
+          </div>
+
+          <p className="text-sm text-foreground/90 leading-relaxed">
+            <strong>
+              Caminho de edição da distribuição de compra já feita na Consolidação para Compras (/
+              consolidacao-simples), por relato do usuário ("faltou a opção de editar a
+              distribuição"):
+            </strong>{' '}
+            o mecanismo de upsert (0.0.311) já gravava por cima, mas faltava o acesso visível. Agora
+            existem <strong>três caminhos de edição</strong>: (1) o botão verde da tabela, que antes
+            dizia "Comprado" (parecia só um status), passa a dizer{' '}
+            <strong>"Editar" com um lápis</strong> e tooltip "Distribuição já gravada — clique para
+            EDITAR" — abre o cartão carregado; (2) o cartão abre em <strong>modo edição</strong>{' '}
+            quando há linhas gravadas: título "Editar compra", badge âmbar "Editando distribuição
+            gravada" no topo e botão "Salvar alterações" (em vez de Confirmar); (3) na seção
+            "Pedidos de compra por fornecedor", cada linha de produto ganhou um{' '}
+            <strong>lápis</strong> que abre o cartão do produto direto, sem precisar achar a linha
+            na tabela. Ao salvar, as linhas gravadas do ciclo são{' '}
+            <strong>atualizadas por cima</strong> (upsert por ciclo+produto+fornecedor, sem
+            duplicar); o botão <strong>Cancelar</strong> restaura a distribuição gravada sem gravar;
+            "Excluir distribuição" continua disponível para recomeçar. Produtos não comprados mantêm
+            o fluxo normal (botão laranja "Comprar"). Preservados: Total Pedido/Total Comprado/%
+            Comprado em tempo real (0.0.312), percentuais inteiros no Distribuir igualmente
+            (42/42/41), kg inteiros pt-BR, aviso amarelo acima do máximo sem travar, dropdown
+            alfabético, checkbox e lixeira, <code>compra_config</code> com máximo editável (padrão
+            125%), gravação por ciclo_id e botão laranja/verde. Consolidação Final (/ consolidacao),
+            /rotas e Separação (/caixas) não são afetadas.
+          </p>
+        </div>
+
         {/* Release v0.0.313: cartão Comprar — Total Comprado = soma dos kg distribuídos */}
         <div className="rounded-lg border border-primary/40 bg-primary/5 p-5 space-y-4">
           <div className="flex items-center justify-between flex-wrap gap-2">
