@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-11-15T08:32:36.640Z",
+  "generatedAt": "2026-11-15T09:03:08.433Z",
   "collections": [
     {
       "name": "users",
@@ -2460,6 +2460,64 @@
         "CREATE INDEX idx_compra_distribuicao_ciclo ON compra_distribuicao (ciclo_id)",
         "CREATE INDEX idx_compra_distribuicao_produto ON compra_distribuicao (produto_id)",
         "CREATE INDEX idx_compra_distribuicao_fornecedor ON compra_distribuicao (fornecedor_id)"
+      ]
+    },
+    {
+      "name": "compra_config",
+      "type": "base",
+      "apiRules": {
+        "list": "",
+        "view": "",
+        "create": "@request.auth.id != ''",
+        "update": "@request.auth.id != ''",
+        "delete": "@request.auth.id != ''"
+      },
+      "fields": [
+        {
+          "name": "ciclo_id",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "ciclos"
+        },
+        {
+          "name": "produto_id",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "produtos"
+        },
+        {
+          "name": "percentual_maximo",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "criado_por",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "users"
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": [
+        "CREATE UNIQUE INDEX idx_compra_config_ciclo_produto ON compra_config (ciclo_id, produto_id)",
+        "CREATE INDEX idx_compra_config_ciclo ON compra_config (ciclo_id)"
       ]
     }
   ]

@@ -1014,6 +1014,51 @@ export function Requirements() {
           </p>
         </div>
 
+        {/* Release v0.0.305: revisão do cartão Comprar da /consolidacao-simples */}
+        <div className="rounded-lg border border-primary/40 bg-primary/5 p-5 space-y-4">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="text-primary border-primary/40 font-semibold">
+                Release v0.0.305
+              </Badge>
+              <span className="font-semibold text-foreground">
+                0.0.305: Compras — cartão "Comprar" revisado (totais no topo, percentual máximo
+                editável, lista de fornecedores persistente)
+              </span>
+            </div>
+            <span className="text-xs font-medium text-muted-foreground">
+              Consolidado (v0.0.305)
+            </span>
+            <span className="text-xs font-medium text-primary">Versão Vigente (v0.0.305)</span>
+          </div>
+
+          <p className="text-sm text-foreground/90 leading-relaxed">
+            <strong>
+              Revisão do cartão "Comprar" na Consolidação para Compras, por pedido do usuário:
+            </strong>{' '}
+            (1) o topo do cartão mostra <strong>Total Pedido</strong>,{' '}
+            <strong>Total Comprado</strong> (soma já distribuída) e <strong>% Comprado</strong>{' '}
+            (Total Comprado ÷ Total Pedido, formato pt-BR), com Total Comprado e % Comprado
+            atualizando em tempo real a cada edição de percentual; (2) o limite de 125% passou a ser{' '}
+            <strong>editável no cartão</strong> — o percentual máximo é persistido por ciclo+produto
+            na nova coleção <code>compra_config</code> (migration 0151; registro geral do ciclo como
+            fallback, padrão 125% quando não há valor salvo); (3){' '}
+            <strong>Distribuir igualmente</strong> passa a distribuir o MÁXIMO igualmente entre os
+            selecionados (não a quantidade pedida), e percentuais ficam editáveis nos dois modos
+            ("Distribuir igualmente" e "Por percentual"); (4) <strong>Buscar fornecedor</strong>{' '}
+            virou um dropdown com TODOS os fornecedores em ordem alfabética — selecionar INCLUI o
+            fornecedor na lista do produto (vínculo persistente da coleção{' '}
+            <code>fornecedores_produto</code>, reutilizado, sem nova coleção); (5) cada nome da
+            lista ganhou uma <strong>lixeira</strong> que remove o fornecedor DA LISTA DO PRODUTO
+            (apaga o vínculo persistente — não volta ao reabrir o cartão). Mantidos intactos:
+            gravação da distribuição por ciclo (coleção <code>compra_distribuicao</code>, produto ×
+            fornecedor: quantidade/percentual), seção "Pedidos de compra por fornecedor", coluna
+            "Total Comprado" da tabela, botão Comprar laranja/verde ("Comprado"), filtros Data de
+            entrega + Chamada e números pt-BR. Consolidação Final, /rotas e Separação (/caixas) não
+            são afetadas.
+          </p>
+        </div>
+
         {/* Release v0.0.302: zebra vertical de colunas (tons alternados) no PDF de /caixas */}
         <div className="rounded-lg border border-primary/40 bg-primary/5 p-5 space-y-4">
           <div className="flex items-center justify-between flex-wrap gap-2">

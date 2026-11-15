@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { Trash2 } from 'lucide-react'
 import {
   Dialog,
   DialogContent,
@@ -9,27 +10,37 @@ import {
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Badge } from '@/components/ui/badge'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { useToast } from '@/hooks/use-toast'
 import { useApp } from '@/context/app-context'
 import { useAuth } from '@/context/auth-context'
-import pb from '@/lib/pocketbase/client'
 import {
   compraDistribuicaoService,
+  compraConfigService,
   fornecedoresProdutoService,
+  PERCENTUAL_MAXIMO_PADRAO,
 } from '@/services/compraDistribuicao'
-import type { CompraDistribuicaoRecord } from '@/lib/types'
+import type { CompraDistribuicaoRecord, FornecedorProdutoRecord } from '@/lib/types'
 import { cn } from '@/lib/utils'
 
 /**
  * Cartão "Comprar" da Consolidação para Compras: distribui a quantidade total
- * do produto entre os fornecedores cadastrados para ele (igual ou por
- * percentuais até 125%) e GRAVA a distribuição por ciclo (coleção
- * compra_distribuicao, uma linha por fornecedor participante). Reabrir o
- * cartão carrega as linhas salvas; excluir a distribuição apaga as linhas.
+ * do produto entre os fornecedores da LISTA DO PRODUTO (vínculo persistente da
+ * coleção fornecedores_produto — incluídos via dropdown e removidos pela
+ * lixeira). O percentual máximo (padrão 125%) é editável e persistido por
+ * ciclo+produto (coleção compra_config). "Distribuir igualmente" divide o
+ * MÁXIMO entre os selecionados; percentuais ficam editáveis nos dois modos e
+ * Total Comprado / % Comprado atualizam em tempo real. GRAVA a distribuição
+ * por ciclo (coleção compra_distribuicao, uma linha por fornecedor).
  */
 
 type ModoDistribuicao = 'igual' | 'percentual'
@@ -47,8 +58,6 @@ interface CartaoComprarDialogProps {
   onDistribuicaoGravada: () => void
 }
 
-const MAX_PERCENTUAL = 125
-
 function formatPercent(value: number): string {
   if (!Number.isFinite(value)) return ''
   return String(Math.round(value * 100) / 100).replace('.', ',')
@@ -60,6 +69,10 @@ function parsePercent(raw: string): number | null {
   const v = Number(cleaned)
   if (!Number.isFinite(v)) return null
   return Math.round(v * 100) / 100
+}
+
+function formatQty(value: number): string {
+  return (value || 0).toLocaleString('pt-BR', { maximumFractionDigits: 2 })
 }
 
 export function CartaoComprarDialog({
@@ -82,12 +95,16 @@ export function CartaoComprarDialog({
   const [selecionados, setSelecionados] = useState<Set<string>>(new Set())
   const [percentuais, setPercentuais] = useState<Record<string, string>>({})
   const [salvos, setSalvos] = useState<CompraDistribuicaoRecord[]>([])
-  const [buscaFornecedor, setBuscaFornecedor] = useState('')
+  const [vinculos, setVinculos] = useState<FornecedorProdutoRecord[]>([])
+  const [maxPercentual, setMaxPercentual] = useState(PERCENTUAL_MAXIMO_PADRAO)
+  const [maxInput, setMaxInput] = useState(String(PERCENTUAL_MAXIMO_PADRAO))
+  const [dropdownSel, setDropdownSel] = useState('')
   const [carregando, setCarregando] = useState(false)
   const [salvando, setSalvando] = useState(false)
   const carregouRef = useRef(false)
 
-  // Carga do cartão: vínculos fornecedor↔produto + linhas salvas do ciclo+produto
+  // Carga do cartão: vínculos fornecedor↔produto + linhas salvas + percentual
+  // máximo salvo (por ciclo+produto, padrão 125%)
   useEffect(() => {
     if (!open || !produtoId || !cicloId) return
     if (carregouRef.current) return
@@ -97,19 +114,29 @@ export function CartaoComprarDialog({
     Promise.all([
       fornecedoresProdutoService.listByProduto(produtoId),
       compraDistribuicaoService.listByCicloProduto(cicloId, produtoId),
+      compraConfigService.getPercentualMaximo(cicloId, produtoId),
     ])
-      .then(([vinculos, dists]) => {
+      .then(([vinculosCarregados, dists, maxSalvo]) => {
         if (!vivo) return
-        const idsVinculados = new Set(vinculos.map((v) => v.fornecedor_id))
+        const idsVinculados = new Set(vinculosCarregados.map((v) => v.fornecedor_id))
         const idsComLinhas = new Set(dists.map((d) => d.fornecedor_id))
+        const todos = new Set([...idsVinculados, ...idsComLinhas])
         setSalvos(dists)
-        setSelecionados(new Set([...idsVinculados, ...idsComLinhas]))
+        setVinculos(vinculosCarregados)
+        setSelecionados(todos)
+        setMaxPercentual(maxSalvo)
+        setMaxInput(formatPercent(maxSalvo))
+        // Percentuais salvos (gravados em ambos os modos); quem não tem valor
+        // recebe a divisão igual do máximo.
         const percs: Record<string, string> = {}
         for (const d of dists) {
-          if (d.modo === 'percentual' && typeof d.percentual === 'number') {
+          if (typeof d.percentual === 'number' && d.percentual > 0) {
             percs[d.fornecedor_id] = formatPercent(d.percentual)
           }
         }
+        const idsSemPerc = [...todos].filter((id) => !percs[id])
+        const partesIguais = formatPercent(Math.round((maxSalvo / todos.size) * 100) / 100)
+        for (const id of idsSemPerc) percs[id] = todos.size > 0 ? partesIguais : ''
         setPercentuais(percs)
         const modos = new Set(dists.map((d) => d.modo))
         setModo(modos.has('percentual') && modos.size === 1 ? 'percentual' : 'igual')
@@ -132,18 +159,34 @@ export function CartaoComprarDialog({
     setSelecionados(new Set())
     setPercentuais({})
     setSalvos([])
+    setVinculos([])
     setModo('igual')
-    setBuscaFornecedor('')
+    setMaxPercentual(PERCENTUAL_MAXIMO_PADRAO)
+    setMaxInput(String(PERCENTUAL_MAXIMO_PADRAO))
+    setDropdownSel('')
   }, [open])
 
-  const catalogoFornecedores = useMemo(() => {
-    const filtrados = fornecedores.filter((f) => {
-      if (!buscaFornecedor.trim()) return true
-      const termo = buscaFornecedor.trim().toLowerCase()
-      return f.nome.toLowerCase().includes(termo)
-    })
-    return [...filtrados].sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'))
-  }, [fornecedores, buscaFornecedor])
+  // Lista do produto (vínculo persistente) + fornecedores vindos só de linhas
+  // gravadas de versões anteriores, em ordem alfabética
+  const listaProduto = useMemo(() => {
+    const ids = new Set(vinculos.map((v) => v.fornecedor_id))
+    for (const s of salvos) {
+      if (s.fornecedor_id) ids.add(s.fornecedor_id)
+    }
+    return [...ids]
+      .map((id) => fornecedores.find((f) => f.id === id))
+      .filter((f): f is NonNullable<typeof f> => Boolean(f))
+      .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'))
+  }, [vinculos, salvos, fornecedores])
+
+  // Dropdown: TODOS os fornecedores em ordem alfabética (exclui os já na lista)
+  const dropdownFornecedores = useMemo(
+    () =>
+      [...fornecedores]
+        .filter((f) => !listaProduto.some((p) => p.id === f.id))
+        .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR')),
+    [fornecedores, listaProduto],
+  )
 
   const totalPercentual = useMemo(() => {
     let total = 0
@@ -154,32 +197,103 @@ export function CartaoComprarDialog({
     return Math.round(total * 100) / 100
   }, [selecionados, percentuais])
 
-  const temPercentuaisPreenchidos = useMemo(
-    () => [...selecionados].some((id) => parsePercent(percentuais[id] || '') !== null),
-    [selecionados, percentuais],
+  // Total Comprado e % Comprado em TEMPO REAL: derivam dos percentuais atuais
+  // da tela (não das linhas gravadas)
+  const totalCompradoAtual = useMemo(
+    () => Math.round((totalPercentual / 100) * quantidadeTotal * 100) / 100,
+    [totalPercentual, quantidadeTotal],
   )
+  const pctCompradoAtual = totalPercentual
 
-  const percentualInvalido =
-    modo === 'percentual' && (totalPercentual <= 0 || totalPercentual > MAX_PERCENTUAL)
+  const percentualInvalido = totalPercentual <= 0 || totalPercentual > maxPercentual
 
   const calcularQuantidade = (fornecedorId: string): number => {
-    if (modo === 'igual') {
-      const n = selecionados.size
-      if (n === 0 || quantidadeTotal <= 0) return 0
-      return Math.round((quantidadeTotal / n) * 100) / 100
-    }
     const p = parsePercent(percentuais[fornecedorId] || '')
     if (p === null || p <= 0 || quantidadeTotal <= 0) return 0
     return Math.round((p / 100) * quantidadeTotal * 100) / 100
   }
 
-  const toggleFornecedor = (id: string) => {
+  const aplicarDistribuicaoIgual = () => {
+    const n = selecionados.size
+    if (n === 0) return
+    const parte = formatPercent(Math.round((maxPercentual / n) * 100) / 100)
+    const next: Record<string, string> = {}
+    for (const id of selecionados) next[id] = parte
+    setPercentuais(next)
+  }
+
+  const gravarMaxPercentual = (valor: number) => {
+    compraConfigService
+      .salvarPercentualMaximo({ cicloId, produtoId, percentualMaximo: valor, criadoPor: user?.id })
+      .catch(() =>
+        toast({
+          title: 'Erro ao salvar o percentual máximo',
+          variant: 'destructive',
+        }),
+      )
+  }
+
+  const handleMaxBlur = () => {
+    const v = parsePercent(maxInput)
+    if (v !== null && v > 0 && v !== maxPercentual) {
+      setMaxPercentual(v)
+      gravarMaxPercentual(v)
+    } else {
+      setMaxInput(formatPercent(maxPercentual))
+    }
+  }
+
+  // Dropdown → INCLUI o fornecedor na lista do produto (vínculo persistente)
+  const incluirFornecedor = async (fornecedorId: string) => {
+    setDropdownSel('')
+    if (!fornecedorId || listaProduto.some((f) => f.id === fornecedorId)) return
+    const nome = fornecedores.find((f) => f.id === fornecedorId)?.nome || ''
+    try {
+      const vinculo = await fornecedoresProdutoService.create(fornecedorId, produtoId)
+      setVinculos((prev) => [...prev, vinculo])
+    } catch {
+      // Vínculo pode já existir (índice único) — segue com inclusão local
+      setVinculos((prev) => [
+        ...prev,
+        { id: `local-${fornecedorId}`, fornecedor_id: fornecedorId, produto_id: produtoId },
+      ])
+    }
+    // Entra na compra marcado; percentual: divisão igual do máximo quando a
+    // lista ainda não tem percentuais, senão 0 para edição manual
+    const jaTemPerc = [...selecionados].some((id) => parsePercent(percentuais[id] || '') !== null)
+    setSelecionados((prev) => new Set(prev).add(fornecedorId))
+    setPercentuais((prev) => ({
+      ...prev,
+      [fornecedorId]: jaTemPerc ? '' : formatPercent(Math.round(maxPercentual * 100) / 100),
+    }))
+    if (nome) toast({ title: `${nome} incluído na lista do produto` })
+  }
+
+  // Lixeira → REMOVE o fornecedor da lista do produto (apaga o vínculo
+  // persistente) e o tira da compra atual
+  const removerVinculo = async (fornecedorId: string) => {
+    const vinculo = vinculos.find((v) => v.fornecedor_id === fornecedorId)
+    if (vinculo) {
+      try {
+        await fornecedoresProdutoService.delete(vinculo.id)
+      } catch {
+        toast({ title: 'Erro ao remover o fornecedor da lista', variant: 'destructive' })
+        return
+      }
+    }
+    setVinculos((prev) => prev.filter((v) => v.fornecedor_id !== fornecedorId))
     setSelecionados((prev) => {
       const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
+      next.delete(fornecedorId)
       return next
     })
+    setPercentuais((prev) => {
+      const next = { ...prev }
+      delete next[fornecedorId]
+      return next
+    })
+    const nome = fornecedores.find((f) => f.id === fornecedorId)?.nome || 'Fornecedor'
+    toast({ title: `${nome} removido da lista do produto` })
   }
 
   const excluirDistribuicao = async () => {
@@ -214,7 +328,7 @@ export function CartaoComprarDialog({
     if (percentualInvalido) {
       toast({
         title: 'Percentuais inválidos',
-        description: `A soma dos percentuais deve ficar entre 0% e ${MAX_PERCENTUAL}%.`,
+        description: `A soma dos percentuais deve ficar entre 0% e ${formatPercent(maxPercentual)}%.`,
         variant: 'destructive',
       })
       return
@@ -230,10 +344,7 @@ export function CartaoComprarDialog({
         .map((fornecedorId) => ({
           fornecedorId,
           quantidade: calcularQuantidade(fornecedorId),
-          percentual:
-            modo === 'percentual'
-              ? (parsePercent(percentuais[fornecedorId] || '') ?? 0)
-              : undefined,
+          percentual: parsePercent(percentuais[fornecedorId] || '') ?? 0,
           modo,
         }))
       const gravadas = await compraDistribuicaoService.salvarDistribuicao({
@@ -258,15 +369,46 @@ export function CartaoComprarDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg max-h-[90vh] flex flex-col">
+      <DialogContent className="sm:max-w-xl max-h-[90vh] flex flex-col">
         <DialogHeader>
           <DialogTitle>Comprar — {produtoNome}</DialogTitle>
-          <DialogDescription>
-            Total do recorte:{' '}
-            <span className="font-mono font-semibold text-foreground">
-              {quantidadeTotal.toLocaleString('pt-BR', { maximumFractionDigits: 2 })}
-            </span>{' '}
-            {unidade}
+          <DialogDescription asChild>
+            <div className="flex flex-wrap items-center gap-x-5 gap-y-1 text-sm">
+              <span>
+                Total Pedido:{' '}
+                <span className="font-mono font-semibold text-foreground">
+                  {formatQty(quantidadeTotal)}
+                </span>{' '}
+                {unidade}
+              </span>
+              <span>
+                Total Comprado:{' '}
+                <span
+                  className={cn(
+                    'font-mono font-semibold',
+                    totalCompradoAtual > 0 ? 'text-emerald-700' : 'text-muted-foreground',
+                  )}
+                >
+                  {formatQty(totalCompradoAtual)}
+                </span>{' '}
+                {unidade}
+              </span>
+              <span>
+                % Comprado:{' '}
+                <span
+                  className={cn(
+                    'font-mono font-semibold',
+                    pctCompradoAtual > maxPercentual
+                      ? 'text-destructive'
+                      : pctCompradoAtual > 0
+                        ? 'text-emerald-700'
+                        : 'text-muted-foreground',
+                  )}
+                >
+                  {formatPercent(pctCompradoAtual)}%
+                </span>
+              </span>
+            </div>
           </DialogDescription>
         </DialogHeader>
 
@@ -274,12 +416,15 @@ export function CartaoComprarDialog({
           <div className="py-8 text-center text-sm text-muted-foreground">Carregando…</div>
         ) : (
           <>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <Button
                 type="button"
                 size="sm"
                 variant={modo === 'igual' ? 'default' : 'outline'}
-                onClick={() => setModo('igual')}
+                onClick={() => {
+                  setModo('igual')
+                  aplicarDistribuicaoIgual()
+                }}
               >
                 Distribuir igualmente
               </Button>
@@ -291,29 +436,66 @@ export function CartaoComprarDialog({
               >
                 Por percentual
               </Button>
-              <span className="ml-auto text-xs text-muted-foreground">Máx. {MAX_PERCENTUAL}%</span>
+              <label className="ml-auto flex items-center gap-2 text-xs text-muted-foreground">
+                Máx. (%)
+                <Input
+                  className="h-8 w-20 text-right text-sm"
+                  inputMode="decimal"
+                  value={maxInput}
+                  onChange={(e) => setMaxInput(e.target.value)}
+                  onBlur={handleMaxBlur}
+                  aria-label="Percentual máximo"
+                />
+              </label>
             </div>
 
-            <Input
-              placeholder="Buscar fornecedor…"
-              value={buscaFornecedor}
-              onChange={(e) => setBuscaFornecedor(e.target.value)}
-            />
+            {/* Dropdown: TODOS os fornecedores em ordem alfabética — selecionar
+                INCLUI na lista do produto (vínculo persistente) */}
+            <div className="flex items-center gap-2">
+              <Select value={dropdownSel} onValueChange={incluirFornecedor}>
+                <SelectTrigger className="w-full" aria-label="Buscar fornecedor">
+                  <SelectValue placeholder="Buscar fornecedor…" />
+                </SelectTrigger>
+                <SelectContent>
+                  {dropdownFornecedores.length === 0 ? (
+                    <div className="p-3 text-center text-sm text-muted-foreground">
+                      Todos os fornecedores já estão na lista do produto.
+                    </div>
+                  ) : (
+                    dropdownFornecedores.map((f) => (
+                      <SelectItem key={f.id} value={f.id}>
+                        {f.nome}
+                      </SelectItem>
+                    ))
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
 
-            <ScrollArea className="h-[260px] rounded-md border">
+            {/* Lista do produto: checkbox marca quem participa desta compra; */}
+            {/* lixeira remove o vínculo persistente do produto */}
+            <ScrollArea className="h-[240px] rounded-md border">
               <div className="divide-y">
-                {catalogoFornecedores.length === 0 && (
+                {listaProduto.length === 0 && (
                   <div className="p-4 text-center text-sm text-muted-foreground">
-                    Nenhum fornecedor encontrado.
+                    Nenhum fornecedor na lista deste produto. Use o dropdown acima para incluir — a
+                    lista fica salva para as próximas compras.
                   </div>
                 )}
-                {catalogoFornecedores.map((f) => {
+                {listaProduto.map((f) => {
                   const marcado = selecionados.has(f.id)
                   return (
                     <div key={f.id} className="flex items-center gap-3 px-3 py-2">
                       <Checkbox
                         checked={marcado}
-                        onCheckedChange={() => toggleFornecedor(f.id)}
+                        onCheckedChange={() =>
+                          setSelecionados((prev) => {
+                            const next = new Set(prev)
+                            if (next.has(f.id)) next.delete(f.id)
+                            else next.add(f.id)
+                            return next
+                          })
+                        }
                         aria-label={`Selecionar ${f.nome}`}
                       />
                       <div className="min-w-0 flex-1">
@@ -330,7 +512,7 @@ export function CartaoComprarDialog({
                           {f.vinculo}
                         </Badge>
                       </div>
-                      {modo === 'percentual' && marcado && (
+                      {marcado && (
                         <div className="w-24 flex items-center gap-1">
                           <Input
                             className="h-8 text-right text-sm"
@@ -345,29 +527,37 @@ export function CartaoComprarDialog({
                         </div>
                       )}
                       {marcado && (
-                        <span className="w-24 text-right text-sm font-mono">
-                          {calcularQuantidade(f.id).toLocaleString('pt-BR', {
-                            maximumFractionDigits: 2,
-                          })}
+                        <span className="w-20 text-right text-sm font-mono">
+                          {formatQty(calcularQuantidade(f.id))}
                         </span>
                       )}
+                      <Button
+                        type="button"
+                        size="icon"
+                        variant="ghost"
+                        className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                        onClick={() => removerVinculo(f.id)}
+                        disabled={salvando}
+                        aria-label={`Remover ${f.nome} da lista do produto`}
+                        title="Remover da lista do produto"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
                     </div>
                   )
                 })}
               </div>
             </ScrollArea>
 
-            {modo === 'percentual' && (
-              <div
-                className={cn(
-                  'text-xs font-medium',
-                  percentualInvalido ? 'text-destructive' : 'text-muted-foreground',
-                )}
-              >
-                Soma dos percentuais: {formatPercent(totalPercentual)}%{' '}
-                {percentualInvalido && `(máx. ${MAX_PERCENTUAL}%)`}
-              </div>
-            )}
+            <div
+              className={cn(
+                'text-xs font-medium',
+                percentualInvalido ? 'text-destructive' : 'text-muted-foreground',
+              )}
+            >
+              Soma dos percentuais: {formatPercent(totalPercentual)}%{' '}
+              {percentualInvalido && `(máx. ${formatPercent(maxPercentual)}%)`}
+            </div>
           </>
         )}
 
